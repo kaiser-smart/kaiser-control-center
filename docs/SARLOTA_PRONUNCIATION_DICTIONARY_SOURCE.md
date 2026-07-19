@@ -43,7 +43,9 @@
 
 ## Povinná poslechová sada
 
-Před připojením slovníku ověřit nejméně:
+Před připojením slovníku ověřit nejméně všechny věty z `SARLOTA_PRONUNCIATION_LISTENING_TESTS`. Sada pokrývá jména ve vokativu, názvy vozidel, čísla, data, časy, jednotky, zkratky, kontakt, pracovní věty i nejistě rozpoznanou SPZ.
+
+Základní minimální věty:
 
 1. `Kaiser servis používá Kaiser Smart odpady.`
 2. `Šarlota načetla ověřený kontext.`

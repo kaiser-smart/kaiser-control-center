@@ -11,6 +11,7 @@ import {
   SARLOTA_GUARDRAILS_PROMPT_RULE,
   SARLOTA_LANGUAGE_PROMPT_RULE,
   SARLOTA_PROMPT_VERSION,
+  SARLOTA_OPERATIONAL_RESPONSE_EXAMPLES_PROMPT_RULE,
   SARLOTA_SAFE_EXAMPLES_PROMPT_RULE,
   sarlotaSystemPrompt
 } from "../src/sarlota/sarlotaSystemPrompt.js";
@@ -87,7 +88,9 @@ import {
   assert.equal(patched.includes(SARLOTA_LANGUAGE_PROMPT_RULE), true);
   assert.equal(patched.includes(SARLOTA_GUARDRAILS_PROMPT_RULE), true);
   assert.equal(patched.includes(SARLOTA_SAFE_EXAMPLES_PROMPT_RULE), true);
+  assert.equal(patched.includes(SARLOTA_OPERATIONAL_RESPONSE_EXAMPLES_PROMPT_RULE), true);
   assert.equal(patched.includes("PŘÍKLADY CHOVÁNÍ – NEJSOU TO PROVOZNÍ DATA"), true);
+  assert.equal(patched.includes("PRAKTICKÉ VZORY ODPOVĚDÍ – JEN S OVĚŘENÝM KONTEXTEM"), true);
   assert.equal(patched.includes("Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ."), true);
   assert.equal(patched.includes("Na potvrzení trasy se znovu neptej."), true);
   assert.equal(patched.includes("Pokyny typu odboč, pokračuj rovně nebo jeď určitý počet metrů říká výhradně HERE"), true);
@@ -301,6 +304,8 @@ import {
   assert.equal(canonicalPrompt.includes("po druhém neúspěchu nabídni bezpečný vizuální výběr"), true);
   assert.equal(canonicalPrompt.includes("starou hodnotu přestaň používat"), true);
   assert.equal(canonicalPrompt.includes("rok ne po jednotlivých číslicích"), true);
+  assert.equal(canonicalPrompt.includes("Hlášení je uložené. Tuto větu použij pouze při výslovném backendovém úspěchu"), true);
+  assert.equal(canonicalPrompt.includes("Neříkej, že jsi označila hlášení jako urgentní"), true);
 }
 
 {

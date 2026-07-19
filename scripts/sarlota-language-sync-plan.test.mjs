@@ -4,6 +4,7 @@ import { __test as statusTest } from "../functions/api/ai/elevenlabs/sarlota-sta
 import {
   SARLOTA_LANGUAGE_KB_CONTENT,
   SARLOTA_LANGUAGE_KB_NAME,
+  SARLOTA_PRONUNCIATION_LISTENING_TESTS,
   SARLOTA_PRONUNCIATION_DICTIONARY_NAME,
   SARLOTA_PRONUNCIATION_RULES
 } from "../src/sarlota/sarlotaLanguagePackage.js";
@@ -133,5 +134,10 @@ assert.equal(
   SARLOTA_PRONUNCIATION_RULES.find((rule) => rule.string_to_replace === "GPS")?.alias,
   "gé, pé, es"
 );
+assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.length >= 18);
+assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.includes("Kaiser servis používá Kaiser Smart odpady."));
+assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.some((item) => item.includes("Radime, Mirku, Petře, Patriku, Kamile a Tomáši.")));
+assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.some((item) => item.includes("AI, API, KSO, GPS, SMS, RCS, IČO, DIČ, DPH, PDF a CSV.")));
+assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.some((item) => item.includes("SPZ jsem nerozpoznala jistě")));
 
 console.log("sarlota language sync plan: ok");

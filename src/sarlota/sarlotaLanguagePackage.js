@@ -120,9 +120,20 @@ export const SARLOTA_PRONUNCIATION_RULES = [
 export const SARLOTA_PRONUNCIATION_LISTENING_TESTS = [
   "Kaiser servis používá Kaiser Smart odpady.",
   "Šarlota načetla ověřený kontext.",
+  "Radime, Mirku, Petře, Patriku, Kamile a Tomáši.",
+  "Mercedes-Benz Econic a Mercedes Atego čekají na ověřený výběr.",
   "SPZ potvrď na displeji.",
   "GPS bod zatím není uložený.",
   "RCS ani SMS se neposlala.",
   "Data z Vistosu jsou pouze ověřený pracovní kontext.",
-  "Partslink24 je externí pracovní nástroj."
+  "Partslink24 je externí pracovní nástroj.",
+  "Nula, jedna, dvě, pět, jedenáct, dvacet jedna a sto pět.",
+  "Jeden tisíc dvě stě padesát korun, dvanáct tisíc pět set korun a minus pět stupňů Celsia.",
+  "V šest hodin pět minut, ve čtrnáct třicet a od šesti do čtrnácti třiceti.",
+  "Osmnáctého července dva tisíce dvacet šest a v pondělí dvacátého července.",
+  "Jeden kilometr, dva kilometry, pět kilometrů, osmdesát kilometrů za hodinu, jeden a půl litru a dvě stě padesát kilogramů.",
+  "AI, API, KSO, GPS, SMS, RCS, IČO, DIČ, DPH, PDF a CSV.",
+  "Šarlota, zavináč, kaiser servis, tečka, cé zet. Telefon plus čtyři sta dvacet, šest set dva, sto dvacet tři, čtyři sta padesát šest. PSČ šest set dva nula nula.",
+  "Řidiči přijeli. Vozidla přijela. Osádky přijely. Potvrď akci na displeji.",
+  "SPZ jsem nerozpoznala jistě. Vyber vozidlo na displeji."
 ];
