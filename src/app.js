@@ -1444,6 +1444,7 @@ const collectionRoutesPilotState = {
   myDailyRouteSarlotaEnabled: false,
   myDailyRouteSarlotaConnecting: false,
   myDailyRouteSarlotaAutoSession: false,
+  myDailyRouteSarlotaAutoAttemptedRunId: "",
   myDailyRouteSarlotaMessage: "",
   myDailyRouteSarlotaContext: null,
   myDailyRouteSarlotaMemoryLoaded: false,
@@ -40446,6 +40447,7 @@ async function resetCollectionRoutesAdminTabletTest() {
     collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
     collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
     collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaAutoAttemptedRunId = "";
     collectionRoutesPilotState.testGpsConfirmations = [];
     collectionRoutesPilotState.testGpsPreview = null;
     collectionRoutesPilotState.dailyRoutesLoaded = false;
@@ -41515,9 +41517,27 @@ function applyMyCollectionDailyRoute(detail, message = "") {
     collectionRoutesPilotState.myDailyRoutePanel = "";
     collectionRoutesPilotState.myDailyRouteMapMode = "leg";
     collectionRoutesPilotState.myDailyRouteMapFocusStopId = "";
+    collectionRoutesPilotState.myDailyRouteSarlotaAutoAttemptedRunId = "";
     collectionDailyDriverMapRuntime.routeCache.clear();
   }
   if (message) collectionRoutesPilotState.myDailyRouteMessage = message;
+}
+
+function collectionDailyDriverSarlotaAutoStartRunId() {
+  const run = collectionRoutesPilotState.myDailyRoute?.run;
+  if (
+    !run?.id
+    || run.scope !== "test"
+    || run.status !== "active"
+    || normalizePath(window.location.pathname) !== COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE
+    || collectionDriverBlackviewSimulatorRequested()
+    || collectionRoutesPilotState.myDailyRouteSarlotaEnabled
+    || collectionRoutesPilotState.myDailyRouteSarlotaConnecting
+    || collectionRoutesPilotState.myDailyRouteSarlotaAutoAttemptedRunId === run.id
+  ) {
+    return "";
+  }
+  return run.id;
 }
 
 function clearCollectionDailyDriverReport() {
@@ -41735,8 +41755,16 @@ async function startCollectionDailyDriverSarlota(options = {}) {
       }
       collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
       collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
+      const microphonePermissionFailure = [
+        "voice_microphone_denied",
+        "voice_microphone_timeout",
+        "voice_microphone_unavailable",
+        "voice_microphone_error"
+      ].includes(error?.code);
       collectionRoutesPilotState.myDailyRouteSarlotaMessage = error?.code === "voice_stopped"
         ? "Šarlota je vypnutá. Klepnutím ji můžeš znovu připojit."
+        : automaticSession && microphonePermissionFailure
+          ? "Automatický start čeká na mikrofon. Povol mikrofon pro tento web a potom klepni na ZAPNOUT ŠARLOTU."
         : automaticSession
           ? "Automatický rozhovor se nepřipojil. Klepni na ZAPNOUT ŠARLOTU a použij ruční mikrofonový režim."
           : "Šarlota se nepřipojila. Zkontroluj hlášku u mikrofonu a klepni znovu na ZAPNOUT ŠARLOTU.";
@@ -42179,7 +42207,15 @@ async function loadMyCollectionDailyRoute(options = {}) {
   } finally {
     collectionRoutesPilotState.myDailyRouteLoading = false;
   }
+  const sarlotaAutoStartRunId = collectionDailyDriverSarlotaAutoStartRunId();
+  if (sarlotaAutoStartRunId) {
+    collectionRoutesPilotState.myDailyRouteSarlotaAutoAttemptedRunId = sarlotaAutoStartRunId;
+    collectionRoutesPilotState.myDailyRouteSarlotaMessage = "TEST trasa je aktivní. Připravuji úvodní přivítání Šarloty…";
+  }
   if (options.renderAfter !== false) render();
+  if (sarlotaAutoStartRunId) {
+    await enableCollectionDailyDriverSarlota({ promptForMemory: false, invocation: "automatic" });
+  }
 }
 
 async function transitionMyCollectionDailyRoute(action) {
@@ -48720,7 +48756,7 @@ function collectionDriverBlackviewSimulatorPage() {
           width="960"
           height="600"
           loading="eager"
-          allow="camera; microphone; geolocation; fullscreen"
+          allow="camera; microphone; geolocation; autoplay; fullscreen"
           allowfullscreen
           data-collection-driver-blackview-frame
         ></iframe>

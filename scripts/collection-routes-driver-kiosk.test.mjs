@@ -221,6 +221,7 @@ assert.ok(
     && appSource.includes("data-collection-driver-blackview-frame")
     && appSource.includes('width="960"')
     && appSource.includes('height="600"')
+    && appSource.includes('allow="camera; microphone; geolocation; autoplay; fullscreen"')
     && appSource.includes('url.searchParams.delete("device")')
     && styleSource.includes("collection-driver-blackview-simulator-active")
     && styleSource.includes(".collection-driver-blackview-simulator-frame iframe")

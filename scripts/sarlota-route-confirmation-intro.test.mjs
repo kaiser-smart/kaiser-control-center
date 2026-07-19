@@ -18,6 +18,22 @@ assert.match(transitionSource, /await enableCollectionDailyDriverSarlota\(\{ pro
 assert.match(transitionSource, /Trasa je zahájená\. Připravuji úvodní přivítání Šarloty/);
 assert.doesNotMatch(transitionSource, /speechSynthesis|SpeechSynthesisUtterance/);
 
+const loadRouteStart = appSource.indexOf("async function loadMyCollectionDailyRoute(options = {})");
+const loadRouteEnd = appSource.indexOf("async function transitionMyCollectionDailyRoute(action)", loadRouteStart);
+assert.ok(loadRouteStart >= 0 && loadRouteEnd > loadRouteStart);
+const loadRouteSource = appSource.slice(loadRouteStart, loadRouteEnd);
+
+assert.match(appSource, /function collectionDailyDriverSarlotaAutoStartRunId\(\)/);
+assert.match(appSource, /run\.scope !== "test"/);
+assert.match(appSource, /run\.status !== "active"/);
+assert.match(appSource, /normalizePath\(window\.location\.pathname\) !== COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE/);
+assert.match(appSource, /\|\| collectionDriverBlackviewSimulatorRequested\(\)/);
+assert.match(appSource, /myDailyRouteSarlotaAutoAttemptedRunId === run\.id/);
+assert.match(loadRouteSource, /const sarlotaAutoStartRunId = collectionDailyDriverSarlotaAutoStartRunId\(\);/);
+assert.match(loadRouteSource, /myDailyRouteSarlotaAutoAttemptedRunId = sarlotaAutoStartRunId;/);
+assert.match(loadRouteSource, /await enableCollectionDailyDriverSarlota\(\{ promptForMemory: false, invocation: "automatic" \}\);/);
+assert.match(appSource, /Automatický start čeká na mikrofon\. Povol mikrofon pro tento web/);
+
 const enableStart = appSource.indexOf("async function enableCollectionDailyDriverSarlota(options = {})");
 const enableEnd = appSource.indexOf("async function grantCollectionRoutesSarlotaMemoryAndStart", enableStart);
 assert.ok(enableStart >= 0 && enableEnd > enableStart);
