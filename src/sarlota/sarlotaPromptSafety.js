@@ -6,6 +6,46 @@ export const DRIVER_REPORT_PROMPT_LEGACY_RULE_MARKERS = [
   "HLÁŠENÍ ŘIDIČŮ / VOZIDLA"
 ];
 export const DRIVER_REPORT_PROMPT_REQUIRED_PHRASE = "Konkrétní vozidla smíš v hlasu říct pouze tehdy";
+export const DRIVER_REPORT_PROMPT_SAFETY_REQUIREMENTS = [
+  {
+    id: "verified_context",
+    label: "načtení ověřeného kontextu vozidel",
+    markers: ["get_driver_report_context"]
+  },
+  {
+    id: "verified_vehicle_gate",
+    label: "ověření vozidla a jeho přiřazení řidiči",
+    markers: ["vehiclesverified", "assignedtocurrentdriver", "existsinfleet", "fleet_db"]
+  },
+  {
+    id: "safe_vehicle_picker",
+    label: "bezpečný výběr vozidla v aplikaci",
+    markers: ["show_driver_vehicle_picker", "get_driver_vehicle_picker_selection"]
+  },
+  {
+    id: "spz_validation",
+    label: "ověření ručně zadané SPZ",
+    markers: ["validate_driver_vehicle_spz"]
+  },
+  {
+    id: "draft_before_write",
+    label: "příprava hlášení před finálním zápisem",
+    markers: ["create_driver_part_request", "confirmed false"]
+  },
+  {
+    id: "physical_confirmation",
+    label: "fyzické potvrzení zápisu v KSO",
+    alternatives: [
+      ["confirmationsource kso-ui"],
+      ["fyzicke potvrzeni", "kso"]
+    ]
+  },
+  {
+    id: "verified_write_result",
+    label: "ověření skutečně vytvořeného hlášení",
+    markers: ["ok true", "driverpartrequest.reportid"]
+  }
+];
 export const FORBIDDEN_DRIVER_REPORT_PROMPT_PHRASES = [
   "Moment, načtu si " + "vozidla",
   "V hlasovém flow nikdy neříkej " + "konkrétní vozidlo",
@@ -29,6 +69,26 @@ function cleanPromptString(value) {
   return String(value ?? "").trim();
 }
 
+function normalizedPromptString(value) {
+  return cleanPromptString(value)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[{}:_`*]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function requirementMatches(text, requirement) {
+  if (Array.isArray(requirement.markers)) {
+    return requirement.markers.every((marker) => text.includes(normalizedPromptString(marker)));
+  }
+
+  return Array.isArray(requirement.alternatives) && requirement.alternatives.some((alternative) => (
+    alternative.every((marker) => text.includes(normalizedPromptString(marker)))
+  ));
+}
+
 export function driverReportPromptRuleBlock() {
   return [
     "",
@@ -42,6 +102,20 @@ export function driverReportPromptHasCurrentRule(promptText) {
   return text.includes(DRIVER_REPORT_PROMPT_RULE_MARKER)
     && text.includes(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE)
     && text.includes(DRIVER_REPORT_PROMPT_REQUIRED_PHRASE);
+}
+
+export function driverReportPromptSafetyAnalysis(promptText) {
+  const text = normalizedPromptString(promptText);
+  const missingRequirements = DRIVER_REPORT_PROMPT_SAFETY_REQUIREMENTS
+    .filter((requirement) => !requirementMatches(text, requirement))
+    .map(({ id, label }) => ({ id, label }));
+
+  return {
+    safeRulePresent: missingRequirements.length === 0,
+    canonicalRulePresent: driverReportPromptHasCurrentRule(promptText),
+    manuallyAdjusted: missingRequirements.length === 0 && !driverReportPromptHasCurrentRule(promptText),
+    missingRequirements
+  };
 }
 
 export function driverReportPromptForbiddenPhrases(promptText) {

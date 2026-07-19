@@ -64,7 +64,14 @@ const previewHtml = SarlotaStatusPanel({
   promptSyncPlan: readyPlan
 });
 
-assert.match(previewHtml, /Načíst náhled promptu/);
+assert.match(previewHtml, /OVĚŘIT ELEVENLABS/);
+assert.match(previewHtml, /Tools v ElevenLabs/);
+assert.match(previewHtml, /Technické servisní nástroje/);
+assert.match(previewHtml, /AKTUALIZOVAT TOOLS · KSO → ELEVENLABS/);
+assert.doesNotMatch(previewHtml, /data-sarlota-prompt-sync/);
+assert.doesNotMatch(previewHtml, /data-sarlota-language-sync/);
+assert.doesNotMatch(previewHtml, />Obnovit</);
+assert.doesNotMatch(previewHtml, /pravidlo zatím v ElevenLabs promptu není/);
 assert.match(previewHtml, /data-sarlota-prompt-plan/);
 assert.match(previewHtml, /NÁHLED · BEZ ZÁPISU/);
 assert.match(previewHtml, /Jeden kanonický prompt/);
@@ -72,7 +79,7 @@ assert.match(previewHtml, /12600 znaků/);
 assert.match(previewHtml, /sarlota-elevenlabs-2026-07-19-language-examples-hardened/);
 assert.match(previewHtml, /conversation_config\.agent\.prompt\.prompt/);
 assert.match(previewHtml, /data-sarlota-prompt-apply/);
-assert.match(previewHtml, /ZAPSAT DO ELEVENLABS/);
+assert.match(previewHtml, /NAHRADIT PROMPT V ELEVENLABS/);
 assert.doesNotMatch(previewHtml, /TAJNY_TEXT_PROMPTU_SE_NESMI_ZOBRAZIT/);
 
 const confirmationHtml = SarlotaStatusPanel({
@@ -81,7 +88,7 @@ const confirmationHtml = SarlotaStatusPanel({
   promptSyncPlan: readyPlan,
   promptSyncConfirmationPending: true
 });
-assert.match(confirmationHtml, /POTVRDIT ZÁPIS DO ELEVENLABS/);
+assert.match(confirmationHtml, /POTVRDIT NAHRAZENÍ PROMPTU/);
 assert.match(confirmationHtml, /druhé kliknutí provede změnu/);
 
 const languagePlan = {
@@ -109,15 +116,79 @@ const languageHtml = SarlotaStatusPanel({
   selectedAssistantKey: "sarlota",
   languageSyncPlan: languagePlan
 });
-assert.match(languageHtml, /Načíst jazykový balík/);
 assert.match(languageHtml, /data-sarlota-language-plan/);
 assert.match(languageHtml, /Šarlota – jazyková reference KSO/);
 assert.match(languageHtml, /0 → 26/);
 assert.match(languageHtml, /data-sarlota-language-apply/);
+assert.match(languageHtml, /AKTUALIZOVAT KB A VÝSLOVNOST V ELEVENLABS/);
 assert.doesNotMatch(languageHtml, /TAJNY_OBSAH_KB_SE_NESMI_ZOBRAZIT/);
 
 const plainHtml = SarlotaStatusPanel({ status, selectedAssistantKey: "sarlota" });
 assert.doesNotMatch(plainHtml, /data-sarlota-prompt-apply/);
+
+const editorHtml = SarlotaStatusPanel({
+  status,
+  selectedAssistantKey: "sarlota",
+  contentEditor: {
+    loaded: true,
+    activeKind: "prompt",
+    drafts: { prompt: "Bezpečný & upravitelný prompt", knowledge_base: "KB" },
+    validation: { prompt: { valid: true, errors: [] } },
+    data: {
+      documents: {
+        prompt: {
+          title: "Hlavní prompt Šarloty",
+          liveAvailable: true,
+          liveLength: 42,
+          liveFingerprint: "fnv-live",
+          draftContent: "Bezpečný & upravitelný prompt",
+          hasSavedDraft: true,
+          draftStatus: "draft",
+          conflict: false,
+          validation: { valid: true, errors: [] },
+          versions: [{ id: "version-1", version_number: 1, source: "live_snapshot", created_at: "2026-07-19T12:00:00.000Z" }]
+        },
+        knowledge_base: {
+          title: "Knowledge Base",
+          liveAvailable: true,
+          liveLength: 2,
+          draftContent: "KB",
+          versions: []
+        }
+      }
+    }
+  }
+});
+assert.match(editorHtml, /Zdroj pravdy v KSO/);
+assert.match(editorHtml, /HLAVNÍ PROMPT/);
+assert.match(editorHtml, /KNOWLEDGE BASE/);
+assert.match(editorHtml, /ULOŽIT KONCEPT V KSO/);
+assert.match(editorHtml, /PUBLIKOVAT DO ELEVENLABS/);
+assert.match(editorHtml, /VRÁTIT TUTO VERZI/);
+assert.match(editorHtml, /Porovnat koncept s živou verzí ElevenLabs/);
+assert.match(editorHtml, /Bezpečný &amp; upravitelný prompt/);
+assert.doesNotMatch(editorHtml, /Bezpečný & upravitelný prompt/);
+
+const reviewedHtml = SarlotaStatusPanel({
+  status: {
+    ...status,
+    driverReportPrompt: {
+      status: "review",
+      syncAllowed: true,
+      rulePresent: true,
+      canonicalRulePresent: false,
+      manuallyAdjusted: true,
+      missingRequirements: [],
+      forbiddenPhrasesPresent: [],
+      promptTextReturned: false
+    }
+  },
+  selectedAssistantKey: "sarlota"
+});
+assert.match(reviewedHtml, /kontrola/);
+assert.match(reviewedHtml, /bezpečnostní pravidla nalezena; prompt se liší od verze KSO/);
+assert.match(reviewedHtml, /žádné povinné bezpečnostní pravidlo nechybí/);
+assert.doesNotMatch(reviewedHtml, />chyba</);
 
 const appliedHtml = SarlotaStatusPanel({
   status,

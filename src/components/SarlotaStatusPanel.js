@@ -15,6 +15,7 @@ function statusMeta(status) {
     configured: "nakonfigurováno",
     ok: "OK",
     error: "chyba",
+    review: "kontrola",
     unverified: "neověřeno",
     waiting: "neověřeno"
   };
@@ -137,6 +138,30 @@ function knowledgeDiagnostics(knowledgeBase = null) {
   `;
 }
 
+function promptSafetyDiagnostics(prompt = null) {
+  if (!prompt) {
+    return "";
+  }
+
+  const missing = safeArray(prompt.missingRequirements);
+  const missingText = missing.length
+    ? missing.map((item) => `<li>${escapeHtml(item?.label || "povinné bezpečnostní pravidlo")}</li>`).join("")
+    : "<li>žádné povinné bezpečnostní pravidlo nechybí</li>";
+
+  return `
+    <section class="sarlota-status__diagnostic">
+      <h3>Kontrola bezpečnosti promptu</h3>
+      <dl>
+        ${diagnosticLine("Bezpečnostní pravidla", escapeHtml(prompt.rulePresent === true ? "nalezena" : prompt.rulePresent === false ? "neúplná" : "neověřena"))}
+        ${diagnosticLine("Shoda s verzí KSO", escapeHtml(prompt.canonicalRulePresent === true ? "ano" : prompt.canonicalRulePresent === false ? "ne" : "neověřena"))}
+        ${diagnosticLine("Obsah ve stavové diagnostice", escapeHtml(prompt.promptTextReturned ? "vrácen" : "nevrací se; je dostupný jen v chráněném editoru"))}
+      </dl>
+      <strong>Chybějící povinné body</strong>
+      <ul class="sarlota-status__diagnostic-list">${missingText}</ul>
+    </section>
+  `;
+}
+
 function vehicleContextDiagnostics(context = null) {
   if (!context) {
     return "";
@@ -209,6 +234,7 @@ function voiceWebhookSelfCheckDiagnostics(check = null) {
 
 function diagnosticDetails(data) {
   const details = [
+    promptSafetyDiagnostics(data.driverReportPrompt),
     toolDiagnostics(data.tools),
     knowledgeDiagnostics(data.knowledgeBase),
     vehicleContextDiagnostics(data.driverReportVehicleContext),
@@ -221,8 +247,8 @@ function diagnosticDetails(data) {
   }
 
   return `
-    <details class="sarlota-status__details" open>
-      <summary>Diagnostický detail bez změn v ElevenLabs</summary>
+    <details class="sarlota-status__details">
+      <summary>Technické podrobnosti</summary>
       <div class="sarlota-status__diagnostics">
         ${details}
       </div>
@@ -275,15 +301,22 @@ function driverReportPromptDetail(prompt = null) {
 
   const forbidden = safeArray(prompt.forbiddenPhrasesPresent);
   if (forbidden.length) {
-    return `v promptu zůstává starý blok: ${forbidden.length} zakázaných frází`;
+    return `nalezeny nebezpečné zastaralé formulace: ${forbidden.length}`;
+  }
+
+  if (prompt.rulePresent === true && prompt.canonicalRulePresent === true) {
+    return "povinná bezpečnostní pravidla jsou ověřena a odpovídají KSO";
   }
 
   if (prompt.rulePresent === true) {
-    return "tvrdé pravidlo UI výběru je v ElevenLabs promptu";
+    return "bezpečnostní pravidla nalezena; prompt se liší od verze KSO";
   }
 
   if (prompt.rulePresent === false) {
-    return "pravidlo zatím v ElevenLabs promptu není";
+    const missingCount = safeArray(prompt.missingRequirements).length;
+    return missingCount
+      ? `chybí ${missingCount} povinných bezpečnostních bodů`
+      : "povinná bezpečnostní pravidla nejsou úplná";
   }
 
   return "ElevenLabs prompt neověřen";
@@ -400,6 +433,105 @@ function voiceWriteTestControls(test = {}, syncing = false) {
   `;
 }
 
+function contentVersionLabel(version = {}) {
+  const number = Number(version.version_number || version.versionNumber || 0);
+  const createdAt = version.created_at || version.createdAt;
+  const date = createdAt ? new Date(createdAt).toLocaleString("cs-CZ") : "čas neuveden";
+  const source = {
+    live_snapshot: "záloha před změnou",
+    published_draft: "publikovaný koncept",
+    rollback: "obnovená historická verze"
+  }[version.source] || "uložená verze";
+  return `Verze ${number || "–"} · ${source} · ${date}`;
+}
+
+function sarlotaContentEditor(editor = {}, syncing = false) {
+  if (editor.loading) {
+    return `<section class="sarlota-content-editor"><p>Načítám Prompt a Knowledge Base z ElevenLabs…</p></section>`;
+  }
+  if (editor.error && !editor.data) {
+    return `<section class="sarlota-content-editor"><p class="module-feedback__error" role="alert">${escapeHtml(editor.error)}</p><button class="secondary-link" type="button" data-sarlota-content-refresh>ZKUSIT ZNOVU</button></section>`;
+  }
+  if (!editor.data?.documents) {
+    return "";
+  }
+
+  const kind = editor.activeKind === "knowledge_base" ? "knowledge_base" : "prompt";
+  const document = editor.data.documents[kind] || {};
+  const draft = String(editor.drafts?.[kind] ?? document.draftContent ?? document.liveContent ?? "");
+  const liveContent = String(document.liveContent ?? "");
+  const validation = editor.validation?.[kind] || document.validation || { valid: false, errors: [] };
+  const versions = safeArray(document.versions);
+  const hasChanges = document.draftFingerprint
+    ? document.draftFingerprint !== document.liveFingerprint
+    : draft !== liveContent;
+  const publishDisabled = syncing
+    || editor.saving
+    || editor.publishing
+    || document.conflict
+    || document.hasSavedDraft !== true
+    || !hasChanges
+    || validation.valid !== true;
+  const versionsHtml = versions.length
+    ? versions.map((version) => `
+      <li>
+        <span>${escapeHtml(contentVersionLabel(version))}</span>
+        <button class="text-action" type="button" data-sarlota-content-rollback="${escapeHtml(version.id || "")}" data-sarlota-content-kind="${escapeHtml(kind)}" ${syncing || editor.publishing || version.content_fingerprint === document.liveFingerprint ? "disabled" : ""}>VRÁTIT TUTO VERZI</button>
+      </li>
+    `).join("")
+    : "<li>Zatím není uložená žádná historická verze.</li>";
+  const validationHtml = validation.valid
+    ? '<p class="sarlota-content-editor__valid">Bezpečnostní kontrola: připraveno</p>'
+    : `<div class="sarlota-content-editor__invalid"><strong>Nelze publikovat</strong><ul>${safeArray(validation.errors).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>`;
+
+  return `
+    <section class="sarlota-content-editor" aria-labelledby="sarlota-content-editor-title">
+      <div class="sarlota-content-editor__head">
+        <div>
+          <span class="module-feedback__eyebrow">Zdroj pravdy v KSO</span>
+          <h3 id="sarlota-content-editor-title">Prompt a Knowledge Base</h3>
+          <p>Nejdřív uprav a ulož koncept. Produkční ElevenLabs se změní až samostatným potvrzením publikování.</p>
+        </div>
+        <button class="secondary-link" type="button" data-sarlota-content-refresh ${syncing || editor.saving || editor.publishing ? "disabled" : ""}>NAČÍST Z ELEVENLABS</button>
+      </div>
+      <div class="sarlota-content-editor__tabs" role="tablist" aria-label="Obsah Šarloty">
+        <button type="button" role="tab" aria-selected="${kind === "prompt"}" class="${kind === "prompt" ? "is-active" : ""}" data-sarlota-content-tab="prompt">HLAVNÍ PROMPT</button>
+        <button type="button" role="tab" aria-selected="${kind === "knowledge_base"}" class="${kind === "knowledge_base" ? "is-active" : ""}" data-sarlota-content-tab="knowledge_base">KNOWLEDGE BASE</button>
+      </div>
+      ${document.conflict ? '<p class="module-feedback__error" role="alert">Obsah v ElevenLabs se od uloženého konceptu změnil. Publikování je zablokované; nejdřív změny bezpečně porovnej a spoj.</p>' : ""}
+      ${editor.message ? `<p class="module-feedback__success" role="status">${escapeHtml(editor.message)}</p>` : ""}
+      ${editor.error ? `<p class="module-feedback__error" role="alert">${escapeHtml(editor.error)}</p>` : ""}
+      <div class="sarlota-content-editor__status">
+        <span><strong>Živá verze:</strong> ${escapeHtml(document.liveAvailable ? `${Number(document.liveLength || 0)} znaků` : "chybí")}</span>
+        <span><strong>Koncept:</strong> ${escapeHtml(document.hasSavedDraft ? (document.draftStatus === "published" ? "publikovaný" : "uložený v KSO") : "načtený z ElevenLabs")}</span>
+      </div>
+      <label class="sarlota-content-editor__field">
+        <span>${escapeHtml(document.title || (kind === "prompt" ? "Hlavní prompt Šarloty" : "Knowledge Base"))}</span>
+        <textarea rows="24" spellcheck="true" data-sarlota-content-textarea data-sarlota-content-kind="${escapeHtml(kind)}" ${syncing || editor.publishing ? "disabled" : ""}>${escapeHtml(draft)}</textarea>
+        <small data-sarlota-content-count>${escapeHtml(`${draft.length} znaků · úpravy se automaticky neposílají do ElevenLabs`)}</small>
+      </label>
+      ${validationHtml}
+      <details class="sarlota-content-editor__comparison">
+        <summary>${hasChanges ? "Porovnat koncept s živou verzí ElevenLabs" : "Koncept odpovídá živé verzi ElevenLabs"}</summary>
+        ${hasChanges ? `
+          <div>
+            <section><strong>ŽIVĚ V ELEVENLABS</strong><pre>${escapeHtml(liveContent)}</pre></section>
+            <section><strong>KONCEPT V KSO</strong><pre>${escapeHtml(draft)}</pre></section>
+          </div>
+        ` : '<p>Mezi konceptem a právě načteným živým obsahem není rozdíl.</p>'}
+      </details>
+      <div class="sarlota-content-editor__actions">
+        <button class="secondary-link" type="button" data-sarlota-content-save data-sarlota-content-kind="${escapeHtml(kind)}" ${syncing || editor.saving || editor.publishing ? "disabled" : ""}>${editor.saving ? "UKLÁDÁM…" : "ULOŽIT KONCEPT V KSO"}</button>
+        <button class="primary-action" type="button" data-sarlota-content-publish data-sarlota-content-kind="${escapeHtml(kind)}" ${publishDisabled ? "disabled" : ""}>${editor.publishing ? "PUBLIKUJI…" : "PUBLIKOVAT DO ELEVENLABS"}</button>
+      </div>
+      <details class="sarlota-content-editor__history">
+        <summary>Historie a návrat k předchozí verzi</summary>
+        <ul>${versionsHtml}</ul>
+      </details>
+    </section>
+  `;
+}
+
 function promptSyncBlockLabels(prompt = {}) {
   if (prompt.willReplaceEntirePrompt) {
     return ["Jeden kanonický prompt: identita, bezpečnost, jazyk, nástroje a modulová pravidla"];
@@ -442,8 +574,8 @@ function promptSyncPreview(plan = null, syncing = false, confirmationPending = f
       <div class="sarlota-status__prompt-plan-head">
         <div>
           <span class="sarlota-status__badge sarlota-status__badge--${escapeHtml(badgeTone)}">${escapeHtml(badgeLabel)}</span>
-          <h3>Náhled změny ElevenLabs promptu</h3>
-          <p>Tento náhled je pouze čtecí. Při zápisu se nahradí jen text promptu; first message, model ani tools se nezmění.</p>
+          <h3>Porovnání promptu · KSO → ElevenLabs</h3>
+          <p>Tento krok je pouze čtecí. Až samostatné potvrzení nahradí celý text promptu v ElevenLabs verzí uloženou v KSO; first message, model ani tools se nezmění.</p>
         </div>
       </div>
       <dl class="sarlota-status__prompt-plan-grid">
@@ -463,7 +595,7 @@ function promptSyncPreview(plan = null, syncing = false, confirmationPending = f
       <p class="sarlota-status__prompt-plan-safety">Do prohlížeče se nevrací text promptu, API klíč, Agent ID ani signed URL. Zápis znovu načte živého agenta a projde backendovou bezpečnostní kontrolou.</p>
       ${confirmationPending ? `<p class="module-feedback__warning" role="status">Poslední kontrola před zápisem: druhé kliknutí provede změnu pouze při shodném aktuálním otisku.</p>` : ""}
       <div class="sarlota-status__prompt-plan-actions">
-        ${ready ? `<button class="primary-action" type="button" data-sarlota-prompt-apply ${syncing ? "disabled" : ""}>${confirmationPending ? "POTVRDIT ZÁPIS DO ELEVENLABS" : "ZAPSAT DO ELEVENLABS"}</button>` : ""}
+        ${ready ? `<button class="primary-action" type="button" data-sarlota-prompt-apply ${syncing ? "disabled" : ""}>${confirmationPending ? "POTVRDIT NAHRAZENÍ PROMPTU" : "NAHRADIT PROMPT V ELEVENLABS"}</button>` : ""}
         <button class="secondary-link" type="button" data-sarlota-prompt-plan-cancel ${syncing ? "disabled" : ""}>${alreadyApplied ? "ZAVŘÍT NÁHLED" : "ZRUŠIT NÁHLED"}</button>
       </div>
     </section>
@@ -493,8 +625,8 @@ function languageSyncPreview(plan = null, syncing = false) {
       <div class="sarlota-status__prompt-plan-head">
         <div>
           <span class="sarlota-status__badge sarlota-status__badge--${escapeHtml(badgeTone)}">${escapeHtml(badgeLabel)}</span>
-          <h3>Náhled jazykové KB a výslovnosti</h3>
-          <p>Tento náhled je pouze čtecí. Spravuje jen dva přesně pojmenované zdroje Šarloty.</p>
+          <h3>Porovnání KB a výslovnosti · KSO → ElevenLabs</h3>
+          <p>Tento krok je pouze čtecí. Až samostatné potvrzení aktualizuje dva přesně pojmenované zdroje Šarloty v ElevenLabs.</p>
         </div>
       </div>
       <dl class="sarlota-status__prompt-plan-grid">
@@ -507,7 +639,7 @@ function languageSyncPreview(plan = null, syncing = false) {
       </dl>
       <p class="sarlota-status__prompt-plan-safety">Prompt, první zpráva, model a tools se nemění. Cizí KB ani cizí výslovnostní slovníky se nemažou. Text KB, API klíč a plná ID se do prohlížeče nevracejí.</p>
       <div class="sarlota-status__prompt-plan-actions">
-        ${ready ? `<button class="primary-action" type="button" data-sarlota-language-apply ${syncing ? "disabled" : ""}>PŘIPOJIT JAZYKOVÝ BALÍK</button>` : ""}
+        ${ready ? `<button class="primary-action" type="button" data-sarlota-language-apply ${syncing ? "disabled" : ""}>AKTUALIZOVAT KB A VÝSLOVNOST V ELEVENLABS</button>` : ""}
         <button class="secondary-link" type="button" data-sarlota-language-plan-cancel ${syncing ? "disabled" : ""}>${alreadyApplied ? "ZAVŘÍT NÁHLED" : "ZRUŠIT NÁHLED"}</button>
       </div>
     </section>
@@ -526,7 +658,8 @@ export function SarlotaStatusPanel({
   voiceWriteTest = {},
   promptSyncPlan = null,
   promptSyncConfirmationPending = false,
-  languageSyncPlan = null
+  languageSyncPlan = null,
+  contentEditor = {}
 } = {}) {
   const data = status || {};
   const selectedConfig = ELEVENLABS_ASSISTANT_CONFIGS[selectedAssistantKey] || ELEVENLABS_ASSISTANT_CONFIGS.sarlota;
@@ -564,7 +697,7 @@ export function SarlotaStatusPanel({
     statusRow("Personalizace", data.personalization?.status || "unverified", data.personalization?.source || "přihlášený uživatel"),
     statusRow("Vocativ uživatele", data.vocative?.status || "unverified", vocativeDetail),
     statusRow("LLM model v EL", data.openAiModelInElevenLabs?.status || "unverified", modelDetail(data.openAiModelInElevenLabs)),
-    statusRow("Prompt Hlášení řidičů", data.driverReportPrompt?.status || "unverified", driverReportPromptDetail(data.driverReportPrompt)),
+    statusRow("Bezpečnost promptu", data.driverReportPrompt?.status || "unverified", driverReportPromptDetail(data.driverReportPrompt)),
     statusRow("Tools", data.tools?.status || "unverified", toolDetail(data.tools)),
     statusRow("Knowledge Base", data.knowledgeBase?.status || "unverified", knowledgeBaseDetail(data.knowledgeBase)),
     statusRow("Kontext vozidel", data.driverReportVehicleContext?.status ? "ok" : "unverified", vehicleContextDetail(data.driverReportVehicleContext)),
@@ -583,7 +716,6 @@ export function SarlotaStatusPanel({
       data.signedUrlEndpoint?.exists ? (data.signedUrlEndpoint?.pathForAssistant || `/api/ai/elevenlabs/signed-url?assistant=${selectedConfig.assistantKey}`) : "neověřeno"
     )
   ].join("");
-  const promptSyncDisabled = loading || syncing || data.driverReportPrompt?.syncAllowed === false || selectedConfig.promptSyncAllowed === false;
   const diagnosticSyncDisabled = loading || syncing || selectedConfig.assistantKey !== "sarlota";
   const smart2RepairDisabled = loading || syncing || selectedConfig.assistantKey !== "sarlota-smart-2";
   const smart2DeleteDisabled = loading || syncing || selectedConfig.assistantKey !== "sarlota-smart-2";
@@ -603,35 +735,33 @@ export function SarlotaStatusPanel({
               ${assistantOptions}
             </select>
           </label>
-          <button class="secondary-link" type="button" data-sarlota-status-refresh ${loading || syncing ? "disabled" : ""}>
-            ${loading ? "Načítám..." : "Obnovit"}
+          <button class="primary-action" type="button" data-sarlota-status-refresh ${loading || syncing ? "disabled" : ""}>
+            ${loading ? "OVĚŘUJI..." : "OVĚŘIT ELEVENLABS"}
           </button>
         </div>
       </div>
-      <details class="sarlota-status__service-actions">
-        <summary>Servisní akce Šarloty</summary>
+      <section class="sarlota-status__read-only-note" aria-label="Bezpečné ověření ElevenLabs">
+        <strong>Bezpečné čtení</strong>
+        <span>Tlačítko Ověřit ElevenLabs pouze načte aktuální stav agenta, promptu, tools a připojené Knowledge Base. Nic nemění.</span>
+      </section>
+      ${sarlotaContentEditor(contentEditor, syncing)}
+      <details class="sarlota-status__service-actions sarlota-status__service-actions--write">
+        <summary>Tools v ElevenLabs</summary>
+        <p class="sarlota-status__service-warning">Aktualizace tools zapisuje jedním směrem z KSO do ElevenLabs a před provedením má vlastní potvrzení.</p>
         <div class="sarlota-status__actions sarlota-status__actions--service">
           <button class="primary-action sarlota-status__sync" type="button" data-sarlota-tools-sync ${loading || syncing ? "disabled" : ""}>
-            ${syncing ? "Synchronizuji..." : "Synchronizovat tools"}
+            ${syncing ? "Synchronizuji..." : "AKTUALIZOVAT TOOLS · KSO → ELEVENLABS"}
           </button>
-          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-smart-2-repair ${smart2RepairDisabled ? "disabled" : ""}>
-            Opravit Smart 2 základ
-          </button>
-          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-smart-2-delete ${smart2DeleteDisabled ? "disabled" : ""}>
-            Smazat test Smart 2
-          </button>
-          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-tools-diagnostic ${diagnosticSyncDisabled ? "disabled" : ""}>
-            Servis: odpojit tools
-          </button>
-          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-vehicle-context-diagnostic ${loading || syncing ? "disabled" : ""}>
-            ${omitDriverReportVehicleContext ? "Vypnout test bez vozidel" : "Test: bez vozidel v hlasu"}
-          </button>
-          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-prompt-sync ${promptSyncDisabled ? "disabled" : ""}>
-            Načíst náhled promptu
-          </button>
-          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-language-sync ${diagnosticSyncDisabled ? "disabled" : ""}>
-            Načíst jazykový balík
-          </button>
+        </div>
+        <p>Prompt a Knowledge Base se publikují výhradně z verzovaného editoru výše.</p>
+      </details>
+      <details class="sarlota-status__service-actions">
+        <summary>Technické servisní nástroje</summary>
+        <div class="sarlota-status__actions sarlota-status__actions--service">
+          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-smart-2-repair ${smart2RepairDisabled ? "disabled" : ""}>Opravit Smart 2 základ</button>
+          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-smart-2-delete ${smart2DeleteDisabled ? "disabled" : ""}>Smazat test Smart 2</button>
+          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-tools-diagnostic ${diagnosticSyncDisabled ? "disabled" : ""}>Odpojit tools pro diagnostiku</button>
+          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-vehicle-context-diagnostic ${loading || syncing ? "disabled" : ""}>${omitDriverReportVehicleContext ? "Vypnout test bez vozidel" : "Test bez vozidel v hlasu"}</button>
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-voice-write-test ${voiceWriteTestDisabled ? "disabled" : ""}>
             Test voice zápisu
           </button>
@@ -639,7 +769,7 @@ export function SarlotaStatusPanel({
             Testovací hovor
           </button>
         </div>
-        <p>Servisní akce mění nebo testují napojení. Rizikové kroky mají vlastní potvrzení.</p>
+        <p>Určeno pro diagnostiku. Některé kroky mění testovací nebo produkční napojení a vždy mají vlastní potvrzení.</p>
       </details>
       ${error ? `<p class="module-feedback__error" role="alert">${escapeHtml(error)}</p>` : ""}
       ${syncError ? `<p class="module-feedback__error" role="alert">${escapeHtml(syncError)}</p>` : ""}
@@ -652,7 +782,7 @@ export function SarlotaStatusPanel({
       </dl>
       ${diagnosticDetails(data)}
       <p class="sarlota-status__meta">
-        Aktualizováno: ${escapeHtml(generatedAt)}. Tools a prompt se synchronizují odděleně; Smart 2 základ opravuje jen first message a model. Hlasový test bez vozidel je jen v této otevřené stránce. Kontrolní voice zápis vytvoří testovací hlášení až po potvrzení.
+        Ověřeno: ${escapeHtml(generatedAt)}. Běžné ověření je pouze čtecí. Zápisy z KSO do ElevenLabs jsou oddělené a vyžadují vlastní potvrzení.
       </p>
     </section>
   `;
