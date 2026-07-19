@@ -304,6 +304,15 @@ async function elevenLabsRequest({ apiKey, path, method = "GET", body = null }) 
   return payload;
 }
 
+async function elevenLabsRequestAtStage(stage, options) {
+  try {
+    return await elevenLabsRequest(options);
+  } catch (error) {
+    error.stage = stage;
+    throw error;
+  }
+}
+
 function upstreamErrorSummary(error) {
   if (error?.code === "ELEVENLABS_REQUEST_TIMEOUT") return "ElevenLabs API neodpovědělo včas.";
   const detail = error?.payload?.detail;
@@ -327,9 +336,9 @@ async function readLiveContext(env, assistantConfig) {
   }
 
   const [agentConfig, knowledgePayload, dictionaryPayload] = await Promise.all([
-    elevenLabsRequest({ apiKey, path: `/convai/agents/${encodeURIComponent(agentId)}` }),
-    elevenLabsRequest({ apiKey, path: "/convai/knowledge-base?page_size=100" }),
-    elevenLabsRequest({ apiKey, path: "/pronunciation-dictionaries?page_size=100" })
+    elevenLabsRequestAtStage("agent_read", { apiKey, path: `/convai/agents/${encodeURIComponent(agentId)}` }),
+    elevenLabsRequestAtStage("knowledge_base_list", { apiKey, path: "/convai/knowledge-base?page_size=100" }),
+    elevenLabsRequestAtStage("pronunciation_dictionary_list", { apiKey, path: "/pronunciation-dictionaries?page_size=100" })
   ]);
   const matchingKnowledge = matchingByExactName(knowledgeBaseDocuments(knowledgePayload), SARLOTA_LANGUAGE_KB_NAME);
   const matchingDictionaries = matchingByExactName(pronunciationDictionaries(dictionaryPayload), SARLOTA_PRONUNCIATION_DICTIONARY_NAME);
@@ -669,7 +678,11 @@ export async function onRequestGet({ request, env }) {
 
     return json(buildPlan(await readLiveContext(env, assistantConfig)));
   } catch (error) {
-    console.error("elevenlabs.sarlota_language_sync_plan_failed", { message: safeErrorMessage(error), status: error.status || 0 });
+    console.error("elevenlabs.sarlota_language_sync_plan_failed", {
+      message: safeErrorMessage(error),
+      stage: cleanString(error.stage || "unknown"),
+      status: error.status || 0
+    });
     return json({
       error: "Náhled jazykového balíku Šarloty se teď nepodařilo připravit.",
       code: "sarlota_language_sync_plan_failed",
