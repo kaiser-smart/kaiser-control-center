@@ -39,7 +39,7 @@ const readyPlan = {
     path: "conversation_config.agent.prompt.prompt",
     currentLength: 8421,
     targetLength: 12600,
-    targetVersion: "sarlota-elevenlabs-2026-07-19-main-prompt-consolidated",
+    targetVersion: "sarlota-elevenlabs-2026-07-19-language-examples-hardened",
     currentFingerprint: "fnv1a-current-8421",
     currentPromptText: "TAJNY_TEXT_PROMPTU_SE_NESMI_ZOBRAZIT",
     willReplaceEntirePrompt: true,
@@ -69,7 +69,7 @@ assert.match(previewHtml, /data-sarlota-prompt-plan/);
 assert.match(previewHtml, /NÁHLED · BEZ ZÁPISU/);
 assert.match(previewHtml, /Jeden kanonický prompt/);
 assert.match(previewHtml, /12600 znaků/);
-assert.match(previewHtml, /sarlota-elevenlabs-2026-07-19-main-prompt-consolidated/);
+assert.match(previewHtml, /sarlota-elevenlabs-2026-07-19-language-examples-hardened/);
 assert.match(previewHtml, /conversation_config\.agent\.prompt\.prompt/);
 assert.match(previewHtml, /data-sarlota-prompt-apply/);
 assert.match(previewHtml, /ZAPSAT DO ELEVENLABS/);

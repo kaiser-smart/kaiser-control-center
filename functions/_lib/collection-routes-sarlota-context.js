@@ -147,6 +147,27 @@ function safeVehicleAssignment(route, vehicles) {
   };
 }
 
+function voiceSafeVehicleAssignment(vehicle) {
+  const verified = vehicle?.status === "verified" && vehicle?.fleetVerified === true && vehicle?.fleetMatch === true;
+  return {
+    ...vehicle,
+    label: verified ? cleanString(vehicle.label) : "",
+    registration: verified ? cleanString(vehicle.registration) : "",
+    code: verified ? cleanString(vehicle.code) : "",
+    fleetVehicle: verified ? vehicle.fleetVehicle : null
+  };
+}
+
+function voiceSafeRoute(route, vehicle) {
+  const verified = vehicle?.status === "verified" && vehicle?.fleetVerified === true && vehicle?.fleetMatch === true;
+  return {
+    ...route,
+    vehicleCode: verified ? cleanString(route.vehicleCode) : "",
+    vehicleRegistration: verified ? cleanString(route.vehicleRegistration) : "",
+    vehicleLabel: verified ? cleanString(route.vehicleLabel) : ""
+  };
+}
+
 function safeSchedule(detail) {
   const metadata = detail?.run?.metadata && typeof detail.run.metadata === "object"
     ? detail.run.metadata
@@ -176,7 +197,7 @@ function startReadiness({ user, route, vehicle, crew, weather, schedule, scope, 
   return {
     actorVerified: Boolean(cleanString(user?.id) && route.driverVerified),
     dateVerified: scope === "test" || route.routeDate === date,
-    vehicleVerified: vehicle.status === "verified" || vehicle.status === "route_assigned",
+    vehicleVerified: vehicle.status === "verified" && vehicle.fleetVerified === true && vehicle.fleetMatch === true,
     crewVerified: crew.verified,
     canStart: route.status === "confirmed" && blockers.length === 0,
     canOperate: route.status === "active" && blockers.length === 0,
@@ -250,7 +271,10 @@ function safeVehicles(result = {}) {
         type: cleanString(vehicle.type || vehicle.vehicleType)
       }))
       : [],
-    fallbackQuestion: verified ? "" : cleanString(payload.fallbackQuestion || payload.messageForAssistant)
+    fallbackQuestion: verified
+      ? ""
+      : cleanString(payload.fallbackQuestion || payload.messageForAssistant)
+        || "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ."
   };
 }
 
@@ -295,7 +319,7 @@ function introAnnouncement(user, route, vehicle, crew, weather, memory, readines
   } else if (route.totalCount) {
     parts.push(`Čeká nás ${stopCountText(route.totalCount)}.`);
   }
-  if (vehicle.assigned && vehicle.label) {
+  if (vehicle.status === "verified" && vehicle.fleetVerified === true && vehicle.fleetMatch === true && vehicle.label) {
     parts.push(`Vozidlo ${vehicle.label} sedí s denní trasou.`);
   }
   if (weather?.verified && cleanString(weather.summary)) {
@@ -390,12 +414,14 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
   const vehicle = safeVehicleAssignment(route, vehicles);
   const schedule = safeSchedule(detail);
   const readiness = startReadiness({ user, route, vehicle, crew, weather, schedule, scope, date });
+  const voiceRoute = voiceSafeRoute(route, vehicle);
+  const voiceVehicle = voiceSafeVehicleAssignment(vehicle);
   return {
     actor: { id: cleanString(user.id), name: cleanString(user.name), role: cleanString(user.role) },
     scope,
     date,
-    route,
-    vehicle,
+    route: voiceRoute,
+    vehicle: voiceVehicle,
     crew,
     schedule,
     readiness,

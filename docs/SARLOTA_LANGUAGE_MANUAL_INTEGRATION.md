@@ -8,6 +8,8 @@
 - Rozsah zdroje: 1 553 řádků
 - Datum integrace: 19. 7. 2026
 - Kanonický runtime prompt: `src/sarlota/sarlotaSystemPrompt.js`
+- Očištěný KB podklad: [SARLOTA_LANGUAGE_REFERENCE_KB.md](./SARLOTA_LANGUAGE_REFERENCE_KB.md)
+- Zdroj TTS slovníku: [SARLOTA_PRONUNCIATION_DICTIONARY_SOURCE.md](./SARLOTA_PRONUNCIATION_DICTIONARY_SOURCE.md)
 
 ## Co je v hlavním promptu aktivní
 
@@ -44,6 +46,8 @@
 Zdroj doporučuje aliasy například pro Kaiser, kAIser, ElevenLabs, Twilio, Cloudflare a firemní zkratky. Tyto aliasy patří pouze do TTS výslovnostního slovníku ElevenLabs. Nesmějí se ukládat do databáze, e-mailu, dokumentu, UI ani do textového přepisu odpovědi.
 
 Hlavní prompt proto obsahuje pravidlo pro oddělení oficiálního zápisu a TTS výslovnosti, ale nevynucuje fonetický přepis v textové odpovědi. Samotné připojení výslovnostního slovníku k produkčnímu hlasu je samostatná konfigurační změna a musí být ověřené read-only náhledem agenta.
+
+Očištěný KB dokument neobsahuje konkrétní provozní příklady, které by model mohl zaměnit za živá data. Ani tento dokument, ani zdroj výslovnostního slovníku nejsou v rámci repo integrace automaticky nahrané do ElevenLabs.
 
 ## Opravené rozpory
 

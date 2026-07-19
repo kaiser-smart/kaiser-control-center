@@ -292,11 +292,19 @@ const unconfirmedCrew = await buildCollectionRoutesSarlotaContext({}, miroslav, 
 });
 assert.equal(unconfirmedCrew.crew.status, "unconfirmed");
 assert.equal(unconfirmedCrew.readiness.canStart, true, "Neznámá osádka a počasí jsou pravdivá varování, ne důvod vymyslet data nebo zablokovat TEST.");
+assert.equal(unconfirmedCrew.readiness.vehicleVerified, false);
+assert.equal(unconfirmedCrew.vehicle.status, "route_assigned");
+assert.equal(unconfirmedCrew.vehicle.label, "");
+assert.equal(unconfirmedCrew.vehicle.registration, "");
+assert.equal(unconfirmedCrew.route.vehicleLabel, "");
+assert.equal(unconfirmedCrew.route.vehicleRegistration, "");
 assert.ok(unconfirmedCrew.readiness.warnings.some((item) => item.code === "crew_unconfirmed"));
 assert.ok(unconfirmedCrew.readiness.warnings.some((item) => item.code === "weather_unavailable"));
 assert.doesNotMatch(unconfirmedCrew.introAnnouncement, /kluci|posádko/);
+assert.doesNotMatch(unconfirmedCrew.introAnnouncement, /Míra|1BP 8373/);
 assert.match(unconfirmedCrew.introAnnouncement, /Dnešní trasu mám načtenou/);
 assert.match(unconfirmedCrew.introAnnouncement, /Aktuální počasí se mi teď nepodařilo ověřit/);
+assert.equal(JSON.stringify(unconfirmedCrew).includes("Míra · 1BP 8373"), false);
 
 const vehicleMismatch = await buildCollectionRoutesSarlotaContext({}, miroslav, {
   scope: "production",
@@ -338,11 +346,14 @@ const variables = await collectionRoutesContextVariables({}, miroslav, "/trasy-s
 assert.equal(variables.collection_route_scope, "test");
 assert.equal(variables.collection_route_news_status, "test_override");
 assert.equal(variables.collection_route_total_count, "2");
-assert.equal(variables.collection_route_vehicle, "Míra · 1BP 8373");
+assert.equal(variables.collection_route_vehicle, "");
+assert.equal(variables.collection_route_vehicle_status, "route_assigned");
+assert.doesNotMatch(variables.intro_announcement, /Míra|1BP 8373/);
 assert.equal(variables.collection_route_crew_status, "incomplete");
 assert.match(variables.current_module_context, /HERE truck navigation/);
 assert.match(variables.current_module_context, /"totalCount":2/);
 assert.doesNotMatch(variables.current_module_context, /Tomáš Gaží|physicalTesterName/);
+assert.doesNotMatch(variables.current_module_context, /Míra · 1BP 8373|1BP 8373/);
 
 const toolSchema = ELEVENLABS_CLIENT_TOOL_SCHEMAS.find((item) => item.name === "get_collection_routes_context");
 assert.ok(toolSchema);

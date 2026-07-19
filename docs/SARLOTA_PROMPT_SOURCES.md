@@ -23,5 +23,7 @@ Tento seznam uchovává produktové vstupy odděleně od živého runtime prompt
 - Veřejné zprávy: oficiální RSS adaptér `functions/_lib/sarlota-news.js`
 - Pracovní paměť: consent-first strukturovaná témata v `functions/_lib/sarlota-user-memory.js`
 - Jazykový manuál: [SARLOTA_LANGUAGE_MANUAL_INTEGRATION.md](./SARLOTA_LANGUAGE_MANUAL_INTEGRATION.md)
+- Očištěný KB podklad: [SARLOTA_LANGUAGE_REFERENCE_KB.md](./SARLOTA_LANGUAGE_REFERENCE_KB.md)
+- Zdroj TTS výslovnosti: [SARLOTA_PRONUNCIATION_DICTIONARY_SOURCE.md](./SARLOTA_PRONUNCIATION_DICTIONARY_SOURCE.md)
 
 Před každou další změnou živého agenta je nutné načíst aktuální ElevenLabs konfiguraci read-only, ověřit název agenta, `{{intro_announcement}}`, cestu promptu a otisk aktuální verze a samostatně potvrdit `apply: true`. Zápis mění pouze text promptu; first message, model a tools zůstávají beze změny.

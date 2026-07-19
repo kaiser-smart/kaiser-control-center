@@ -11,6 +11,7 @@ import {
   SARLOTA_GUARDRAILS_PROMPT_RULE,
   SARLOTA_LANGUAGE_PROMPT_RULE,
   SARLOTA_PROMPT_VERSION,
+  SARLOTA_SAFE_EXAMPLES_PROMPT_RULE,
   sarlotaSystemPrompt
 } from "../src/sarlota/sarlotaSystemPrompt.js";
 
@@ -85,6 +86,11 @@ import {
   assert.equal(patched.includes("Bezpečný vlastní text."), false);
   assert.equal(patched.includes(SARLOTA_LANGUAGE_PROMPT_RULE), true);
   assert.equal(patched.includes(SARLOTA_GUARDRAILS_PROMPT_RULE), true);
+  assert.equal(patched.includes(SARLOTA_SAFE_EXAMPLES_PROMPT_RULE), true);
+  assert.equal(patched.includes("PŘÍKLADY CHOVÁNÍ – NEJSOU TO PROVOZNÍ DATA"), true);
+  assert.equal(patched.includes("Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ."), true);
+  assert.equal(patched.includes("Na potvrzení trasy se znovu neptej."), true);
+  assert.equal(patched.includes("Pokyny typu odboč, pokračuj rovně nebo jeď určitý počet metrů říká výhradně HERE"), true);
   assert.equal(patched.includes(SARLOTA_PROMPT_VERSION), true);
   assert.equal(patched.includes(SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE), true);
   assert.equal(patched.includes(SARLOTA_COLLECTION_ROUTES_CREW_TABLET_PROMPT_RULE), true);
