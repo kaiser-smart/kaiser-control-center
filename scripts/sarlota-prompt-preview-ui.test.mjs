@@ -75,6 +75,15 @@ assert.match(previewHtml, /data-sarlota-prompt-apply/);
 assert.match(previewHtml, /ZAPSAT DO ELEVENLABS/);
 assert.doesNotMatch(previewHtml, /TAJNY_TEXT_PROMPTU_SE_NESMI_ZOBRAZIT/);
 
+const confirmationHtml = SarlotaStatusPanel({
+  status,
+  selectedAssistantKey: "sarlota",
+  promptSyncPlan: readyPlan,
+  promptSyncConfirmationPending: true
+});
+assert.match(confirmationHtml, /POTVRDIT ZÁPIS DO ELEVENLABS/);
+assert.match(confirmationHtml, /druhé kliknutí provede změnu/);
+
 const languagePlan = {
   ready: true,
   alreadyApplied: false,
@@ -130,7 +139,7 @@ assert.doesNotMatch(appliedHtml, /data-sarlota-prompt-apply/);
 const appSource = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const previewStart = appSource.indexOf("async function syncSarlotaPrompt()");
 const applyStart = appSource.indexOf("async function applySarlotaPromptSync()");
-const nextFunction = appSource.indexOf("function resetSarlotaVoiceWriteTest()", applyStart);
+const nextFunction = appSource.indexOf("function sarlotaLanguageSyncConfirmText", applyStart);
 assert.ok(previewStart >= 0 && applyStart > previewStart && nextFunction > applyStart);
 const previewSource = appSource.slice(previewStart, applyStart);
 const applySource = appSource.slice(applyStart, nextFunction);
@@ -140,12 +149,13 @@ assert.doesNotMatch(previewSource, /method: "POST"/);
 assert.match(applySource, /method: "POST"/);
 assert.match(applySource, /apply: true/);
 assert.match(applySource, /expectedCurrentFingerprint/);
+assert.match(applySource, /promptSyncConfirmationPending/);
+assert.doesNotMatch(applySource, /window\.confirm/);
 assert.match(appSource, /data-sarlota-prompt-apply/);
 assert.match(appSource, /data-sarlota-prompt-plan-cancel/);
 assert.match(appSource, /sarlota-language-sync/);
 assert.match(appSource, /data-sarlota-language-apply/);
 assert.match(appSource, /expectedCurrentFingerprint: plan\.currentFingerprint/);
-assert.match(appSource, /Nahradit hlavní ElevenLabs prompt/);
 assert.match(appSource, /myDailyRouteSarlotaConnecting/);
 assert.match(appSource, /options\.onFailed\?\.\(error\)/);
 

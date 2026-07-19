@@ -416,7 +416,7 @@ function promptSyncBlockLabels(prompt = {}) {
   ].filter(([missing]) => missing).map(([, label]) => label);
 }
 
-function promptSyncPreview(plan = null, syncing = false) {
+function promptSyncPreview(plan = null, syncing = false, confirmationPending = false) {
   if (!plan) {
     return "";
   }
@@ -461,8 +461,9 @@ function promptSyncPreview(plan = null, syncing = false) {
         ${safeArray(prompt.forbiddenPhrasesPresent).length ? `<p>Budou odstraněné zakázané zastaralé fráze: ${escapeHtml(safeArray(prompt.forbiddenPhrasesPresent).length)}.</p>` : ""}
       </div>
       <p class="sarlota-status__prompt-plan-safety">Do prohlížeče se nevrací text promptu, API klíč, Agent ID ani signed URL. Zápis znovu načte živého agenta a projde backendovou bezpečnostní kontrolou.</p>
+      ${confirmationPending ? `<p class="module-feedback__warning" role="status">Poslední kontrola před zápisem: druhé kliknutí provede změnu pouze při shodném aktuálním otisku.</p>` : ""}
       <div class="sarlota-status__prompt-plan-actions">
-        ${ready ? `<button class="primary-action" type="button" data-sarlota-prompt-apply ${syncing ? "disabled" : ""}>ZAPSAT DO ELEVENLABS</button>` : ""}
+        ${ready ? `<button class="primary-action" type="button" data-sarlota-prompt-apply ${syncing ? "disabled" : ""}>${confirmationPending ? "POTVRDIT ZÁPIS DO ELEVENLABS" : "ZAPSAT DO ELEVENLABS"}</button>` : ""}
         <button class="secondary-link" type="button" data-sarlota-prompt-plan-cancel ${syncing ? "disabled" : ""}>${alreadyApplied ? "ZAVŘÍT NÁHLED" : "ZRUŠIT NÁHLED"}</button>
       </div>
     </section>
@@ -524,6 +525,7 @@ export function SarlotaStatusPanel({
   voiceDiagnostics = {},
   voiceWriteTest = {},
   promptSyncPlan = null,
+  promptSyncConfirmationPending = false,
   languageSyncPlan = null
 } = {}) {
   const data = status || {};
@@ -642,7 +644,7 @@ export function SarlotaStatusPanel({
       ${error ? `<p class="module-feedback__error" role="alert">${escapeHtml(error)}</p>` : ""}
       ${syncError ? `<p class="module-feedback__error" role="alert">${escapeHtml(syncError)}</p>` : ""}
       ${syncMessage ? `<p class="module-feedback__success" role="status">${escapeHtml(syncMessage)}</p>` : ""}
-      ${promptSyncPreview(promptSyncPlan, syncing)}
+      ${promptSyncPreview(promptSyncPlan, syncing, promptSyncConfirmationPending)}
       ${languageSyncPreview(languageSyncPlan, syncing)}
       ${voiceWriteTestControls(voiceWriteTest, syncing)}
       <dl class="sarlota-status__grid">

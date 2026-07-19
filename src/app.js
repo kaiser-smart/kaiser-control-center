@@ -888,6 +888,7 @@ const sarlotaStatusState = {
   syncMessage: "",
   syncError: "",
   promptSyncPlan: null,
+  promptSyncConfirmationPending: false,
   languageSyncPlan: null,
   voiceWriteTest: {
     plan: null,
@@ -6697,6 +6698,7 @@ function settingsManagementSection(user) {
       voiceDiagnostics: sarlotaVoiceDiagnosticsState,
       voiceWriteTest: sarlotaStatusState.voiceWriteTest,
       promptSyncPlan: sarlotaStatusState.promptSyncPlan,
+      promptSyncConfirmationPending: sarlotaStatusState.promptSyncConfirmationPending,
       languageSyncPlan: sarlotaStatusState.languageSyncPlan
     })}
     ${AppearanceSettingsBox({
@@ -46901,6 +46903,7 @@ function selectSarlotaAssistant(assistantKey) {
   sarlotaStatusState.syncError = "";
   sarlotaStatusState.syncMessage = "";
   sarlotaStatusState.promptSyncPlan = null;
+  sarlotaStatusState.promptSyncConfirmationPending = false;
   sarlotaStatusState.languageSyncPlan = null;
   void loadSarlotaStatus({ force: true });
 }
@@ -46920,24 +46923,6 @@ function startSarlotaAssistantTestCall() {
   renderAiAssistantLayerOnly();
 }
 
-function sarlotaPromptSyncConfirmText(plan = {}) {
-  const assistantName = plan.assistant?.assistantDisplayName || selectedSarlotaAssistantConfig().displayName;
-  const prompt = plan.prompt || {};
-  return [
-    `Nahradit hlavní ElevenLabs prompt asistenta ${assistantName} kanonickou repo verzí?`,
-    "",
-    `Cesta promptu: ${prompt.path || "nenalezena"}`,
-    `Verze: ${prompt.targetVersion || "neuvedena"}`,
-    `Délka: ${Number(prompt.currentLength || 0)} → ${Number(prompt.targetLength || 0)} znaků`,
-    `Synchronizace už je kompletní: ${plan.alreadyApplied ? "ano" : "ne"}`,
-    "",
-    "Dosavadní konfliktní text promptu bude nahrazen jedním kanonickým promptem z repozitáře.",
-    "Aktuální otisk se před zápisem znovu ověří; při změně se zápis zastaví.",
-    "First message, model ani tools se nemění.",
-    "Bez potvrzení se nic neprovede."
-  ].join("\n");
-}
-
 async function syncSarlotaPrompt() {
   if (!authState.user || sarlotaStatusState.syncing || !canManageAppearanceSettings(authState.user)) {
     return;
@@ -46951,6 +46936,7 @@ async function syncSarlotaPrompt() {
   try {
     const plan = await apiJson(`/api/ai/elevenlabs/sarlota-prompt-sync?${sarlotaAssistantApiQuery()}`);
     sarlotaStatusState.promptSyncPlan = plan;
+    sarlotaStatusState.promptSyncConfirmationPending = false;
     const forbiddenPromptPhrases = Array.isArray(plan.prompt?.forbiddenPhrasesPresent)
       ? plan.prompt.forbiddenPhrasesPresent
       : [];
@@ -46982,6 +46968,7 @@ async function syncSarlotaPrompt() {
 function cancelSarlotaPromptSyncPreview() {
   if (sarlotaStatusState.syncing) return;
   sarlotaStatusState.promptSyncPlan = null;
+  sarlotaStatusState.promptSyncConfirmationPending = false;
   sarlotaStatusState.syncMessage = "Náhled promptu byl zavřený. Nic se nezapsalo.";
   sarlotaStatusState.syncError = "";
   render();
@@ -46993,8 +46980,9 @@ async function applySarlotaPromptSync() {
     return;
   }
 
-  if (!window.confirm(sarlotaPromptSyncConfirmText(plan))) {
-    sarlotaStatusState.syncMessage = "Zápis promptu zrušen. Náhled zůstává otevřený a nic se nezměnilo.";
+  if (!sarlotaStatusState.promptSyncConfirmationPending) {
+    sarlotaStatusState.promptSyncConfirmationPending = true;
+    sarlotaStatusState.syncMessage = "Zápis ještě neproběhl. Zkontroluj náhled a potvrď ho druhým kliknutím.";
     sarlotaStatusState.syncError = "";
     render();
     return;
@@ -47016,12 +47004,14 @@ async function applySarlotaPromptSync() {
     });
 
     sarlotaStatusState.promptSyncPlan = null;
+    sarlotaStatusState.promptSyncConfirmationPending = false;
     sarlotaStatusState.syncMessage = result.status === "ok"
       ? "ElevenLabs prompt Šarloty je synchronizovaný."
       : "Prompt byl uložen částečně, zkontroluj stav Šarloty.";
     await loadSarlotaStatus({ force: true, renderAfter: false });
   } catch (error) {
     console.error("smart_odpady_sarlota_prompt_sync_failed", error);
+    sarlotaStatusState.promptSyncConfirmationPending = false;
     sarlotaStatusState.syncError = error.payload?.error || "Synchronizace promptu ElevenLabs se nepodařila.";
     sarlotaStatusState.syncMessage = "";
   } finally {
