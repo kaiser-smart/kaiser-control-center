@@ -37,6 +37,7 @@ const emptyContext = {
   agentConfig: baseAgent(),
   matchingKnowledge: [],
   matchingDictionaries: [],
+  pronunciationDictionaryAccess: { ok: true, status: 200 },
   knowledgeContent: "",
   dictionaryDetail: {}
 };
@@ -47,6 +48,14 @@ assert.equal(emptyPlan.knowledgeBase.action, "create");
 assert.equal(emptyPlan.pronunciationDictionary.action, "create");
 assert.equal(emptyPlan.agent.promptLength, "Kanonický prompt".length);
 assert.equal(__test.knowledgeBaseEntriesFromAgent(emptyContext.agentConfig).length, 0, "boolean false is not a KB entry");
+
+const dictionaryBlockedPlan = __test.buildPlan({
+  ...emptyContext,
+  pronunciationDictionaryAccess: { ok: false, status: 401 }
+});
+assert.equal(dictionaryBlockedPlan.ready, true, "KB can proceed when only dictionary permission is missing");
+assert.equal(dictionaryBlockedPlan.pronunciationDictionary.action, "blocked_permission");
+assert.equal(dictionaryBlockedPlan.pronunciationDictionary.accessible, false);
 
 const knowledge = { id: "kb-managed", name: SARLOTA_LANGUAGE_KB_NAME };
 const dictionary = {
@@ -91,6 +100,9 @@ assert.deepEqual(
   "managed dictionary replacement preserves unrelated locators"
 );
 assert.equal(patch.conversation_config.tts.pronunciation_dictionary_locators[1].version_id, "version-managed");
+
+const knowledgeOnlyPatch = __test.languageAgentPatch(currentAgent, knowledge);
+assert.equal(knowledgeOnlyPatch.conversation_config.tts, undefined, "KB-only patch does not touch pronunciation locators");
 
 const before = __test.agentInvariants(currentAgent);
 const simulatedAfter = structuredClone(currentAgent);

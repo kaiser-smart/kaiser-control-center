@@ -234,28 +234,32 @@ function managedPronunciationLocator(dictionary, versionId = "") {
   };
 }
 
-function languageAgentPatch(agentConfig, document, dictionary, versionId = "") {
+function languageAgentPatch(agentConfig, document, dictionary = null, versionId = "") {
   const documentId = resourceId(document);
   const dictionaryId = resourceId(dictionary);
   const resolvedVersionId = cleanString(versionId || resourceVersionId(dictionary));
-  if (!documentId || !dictionaryId || !resolvedVersionId) return null;
+  if (!documentId) return null;
+  if (dictionary && (!dictionaryId || !resolvedVersionId)) return null;
 
   const knowledgeBase = knowledgeBaseEntriesFromAgent(agentConfig)
     .filter((entry) => knowledgeBaseEntryId(entry) !== documentId && resourceName(entry) !== SARLOTA_LANGUAGE_KB_NAME);
-  const locators = pronunciationLocatorsFromAgent(agentConfig)
-    .filter((locator) => locatorDictionaryId(locator) !== dictionaryId);
-
   knowledgeBase.push(managedKnowledgeBaseAttachment(document));
-  locators.push(managedPronunciationLocator(dictionary, resolvedVersionId));
-
-  return {
+  const patch = {
     conversation_config: {
       agent: {
         prompt: { knowledge_base: knowledgeBase }
-      },
-      tts: { pronunciation_dictionary_locators: locators }
+      }
     }
   };
+
+  if (dictionary) {
+    const locators = pronunciationLocatorsFromAgent(agentConfig)
+      .filter((locator) => locatorDictionaryId(locator) !== dictionaryId);
+    locators.push(managedPronunciationLocator(dictionary, resolvedVersionId));
+    patch.conversation_config.tts = { pronunciation_dictionary_locators: locators };
+  }
+
+  return patch;
 }
 
 async function elevenLabsRequest({ apiKey, path, method = "GET", body = null }) {
@@ -335,11 +339,19 @@ async function readLiveContext(env, assistantConfig) {
     };
   }
 
-  const [agentConfig, knowledgePayload, dictionaryPayload] = await Promise.all([
+  const [agentConfig, knowledgePayload, dictionaryResult] = await Promise.all([
     elevenLabsRequestAtStage("agent_read", { apiKey, path: `/convai/agents/${encodeURIComponent(agentId)}` }),
     elevenLabsRequestAtStage("knowledge_base_list", { apiKey, path: "/convai/knowledge-base?page_size=100" }),
     elevenLabsRequestAtStage("pronunciation_dictionary_list", { apiKey, path: "/pronunciation-dictionaries?page_size=100" })
+      .then((payload) => ({ ok: true, payload }))
+      .catch((error) => {
+        if ([401, 403].includes(Number(error?.status || 0))) {
+          return { ok: false, status: Number(error.status), stage: cleanString(error.stage) };
+        }
+        throw error;
+      })
   ]);
+  const dictionaryPayload = dictionaryResult.ok ? dictionaryResult.payload : {};
   const matchingKnowledge = matchingByExactName(knowledgeBaseDocuments(knowledgePayload), SARLOTA_LANGUAGE_KB_NAME);
   const matchingDictionaries = matchingByExactName(pronunciationDictionaries(dictionaryPayload), SARLOTA_PRONUNCIATION_DICTIONARY_NAME);
   const knowledgeContent = matchingKnowledge.length === 1
@@ -363,6 +375,9 @@ async function readLiveContext(env, assistantConfig) {
     agentConfig,
     matchingKnowledge,
     matchingDictionaries,
+    pronunciationDictionaryAccess: dictionaryResult.ok
+      ? { ok: true, status: 200 }
+      : { ok: false, status: dictionaryResult.status, stage: dictionaryResult.stage },
     knowledgeContent,
     dictionaryDetail
   };
@@ -383,6 +398,7 @@ function buildPlan(context) {
   const agentNameMatches = elevenLabsAgentNameMatchesExpected(context.agentConfig?.name, context.assistantConfig);
   const exactKnowledgeCount = context.matchingKnowledge.length;
   const exactDictionaryCount = context.matchingDictionaries.length;
+  const dictionaryAccessible = context.pronunciationDictionaryAccess?.ok !== false;
   const knowledge = context.matchingKnowledge[0] || null;
   const dictionary = context.matchingDictionaries[0] || null;
   const currentRules = canonicalRules(pronunciationRulesFromPayload(context.dictionaryDetail));
@@ -397,23 +413,29 @@ function buildPlan(context) {
   const attachedDictionary = dictionary
     ? pronunciationLocatorsFromAgent(context.agentConfig).some((locator) => locatorDictionaryId(locator) === resourceId(dictionary))
     : false;
-  const duplicateResources = exactKnowledgeCount > 1 || exactDictionaryCount > 1;
+  const duplicateResources = exactKnowledgeCount > 1 || (dictionaryAccessible && exactDictionaryCount > 1);
   const knowledgeCurrent = exactKnowledgeCount === 1 && currentKnowledgeFingerprint === targetKnowledgeFingerprint;
-  const dictionaryCurrent = exactDictionaryCount === 1 && currentRulesFingerprint === targetRulesFingerprint;
+  const dictionaryCurrent = dictionaryAccessible && exactDictionaryCount === 1 && currentRulesFingerprint === targetRulesFingerprint;
   const alreadyApplied = knowledgeCurrent && dictionaryCurrent && attachedKnowledge && attachedDictionary;
+  const knowledgeNeedsChange = !knowledgeCurrent || !attachedKnowledge;
+  const dictionaryNeedsChange = dictionaryAccessible && (!dictionaryCurrent || !attachedDictionary);
   const currentFingerprint = fingerprint(canonicalJson({
     invariants,
     matchingKnowledge: context.matchingKnowledge.map((item) => ({ id: resourceId(item), name: resourceName(item) })),
     matchingDictionaries: context.matchingDictionaries.map((item) => ({ id: resourceId(item), name: resourceName(item), versionId: resourceVersionId(item) })),
     currentKnowledgeFingerprint,
     currentRulesFingerprint,
+    dictionaryAccessible,
     attachedKnowledge,
     attachedDictionary
   }));
 
   return {
     mode: "dry_run",
-    ready: agentNameMatches && invariants.firstMessageMatches && !duplicateResources && !alreadyApplied,
+    ready: agentNameMatches
+      && invariants.firstMessageMatches
+      && !duplicateResources
+      && (knowledgeNeedsChange || dictionaryNeedsChange),
     alreadyApplied,
     generatedAt: new Date().toISOString(),
     assistant: assistantPublicMetadata(context.assistantConfig),
@@ -444,6 +466,9 @@ function buildPlan(context) {
     pronunciationDictionary: {
       name: SARLOTA_PRONUNCIATION_DICTIONARY_NAME,
       exactMatchCount: exactDictionaryCount,
+      accessible: dictionaryAccessible,
+      accessStatus: dictionaryAccessible ? "ok" : "permission_required",
+      upstreamStatus: dictionaryAccessible ? 200 : Number(context.pronunciationDictionaryAccess?.status || 0),
       exists: exactDictionaryCount === 1,
       idMasked: maskId(resourceId(dictionary)),
       attached: attachedDictionary,
@@ -452,7 +477,13 @@ function buildPlan(context) {
       targetRuleCount: targetRules.length,
       currentFingerprint: currentRulesFingerprint,
       targetFingerprint: targetRulesFingerprint,
-      action: exactDictionaryCount === 0 ? "create" : dictionaryCurrent ? (attachedDictionary ? "none" : "attach") : "replace_rules",
+      action: !dictionaryAccessible
+        ? "blocked_permission"
+        : exactDictionaryCount === 0
+          ? "create"
+          : dictionaryCurrent
+            ? (attachedDictionary ? "none" : "attach")
+            : "replace_rules",
       listeningTests: SARLOTA_PRONUNCIATION_LISTENING_TESTS
     },
     safety: {
@@ -566,17 +597,21 @@ async function applyPayload(env, assistantConfig, user, expectedCurrentFingerpri
 
   const before = agentInvariants(context.agentConfig);
   let knowledgeResult;
-  let dictionaryResult;
+  let dictionaryResult = null;
   try {
     knowledgeResult = await upsertKnowledgeBase(context, plan);
-    dictionaryResult = await upsertPronunciationDictionary(context, plan);
+    if (plan.pronunciationDictionary.accessible) {
+      dictionaryResult = await upsertPronunciationDictionary(context, plan);
+    }
   } catch (error) {
     return json({
       error: `Jazykové zdroje se nepodařilo bezpečně připravit. ${error.status ? `HTTP ${error.status}. ` : ""}${upstreamErrorSummary(error)}`,
       code: "sarlota_language_resources_upsert_failed",
       partial: {
         knowledgeBaseAction: knowledgeResult?.action || "not_completed",
-        pronunciationDictionaryAction: dictionaryResult?.action || "not_completed",
+        pronunciationDictionaryAction: plan.pronunciationDictionary.accessible
+          ? (dictionaryResult?.action || "not_completed")
+          : "blocked_permission",
         agentPatched: false
       },
       apiStatus: "waiting"
@@ -586,8 +621,8 @@ async function applyPayload(env, assistantConfig, user, expectedCurrentFingerpri
   const patchBody = languageAgentPatch(
     context.agentConfig,
     knowledgeResult.resource,
-    dictionaryResult.resource,
-    dictionaryResult.versionId
+    dictionaryResult?.resource || null,
+    dictionaryResult?.versionId || ""
   );
   if (!patchBody) {
     return json({
@@ -595,7 +630,7 @@ async function applyPayload(env, assistantConfig, user, expectedCurrentFingerpri
       code: "sarlota_language_attachment_identifiers_missing",
       partial: {
         knowledgeBaseAction: knowledgeResult.action,
-        pronunciationDictionaryAction: dictionaryResult.action,
+        pronunciationDictionaryAction: dictionaryResult?.action || "blocked_permission",
         agentPatched: false
       },
       apiStatus: "waiting"
@@ -629,24 +664,30 @@ async function applyPayload(env, assistantConfig, user, expectedCurrentFingerpri
     && before.firstMessageFingerprint === after.firstMessageFingerprint
     && before.model === after.model
     && before.toolsFingerprint === after.toolsFingerprint;
-  const verified = verifiedPlan.alreadyApplied && invariantsPreserved;
+  const knowledgeVerified = verifiedPlan.knowledgeBase?.current === true
+    && verifiedPlan.knowledgeBase?.attached === true;
+  const dictionaryVerified = verifiedPlan.pronunciationDictionary?.current === true
+    && verifiedPlan.pronunciationDictionary?.attached === true;
+  const verified = knowledgeVerified && dictionaryVerified && invariantsPreserved;
+  const partialVerified = knowledgeVerified && invariantsPreserved;
 
   return json({
-    status: verified ? "ok" : "partial",
+    status: verified ? "ok" : partialVerified ? "partial" : "waiting",
     generatedAt: new Date().toISOString(),
     packageVersion: SARLOTA_LANGUAGE_PACKAGE_VERSION,
     resources: {
       knowledgeBase: { name: SARLOTA_LANGUAGE_KB_NAME, action: knowledgeResult.action, attached: verifiedPlan.knowledgeBase?.attached === true },
       pronunciationDictionary: {
         name: SARLOTA_PRONUNCIATION_DICTIONARY_NAME,
-        action: dictionaryResult.action,
+        action: dictionaryResult?.action || "blocked_permission",
         ruleCount: SARLOTA_PRONUNCIATION_RULES.length,
-        attached: verifiedPlan.pronunciationDictionary?.attached === true
+        attached: dictionaryVerified,
+        accessStatus: verifiedPlan.pronunciationDictionary?.accessStatus || "unknown"
       }
     },
     verification: {
-      knowledgeBaseCurrent: verifiedPlan.knowledgeBase?.current === true,
-      pronunciationDictionaryCurrent: verifiedPlan.pronunciationDictionary?.current === true,
+      knowledgeBaseCurrent: knowledgeVerified,
+      pronunciationDictionaryCurrent: dictionaryVerified,
       promptChanged: before.promptFingerprint !== after.promptFingerprint,
       firstMessageChanged: before.firstMessageFingerprint !== after.firstMessageFingerprint,
       modelChanged: before.model !== after.model,
@@ -654,7 +695,7 @@ async function applyPayload(env, assistantConfig, user, expectedCurrentFingerpri
       listeningTestRequired: true,
       listeningTests: SARLOTA_PRONUNCIATION_LISTENING_TESTS
     }
-  }, verified ? 200 : 207);
+  }, verified ? 200 : partialVerified ? 207 : 409);
 }
 
 export async function onRequestGet({ request, env }) {

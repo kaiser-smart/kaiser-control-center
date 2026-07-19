@@ -483,6 +483,7 @@ function languageSyncPreview(plan = null, syncing = false) {
     update: "aktualizovat a připojit",
     attach: "připojit existující",
     replace_rules: "nahradit pravidla a připojit",
+    blocked_permission: "čeká na oprávnění API klíče",
     none: "beze změny"
   })[action] || "neověřeno";
 
