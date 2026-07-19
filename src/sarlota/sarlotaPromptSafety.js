@@ -32,7 +32,6 @@ function cleanPromptString(value) {
 export function driverReportPromptRuleBlock() {
   return [
     "",
-    DRIVER_REPORT_PROMPT_RULE_MARKER,
     SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
     ""
   ].join("\n");

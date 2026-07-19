@@ -265,7 +265,7 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   },
   {
     name: "create_driver_part_request",
-    description: "Zapíše servisní hlášení řidiče přes KSO backend. Hlášení se vytvoří hned po jedné otázce na poznámku; dohledání dílů, cen a případná zpráva Patrikovi běží až potom na pozadí. Vyžaduje vehicleId z ověřeného seznamu, get_driver_vehicle_picker_selection nebo ručně ověřenou SPZ. Po vyřízení poznámky volej s confirmed true, confirmationSource voice-intake, driverNoteStatus provided/declined a driverNoteQuestionAsked true. Za vytvořené hlášení považuj jen výsledek s ok true a neprázdným driverPartRequest.reportId; jinak nikdy neříkej, že hlášení vzniklo.",
+    description: "Připraví servisní hlášení řidiče a otevře jeho finální potvrzení v KSO. Vyžaduje vehicleId z ověřeného seznamu nebo pickeru, případně ručně ověřenou SPZ. Po jedné otázce na poznámku volej s confirmed false, driverNoteStatus provided/declined a driverNoteQuestionAsked true. Hlasové potvrzení zápis nepovoluje; potvrzení musí vzniknout fyzicky v KSO jako kso-ui. Za vytvořené hlášení považuj jen výsledek s ok true a neprázdným driverPartRequest.reportId.",
     parameters: [
       { name: "defectDescription", type: "string", required: true },
       { name: "driverNote", type: "string", required: false },
@@ -1562,12 +1562,6 @@ export function createElevenLabsClientTools({
     let vehicleSelectionSource = cleanString(parameters.vehicleSelectionSource || parameters.vehicle_selection_source);
     const spokenSummary = cleanString(parameters.spokenSummary || parameters.summary || parameters.message);
     const driverNote = cleanString(parameters.driverNote || parameters.driver_note || parameters.note || parameters.comment);
-    const requestedConfirmed = booleanToolValue(
-      parameters.confirmed ??
-      parameters.writeConfirmed ??
-      parameters.write_confirmed
-    );
-    const requestedConfirmationSource = cleanString(parameters.confirmationSource || parameters.confirmation_source);
     const driverNoteStatus = normalizeKey(parameters.driverNoteStatus || parameters.driver_note_status || parameters.noteStatus || parameters.note_status).replace(/-/g, "_");
     const driverNoteQuestionAsked = booleanToolValue(
       parameters.driverNoteQuestionAsked ??
@@ -1575,8 +1569,6 @@ export function createElevenLabsClientTools({
       parameters.noteQuestionAsked ??
       parameters.note_question_asked
     ) || Boolean(driverNote || driverNoteStatus);
-    const driverNoteHandled = Boolean(driverNote) ||
-      ["provided", "declined", "none", "no_note", "bez_poznamky", "empty", "skipped"].includes(driverNoteStatus);
     const cachedSelection = resolveDriverVehiclePickerSelection(sessionKey);
     if (!vehicleId && cachedSelection?.vehicleId) {
       vehicleId = cachedSelection.vehicleId;
@@ -1717,23 +1709,12 @@ export function createElevenLabsClientTools({
       preparedParameters.vin ? `VIN: ${preparedParameters.vin}` : (vin ? `VIN: ${vin}` : ""),
       "Dohledání dílů, cen a případná zpráva Patrikovi poběží až po uložení na pozadí."
     ].filter(Boolean).join("\n");
-    const selectedByKsoPicker = cachedSelection?.vehicleId &&
-      cleanString(preparedParameters.vehicleId || vehicleId) === cachedSelection.vehicleId &&
-      cleanString(cachedSelection.vehicleSelectionSource) === "backend_ui_picker";
-    const voiceIntakeConfirmed = !selectedByKsoPicker &&
-      requestedConfirmed &&
-      driverNoteHandled &&
-      (!requestedConfirmationSource || requestedConfirmationSource === "voice-intake");
-    const popupConfirmed = selectedByKsoPicker
-      ? true
-      : voiceIntakeConfirmed
-      ? true
-      : await confirm({
-        title: "Potvrdit hlášení řidiče",
-        message: confirmationMessage,
-        confirmLabel: "Uložit hlášení",
-        cancelLabel: "Zrušit"
-      });
+    const popupConfirmed = await confirm({
+      title: "Potvrdit hlášení řidiče",
+      message: confirmationMessage,
+      confirmLabel: "Uložit hlášení",
+      cancelLabel: "Zrušit"
+    });
 
     if (!popupConfirmed) {
       return {
@@ -1772,8 +1753,8 @@ export function createElevenLabsClientTools({
     }
     const trustedParameters = {
       ...preparedParameters,
-      confirmationSource: voiceIntakeConfirmed ? "voice-intake" : "kso-ui",
-      confirmation_source: voiceIntakeConfirmed ? "voice-intake" : "kso-ui",
+      confirmationSource: "kso-ui",
+      confirmation_source: "kso-ui",
       confirmationId,
       confirmation_id: confirmationId
     };

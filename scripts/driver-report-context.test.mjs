@@ -775,7 +775,7 @@ for (const [name, payload] of [
     const result = await tools.create_driver_part_request({
       sessionId: "picker-write-test",
       defectDescription: "poškozené přední sklo",
-      confirmed: true,
+      confirmed: false,
       spokenSummary: "Zapíšu závadu poškozené přední sklo k vybranému vozidlu."
     });
 
@@ -795,7 +795,7 @@ for (const [name, payload] of [
     assert.equal(posts[1].parameters.confirmation_id, "driver-part-confirm-safe");
     assert.equal(posts[1].context.confirmationSource, "kso-ui");
     assert.equal(posts[1].context.confirmationId, "driver-part-confirm-safe");
-    assert.equal(confirmCalls, 0);
+    assert.equal(confirmCalls, 1);
   });
 }
 
@@ -866,9 +866,11 @@ for (const [name, payload] of [
 
 {
   const posts = [];
+  let confirmationOpened = false;
   const tools = createElevenLabsClientTools({
     confirm: async () => {
-      throw new Error("voice-intake must not open UI confirmation");
+      confirmationOpened = true;
+      return true;
     },
     requestJson: async (path, options = {}) => {
       assert.equal(path, "/api/voice/sarlota");
@@ -925,17 +927,20 @@ for (const [name, payload] of [
 
   assert.equal(result.ok, true);
   assert.equal(result.status, "created");
+  assert.equal(confirmationOpened, true);
   assert.equal(posts.length, 2);
-  assert.equal(posts[1].parameters.confirmationSource, "voice-intake");
-  assert.equal(posts[1].parameters.confirmation_source, "voice-intake");
+  assert.equal(posts[1].parameters.confirmationSource, "kso-ui");
+  assert.equal(posts[1].parameters.confirmation_source, "kso-ui");
   assert.equal(posts[1].parameters.driverNoteStatus, "declined");
   assert.equal(posts[1].parameters.driverNoteQuestionAsked, true);
 }
 
 {
+  let confirmationOpened = false;
   const tools = createElevenLabsClientTools({
     confirm: async () => {
-      throw new Error("voice-intake must not open UI confirmation");
+      confirmationOpened = true;
+      return true;
     },
     requestJson: async (path, options = {}) => {
       assert.equal(path, "/api/voice/sarlota");
@@ -990,6 +995,7 @@ for (const [name, payload] of [
 
   assert.equal(result.ok, false);
   assert.equal(result.status, "write_unverified");
+  assert.equal(confirmationOpened, true);
   assert.equal(result.code, "driver_part_report_id_missing");
   assert.equal(result.message.includes("Backend nepotvrdil číslo hlášení"), true);
   assert.equal(result.message.includes("Hlášení jsem vytvořila"), false);
@@ -1001,13 +1007,15 @@ for (const [name, payload] of [
   }
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /vždy nejdřív zavolej get_driver_report_context/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /show_driver_vehicle_picker nesmí být první krok/);
-  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Pokud get_driver_report_context selže/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /výsledek selže/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /hned zavolej show_driver_vehicle_picker/);
-  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Pokud řekne jen fragment SPZ/);
-  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neříkej VIN/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Fragment SPZ nikdy nepovažuj za ověřený/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nevyslovuj VIN/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nevidím bezpečně přiřazené vozidlo\. Nadiktuj mi prosím SPZ\./);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Doplníš k tomu ještě poznámku/);
-  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /confirmationSource `voice-intake`/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /confirmed false/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neposílej confirmationSource voice-intake/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /confirmationSource kso-ui/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /driverPartRequest\.reportId/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Hlášení se mi nepodařilo zapsat/);
 }

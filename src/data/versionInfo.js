@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.619"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.620"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: jeden bezpečný hlavní prompt",
+    text: "Hlasová Šarlota má kanonický blokově členěný prompt s jazykovým manuálem, pravidly tabletu osádky a jedinou verzí každého provozního toku. Servisní hlášení hlas pouze připraví; finální zápis znovu vyžaduje fyzické potvrzení v KSO."
+  },
   {
     title: "Šarlota: automatické obnovení hlasového spojení",
     text: "Když se automatické holografické přivítání přeruší kvůli krátkému výpadku WebSocketu, tablet jednou sám obnoví spojení. Hologram zůstane aktivní a ruční mikrofonový panel se zobrazí až po neúspěšném opakování nebo po výslovném klepnutí řidiče."
@@ -677,8 +681,8 @@ export const versionNews = [
     text: "Kontrolní zápis v nastavení nově emuluje dokončený hlasový rozhovor bez poznámky, takže po potvrzení opravdu projde přes backendový voice handler až k vytvoření testovacího hlášení."
   },
   {
-    title: "Hlášení řidičů: hlasový zápis po jedné poznámce",
-    text: "Šarlota má po servisním požadavku položit jednu otázku na poznámku a pak hlášení hned vytvořit přes bezpečný voice-intake. Díly, ceny a Patrikův handoff dál běží až po vytvoření hlášení na pozadí."
+    title: "Hlášení řidičů: jedna otázka na poznámku",
+    text: "Šarlota po servisním požadavku položí jednu otázku na poznámku a připraví hlášení. Původní voice-intake už finální zápis nepotvrzuje; uložení vyžaduje fyzické potvrzení v KSO."
   },
   {
     title: "Hlášení řidičů: OpenAI náhled není finální handoff",
@@ -830,7 +834,7 @@ export const versionNews = [
   },
   {
     title: "Šarlota: ostrý hlasový průchod Hlášení řidičů",
-    text: "Výběr vozidla v KSO popupu se bere jako aplikační potvrzení pro hlasové hlášení. Šarlota po ověřeném vozidle a konkrétním dílu může spustit cenový průzkum Autopilota a poslat pilotní e-mail Patrikovi s CC Radimovi; nic se automaticky neobjednává."
+    text: "Výběr vozidla v KSO popupu bezpečně potvrdí identitu vozidla, ale nenahrazuje finální potvrzení zápisu hlášení. Cenový průzkum, e-mail ani objednávka se nespouštějí bez samostatného oprávněného kroku."
   },
   {
     title: "Trasy svozu: offline balíček pro řidiče",
@@ -1134,7 +1138,7 @@ export const versionNews = [
   },
   {
     title: "Hlášení řidičů: náhradní díly",
-    text: "Modul Hlášení řidičů má backendový workflow pro náhradní díly: pravděpodobný díl, předání Patrikovi, SMS servisu, doručení dílu, plán servisu a hlasové potvrzení Šarlotou."
+    text: "Modul Hlášení řidičů má backendový workflow pro náhradní díly: pravděpodobný díl, předání Patrikovi, SMS servisu, doručení dílu a plán servisu. Šarlota smí oznámit jen stav potvrzený backendem; provozní účinek vyžaduje oprávněný krok v KSO."
   },
   {
     title: "Datová schránka: ukládání konceptů Autopilota",

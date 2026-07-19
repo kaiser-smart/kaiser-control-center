@@ -38,7 +38,11 @@ const readyPlan = {
   prompt: {
     path: "conversation_config.agent.prompt.prompt",
     currentLength: 8421,
+    targetLength: 12600,
+    targetVersion: "sarlota-elevenlabs-2026-07-19-main-prompt-consolidated",
+    currentFingerprint: "fnv1a-current-8421",
     currentPromptText: "TAJNY_TEXT_PROMPTU_SE_NESMI_ZOBRAZIT",
+    willReplaceEntirePrompt: true,
     willAppendCollectionRoutesCrewTabletRule: true,
     willAppendCollectionRoutesContextRule: true,
     willAppendCollectionRoutesDriverActionRule: true,
@@ -63,8 +67,9 @@ const previewHtml = SarlotaStatusPanel({
 assert.match(previewHtml, /Načíst náhled promptu/);
 assert.match(previewHtml, /data-sarlota-prompt-plan/);
 assert.match(previewHtml, /NÁHLED · BEZ ZÁPISU/);
-assert.match(previewHtml, /Svozové trasy: tablet osádky a úvodní hlášení/);
-assert.match(previewHtml, /Svozové trasy: kontext, počasí, zprávy a paměť/);
+assert.match(previewHtml, /Jeden kanonický prompt/);
+assert.match(previewHtml, /12600 znaků/);
+assert.match(previewHtml, /sarlota-elevenlabs-2026-07-19-main-prompt-consolidated/);
 assert.match(previewHtml, /conversation_config\.agent\.prompt\.prompt/);
 assert.match(previewHtml, /data-sarlota-prompt-apply/);
 assert.match(previewHtml, /ZAPSAT DO ELEVENLABS/);
@@ -102,9 +107,10 @@ assert.match(previewSource, /sarlotaStatusState\.promptSyncPlan = plan/);
 assert.doesNotMatch(previewSource, /method: "POST"/);
 assert.match(applySource, /method: "POST"/);
 assert.match(applySource, /apply: true/);
+assert.match(applySource, /expectedCurrentFingerprint/);
 assert.match(appSource, /data-sarlota-prompt-apply/);
 assert.match(appSource, /data-sarlota-prompt-plan-cancel/);
-assert.match(appSource, /willAppendCollectionRoutesCrewTabletRule, "Svozové trasy: tablet osádky a úvodní hlášení"/);
+assert.match(appSource, /Nahradit hlavní ElevenLabs prompt/);
 assert.match(appSource, /myDailyRouteSarlotaConnecting/);
 assert.match(appSource, /options\.onFailed\?\.\(error\)/);
 

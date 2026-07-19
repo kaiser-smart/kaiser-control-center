@@ -23,7 +23,10 @@ import {
   SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_DRIVER_ACTION_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE,
-  SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE
+  SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE,
+  SARLOTA_DATA_BOX_PROMPT_RULE,
+  SARLOTA_PROMPT_VERSION,
+  sarlotaSystemPrompt
 } from "../../../../src/sarlota/sarlotaSystemPrompt.js";
 
 const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
@@ -37,10 +40,7 @@ const DATA_BOX_CONTEXT_RULE_MARKER = "KONTEXT MODULU DATOVÁ SCHRÁNKA";
 const DATA_BOX_CONTEXT_RULE_REQUIRED_PHRASE = "Když je current_module Datová schránka";
 const DATA_BOX_CONTEXT_RULE_BLOCK = [
   "",
-  DATA_BOX_CONTEXT_RULE_MARKER,
-  "Když je current_module Datová schránka, pracuj výhradně s hodnotou current_module_context z KSO backendu.",
-  "Jasně rozlišuj read-only stav, pilot a nedostupná data. Nikdy si nevymýšlej obsah datových zpráv, příloh, odesílatele, příjemce ani stav konkrétní akce.",
-  "Nikdy netvrď, že se datová zpráva odeslala, archivovala, smazala nebo změnila. Pro obsah konkrétní zprávy požádej o její bezpečné otevření v aplikaci."
+  SARLOTA_DATA_BOX_PROMPT_RULE
 ].join("\n");
 const COLLECTION_ROUTES_CONTEXT_RULE_MARKER = "SVOZOVÉ TRASY / KONTEXT A PRACOVNÍ PAMĚŤ";
 const COLLECTION_ROUTES_CONTEXT_RULE_REQUIRED_PHRASE = "výhradně nástrojem get_collection_routes_context";
@@ -60,7 +60,7 @@ const COLLECTION_ROUTES_GPS_RULE_BLOCK = [
   "",
   SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE
 ].join("\n");
-const COLLECTION_ROUTES_INCIDENT_RULE_MARKER = "SVOZOVÉ TRASY / TEST HLÁŠENÍ STANOVIŠTĚ";
+const COLLECTION_ROUTES_INCIDENT_RULE_MARKER = "SVOZOVÉ TRASY / HLÁŠENÍ STANOVIŠTĚ";
 const COLLECTION_ROUTES_INCIDENT_RULE_REQUIRED_PHRASE = "zavolej prepare_collection_route_test_incident";
 const COLLECTION_ROUTES_INCIDENT_RULE_BLOCK = [
   "",
@@ -87,6 +87,18 @@ function cleanString(value) {
 
 function safeErrorMessage(error) {
   return cleanString(error?.message || error?.name || "unknown_error");
+}
+
+function promptFingerprint(promptText) {
+  const text = String(promptText || "");
+  let hash = 2166136261;
+
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return `fnv1a-${(hash >>> 0).toString(16).padStart(8, "0")}-${text.length}`;
 }
 
 function getPathValue(source, path) {
@@ -274,19 +286,8 @@ function bodyForPromptPatch(path, nextPrompt) {
   };
 }
 
-function buildSarlotaPromptPatchText(promptText) {
-  const cleanedPrompt = [
-    stripDriverReportPromptBlocks,
-    stripLegacyDriverReportExamples,
-    stripDataBoxContextPromptBlocks,
-    stripCollectionRoutesCrewTabletPromptBlocks,
-    stripCollectionRoutesContextPromptBlocks,
-    stripCollectionRoutesGpsPromptBlocks,
-    stripCollectionRoutesIncidentPromptBlocks,
-    stripCollectionRoutesDriverActionPromptBlocks
-  ].reduce((currentPrompt, stripPromptBlock) => stripPromptBlock(currentPrompt), String(promptText || ""));
-
-  return `${cleanedPrompt}${PROMPT_RULE_BLOCK}${DATA_BOX_CONTEXT_RULE_BLOCK}${COLLECTION_ROUTES_CREW_TABLET_RULE_BLOCK}${COLLECTION_ROUTES_CONTEXT_RULE_BLOCK}${COLLECTION_ROUTES_GPS_RULE_BLOCK}${COLLECTION_ROUTES_INCIDENT_RULE_BLOCK}${COLLECTION_ROUTES_DRIVER_ACTION_RULE_BLOCK}`;
+function buildSarlotaPromptPatchText() {
+  return sarlotaSystemPrompt();
 }
 
 async function elevenLabsRequest({ apiKey, path, method = "GET", body = null }) {
@@ -375,6 +376,7 @@ function buildPlan(context) {
   }
 
   const promptPath = writablePromptPathFromAgent(context.agentConfig);
+  const targetPrompt = buildSarlotaPromptPatchText();
   const firstMessage = firstMessageFromAgent(context.agentConfig);
   const agentNameMatches = elevenLabsAgentNameMatchesExpected(context.agentConfig?.name, context.assistantConfig);
   const firstMessageMatches = firstMessage === FIRST_MESSAGE_TEMPLATE;
@@ -389,12 +391,25 @@ function buildPlan(context) {
   const hasLegacyUnsafeExample = promptHasLegacyUnsafeDriverReportExample(promptPath.value);
   const forbiddenPhrases = forbiddenPromptPhrases(promptPath.value);
   const hasForbiddenPhrases = forbiddenPhrases.length > 0;
-  const promptNeedsPatch = !hasCurrentRule || !hasDataBoxContextRule || !hasCollectionRoutesCrewTabletRule || !hasCollectionRoutesContextRule || !hasCollectionRoutesGpsRule || !hasCollectionRoutesIncidentRule || !hasCollectionRoutesDriverActionRule || hasLegacyRule || hasLegacyUnsafeExample || hasForbiddenPhrases;
+  const currentFingerprint = promptFingerprint(promptPath.value);
+  const targetFingerprint = promptFingerprint(targetPrompt);
+  const promptNeedsPatch = currentFingerprint !== targetFingerprint;
+  const alreadyApplied = !promptNeedsPatch
+    && hasCurrentRule
+    && hasDataBoxContextRule
+    && hasCollectionRoutesCrewTabletRule
+    && hasCollectionRoutesContextRule
+    && hasCollectionRoutesGpsRule
+    && hasCollectionRoutesIncidentRule
+    && hasCollectionRoutesDriverActionRule
+    && !hasLegacyRule
+    && !hasLegacyUnsafeExample
+    && !hasForbiddenPhrases;
 
   return {
     mode: "dry_run",
     ready: agentNameMatches && firstMessageMatches && promptNeedsPatch,
-    alreadyApplied: hasCurrentRule && hasDataBoxContextRule && hasCollectionRoutesCrewTabletRule && hasCollectionRoutesContextRule && hasCollectionRoutesGpsRule && hasCollectionRoutesIncidentRule && hasCollectionRoutesDriverActionRule && !hasLegacyRule && !hasLegacyUnsafeExample && !hasForbiddenPhrases,
+    alreadyApplied,
     generatedAt: new Date().toISOString(),
     assistant: assistantPublicMetadata(context.assistantConfig),
     agent: {
@@ -406,6 +421,10 @@ function buildPlan(context) {
     prompt: {
       path: promptPath.pathText,
       currentLength: promptPath.value.length,
+      targetLength: targetPrompt.length,
+      currentFingerprint,
+      targetFingerprint,
+      targetVersion: SARLOTA_PROMPT_VERSION,
       currentRulePresent: hasCurrentRule,
       dataBoxContextRulePresent: hasDataBoxContextRule,
       collectionRoutesCrewTabletRulePresent: hasCollectionRoutesCrewTabletRule,
@@ -415,13 +434,14 @@ function buildPlan(context) {
       collectionRoutesDriverActionRulePresent: hasCollectionRoutesDriverActionRule,
       legacyRulePresent: hasLegacyRule,
       forbiddenPhrasesPresent: forbiddenPhrases,
+      willReplaceEntirePrompt: promptNeedsPatch,
       willAppendDriverReportVehicleRule: promptNeedsPatch,
-      willAppendDataBoxContextRule: !hasDataBoxContextRule,
-      willAppendCollectionRoutesCrewTabletRule: !hasCollectionRoutesCrewTabletRule,
-      willAppendCollectionRoutesContextRule: !hasCollectionRoutesContextRule,
-      willAppendCollectionRoutesGpsRule: !hasCollectionRoutesGpsRule,
-      willAppendCollectionRoutesIncidentRule: !hasCollectionRoutesIncidentRule,
-      willAppendCollectionRoutesDriverActionRule: !hasCollectionRoutesDriverActionRule,
+      willAppendDataBoxContextRule: promptNeedsPatch,
+      willAppendCollectionRoutesCrewTabletRule: promptNeedsPatch,
+      willAppendCollectionRoutesContextRule: promptNeedsPatch,
+      willAppendCollectionRoutesGpsRule: promptNeedsPatch,
+      willAppendCollectionRoutesIncidentRule: promptNeedsPatch,
+      willAppendCollectionRoutesDriverActionRule: promptNeedsPatch,
       willRemoveLegacyDriverReportVehicleRule: hasLegacyRule,
       willRemoveLegacyUnsafeExample: hasLegacyUnsafeExample,
       willRemoveForbiddenDriverReportPhrases: hasForbiddenPhrases
@@ -429,6 +449,8 @@ function buildPlan(context) {
     safety: {
       returnsPromptText: false,
       requiresPostApplyTrue: true,
+      requiresCurrentFingerprint: true,
+      replacesPromptWithCanonicalRepoVersion: true,
       willNotPatchFirstMessage: true,
       willNotPatchModel: true,
       willNotPatchTools: true
@@ -453,7 +475,7 @@ function upstreamErrorSummary(error) {
   return cleanString(error?.payload?.message || error?.payload?.error || error?.message || "upstream_error");
 }
 
-async function applyPayload(env, assistantConfig, user = null) {
+async function applyPayload(env, assistantConfig, user = null, expectedCurrentFingerprint = "") {
   if (!assistantConfig?.promptSyncAllowed) {
     return json({
       error: "Prompt Šarloty pro tohoto asistenta není povolený.",
@@ -507,8 +529,17 @@ async function applyPayload(env, assistantConfig, user = null) {
     }, 409);
   }
 
+  if (!cleanString(expectedCurrentFingerprint) || expectedCurrentFingerprint !== plan.prompt.currentFingerprint) {
+    return json({
+      error: "Živý ElevenLabs prompt se od náhledu změnil. Načti nový read-only náhled a potvrď ho znovu.",
+      code: "sarlota_prompt_sync_fingerprint_mismatch",
+      plan,
+      apiStatus: "waiting"
+    }, 409);
+  }
+
   const promptPath = writablePromptPathFromAgent(context.agentConfig);
-  const nextPrompt = buildSarlotaPromptPatchText(promptPath.value);
+  const nextPrompt = buildSarlotaPromptPatchText();
   const patchBody = bodyForPromptPatch(promptPath.path, nextPrompt);
 
   try {
@@ -540,7 +571,9 @@ async function applyPayload(env, assistantConfig, user = null) {
   });
   const verifiedPrompt = promptPathFromAgent(verifiedAgentConfig);
   const verified = verifiedPrompt
-    ? promptHasCurrentRule(verifiedPrompt.value)
+    ? promptFingerprint(verifiedPrompt.value) === plan.prompt.targetFingerprint
+      && firstMessageFromAgent(verifiedAgentConfig) === FIRST_MESSAGE_TEMPLATE
+      && promptHasCurrentRule(verifiedPrompt.value)
       && promptHasDataBoxContextRule(verifiedPrompt.value)
       && promptHasCollectionRoutesCrewTabletRule(verifiedPrompt.value)
       && promptHasCollectionRoutesContextRule(verifiedPrompt.value)
@@ -557,7 +590,10 @@ async function applyPayload(env, assistantConfig, user = null) {
       path: promptPath.pathText,
       rulePresent: verified,
       forbiddenPhrasesPresent: verifiedPrompt ? forbiddenPromptPhrases(verifiedPrompt.value) : [],
-      currentLength: verifiedPrompt?.value?.length || 0
+      currentLength: verifiedPrompt?.value?.length || 0,
+      currentFingerprint: verifiedPrompt ? promptFingerprint(verifiedPrompt.value) : "",
+      targetFingerprint: plan.prompt.targetFingerprint,
+      targetVersion: SARLOTA_PROMPT_VERSION
     },
     agentPatch: {
       applied: true,
@@ -637,7 +673,7 @@ export async function onRequestPost({ request, env }) {
       }, 409);
     }
 
-    return await applyPayload(env, assistantConfig, user);
+    return await applyPayload(env, assistantConfig, user, payload?.expectedCurrentFingerprint);
   } catch (error) {
     console.error("elevenlabs.sarlota_prompt_sync_failed", {
       message: safeErrorMessage(error),
@@ -692,5 +728,6 @@ export const __test = {
   stripCollectionRoutesIncidentPromptBlocks,
   stripCollectionRoutesDriverActionPromptBlocks,
   buildSarlotaPromptPatchText,
+  promptFingerprint,
   upstreamErrorSummary
 };

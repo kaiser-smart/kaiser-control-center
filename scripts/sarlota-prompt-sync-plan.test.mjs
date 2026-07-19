@@ -7,7 +7,11 @@ import {
   SARLOTA_COLLECTION_ROUTES_DRIVER_ACTION_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE,
   SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE,
-  SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE
+  SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
+  SARLOTA_GUARDRAILS_PROMPT_RULE,
+  SARLOTA_LANGUAGE_PROMPT_RULE,
+  SARLOTA_PROMPT_VERSION,
+  sarlotaSystemPrompt
 } from "../src/sarlota/sarlotaSystemPrompt.js";
 
 {
@@ -29,7 +33,7 @@ import {
     SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE.includes(promptSyncTest.COLLECTION_ROUTES_GPS_RULE_REQUIRED_PHRASE),
     true
   );
-  assert.equal(promptSyncTest.COLLECTION_ROUTES_INCIDENT_RULE_MARKER, "SVOZOVÉ TRASY / TEST HLÁŠENÍ STANOVIŠTĚ");
+  assert.equal(promptSyncTest.COLLECTION_ROUTES_INCIDENT_RULE_MARKER, "SVOZOVÉ TRASY / HLÁŠENÍ STANOVIŠTĚ");
   assert.equal(
     SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE.includes(promptSyncTest.COLLECTION_ROUTES_INCIDENT_RULE_REQUIRED_PHRASE),
     true
@@ -77,7 +81,11 @@ import {
 {
   const patched = promptSyncTest.buildSarlotaPromptPatchText("Jsi Šarlota.\nBezpečný vlastní text.");
 
-  assert.equal(patched.includes("Bezpečný vlastní text."), true);
+  assert.equal(patched, sarlotaSystemPrompt());
+  assert.equal(patched.includes("Bezpečný vlastní text."), false);
+  assert.equal(patched.includes(SARLOTA_LANGUAGE_PROMPT_RULE), true);
+  assert.equal(patched.includes(SARLOTA_GUARDRAILS_PROMPT_RULE), true);
+  assert.equal(patched.includes(SARLOTA_PROMPT_VERSION), true);
   assert.equal(patched.includes(SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE), true);
   assert.equal(patched.includes(SARLOTA_COLLECTION_ROUTES_CREW_TABLET_PROMPT_RULE), true);
   assert.equal(patched.split(SARLOTA_COLLECTION_ROUTES_CREW_TABLET_PROMPT_RULE).length - 1, 1);
@@ -238,19 +246,14 @@ import {
   assert.equal(plan.prompt.willAppendCollectionRoutesGpsRule, true);
   assert.equal(plan.prompt.willAppendCollectionRoutesIncidentRule, true);
   assert.equal(plan.prompt.willRemoveForbiddenDriverReportPhrases, true);
+  assert.equal(plan.prompt.willReplaceEntirePrompt, true);
+  assert.equal(plan.prompt.targetVersion, SARLOTA_PROMPT_VERSION);
+  assert.notEqual(plan.prompt.currentFingerprint, plan.prompt.targetFingerprint);
+  assert.equal(plan.safety.requiresCurrentFingerprint, true);
 }
 
 {
-  const completePrompt = [
-    "Jsi Šarlota.",
-    SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
-    promptSyncTest.DATA_BOX_CONTEXT_RULE_BLOCK,
-    promptSyncTest.COLLECTION_ROUTES_CREW_TABLET_RULE_BLOCK,
-    promptSyncTest.COLLECTION_ROUTES_CONTEXT_RULE_BLOCK,
-    promptSyncTest.COLLECTION_ROUTES_GPS_RULE_BLOCK,
-    promptSyncTest.COLLECTION_ROUTES_INCIDENT_RULE_BLOCK,
-    promptSyncTest.COLLECTION_ROUTES_DRIVER_ACTION_RULE_BLOCK
-  ].join("\n");
+  const completePrompt = sarlotaSystemPrompt();
   const plan = promptSyncTest.buildPlan({
     ok: true,
     assistantConfig: {
@@ -278,21 +281,20 @@ import {
   assert.equal(plan.prompt.collectionRoutesDriverActionRulePresent, true);
   assert.equal(plan.alreadyApplied, true);
   assert.equal(plan.ready, false);
+  assert.equal(plan.prompt.currentFingerprint, plan.prompt.targetFingerprint);
+  assert.equal(plan.prompt.currentLength, plan.prompt.targetLength);
 }
 
 {
-  const duplicatedCurrentRulePrompt = [
-    "Jsi Šarlota.",
-    promptSyncTest.PROMPT_RULE_MARKER,
-    SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
-    "Bezpečný zbytek promptu."
-  ].join("\n");
-  const stripped = promptSyncTest.stripDriverReportPromptBlocks(duplicatedCurrentRulePrompt);
-
-  assert.equal(stripped.includes(promptSyncTest.PROMPT_RULE_MARKER), false);
-  assert.equal(stripped.includes(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE), false);
-  assert.equal(stripped.includes("Bezpečný zbytek promptu."), true);
-  assert.equal(promptSyncTest.promptHasCurrentRule(stripped), false);
+  const canonicalPrompt = sarlotaSystemPrompt();
+  assert.equal(canonicalPrompt.split("SVOZOVÉ TRASY / HLÁŠENÍ STANOVIŠTĚ").length - 1, 1);
+  assert.equal(canonicalPrompt.split("HLÁŠENÍ ŘIDIČŮ / SERVIS VOZIDEL").length - 1, 1);
+  assert.equal(canonicalPrompt.split("KONVERZAČNÍ LOGIKA A NEJISTOTA").length - 1, 1);
+  assert.equal(canonicalPrompt.includes("confirmed true, confirmationSource `voice-intake`"), false);
+  assert.equal(canonicalPrompt.includes("nejvýše dva přesné titulky"), true);
+  assert.equal(canonicalPrompt.includes("po druhém neúspěchu nabídni bezpečný vizuální výběr"), true);
+  assert.equal(canonicalPrompt.includes("starou hodnotu přestaň používat"), true);
+  assert.equal(canonicalPrompt.includes("rok ne po jednotlivých číslicích"), true);
 }
 
 {

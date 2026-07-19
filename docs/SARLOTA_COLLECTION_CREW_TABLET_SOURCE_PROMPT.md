@@ -4,9 +4,9 @@
 
 - Typ: zdrojový produktový prompt od Radima Opluštila.
 - Uloženo: 18. 7. 2026.
-- Stav: **ULOŽENÝ ÚPLNÝ ZDROJ; BEZPEČNÝ PROVOZNÍ VÝTAH JE AKTIVNÍ V KSO A SYNCHRONIZOVANÝ DO ELEVENLABS**.
+- Stav: **ULOŽENÝ ÚPLNÝ ZDROJ; BEZPEČNÝ PROVOZNÍ VÝTAH JE AKTIVNÍ V KSO A SOUČÁSTÍ KANONICKÉ REPO VERZE PROMPTU**.
 - Účel: trvalý vstup pro návrh a další bezpečnou implementaci Hlasové Šarloty ve Svozových trasách.
-- Živá synchronizace ElevenLabs: provedena minimálním merge postupem; původní text se do agenta nekopíruje slepě.
+- Živá synchronizace ElevenLabs: dřívější dílčí blok byl synchronizován; nová kanonická verze se zapíše až po read-only náhledu a ověření otisku aktuálního promptu.
 - Aktivní runtime: backendové `intro_announcement`, oprávněný kontext trasy, vozidla, osádky, počasí, pracovních kontaktů, dostupnosti, nadřízených, zpráv a dobrovolné pracovní paměti.
 - Bezpečnost: hlas HERE navigace zůstává oddělený; každý provozní zápis a otevření externí navigace dál vyžaduje fyzické potvrzení.
 - Databázová migrace: žádná.
@@ -37,7 +37,7 @@ Při budoucí implementaci platí vždy:
 - Aktivní: oficiální RSS iROZHLAS a ověřené počasí Open‑Meteo; při výpadku se nic nevymýšlí.
 - Aktivní: dobrovolná strukturovaná pracovní paměť bez audia, úplných přepisů a soukromých rozhovorů.
 - Neaktivní do samostatného ověření: T‑Cars rozpoznání pohybu, automatické sledování závad a další nové nástroje, které backend zatím bezpečně neposkytuje.
-- Každý budoucí blok se dál synchronizuje pouze minimálním merge postupem po read-only náhledu; tento úplný zdrojový dokument se do živého agenta nepřepisuje naslepo.
+- Každá budoucí změna se synchronizuje jen z kanonického repo promptu po read-only náhledu a ověření otisku; tento úplný zdrojový dokument se do živého agenta nepřepisuje naslepo.
 
 ---
 

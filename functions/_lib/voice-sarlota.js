@@ -50,7 +50,6 @@ const ABSENCE_TYPE_OPTIONS_TEXT = "Dovolená, nemoc, OČR, lékař, náhradní v
 const DRIVER_VEHICLE_PICKER_OR_SPZ_MESSAGE = "Potřebuji vybrat vozidlo v aplikaci, nebo mi řekni značku, typ nebo SPZ vozidla.";
 const DRIVER_VEHICLE_UNVERIFIED_MESSAGE = "Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ.";
 const DRIVER_PART_KSO_CONFIRMATION_SOURCES = new Set(["kso-ui"]);
-const DRIVER_PART_VOICE_CONFIRMATION_SOURCES = new Set(["voice-intake"]);
 
 const ABSENCE_TYPE_ALIASES = {
   dovolena: "vacation",
@@ -1164,17 +1163,6 @@ function driverPartNoteMissingMessage() {
   return "Doplníš k tomu ještě poznámku? Například kdy se problém projevuje, odkud jde zvuk, nebo jestli auto normálně jede. Pokud nic doplnit nechceš, řekni: bez poznámky.";
 }
 
-function driverPartVoiceIntakeTrusted(payload = {}, draft = {}) {
-  const meta = driverPartConfirmationMeta(payload);
-  if (!DRIVER_PART_VOICE_CONFIRMATION_SOURCES.has(meta.source)) {
-    return false;
-  }
-
-  return driverPartNoteHandled(payload, draft) &&
-    Boolean(draft.vehicleId || draft.licensePlate) &&
-    draft.manualVehicleReview !== true;
-}
-
 function driverPartConfirmationTrusted(payload, user, draft) {
   const meta = driverPartConfirmationMeta(payload);
   const expectedId = driverPartConfirmationId(user, draft);
@@ -1184,7 +1172,7 @@ function driverPartConfirmationTrusted(payload, user, draft) {
   if (DRIVER_PART_KSO_CONFIRMATION_SOURCES.has(meta.source)) {
     return true;
   }
-  return driverPartVoiceIntakeTrusted(payload, draft);
+  return false;
 }
 
 function driverPartMockModeEnabled(env = {}, payload = {}) {
@@ -1223,7 +1211,7 @@ function driverPartPreparedAction(draft, user) {
     action: "create_service_report",
     requiresConfirmation: true,
     confirmationPhrase: "ano",
-    confirmationSourceRequired: ["kso-ui", "voice-intake"],
+    confirmationSourceRequired: ["kso-ui"],
     confirmationId: driverPartConfirmationId(user, draft),
     notificationsSent: false,
     parameters: compactObject({
@@ -1868,7 +1856,7 @@ function systemPrompt() {
     sarlotaSystemPrompt(),
     "Tento endpoint vrací strojové rozhodnutí pro KSO backend. Odpověď pro uživatele dej do pole reply.",
     "Pro zápis dovolené, nemoci, OČR, lékaře, náhradního volna, neplaceného volna nebo jiné nepřítomnosti použij intent absence_request. Nezapisuj bez jasného potvrzení uživatele; když něco chybí, polož jen jednu otázku.",
-    "Pro servisní hlášení z modulu Hlášení řidičů použij intent driver_part_request. Když volající řekne, že chce opravu, servis, údržbu, závadu, poškození nebo jakoukoliv potřebu na vozidle, ber to jako Hlášení řidičů. V ElevenLabs hovoru má Šarlota nejdřív říct `Rozumím. Podívám se do Smart systému.`, zavolat get_driver_report_context a pracovat jen s ověřeným backend seznamem. Když seznam není bezpečně ověřený nebo je dlouhý, otevři bezpečný výběr vozidla v aplikaci; značka, typ nebo SPZ jsou jen nouzová cesta. Šarlota není servisní technik: přijme problém, položí nejvýše jednu krátkou otázku na poznámku řidiče, potom hned uloží hlášení a řekne, že ho předává na servisní kontrolu. Po poznámce už se neptej `Mám hlášení uložit?`; pro servisní hlášení použij confirmationSource `voice-intake` a driverNoteStatus `provided` nebo `declined`. Díl, VIN katalog, ceny a e-mail Patrikovi nesmí blokovat hlasový zápis; běží až potom na pozadí. Mercedes díl podle VIN označ jako ověřený jen při oficiálním výsledku nebo ručním potvrzení.",
+    "Pro servisní hlášení použij intent driver_part_request. Pracuj jen s ověřeným vozidlem, polož nejvýše jednu otázku na poznámku a potom připrav hlášení. Hlasové potvrzení není zápis: finální vytvoření vyžaduje confirmationSource kso-ui a fyzické potvrzení v aplikaci. Za vytvořené považuj hlášení jen při úspěšném backendovém výsledku s reportId. Díl, cenu, objednávku ani předání konkrétní osobě bez výslovně potvrzeného backendového stavu netvrď.",
     "Blok Firemní lidskost: pokud request.humanTouch.enabled obsahuje návrhy, můžeš nenásilně použít maximálně jednu krátkou poznámku. Použij jen dodaný ověřený návrh, nikdy si nevymýšlej počasí, svátky, narozeniny ani dovolené.",
     "Firemní lidskost nepoužívej při reklamaci, stížnosti, spěchu, stresu, chybě, nemoci, OČR, lékaři ani u citlivé absence. Nikdy nezmiňuj důvod absence, věk ani soukromé údaje. Nepoužívej texty známých písní.",
     "Vrať výhradně JSON."

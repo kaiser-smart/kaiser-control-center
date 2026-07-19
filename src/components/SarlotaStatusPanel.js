@@ -401,6 +401,10 @@ function voiceWriteTestControls(test = {}, syncing = false) {
 }
 
 function promptSyncBlockLabels(prompt = {}) {
+  if (prompt.willReplaceEntirePrompt) {
+    return ["Jeden kanonický prompt: identita, bezpečnost, jazyk, nástroje a modulová pravidla"];
+  }
+
   return [
     [prompt.willAppendDriverReportVehicleRule, "Hlášení řidičů a vozidla"],
     [prompt.willAppendDataBoxContextRule, "Datová schránka"],
@@ -439,7 +443,7 @@ function promptSyncPreview(plan = null, syncing = false) {
         <div>
           <span class="sarlota-status__badge sarlota-status__badge--${escapeHtml(badgeTone)}">${escapeHtml(badgeLabel)}</span>
           <h3>Náhled změny ElevenLabs promptu</h3>
-          <p>Tento náhled je pouze čtecí. Prompt, first message, model ani tools se zatím nemění.</p>
+          <p>Tento náhled je pouze čtecí. Při zápisu se nahradí jen text promptu; first message, model ani tools se nezmění.</p>
         </div>
       </div>
       <dl class="sarlota-status__prompt-plan-grid">
@@ -447,9 +451,11 @@ function promptSyncPreview(plan = null, syncing = false) {
         ${diagnosticLine("First message", escapeHtml(matchLabel(agent.firstMessageMatches, "{{intro_announcement}} ověřeno")))}
         ${diagnosticLine("Cesta promptu", escapeHtml(prompt.path || "nenalezena"))}
         ${diagnosticLine("Délka nyní", escapeHtml(`${Number(prompt.currentLength || 0)} znaků`))}
+        ${diagnosticLine("Délka nové verze", escapeHtml(`${Number(prompt.targetLength || 0)} znaků`))}
+        ${diagnosticLine("Verze promptu", escapeHtml(prompt.targetVersion || "neuvedena"))}
       </dl>
       <div class="sarlota-status__prompt-plan-blocks">
-        <strong>Spravované bloky k doplnění nebo sjednocení</strong>
+        <strong>Rozsah kanonické synchronizace</strong>
         <ul>${blocks}</ul>
         ${prompt.legacyRulePresent ? "<p>Starý blok vozidel bude odstraněný.</p>" : ""}
         ${safeArray(prompt.forbiddenPhrasesPresent).length ? `<p>Budou odstraněné zakázané zastaralé fráze: ${escapeHtml(safeArray(prompt.forbiddenPhrasesPresent).length)}.</p>` : ""}

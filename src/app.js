@@ -46920,25 +46920,16 @@ function startSarlotaAssistantTestCall() {
 function sarlotaPromptSyncConfirmText(plan = {}) {
   const assistantName = plan.assistant?.assistantDisplayName || selectedSarlotaAssistantConfig().displayName;
   const prompt = plan.prompt || {};
-  const plannedBlocks = [
-    [prompt.willAppendDriverReportVehicleRule, "Hlášení řidičů a vozidla"],
-    [prompt.willAppendDataBoxContextRule, "Datová schránka"],
-    [prompt.willAppendCollectionRoutesCrewTabletRule, "Svozové trasy: tablet osádky a úvodní hlášení"],
-    [prompt.willAppendCollectionRoutesContextRule, "Svozové trasy: kontext, počasí, zprávy a paměť"],
-    [prompt.willAppendCollectionRoutesGpsRule, "Svozové trasy: GPS stanoviště"],
-    [prompt.willAppendCollectionRoutesIncidentRule, "Svozové trasy: hlášení stanoviště"],
-    [prompt.willAppendCollectionRoutesDriverActionRule, "Svozové trasy: pracovní kroky řidiče"]
-  ].filter(([missing]) => missing).map(([, label]) => label);
   return [
-    `Doplnit chybějící bezpečná pravidla do ElevenLabs promptu asistenta ${assistantName}?`,
+    `Nahradit hlavní ElevenLabs prompt asistenta ${assistantName} kanonickou repo verzí?`,
     "",
     `Cesta promptu: ${prompt.path || "nenalezena"}`,
+    `Verze: ${prompt.targetVersion || "neuvedena"}`,
+    `Délka: ${Number(prompt.currentLength || 0)} → ${Number(prompt.targetLength || 0)} znaků`,
     `Synchronizace už je kompletní: ${plan.alreadyApplied ? "ano" : "ne"}`,
-    `Bloky k synchronizaci: ${plannedBlocks.length ? plannedBlocks.join(", ") : "žádné"}`,
-    `Starý blok k odstranění: ${prompt.legacyRulePresent ? "ano" : "ne"}`,
     "",
-    "Zbytek aktuálního promptu zůstane zachovaný.",
-    "Spravované bloky se sjednotí na bezpečnou repo verzi; zastaralý blok vozidel se odstraní.",
+    "Dosavadní konfliktní text promptu bude nahrazen jedním kanonickým promptem z repozitáře.",
+    "Aktuální otisk se před zápisem znovu ověří; při změně se zápis zastaví.",
     "First message, model ani tools se nemění.",
     "Bez potvrzení se nic neprovede."
   ].join("\n");
@@ -47008,13 +46999,17 @@ async function applySarlotaPromptSync() {
 
   sarlotaStatusState.syncing = true;
   sarlotaStatusState.syncError = "";
-  sarlotaStatusState.syncMessage = "Doplňuji ElevenLabs prompt...";
+  sarlotaStatusState.syncMessage = "Synchronizuji kanonický ElevenLabs prompt...";
   render();
 
   try {
     const result = await apiJson("/api/ai/elevenlabs/sarlota-prompt-sync", {
       method: "POST",
-      body: JSON.stringify({ apply: true, assistant: selectedSarlotaAssistantConfig().assistantKey })
+      body: JSON.stringify({
+        apply: true,
+        assistant: selectedSarlotaAssistantConfig().assistantKey,
+        expectedCurrentFingerprint: plan.prompt?.currentFingerprint || ""
+      })
     });
 
     sarlotaStatusState.promptSyncPlan = null;

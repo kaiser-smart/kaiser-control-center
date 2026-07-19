@@ -457,7 +457,7 @@ async function testVoiceCreateConfirmationGuards() {
 
   const action = afterNote.preparedActions[0];
   assert.equal(action.requiresConfirmation, true);
-  assert.deepEqual(action.confirmationSourceRequired, ["kso-ui", "voice-intake"]);
+  assert.deepEqual(action.confirmationSourceRequired, ["kso-ui"]);
   assert.equal(action.parameters.driverNoteStatus, "declined");
   assert.equal(action.parameters.driverNoteQuestionAsked, true);
   assert.match(action.confirmationId, /^driver-part-confirm-/);
@@ -495,10 +495,10 @@ async function testVoiceCreateConfirmationGuards() {
       confirmationId: action.confirmationId
     }
   });
-  assert.equal(voiceIntake.status, "created_mock");
+  assert.equal(voiceIntake.status, "needs_confirmation");
   assert.equal(voiceIntake.notificationsSent, false);
-  assert.equal(voiceIntake.driverPartRequest.status, "mock_created");
-  assert.match(voiceIntake.reply, /Mock hotovo/);
+  assert.equal(voiceIntake.driverPartRequest, null);
+  assert.equal(voiceIntake.reply, "Potvrď to prosím v aplikaci.");
   assert.equal(voiceIntake.reply.includes("předala Patrikovi"), false);
   assert.equal(voiceIntake.reply.includes("předala Kamilovi"), false);
 

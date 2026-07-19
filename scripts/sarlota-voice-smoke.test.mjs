@@ -88,11 +88,11 @@ function assertNoSecret(value = "") {
 }
 
 {
-  assert.match(SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE, /current_module_route `\/trasy-svozu`/);
+  assert.match(SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE, /current_module_route \/trasy-svozu/);
   assert.match(SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE, /vždy zavolej prepare_collection_route_gps_capture/);
   assert.match(SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE, /nikdy nevolej get_driver_report_context/);
   assert.match(SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE, /show_driver_vehicle_picker/);
-  assert.match(SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE, /Finální uložení vždy vyžaduje fyzické klepnutí/);
+  assert.match(SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE, /finální uložení vyžaduje fyzické klepnutí/);
 
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Jaký tam jsou vozidla\?/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Jaký tam mám\?/);
@@ -103,17 +103,18 @@ function assertNoSecret(value = "") {
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Konkrétní vozidla smíš v hlasu říct pouze tehdy/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /vehiclesVerified: true/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /jedno nebo více vozidel/);
-  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neříkej VIN v hlasu/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nevyslovuj VIN/);
   assert.match(
     SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE,
     /Nevidím bezpečně přiřazené vozidlo\. Nadiktuj mi prosím SPZ\./
   );
   assert.doesNotMatch(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Konkrétní vozidlo smíš[^.]*právě jedno vozidlo/);
-  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neříkej, že je hotovo/);
-  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neříkej, že je něco předané Patrikovi nebo Kamilovi/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Za vytvořené považuj hlášení jen tehdy/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Netvrď, že je něco předané konkrétní osobě/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Doplníš k tomu ještě poznámku/);
-  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /confirmationSource `voice-intake`/);
-  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Po vyřízení poznámky už se neptej `Mám hlášení uložit\?`/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /confirmed false/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Nikdy neposílej confirmationSource voice-intake/);
+  assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Potvrď hlášení prosím v aplikaci/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /driverPartRequest\.reportId/);
   assert.match(SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE, /Hlášení se mi nepodařilo zapsat/);
   const createReportTool = ELEVENLABS_CLIENT_TOOL_SCHEMAS.find((tool) => tool.name === "create_driver_part_request");
