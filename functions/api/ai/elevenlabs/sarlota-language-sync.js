@@ -295,7 +295,7 @@ async function elevenLabsRequest({ apiKey, path, method = "GET", body = null }) 
   try {
     payload = text ? JSON.parse(text) : {};
   } catch (_) {
-    payload = {};
+    payload = text;
   }
 
   if (!response.ok) {
