@@ -1411,6 +1411,13 @@ const collectionRoutesPilotState = {
   testTabletOpen: false,
   testTabletSelectedRunId: "",
   testTabletMapNode: null,
+  adminTabletTestLauncherOpen: false,
+  adminTabletTestLoaded: false,
+  adminTabletTestLoading: false,
+  adminTabletTestRoutes: [],
+  adminTabletTestSelectedRunId: "",
+  adminTabletTestSession: null,
+  adminTabletTestError: "",
   myDailyRouteLoaded: false,
   myDailyRouteLoading: false,
   myDailyRoute: null,
@@ -1707,7 +1714,8 @@ const elevenLabsAssistant = ElevenLabsAssistantProvider({
   signedUrlOptions: (assistantId, sessionContext = {}) => ({
     omitDriverReportVehicleContext: ["sarlota", "sarlota-smart-2"].includes(assistantId) &&
       sessionContext.interfaceMode === "voice" &&
-      sarlotaVoiceDiagnosticsState.omitDriverReportVehicleContext
+      sarlotaVoiceDiagnosticsState.omitDriverReportVehicleContext,
+    tabletTestSession: collectionRoutesPilotState.adminTabletTestSession?.id || ""
   }),
   tools: {
     navigate: (route) => navigateFromAiAssistant(route),
@@ -24182,6 +24190,44 @@ function collectionDailyDriverPanel(detail, currentStop, visibleStops, remaining
   return "";
 }
 
+function collectionRoutesAdminTabletTestDiagnostics(detail, currentStop) {
+  if (!collectionRoutesAdminTabletTestActive()) return "";
+  const context = collectionRoutesPilotState.myDailyRouteSarlotaContext || {};
+  const diagnostics = [
+    ["Řidič načten", detail?.run?.driverUserId === "pneumatiky-miroslav-vasek", "Chyba"],
+    ["Vozidlo načteno", context.vehicle?.status === "verified", context.vehicle ? "Chybí" : "Chybí"],
+    ["Osádka načtena", context.crew?.verified === true, "Chybí"],
+    ["Trasa načtena", Boolean(detail?.run && Array.isArray(detail?.stops)), "Chyba"],
+    ["Počasí načteno", context.weather?.verified === true, "Chybí"],
+    ["Šarlota připojena", collectionRoutesPilotState.myDailyRouteSarlotaEnabled === true, collectionRoutesPilotState.myDailyRouteSarlotaConnecting ? "Chybí" : "Chybí"],
+    ["Navigace připravena", Boolean(currentStop?.addressText), "Chybí"],
+    ["TEST zápisy aktivní", detail?.run?.scope === "test" && collectionRoutesPilotState.adminTabletTestSession?.active === true, "Chyba"]
+  ];
+  const technical = {
+    scope: detail?.run?.scope || "",
+    routeStatus: detail?.run?.status || "",
+    voiceContext: context.apiStatus || "čeká",
+    memory: context.memory?.apiStatus || "čeká",
+    productionWrites: false,
+    vistosWrites: false,
+    notifications: false
+  };
+  return `
+    <section class="collection-routes-tablet-test-status" aria-labelledby="collection-routes-tablet-test-status-title">
+      <header><div><span>ADMINISTRÁTORSKÁ KONTROLA</span><h2 id="collection-routes-tablet-test-status-title">Stav testu</h2></div><strong>TEST</strong></header>
+      <div class="collection-routes-tablet-test-status__grid">
+        ${diagnostics.map(([label, ready, fallback]) => {
+          const state = ready ? "Připraveno" : fallback;
+          const tone = ready ? "ready" : state === "Chyba" ? "error" : "missing";
+          return `<article class="is-${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(state)}</strong></article>`;
+        }).join("")}
+      </div>
+      ${context.memory?.apiStatus === "unavailable_test_scope" ? `<p class="collection-routes-tablet-test-status__notice">Pracovní paměť: Tato funkce zatím není v testovacím režimu dostupná.</p>` : ""}
+      <details><summary>Technické podrobnosti</summary><pre>${escapeHtml(JSON.stringify(technical, null, 2))}</pre></details>
+    </section>
+  `;
+}
+
 function collectionDailyRouteDriverPage(_moduleItem, user) {
   const detail = collectionRoutesPilotState.myDailyRoute;
   const run = detail?.run || null;
@@ -24205,18 +24251,19 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
   const stationaryFieldTest = collectionRoutesIsStationaryFieldTestRun(run);
   const driverRouteLabel = stationaryFieldTest ? "Stacionární tablet · bez jízdy" : vehicleLabel;
   const driverRouteTitle = stationaryFieldTest ? "Firma test 501 · jeden bod · bez jízdy" : run?.title || "Denní trasa";
+  const adminTabletTest = collectionRoutesAdminTabletTestActive();
   return `
     <main class="collection-daily-driver-page ${testScope ? "is-isolated-test" : ""}" data-collection-daily-driver-kiosk ${moduleThemeStyleAttribute()}>
       <header class="collection-daily-driver-kiosk-bar">
         <div class="collection-daily-driver-kiosk-brand">
           <strong>kaiser.</strong>
           <span>ŘIDIČSKÝ DISPLEJ</span>
-          ${testScope ? `<b class="collection-daily-driver-test-badge">IZOLOVANÝ TEST · BEZ JÍZDY</b>` : ""}
+          ${adminTabletTest ? `<b class="collection-daily-driver-test-badge">TEST REŽIM · ŘIDIČ: VAŠEK MIROSLAV</b>` : testScope ? `<b class="collection-daily-driver-test-badge">IZOLOVANÝ TEST · BEZ JÍZDY</b>` : ""}
         </div>
         <div class="collection-daily-driver-kiosk-user">
           <span>${escapeHtml(user.name || user.email || "Řidič")}</span>
-          <b>${escapeHtml(roleLabel(user.role))}</b>
-          <button type="button" data-logout>Odhlásit</button>
+          <b>${adminTabletTest ? `Simulace řidiče · správce ${escapeHtml(currentUser()?.email || currentUser()?.name || "")}` : escapeHtml(roleLabel(user.role))}</b>
+          ${adminTabletTest ? `<button type="button" data-collection-routes-admin-tablet-test-reset>UKONČIT A RESETOVAT TEST</button>` : `<button type="button" data-logout>Odhlásit</button>`}
         </div>
       </header>
       <div class="collection-daily-driver-feedback" aria-live="polite">
@@ -24224,6 +24271,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
         ${collectionRoutesPilotState.myDailyRouteError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.myDailyRouteError)}</p>` : ""}
         ${collectionRoutesPilotState.myDailyRouteMessage ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.myDailyRouteMessage)}</p>` : ""}
       </div>
+      ${collectionRoutesAdminTabletTestDiagnostics(detail, currentStop)}
       ${!run && collectionRoutesPilotState.myDailyRouteLoaded ? `<section class="collection-daily-driver-empty"><strong>${testScope ? "Nemáš přiřazenou testovací trasu." : "Dnes nemáš přiřazenou trasu."}</strong><span>Jakmile ji dispečink potvrdí a přiřadí přímo tobě, objeví se tady.</span><button class="secondary-link" type="button" data-collection-daily-driver-refresh>OBNOVIT</button></section>` : ""}
       ${run ? `
         <section class="collection-daily-driver-route">
@@ -24273,7 +24321,9 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
                 ${testScope ? `<button class="collection-daily-driver-action collection-daily-driver-action--mapping" type="button" data-collection-driver-panel="mapping">MAPOVÁNÍ STANOVIŠTĚ</button>` : ""}
                 <button class="collection-daily-driver-action collection-daily-driver-action--sarlota ${collectionRoutesPilotState.myDailyRouteSarlotaEnabled ? "is-active" : ""}" type="button" data-collection-driver-sarlota ${collectionRoutesPilotState.myDailyRouteSarlotaConnecting ? "disabled" : ""}>${collectionRoutesPilotState.myDailyRouteSarlotaConnecting ? "PŘIPOJUJI ŠARLOTU…" : collectionRoutesPilotState.myDailyRouteSarlotaEnabled ? "ŠARLOTA POSLOUCHÁ" : "ZAPNOUT ŠARLOTU"}</button>
                 ${collectionRoutesPilotState.myDailyRouteSarlotaMessage ? `<p class="collection-daily-driver-sarlota-status">${escapeHtml(collectionRoutesPilotState.myDailyRouteSarlotaMessage)}</p>` : ""}
-                ${collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded ? `<button class="collection-daily-driver-sarlota-memory-button" type="button" data-collection-driver-sarlota-memory>${collectionRoutesPilotState.myDailyRouteSarlotaMemory?.consent ? "PAMĚŤ: ZAPNUTÁ" : "PAMĚŤ: VYPNUTÁ"}</button>` : ""}
+                ${collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded ? adminTabletTest
+                  ? `<button class="collection-daily-driver-sarlota-memory-button" type="button" disabled title="Tato funkce zatím není v testovacím režimu dostupná.">PAMĚŤ: NEDOSTUPNÁ V TESTU</button>`
+                  : `<button class="collection-daily-driver-sarlota-memory-button" type="button" data-collection-driver-sarlota-memory>${collectionRoutesPilotState.myDailyRouteSarlotaMemory?.consent ? "PAMĚŤ: ZAPNUTÁ" : "PAMĚŤ: VYPNUTÁ"}</button>` : ""}
               </aside>
             </div>
           ` : ""}
@@ -26100,7 +26150,68 @@ function collectionRoutesActiveSection(user) {
   return collectionRoutesSourceRoutesSection(user);
 }
 
+function collectionRoutesAdminTabletTestActive() {
+  return Boolean(
+    collectionRoutesPilotState.adminTabletTestSession?.active
+    && collectionRoutesPilotState.myDailyRoute?.run?.scope === "test"
+  );
+}
+
+function collectionRoutesAdminTabletTestDriver() {
+  return {
+    id: "pneumatiky-miroslav-vasek",
+    name: "Vašek Miroslav",
+    email: "",
+    role: "ridic",
+    status: "active"
+  };
+}
+
+function collectionRoutesAdminTabletTestLauncher() {
+  if (!collectionRoutesPilotState.adminTabletTestLauncherOpen || collectionRoutesAdminTabletTestActive()) return "";
+  const routes = Array.isArray(collectionRoutesPilotState.adminTabletTestRoutes)
+    ? collectionRoutesPilotState.adminTabletTestRoutes
+    : [];
+  const selectedRunId = collectionRoutesPilotState.adminTabletTestSelectedRunId;
+  const pending = collectionRoutesPilotState.adminTabletTestLoading;
+  return `
+    <div class="collection-routes-tablet-test-launcher" role="presentation">
+      <button type="button" class="collection-routes-tablet-test-launcher__backdrop" data-collection-routes-admin-tablet-test-close aria-label="Zrušit"></button>
+      <section role="dialog" aria-modal="true" aria-labelledby="collection-routes-admin-tablet-test-title" tabindex="-1" data-collection-routes-admin-tablet-test-dialog>
+        <header>
+          <span>BEZPEČNÝ TEST REŽIM</span>
+          <h2 id="collection-routes-admin-tablet-test-title">Test tabletu</h2>
+          <p>Přihlášený administrátor zůstává beze změny. Tablet pouze simuluje provozní identitu řidiče.</p>
+        </header>
+        ${collectionRoutesPilotState.adminTabletTestError ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.adminTabletTestError)}</p>` : ""}
+        <div class="collection-routes-tablet-test-launcher__field">
+          <span>Řidič</span>
+          <strong>Vašek Miroslav</strong>
+        </div>
+        <label class="collection-routes-tablet-test-launcher__field">
+          <span>Testovací trasa</span>
+          <select data-collection-routes-admin-tablet-test-route ${pending || !routes.length ? "disabled" : ""}>
+            ${routes.map((run) => `<option value="${escapeHtml(run.id)}" ${run.id === selectedRunId ? "selected" : ""}>${escapeHtml(run.title || collectionDailyRouteDateLabel(run.routeDate))} · ${escapeHtml(collectionDailyRouteStatusMeta(run.status).label)}</option>`).join("")}
+          </select>
+          ${!pending && !routes.length ? `<small>Tato funkce zatím není v testovacím režimu dostupná: Vašek Miroslav nemá žádnou existující TEST trasu.</small>` : `<small>Výběr obsahuje výhradně existující oddělené TEST trasy tohoto řidiče.</small>`}
+        </label>
+        <div class="collection-routes-tablet-test-launcher__safety">
+          <strong>Bez produkčních zásahů</strong>
+          <span>Bez Vistosu, zákaznických zpráv, ostré GPS a produkčních stavů tras.</span>
+        </div>
+        <footer>
+          <button class="primary-action" type="button" data-collection-routes-admin-tablet-test-start ${pending || !selectedRunId ? "disabled" : ""}>${pending ? "PŘIPRAVUJI TEST…" : "SPUSTIT TEST"}</button>
+          <button class="secondary-link" type="button" data-collection-routes-admin-tablet-test-close ${pending ? "disabled" : ""}>ZRUŠIT</button>
+        </footer>
+      </section>
+    </div>
+  `;
+}
+
 function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
+  if (collectionRoutesAdminTabletTestActive()) {
+    return collectionDailyRouteDriverPage(moduleItem, collectionRoutesAdminTabletTestDriver());
+  }
   if (normalizeRole(user?.role) === "ridic") {
     return collectionDailyRouteDriverPage(moduleItem, user);
   }
@@ -26146,6 +26257,7 @@ function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
             <span>Stav</span>
             <strong>Řízený provozní pilot</strong>
           </div>
+          <button class="collection-routes-admin-tablet-test-button" type="button" data-collection-routes-admin-tablet-test-open>TEST TABLETU</button>
         </div>
         <div class="ui-pilot-hero__icon" aria-hidden="true">${renderModuleIcon(moduleItem)}</div>
       </section>`}
@@ -26166,6 +26278,7 @@ function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
 
       ${collectionRoutesPilotState.loading ? `<p class="module-feedback__notice">Načítám pilotní data z API...</p>` : ""}
       ${collectionRoutesActiveSection(user)}
+      ${collectionRoutesAdminTabletTestLauncher()}
     </main>
   `;
 }
@@ -40221,6 +40334,133 @@ async function openCollectionRoutesTestTablet() {
   setTimeout(() => document.querySelector("[data-collection-routes-test-tablet-dialog]")?.focus(), 0);
 }
 
+async function loadCollectionRoutesAdminTabletTest(options = {}) {
+  if (!collectionRoutesCanManageDailyRoutes(currentUser()) || collectionRoutesPilotState.adminTabletTestLoading) return;
+  if (collectionRoutesPilotState.adminTabletTestLoaded && options.force !== true) return;
+  collectionRoutesPilotState.adminTabletTestLoading = true;
+  collectionRoutesPilotState.adminTabletTestError = "";
+  if (options.renderAfter !== false) render();
+  let restoredActive = false;
+  try {
+    const result = await apiJson("/api/collection-routes/tablet-test-session");
+    collectionRoutesPilotState.adminTabletTestRoutes = Array.isArray(result.routes) ? result.routes : [];
+    collectionRoutesPilotState.adminTabletTestSession = result.session || null;
+    collectionRoutesPilotState.adminTabletTestSelectedRunId = result.session?.runId
+      || collectionRoutesPilotState.adminTabletTestSelectedRunId
+      || result.routes?.[0]?.id
+      || "";
+    collectionRoutesPilotState.adminTabletTestLoaded = true;
+    if (result.session?.active && result.route) {
+      restoredActive = true;
+      applyMyCollectionDailyRoute(result.route);
+      collectionRoutesPilotState.myDailyRouteLoaded = true;
+      collectionRoutesPilotState.testGpsConfirmations = [];
+    }
+  } catch (error) {
+    collectionRoutesPilotState.adminTabletTestError = error.payload?.error || error.message || "TEST tabletu se nepodařilo načíst.";
+    collectionRoutesPilotState.adminTabletTestLoaded = false;
+  } finally {
+    collectionRoutesPilotState.adminTabletTestLoading = false;
+  }
+  if (options.renderAfter !== false) render();
+  if (restoredActive && !collectionRoutesPilotState.myDailyRouteSarlotaContext) {
+    await loadCollectionRoutesSarlotaContext();
+  }
+}
+
+async function openCollectionRoutesAdminTabletTest() {
+  if (!collectionRoutesCanManageDailyRoutes(currentUser())) return;
+  collectionRoutesPilotState.adminTabletTestLauncherOpen = true;
+  collectionRoutesPilotState.adminTabletTestError = "";
+  render();
+  await loadCollectionRoutesAdminTabletTest({ force: true });
+  window.setTimeout(() => document.querySelector("[data-collection-routes-admin-tablet-test-dialog]")?.focus(), 0);
+}
+
+function closeCollectionRoutesAdminTabletTest() {
+  if (collectionRoutesPilotState.adminTabletTestLoading) return;
+  collectionRoutesPilotState.adminTabletTestLauncherOpen = false;
+  collectionRoutesPilotState.adminTabletTestError = "";
+  render();
+  window.setTimeout(() => document.querySelector("[data-collection-routes-admin-tablet-test-open]")?.focus(), 0);
+}
+
+async function startCollectionRoutesAdminTabletTest() {
+  const runId = String(collectionRoutesPilotState.adminTabletTestSelectedRunId || "").trim();
+  if (!runId || collectionRoutesPilotState.adminTabletTestLoading) return;
+  void elevenLabsAssistant.unlockVoiceAudio?.();
+  collectionRoutesPilotState.adminTabletTestLoading = true;
+  collectionRoutesPilotState.adminTabletTestError = "";
+  render();
+  try {
+    const result = await apiJson("/api/collection-routes/tablet-test-session", {
+      method: "POST",
+      body: JSON.stringify({ action: "start", runId })
+    });
+    collectionRoutesPilotState.adminTabletTestSession = result.session || null;
+    collectionRoutesPilotState.adminTabletTestLauncherOpen = false;
+    collectionRoutesPilotState.myDailyRouteLoaded = true;
+    collectionRoutesPilotState.testGpsConfirmations = [];
+    collectionRoutesPilotState.testIncidents = [];
+    collectionRoutesPilotState.myDailyRouteSarlotaContext = null;
+    collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaMemory = null;
+    applyMyCollectionDailyRoute(result.route || null, "TEST relace je aktivní. Všechny zápisy míří jen do TEST scope.");
+  } catch (error) {
+    collectionRoutesPilotState.adminTabletTestError = error.payload?.error || error.message || "TEST relaci se nepodařilo spustit.";
+  } finally {
+    collectionRoutesPilotState.adminTabletTestLoading = false;
+    render();
+  }
+  if (collectionRoutesAdminTabletTestActive()) {
+    await enableCollectionDailyDriverSarlota({ promptForMemory: false, invocation: "automatic" });
+  }
+}
+
+async function resetCollectionRoutesAdminTabletTest() {
+  const session = collectionRoutesPilotState.adminTabletTestSession;
+  if (!session?.id || collectionRoutesPilotState.adminTabletTestLoading) return;
+  if (!window.confirm("Ukončit hlasovou relaci, smazat dočasný stav a vrátit TEST trasu do výchozího stavu?")) return;
+  collectionRoutesPilotState.adminTabletTestLoading = true;
+  collectionRoutesPilotState.myDailyRouteError = "";
+  render();
+  collectionRoutesSarlotaVoiceRequestId += 1;
+  elevenLabsAssistant.stopVoiceAudio?.();
+  if (collectionRoutesPilotState.myDailyRouteNavigationActive) {
+    stopCollectionDailyDriverNavigation({ renderAfter: false });
+  }
+  try {
+    await apiJson("/api/collection-routes/tablet-test-session", {
+      method: "POST",
+      body: JSON.stringify({ action: "reset", runId: session.runId, sessionId: session.id })
+    });
+    collectionRoutesPilotState.adminTabletTestSession = null;
+    collectionRoutesPilotState.adminTabletTestLauncherOpen = false;
+    collectionRoutesPilotState.adminTabletTestLoaded = false;
+    collectionRoutesPilotState.adminTabletTestSelectedRunId = session.runId;
+    collectionRoutesPilotState.myDailyRoute = null;
+    collectionRoutesPilotState.myDailyRouteLoaded = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaContext = null;
+    collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaMemory = null;
+    collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = false;
+    collectionRoutesPilotState.testGpsConfirmations = [];
+    collectionRoutesPilotState.testGpsPreview = null;
+    collectionRoutesPilotState.dailyRoutesLoaded = false;
+    collectionRoutesPilotState.dailyRouteMessage = "TEST byl ukončený a resetovaný. Můžeš ho okamžitě spustit znovu.";
+  } catch (error) {
+    collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "TEST se nepodařilo bezpečně resetovat.";
+  } finally {
+    collectionRoutesPilotState.adminTabletTestLoading = false;
+    render();
+  }
+  if (!collectionRoutesAdminTabletTestActive()) {
+    void loadCollectionDailyRoutes({ force: true });
+  }
+}
+
 function prepareNewCollectionRoutesTestTablet() {
   if (collectionRoutesPilotState.dailyRoutePending) return;
   collectionRoutesPilotState.testTabletSelectedRunId = "";
@@ -40699,7 +40939,10 @@ async function prepareCollectionDailyRouteDriverActionFromSarlota(parameters = {
     writesVistos: false,
     changesRoute: false
   };
-  if (normalizeRole(currentUser()?.role) !== "ridic" || !isCollectionRoutesDriverKioskPath(window.location.pathname)) {
+  if (
+    !collectionRoutesAdminTabletTestActive()
+    && (normalizeRole(currentUser()?.role) !== "ridic" || !isCollectionRoutesDriverKioskPath(window.location.pathname))
+  ) {
     return { ...baseResult, ok: false, status: "wrong_module", answerText: "Tento krok připravím jen na otevřeném řidičském tabletu Svozových tras." };
   }
   if (!detail?.run || detail.run.status !== "active") {
@@ -40858,7 +41101,7 @@ function collectCollectionRoutesTestGpsSamples() {
 
 function collectionRoutesActiveGpsDetail() {
   if (
-    normalizeRole(currentUser()?.role) === "ridic"
+    (normalizeRole(currentUser()?.role) === "ridic" || collectionRoutesAdminTabletTestActive())
     && collectionRoutesPilotState.myDailyRoute?.run?.scope === "test"
   ) return collectionRoutesPilotState.myDailyRoute;
   return collectionRoutesPilotState.dailyRouteDetail;
@@ -41384,11 +41627,14 @@ function applyCollectionRoutesSarlotaContext(result = {}) {
 async function loadCollectionRoutesSarlotaContext() {
   const run = collectionRoutesPilotState.myDailyRoute?.run;
   const scope = run?.scope === "test" ? "test" : "production";
+  const tabletTestSession = collectionRoutesPilotState.adminTabletTestSession?.id || "";
   collectionRoutesPilotState.myDailyRoutePending = "sarlota-context";
   collectionRoutesPilotState.myDailyRouteError = "";
   render();
   try {
-    return applyCollectionRoutesSarlotaContext(await apiJson(`/api/ai/collection-routes/context?scope=${encodeURIComponent(scope)}`));
+    const query = new URLSearchParams({ scope });
+    if (tabletTestSession) query.set("tabletTestSession", tabletTestSession);
+    return applyCollectionRoutesSarlotaContext(await apiJson(`/api/ai/collection-routes/context?${query.toString()}`));
   } catch (error) {
     collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Kontext Šarloty se nepodařilo načíst.";
     return null;
@@ -48284,6 +48530,7 @@ function renderAuthenticatedApp(user) {
       } else {
         ensureCollectionRoutesSvozKaiserWatchdog(user);
         void loadCollectionRoutesPilot();
+        void loadCollectionRoutesAdminTabletTest();
         if (collectionDailyRouteIsTestScope()) {
           ensureCollectionRoutesTestWorkspaceData();
         } else {
@@ -51542,6 +51789,13 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  const adminTabletTestRoute = event.target.closest("[data-collection-routes-admin-tablet-test-route]");
+  if (adminTabletTestRoute) {
+    collectionRoutesPilotState.adminTabletTestSelectedRunId = adminTabletTestRoute.value || "";
+    render();
+    return;
+  }
+
   const collectionDailyDriverReportPhoto = event.target.closest("[data-collection-driver-report-photo]");
   if (collectionDailyDriverReportPhoto) {
     unlockCollectionRoutesSarlotaAudio();
@@ -52553,6 +52807,34 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const adminTabletTestOpen = event.target.closest("[data-collection-routes-admin-tablet-test-open]");
+  if (adminTabletTestOpen) {
+    event.preventDefault();
+    await openCollectionRoutesAdminTabletTest();
+    return;
+  }
+
+  const adminTabletTestClose = event.target.closest("[data-collection-routes-admin-tablet-test-close]");
+  if (adminTabletTestClose) {
+    event.preventDefault();
+    closeCollectionRoutesAdminTabletTest();
+    return;
+  }
+
+  const adminTabletTestStart = event.target.closest("[data-collection-routes-admin-tablet-test-start]");
+  if (adminTabletTestStart) {
+    event.preventDefault();
+    if (!adminTabletTestStart.disabled) await startCollectionRoutesAdminTabletTest();
+    return;
+  }
+
+  const adminTabletTestReset = event.target.closest("[data-collection-routes-admin-tablet-test-reset]");
+  if (adminTabletTestReset) {
+    event.preventDefault();
+    await resetCollectionRoutesAdminTabletTest();
+    return;
+  }
+
   const collectionRoutesTestTabletClose = event.target.closest("[data-collection-routes-test-tablet-close]");
   if (collectionRoutesTestTabletClose) {
     event.preventDefault();
@@ -53017,7 +53299,14 @@ document.addEventListener("click", async (event) => {
   const collectionDailyDriverRefresh = event.target.closest("[data-collection-daily-driver-refresh]");
   if (collectionDailyDriverRefresh) {
     event.preventDefault();
-    if (!collectionDailyDriverRefresh.disabled) await loadMyCollectionDailyRoute({ force: true });
+    if (!collectionDailyDriverRefresh.disabled) {
+      if (collectionRoutesAdminTabletTestActive()) {
+        await loadCollectionRoutesAdminTabletTest({ force: true });
+        await loadCollectionRoutesSarlotaContext();
+      } else {
+        await loadMyCollectionDailyRoute({ force: true });
+      }
+    }
     return;
   }
 

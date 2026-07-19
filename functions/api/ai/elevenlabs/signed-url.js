@@ -11,6 +11,7 @@ import {
 import { driverReportVehicleDynamicVariables } from "../../../_lib/fleet-vehicles-store.js";
 import { dataBoxAssistantContext } from "../../../_lib/data-box-store.js";
 import { buildCollectionRoutesSarlotaContext } from "../../../_lib/collection-routes-sarlota-context.js";
+import { getCollectionDailyRouteTabletTestContext } from "../../../_lib/collection-daily-routes-store.js";
 import { sarlotaHumanTouchContext } from "../../../_lib/sarlota-human-touch.js";
 import {
   assistantConfigFromRequest,
@@ -150,11 +151,31 @@ function dataBoxContextVariables(context = {}) {
   };
 }
 
-export async function collectionRoutesContextVariables(env, user, requestedRoute = "/trasy-svozu", detailOverride = undefined) {
-  const scope = requestedRoute === "/trasy-svozu/test" ? "test" : "production";
+export async function collectionRoutesContextVariables(env, user, requestedRoute = "/trasy-svozu", detailOverride = undefined, options = {}) {
+  const scope = requestedRoute === "/trasy-svozu/test" || options.simulatedUser ? "test" : "production";
   const context = await buildCollectionRoutesSarlotaContext(env, user, {
     scope,
-    ...(detailOverride === undefined ? {} : {
+    ...(options.simulatedUser ? {
+      simulatedUser: options.simulatedUser,
+      trustTestRouteVehicle: true,
+      vehiclesOverride: {
+        vehiclesVerified: false,
+        vehiclesCount: 0,
+        vehicles: [],
+        fallbackQuestion: "Vozidlo je načtené pouze z vybrané TEST trasy."
+      },
+      memoryOverride: {
+        available: false,
+        consent: false,
+        previouslySpoken: false,
+        conversationCount: 0,
+        topics: [],
+        summary: "",
+        apiStatus: "unavailable_test_scope",
+        message: "Tato funkce zatím není v testovacím režimu dostupná."
+      }
+    } : {}),
+    ...(detailOverride === undefined ? {} : options.simulatedUser ? { detailOverride } : {
       detailOverride,
       usersOverride: [user],
       vehiclesOverride: {},
@@ -192,6 +213,9 @@ export async function collectionRoutesContextVariables(env, user, requestedRoute
       routeStatus: cleanString(route.status || "none"),
       actorUserId: cleanString(user?.id),
       actorName: cleanString(user?.name || user?.email),
+      simulatedDriverUserId: cleanString(context.actor?.id),
+      simulatedDriverName: cleanString(context.actor?.name),
+      tabletTestSessionId: cleanString(options.tabletTestSessionId),
       vehicle: cleanString(route.vehicleLabel),
       assignedVehicle: context.vehicle,
       vehiclesVerified: context.vehicles.verified,
@@ -288,19 +312,28 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
   const contextWarnings = [];
   const omitDriverReportVehicleContext = shouldOmitDriverReportVehicleContext(request, assistant);
   const requestedRoute = cleanString(new URL(request.url).searchParams.get("currentRoute"));
-  const userDynamicVariables = userDynamicVariablesForAi(user);
-  const introAnnouncement = await optionalContext(
-    "intro_announcement",
-    () => sarlotaIntroAnnouncementForAi(env, user, assistant),
-    () => fallbackIntroAnnouncement(user),
-    contextWarnings
-  );
-  const humanTouchVariables = await optionalContext(
-    "human_touch",
-    () => sarlotaHumanTouchDynamicVariables(env, user, userDynamicVariables, assistant),
-    fallbackHumanTouchVariables,
-    contextWarnings
-  );
+  const tabletTestSessionId = cleanString(new URL(request.url).searchParams.get("tabletTestSession"));
+  const tabletTest = tabletTestSessionId
+    ? await getCollectionDailyRouteTabletTestContext(env, user, tabletTestSessionId)
+    : null;
+  const voiceIdentity = tabletTest?.simulatedUser || user;
+  const userDynamicVariables = userDynamicVariablesForAi(voiceIdentity);
+  const introAnnouncement = tabletTest
+    ? fallbackIntroAnnouncement(voiceIdentity)
+    : await optionalContext(
+      "intro_announcement",
+      () => sarlotaIntroAnnouncementForAi(env, user, assistant),
+      () => fallbackIntroAnnouncement(user),
+      contextWarnings
+    );
+  const humanTouchVariables = tabletTest
+    ? fallbackHumanTouchVariables()
+    : await optionalContext(
+      "human_touch",
+      () => sarlotaHumanTouchDynamicVariables(env, user, userDynamicVariables, assistant),
+      fallbackHumanTouchVariables,
+      contextWarnings
+    );
   const driverReportVehicleVariables = assistant.assistantType === "sarlota" && !omitDriverReportVehicleContext
     ? await optionalContext(
       "driver_report_vehicle",
@@ -326,7 +359,16 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
   const collectionRoutesVariables = assistant.assistantType === "sarlota" && requestedRoute.startsWith("/trasy-svozu")
     ? await optionalContext(
       "collection_routes",
-      () => collectionRoutesContextVariables(env, user, requestedRoute),
+      () => collectionRoutesContextVariables(
+        env,
+        user,
+        requestedRoute,
+        tabletTest?.route,
+        tabletTest ? {
+          simulatedUser: tabletTest.simulatedUser,
+          tabletTestSessionId
+        } : {}
+      ),
       () => ({
         current_module: "Svozové trasy",
         current_module_route: requestedRoute,
@@ -420,7 +462,7 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
       }, 502);
     }
 
-    await recordAiAction(env, user, {
+    if (!tabletTest) await recordAiAction(env, user, {
       assistantId: assistant.assistantKey,
       assistantName: assistant.displayName,
       actionType: "session",
@@ -441,7 +483,7 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
       },
       status: "ok"
     });
-    await recordSarlotaIntroAnnouncement(env, user, assistant, introAnnouncement);
+    if (!tabletTest) await recordSarlotaIntroAnnouncement(env, user, assistant, introAnnouncement);
 
     const conversationId = cleanString(payload.conversation_id);
     const dynamicVariablesForRuntime = dynamicVariablesWithConversationId(dynamicVariables, conversationId);

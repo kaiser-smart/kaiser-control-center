@@ -30,6 +30,10 @@ function signedUrlEndpoint(apiBaseUrl, assistantId, options = {}) {
   if (currentRoute === "/datove-schranky-plus" || currentRoute.startsWith("/trasy-svozu")) {
     query.set("currentRoute", currentRoute);
   }
+  const tabletTestSession = String(options.tabletTestSession || "").trim();
+  if (currentRoute.startsWith("/trasy-svozu") && tabletTestSession) {
+    query.set("tabletTestSession", tabletTestSession);
+  }
   return `${base}/api/ai/elevenlabs/signed-url?${query.toString()}`;
 }
 

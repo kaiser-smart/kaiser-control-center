@@ -19,6 +19,8 @@ export const COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION = "production";
 export const COLLECTION_DAILY_ROUTE_SCOPE_TEST = "test";
 export const COLLECTION_DAILY_ROUTE_TEST_MODE_STATIONARY_FIELD = "stationary-field-test";
 export const COLLECTION_DAILY_ROUTE_FIELD_TEST_SOURCE_ID = "test-field-site-501";
+export const COLLECTION_DAILY_ROUTE_TABLET_TEST_DRIVER_ID = "pneumatiky-miroslav-vasek";
+export const COLLECTION_DAILY_ROUTE_TABLET_TEST_DRIVER_LABEL = "Vašek Miroslav";
 export const COLLECTION_DAILY_ROUTE_FIELD_TEST_VEHICLE = Object.freeze({
   code: "FIELD",
   registration: "",
@@ -1317,6 +1319,285 @@ export async function listCollectionDailyRoutes(env, input = {}, user = null) {
   } catch (error) {
     throw dbError(error);
   }
+}
+
+function tabletTestSessionFromRun(run = {}) {
+  const metadata = run?.metadata && typeof run.metadata === "object"
+    ? run.metadata
+    : parseJson(run?.metadata_json, {});
+  const session = metadata?.adminTabletTestSession;
+  return session && typeof session === "object" && !Array.isArray(session) ? session : null;
+}
+
+function publicTabletTestSession(session = {}, run = null) {
+  if (!session?.id || session.active !== true) return null;
+  return {
+    id: cleanString(session.id),
+    active: true,
+    scope: COLLECTION_DAILY_ROUTE_SCOPE_TEST,
+    runId: cleanString(session.runId || run?.id),
+    actorUserId: cleanString(session.actorUserId),
+    actorEmail: cleanString(session.actorEmail),
+    simulatedDriverUserId: COLLECTION_DAILY_ROUTE_TABLET_TEST_DRIVER_ID,
+    simulatedDriverName: COLLECTION_DAILY_ROUTE_TABLET_TEST_DRIVER_LABEL,
+    startedAt: cleanString(session.startedAt),
+    expiresAt: cleanString(session.expiresAt)
+  };
+}
+
+function assertTabletTestManager(user) {
+  assertManage(user);
+  if (!isCollectionDailyRouteTestManager(user)) {
+    throw new CollectionDailyRoutesError(
+      "TEST tabletu je dostupný pouze oprávněnému administrátorovi.",
+      403,
+      "collection_daily_route_tablet_test_forbidden"
+    );
+  }
+}
+
+async function tabletTestDriver(env) {
+  const users = await getUsers(env);
+  const driver = users.find((item) => cleanString(item.id) === COLLECTION_DAILY_ROUTE_TABLET_TEST_DRIVER_ID) || null;
+  if (!driver || !isUserActive(driver) || normalizeRole(driver.role) !== "ridic") {
+    throw new CollectionDailyRoutesError(
+      "Testovací provozní identita Vašek Miroslav není dostupná.",
+      409,
+      "collection_daily_route_tablet_test_driver_missing"
+    );
+  }
+  return driver;
+}
+
+async function tabletTestRouteRows(db) {
+  const result = await db.prepare(`
+    SELECT r.*,
+      SUM(CASE WHEN s.status = 'planned' THEN 1 ELSE 0 END) AS planned_count,
+      SUM(CASE WHEN s.status = 'done' THEN 1 ELSE 0 END) AS done_count,
+      SUM(CASE WHEN s.status = 'problem' THEN 1 ELSE 0 END) AS problem_count,
+      (SELECT COUNT(*) FROM collection_daily_route_events e WHERE e.run_id = r.id) AS event_count
+    FROM collection_daily_route_runs r
+    LEFT JOIN collection_daily_route_stops s ON s.run_id = r.id
+    WHERE r.driver_user_id = ?
+      AND (r.source_mode = 'synthetic-brno-test'
+        OR COALESCE(CASE WHEN json_valid(r.metadata_json) THEN json_extract(r.metadata_json, '$.dataScope') ELSE '' END, '') = 'test')
+    GROUP BY r.id
+    ORDER BY
+      CASE r.status WHEN 'confirmed' THEN 0 WHEN 'active' THEN 1 WHEN 'completed' THEN 2 ELSE 3 END,
+      r.route_date DESC,
+      r.updated_at DESC
+    LIMIT 100
+  `).bind(COLLECTION_DAILY_ROUTE_TABLET_TEST_DRIVER_ID).all();
+  return result.results || [];
+}
+
+export async function getCollectionDailyRouteTabletTestLauncher(env, user) {
+  assertTabletTestManager(user);
+  const driver = await tabletTestDriver(env);
+  const db = database(env, true, COLLECTION_DAILY_ROUTE_SCOPE_TEST);
+  try {
+    const rows = await tabletTestRouteRows(db);
+    const actorId = cleanString(user.id);
+    const activeRow = rows.find((row) => {
+      const session = tabletTestSessionFromRun(row);
+      return session?.active === true && cleanString(session.actorUserId) === actorId;
+    }) || null;
+    const activeSession = activeRow ? publicTabletTestSession(tabletTestSessionFromRun(activeRow), activeRow) : null;
+    return {
+      driver: {
+        id: cleanString(driver.id),
+        name: COLLECTION_DAILY_ROUTE_TABLET_TEST_DRIVER_LABEL
+      },
+      routes: rows.map((row) => rowToRun(row)),
+      session: activeSession,
+      route: activeSession ? await detailFromRow(db, activeRow) : null,
+      safety: {
+        scope: COLLECTION_DAILY_ROUTE_SCOPE_TEST,
+        writesProductionRoutes: false,
+        writesVistos: false,
+        sendsNotifications: false,
+        writesProductionGps: false
+      }
+    };
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
+export async function startCollectionDailyRouteTabletTestSession(env, user, input = {}) {
+  assertTabletTestManager(user);
+  const driver = await tabletTestDriver(env);
+  const db = database(env, true, COLLECTION_DAILY_ROUTE_SCOPE_TEST);
+  const runId = cleanString(input.runId);
+  if (!runId) {
+    throw new CollectionDailyRoutesError("Vyber testovací trasu.", 400, "collection_daily_route_tablet_test_run_required");
+  }
+  try {
+    const run = await loadRunRow(db, runId);
+    assertRunMatchesScope(run, COLLECTION_DAILY_ROUTE_SCOPE_TEST);
+    if (cleanString(run.driver_user_id) !== cleanString(driver.id)) {
+      throw new CollectionDailyRoutesError(
+        "Vybraná TEST trasa není přiřazená řidiči Vašek Miroslav.",
+        409,
+        "collection_daily_route_tablet_test_driver_mismatch"
+      );
+    }
+    const changedAt = nowIso();
+    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+    const session = {
+      id: randomId("tablet-test-session"),
+      active: true,
+      runId: run.id,
+      actorUserId: cleanString(user.id),
+      actorEmail: cleanString(user.email),
+      simulatedDriverUserId: cleanString(driver.id),
+      simulatedDriverName: COLLECTION_DAILY_ROUTE_TABLET_TEST_DRIVER_LABEL,
+      startedAt: changedAt,
+      expiresAt,
+      scope: COLLECTION_DAILY_ROUTE_SCOPE_TEST
+    };
+    const metadata = {
+      ...parseJson(run.metadata_json, {}),
+      dataScope: COLLECTION_DAILY_ROUTE_SCOPE_TEST,
+      externalEffectsDisabled: true,
+      notificationsDisabled: true,
+      vistosWritesDisabled: true,
+      productionRouteWritesDisabled: true,
+      adminTabletTestSession: session
+    };
+    const actorName = cleanString(user.name || user.email || user.phone);
+    await db.batch([
+      db.prepare(`
+        UPDATE collection_daily_route_runs
+        SET status = 'active', metadata_json = ?,
+            started_by_user_id = ?, started_by_name = ?, started_at = ?,
+            completed_by_user_id = '', completed_by_name = '', completed_at = NULL,
+            updated_at = ?
+        WHERE id = ?
+      `).bind(jsonString(metadata), cleanString(user.id), actorName, changedAt, changedAt, run.id),
+      db.prepare(`
+        UPDATE collection_daily_route_stops
+        SET status = 'planned', problem_reason = '', problem_note = '', completed_at = NULL,
+            last_event_at = ?, updated_at = ?
+        WHERE run_id = ?
+      `).bind(changedAt, changedAt, run.id),
+      db.prepare("DELETE FROM collection_route_test_gps_confirmations WHERE run_id = ?").bind(run.id),
+      db.prepare(`
+        INSERT INTO collection_daily_route_events (
+          id, run_id, event_type, before_status, after_status, note, idempotency_key,
+          actor_user_id, actor_name, created_at, payload_json
+        ) VALUES (?, ?, 'tablet_test_session_started', ?, 'active', ?, ?, ?, ?, ?, ?)
+      `).bind(
+        randomId("collection-daily-event"),
+        run.id,
+        cleanString(run.status),
+        "Administrátor spustil oddělenou TEST relaci tabletu řidiče Vašek Miroslav.",
+        `tablet-test-start:${session.id}`,
+        cleanString(user.id),
+        actorName,
+        changedAt,
+        jsonString({
+          sessionId: session.id,
+          simulatedDriverUserId: cleanString(driver.id),
+          scope: COLLECTION_DAILY_ROUTE_SCOPE_TEST,
+          sendsNotifications: false,
+          writesVistos: false,
+          writesProductionRoutes: false
+        })
+      )
+    ]);
+    return {
+      session: publicTabletTestSession(session, run),
+      route: await detailFromRow(db, await loadRunRow(db, run.id))
+    };
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
+export async function resetCollectionDailyRouteTabletTestSession(env, user, input = {}) {
+  assertTabletTestManager(user);
+  const db = database(env, true, COLLECTION_DAILY_ROUTE_SCOPE_TEST);
+  const runId = cleanString(input.runId);
+  const sessionId = cleanString(input.sessionId);
+  if (!runId || !sessionId) {
+    throw new CollectionDailyRoutesError("Aktivní TEST relace nebyla nalezena.", 404, "collection_daily_route_tablet_test_session_missing");
+  }
+  try {
+    const run = await loadRunRow(db, runId);
+    assertRunMatchesScope(run, COLLECTION_DAILY_ROUTE_SCOPE_TEST);
+    const session = tabletTestSessionFromRun(run);
+    if (
+      !session
+      || session.active !== true
+      || cleanString(session.id) !== sessionId
+      || cleanString(session.actorUserId) !== cleanString(user.id)
+    ) {
+      throw new CollectionDailyRoutesError("Aktivní TEST relace nebyla nalezena.", 404, "collection_daily_route_tablet_test_session_missing");
+    }
+    const changedAt = nowIso();
+    const actorName = cleanString(user.name || user.email || user.phone);
+    const metadata = {
+      ...parseJson(run.metadata_json, {}),
+      adminTabletTestSession: {
+        ...session,
+        active: false,
+        endedAt: changedAt,
+        endedByUserId: cleanString(user.id)
+      }
+    };
+    await db.batch([
+      db.prepare(`
+        UPDATE collection_daily_route_runs
+        SET status = 'confirmed', metadata_json = ?,
+            started_by_user_id = '', started_by_name = '', started_at = NULL,
+            completed_by_user_id = '', completed_by_name = '', completed_at = NULL,
+            confirmed_by_user_id = ?, confirmed_by_name = ?, confirmed_at = ?,
+            updated_at = ?
+        WHERE id = ?
+      `).bind(jsonString(metadata), cleanString(user.id), actorName, changedAt, changedAt, run.id),
+      db.prepare(`
+        UPDATE collection_daily_route_stops
+        SET status = 'planned', problem_reason = '', problem_note = '', completed_at = NULL,
+            last_event_at = ?, updated_at = ?
+        WHERE run_id = ?
+      `).bind(changedAt, changedAt, run.id),
+      db.prepare("DELETE FROM collection_route_test_gps_confirmations WHERE run_id = ?").bind(run.id),
+      db.prepare(`
+        INSERT INTO collection_daily_route_events (
+          id, run_id, event_type, before_status, after_status, note, idempotency_key,
+          actor_user_id, actor_name, created_at, payload_json
+        ) VALUES (?, ?, 'tablet_test_session_reset', ?, 'confirmed', ?, ?, ?, ?, ?, ?)
+      `).bind(
+        randomId("collection-daily-event"),
+        run.id,
+        cleanString(run.status),
+        "TEST relace byla ukončena a trasa vrácena do výchozího stavu.",
+        `tablet-test-reset:${session.id}`,
+        cleanString(user.id),
+        actorName,
+        changedAt,
+        jsonString({ sessionId: session.id, scope: COLLECTION_DAILY_ROUTE_SCOPE_TEST })
+      )
+    ]);
+    return { reset: true, runId: run.id };
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
+export async function getCollectionDailyRouteTabletTestContext(env, user, sessionId) {
+  assertTabletTestManager(user);
+  const launcher = await getCollectionDailyRouteTabletTestLauncher(env, user);
+  if (!launcher.session || cleanString(launcher.session.id) !== cleanString(sessionId) || !launcher.route) {
+    throw new CollectionDailyRoutesError("Aktivní TEST relace nebyla nalezena.", 404, "collection_daily_route_tablet_test_session_missing");
+  }
+  const users = await getUsers(env);
+  const simulatedUser = users.find((item) => cleanString(item.id) === COLLECTION_DAILY_ROUTE_TABLET_TEST_DRIVER_ID) || null;
+  if (!simulatedUser) {
+    throw new CollectionDailyRoutesError("Testovací provozní identita Vašek Miroslav není dostupná.", 409, "collection_daily_route_tablet_test_driver_missing");
+  }
+  return { session: launcher.session, route: launcher.route, simulatedUser };
 }
 
 export async function getCollectionDailyRoute(env, user, runId, input = {}) {

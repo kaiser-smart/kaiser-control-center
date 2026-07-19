@@ -366,24 +366,35 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
   if (!user) {
     throw new CollectionRoutesSarlotaContextError("Nejsi přihlášený.", 401, "unauthenticated");
   }
-  if (!isUserActive(user) || normalizeRole(user.role) !== "ridic" || !hasPermission(user, "collection-routes", "view")) {
+  const scope = cleanString(options.scope) === "test" ? "test" : "production";
+  const simulatedUser = options.simulatedUser || null;
+  const simulationAllowed = Boolean(
+    simulatedUser
+    && scope === "test"
+    && isUserActive(user)
+    && ["admin", "management"].includes(normalizeRole(user.role))
+    && hasPermission(user, "collection-routes", "manage")
+    && isUserActive(simulatedUser)
+    && normalizeRole(simulatedUser.role) === "ridic"
+  );
+  if (!simulationAllowed && (!isUserActive(user) || normalizeRole(user.role) !== "ridic" || !hasPermission(user, "collection-routes", "view"))) {
     throw new CollectionRoutesSarlotaContextError(
       "Kontext řidičského tabletu je dostupný pouze aktivní roli Řidič.",
       403,
       "collection_routes_sarlota_forbidden"
     );
   }
-  const scope = cleanString(options.scope) === "test" ? "test" : "production";
+  const operationalUser = simulationAllowed ? simulatedUser : user;
   const date = dateValue(options.date) || pragueDate();
   const detail = options.detailOverride !== undefined
     ? options.detailOverride
-    : await getMyCollectionDailyRoute(env, user, { scope });
+    : await getMyCollectionDailyRoute(env, operationalUser, { scope });
   const users = options.usersOverride !== undefined ? options.usersOverride : await getUsers(env);
   const userIds = users.map((item) => cleanString(item.id)).filter(Boolean);
   const [vehicleResult, weather, availability, memory, news] = await Promise.all([
     options.vehiclesOverride !== undefined
       ? options.vehiclesOverride
-      : safeLoad(() => driverReportContextForUser(env, user, { currentModule: "collection-routes" }), {}),
+      : safeLoad(() => driverReportContextForUser(env, operationalUser, { currentModule: "collection-routes" }), {}),
     options.weatherOverride !== undefined
       ? options.weatherOverride
       : safeLoad(
@@ -395,7 +406,7 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
       : safeLoad(() => listEmployeeAvailabilityForSarlota(env, { date, userIds }), []),
     options.memoryOverride !== undefined
       ? options.memoryOverride
-      : getSarlotaUserMemory(env, user),
+      : getSarlotaUserMemory(env, operationalUser),
     options.newsOverride !== undefined
       ? options.newsOverride
       : safeLoad(() => currentSarlotaNews(), {
@@ -407,17 +418,39 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
         items: []
       })
   ]);
-  const route = safeRoute(detail, user);
+  const route = safeRoute(detail, operationalUser);
   const vehicles = safeVehicles(vehicleResult);
   const directory = sanitizeKaiserDirectoryForSarlota(users, availability);
   const crew = safeCrew(detail, directory);
-  const vehicle = safeVehicleAssignment(route, vehicles);
+  const vehicle = options.trustTestRouteVehicle === true && scope === "test" && route.vehicleLabel
+    ? {
+        assigned: true,
+        status: "verified",
+        label: route.vehicleLabel,
+        registration: route.vehicleRegistration,
+        code: route.vehicleCode,
+        fleetVerified: true,
+        fleetMatch: true,
+        fleetVehicle: {
+          id: route.vehicleCode,
+          name: route.vehicleLabel,
+          spz: route.vehicleRegistration,
+          type: "TEST vozidlo"
+        }
+      }
+    : safeVehicleAssignment(route, vehicles);
   const schedule = safeSchedule(detail);
-  const readiness = startReadiness({ user, route, vehicle, crew, weather, schedule, scope, date });
+  const readiness = startReadiness({ user: operationalUser, route, vehicle, crew, weather, schedule, scope, date });
   const voiceRoute = voiceSafeRoute(route, vehicle);
   const voiceVehicle = voiceSafeVehicleAssignment(vehicle);
   return {
-    actor: { id: cleanString(user.id), name: cleanString(user.name), role: cleanString(user.role) },
+    actor: { id: cleanString(operationalUser.id), name: cleanString(operationalUser.name), role: cleanString(operationalUser.role) },
+    authenticatedActor: { id: cleanString(user.id), name: cleanString(user.name || user.email), role: cleanString(user.role) },
+    simulation: simulationAllowed ? {
+      active: true,
+      label: "TEST REŽIM",
+      simulatedDriverUserId: cleanString(operationalUser.id)
+    } : null,
     scope,
     date,
     route: voiceRoute,
@@ -443,7 +476,7 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
       message: "Aktuální přehled zpráv iROZHLAS se teď nepodařilo bezpečně načíst."
     },
     memory,
-    introAnnouncement: introAnnouncement(user, route, vehicle, crew, weather, memory, readiness),
+    introAnnouncement: introAnnouncement(operationalUser, route, vehicle, crew, weather, memory, readiness),
     safety: {
       readOnlyContext: true,
       requiresPhysicalConfirmationForWrites: true,

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.627"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.628"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: samostatný TEST tabletu řidiče",
+    text: "Oprávněný správce spustí z horní části Svozových tras jedním tlačítkem oddělenou TEST relaci řidiče Vašek Miroslav. Vybere existující TEST trasu, otevře stejné řidičské UI se Šarlotou a lidskou diagnostikou a jedním potvrzením relaci ukončí, resetuje a připraví k okamžitému opakování; produkční trasy, Vistos, zákaznické zprávy a ostrá GPS zůstávají mimo tento tok."
+  },
   {
     title: "Šarlota: chráněná jazyková KB a výslovnost",
     text: "Správce nejdřív načte read-only plán a až samostatným potvrzením připojí přesně pojmenovanou jazykovou referenci a dostupný aliasový výslovnostní slovník. Backend před i po změně hlídá prompt, první zprávu, model a tools; jiné KB ani slovníky nemaže. Pokud klíč nemá právo ke slovníkům, KB se připojí samostatně a slovník zůstane pravdivě označený jako čekající."

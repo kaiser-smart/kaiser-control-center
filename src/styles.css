@@ -42406,6 +42406,234 @@ body.collection-driver-kiosk-active #app {
   box-shadow: 0 8px 24px rgba(37, 50, 39, 0.08);
 }
 
+.collection-routes-admin-tablet-test-button {
+  align-self: flex-start;
+  min-height: 52px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 16px;
+  background: #f4c542;
+  color: #172033;
+  font: 800 0.88rem/1 "Quicksand", sans-serif;
+  letter-spacing: 0.08em;
+  box-shadow: 0 12px 28px rgba(44, 37, 12, 0.18);
+  cursor: pointer;
+}
+
+.collection-routes-admin-tablet-test-button:hover,
+.collection-routes-admin-tablet-test-button:focus-visible {
+  background: #ffd760;
+  transform: translateY(-1px);
+}
+
+.collection-routes-tablet-test-launcher {
+  position: fixed;
+  inset: 0;
+  z-index: 1700;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.collection-routes-tablet-test-launcher__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(11, 20, 35, 0.72);
+  backdrop-filter: blur(5px);
+}
+
+.collection-routes-tablet-test-launcher > section {
+  position: relative;
+  width: min(560px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 24px;
+  background: #fff;
+  color: #172033;
+  box-shadow: 0 28px 80px rgba(3, 12, 25, 0.38);
+}
+
+.collection-routes-tablet-test-launcher header > span,
+.collection-routes-tablet-test-launcher__field > span {
+  display: block;
+  margin-bottom: 6px;
+  color: #6d7788;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.collection-routes-tablet-test-launcher h2 {
+  margin: 0 0 8px;
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+}
+
+.collection-routes-tablet-test-launcher header p {
+  margin: 0 0 22px;
+  color: #596474;
+}
+
+.collection-routes-tablet-test-launcher__field {
+  display: block;
+  margin: 14px 0;
+  padding: 16px;
+  border: 1px solid #dce3eb;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.collection-routes-tablet-test-launcher__field strong,
+.collection-routes-tablet-test-launcher__field select {
+  display: block;
+  width: 100%;
+  font: 800 1rem/1.35 "Quicksand", sans-serif;
+}
+
+.collection-routes-tablet-test-launcher__field select {
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.collection-routes-tablet-test-launcher__field small {
+  display: block;
+  margin-top: 8px;
+  color: #687386;
+}
+
+.collection-routes-tablet-test-launcher__safety {
+  display: grid;
+  gap: 4px;
+  margin: 18px 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #eaf8f0;
+  color: #155c3b;
+}
+
+.collection-routes-tablet-test-launcher footer {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.collection-routes-tablet-test-status {
+  margin: 14px clamp(12px, 2vw, 28px);
+  padding: 18px;
+  border: 1px solid rgba(244, 197, 66, 0.35);
+  border-radius: 18px;
+  background: #172033;
+  color: #fff;
+}
+
+.collection-routes-tablet-test-status > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.collection-routes-tablet-test-status > header span {
+  color: #a9b7c9;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.collection-routes-tablet-test-status > header h2 {
+  margin: 2px 0 0;
+  font-size: 1.25rem;
+}
+
+.collection-routes-tablet-test-status > header > strong {
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #f4c542;
+  color: #172033;
+}
+
+.collection-routes-tablet-test-status__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.collection-routes-tablet-test-status__grid article {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.collection-routes-tablet-test-status__grid article span {
+  color: #c2ccda;
+  font-size: 0.78rem;
+}
+
+.collection-routes-tablet-test-status__grid article strong {
+  color: #ffd760;
+  font-size: 0.86rem;
+}
+
+.collection-routes-tablet-test-status__grid article.is-ready strong {
+  color: #6ee7a8;
+}
+
+.collection-routes-tablet-test-status__grid article.is-error strong {
+  color: #ff8f8f;
+}
+
+.collection-routes-tablet-test-status__notice {
+  margin: 12px 0 0;
+  color: #ffd9a0;
+  font-size: 0.86rem;
+}
+
+.collection-routes-tablet-test-status details {
+  margin-top: 12px;
+  color: #c2ccda;
+}
+
+.collection-routes-tablet-test-status pre {
+  overflow: auto;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  font-size: 0.72rem;
+}
+
+@media (max-width: 820px) {
+  .collection-routes-tablet-test-status__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .collection-routes-tablet-test-launcher {
+    padding: 10px;
+  }
+
+  .collection-routes-tablet-test-launcher > section {
+    padding: 20px;
+    border-radius: 18px;
+  }
+
+  .collection-routes-tablet-test-launcher footer {
+    flex-direction: column;
+  }
+
+  .collection-routes-tablet-test-status__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .collection-daily-driver-kiosk-brand,
 .collection-daily-driver-kiosk-user {
   display: flex;
