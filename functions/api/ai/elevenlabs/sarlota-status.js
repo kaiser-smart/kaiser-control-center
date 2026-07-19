@@ -353,7 +353,7 @@ function collectKnowledgeEntriesFromAgent(agentConfig) {
     if (Array.isArray(value)) {
       value.slice(0, 20).forEach((item, index) => {
         if (!item || typeof item !== "object" || Array.isArray(item)) {
-          if (cleanString(item)) {
+          if ((typeof item === "string" || typeof item === "number") && cleanString(item)) {
             entries.push({
               label: safeShortText(item, 80),
               type: typeof item,
@@ -389,7 +389,7 @@ function collectKnowledgeEntriesFromAgent(agentConfig) {
       return;
     }
 
-    if (cleanString(value)) {
+    if ((typeof value === "string" || typeof value === "number") && cleanString(value)) {
       entries.push({
         label: safeShortText(value, 80),
         type: typeof value,
@@ -1067,3 +1067,7 @@ export async function onRequestGet({ request, env }) {
     }, 500);
   }
 }
+
+export const __test = {
+  collectKnowledgeEntriesFromAgent
+};

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { __test } from "../functions/api/ai/elevenlabs/sarlota-language-sync.js";
+import { __test as statusTest } from "../functions/api/ai/elevenlabs/sarlota-status.js";
 import {
   SARLOTA_LANGUAGE_KB_CONTENT,
   SARLOTA_LANGUAGE_KB_NAME,
@@ -48,6 +49,7 @@ assert.equal(emptyPlan.knowledgeBase.action, "create");
 assert.equal(emptyPlan.pronunciationDictionary.action, "create");
 assert.equal(emptyPlan.agent.promptLength, "Kanonický prompt".length);
 assert.equal(__test.knowledgeBaseEntriesFromAgent(emptyContext.agentConfig).length, 0, "boolean false is not a KB entry");
+assert.equal(statusTest.collectKnowledgeEntriesFromAgent(baseAgent()).length, 0, "status ignores boolean KB overrides");
 
 const dictionaryBlockedPlan = __test.buildPlan({
   ...emptyContext,
@@ -87,6 +89,7 @@ assert.equal(currentPlan.alreadyApplied, true);
 assert.equal(currentPlan.ready, false);
 assert.equal(currentPlan.knowledgeBase.current, true);
 assert.equal(currentPlan.pronunciationDictionary.current, true);
+assert.equal(statusTest.collectKnowledgeEntriesFromAgent(currentAgent).length, 2, "status counts both real KB entries and no boolean override");
 
 const patch = __test.languageAgentPatch(currentAgent, knowledge, dictionary);
 assert.deepEqual(
