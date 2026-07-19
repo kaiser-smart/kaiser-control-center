@@ -127,5 +127,11 @@ assert.equal(duplicatePlan.safety.duplicateResources, true);
 const normalizedRules = __test.canonicalRules(SARLOTA_PRONUNCIATION_RULES);
 assert.equal(normalizedRules.length, SARLOTA_PRONUNCIATION_RULES.length);
 assert.ok(normalizedRules.every((rule) => rule.type === "alias"));
+assert.equal(SARLOTA_PRONUNCIATION_RULES[0].string_to_replace, "Kaiser Smart odpady");
+assert.equal(SARLOTA_PRONUNCIATION_RULES[1].string_to_replace, "Kaiser servis");
+assert.equal(
+  SARLOTA_PRONUNCIATION_RULES.find((rule) => rule.string_to_replace === "GPS")?.alias,
+  "gé, pé, es"
+);
 
 console.log("sarlota language sync plan: ok");

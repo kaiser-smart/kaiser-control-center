@@ -1,4 +1,4 @@
-export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-19-v1";
+export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-19-v2";
 export const SARLOTA_LANGUAGE_KB_NAME = "Šarlota – jazyková reference KSO";
 export const SARLOTA_PRONUNCIATION_DICTIONARY_NAME = "Šarlota – čeština KSO";
 
@@ -88,9 +88,10 @@ const aliasRule = (stringToReplace, alias) => ({
 });
 
 export const SARLOTA_PRONUNCIATION_RULES = [
+  aliasRule("Kaiser Smart odpady", "kajzr smart odpady"),
+  aliasRule("Kaiser servis", "kajzr servis"),
   aliasRule("Kaiser", "kajzr"),
   aliasRule("kAIser", "kajzr"),
-  aliasRule("Kaiser Smart odpady", "kajzr smart odpady"),
   aliasRule("Šarlota", "šarlota"),
   aliasRule("ElevenLabs", "ileven labs"),
   aliasRule("Twilio", "tvilio"),
@@ -105,7 +106,7 @@ export const SARLOTA_PRONUNCIATION_RULES = [
   aliasRule("AI", "á í"),
   aliasRule("API", "á pé í"),
   aliasRule("KSO", "ká es ó"),
-  aliasRule("GPS", "gé pé es"),
+  aliasRule("GPS", "gé, pé, es"),
   aliasRule("SMS", "es em es"),
   aliasRule("RCS", "er cé es"),
   aliasRule("SPZ", "es pé zet"),

@@ -21,8 +21,10 @@ assert.doesNotMatch(kbReference, /Patrik|Mercedes|Atego|Econic|Míra|1BP 8373|3B
 assert.doesNotMatch(kbReference, /Hotovo, hlášení je uložené|Označila jsem zastávku jako hotovou/);
 
 assert.match(pronunciationSource, /Alias smí ovlivnit pouze TTS výstup/);
-assert.match(pronunciationSource, /není připojený k živému ElevenLabs agentovi/);
+assert.match(pronunciationSource, /připojeno k živému ElevenLabs agentovi/);
+assert.match(pronunciationSource, /Kaiser servis \| kajzr servis/);
 assert.match(pronunciationSource, /Kaiser \| kajzr/);
+assert.match(pronunciationSource, /GPS \| gé, pé, es/);
 assert.match(pronunciationSource, /SPZ \| es pé zet/);
 assert.match(pronunciationSource, /Každý alias musí projít poslechovým testem/);
 

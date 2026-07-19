@@ -3,7 +3,7 @@
 ## Stav a bezpečnost
 
 - Zdroj: jazykový a výslovnostní manuál Šarloty, verze 1.0.
-- Stav: návrh k hlasovému ověření; není připojený k živému ElevenLabs agentovi.
+- Stav: připojeno k živému ElevenLabs agentovi; pravidla se aktualizují pouze přes auditovaný synchronizační endpoint a následný poslechový test.
 - Alias smí ovlivnit pouze TTS výstup.
 - Oficiální zápis v databázi, e-mailu, dokumentu, UI a přepisu se nikdy nemění.
 - Před připojením je nutný read-only audit aktuálního hlasu, modelu a existujících pronunciation dictionaries.
@@ -13,9 +13,10 @@
 
 | Oficiální zápis | Navržená výslovnost | Poznámka |
 | --- | --- | --- |
+| Kaiser Smart odpady | kajzr smart odpady | Celý firemní název; delší pravidlo má přednost |
+| Kaiser servis | kajzr servis | Celý firemní název; delší pravidlo má přednost |
 | Kaiser | kajzr | Firemní výslovnost |
 | kAIser | kajzr | Grafická hra `AI` se samostatně nečte |
-| Kaiser Smart odpady | kajzr smart odpady | Celý firemní název |
 | Šarlota | šarlota | České jméno |
 | ElevenLabs | ileven labs | Před ostrým použitím poslechnout v české větě |
 | Twilio | tvilio | Před ostrým použitím poslechnout |
@@ -30,7 +31,7 @@
 | AI | á í | Hláskovaná zkratka |
 | API | á pé í | Hláskovaná zkratka |
 | KSO | ká es ó | Hláskovaná zkratka |
-| GPS | gé pé es | Hláskovaná zkratka |
+| GPS | gé, pé, es | Hláskovaná zkratka s krátkými TTS pauzami |
 | SMS | es em es | Hláskovaná zkratka |
 | RCS | er cé es | Hláskovaná zkratka |
 | SPZ | es pé zet | Hláskovaná zkratka |
