@@ -95,6 +95,43 @@ function knowledgeContent(payload) {
     .find((value) => typeof value === "string") || "";
 }
 
+function selectKnowledgeDocument(agentConfig, knowledgePayload) {
+  const available = knowledgeDocuments(knowledgePayload);
+  const availableById = new Map(available.map((item) => [resourceId(item), item]).filter(([id]) => id));
+  const attached = knowledgeEntries(agentConfig)
+    .filter((item) => resourceId(item))
+    .map((item) => availableById.get(resourceId(item)) || item);
+
+  const managedAttached = attached.filter((item) => resourceName(item) === SARLOTA_LANGUAGE_KB_NAME);
+  if (managedAttached.length === 1) return managedAttached[0];
+  if (managedAttached.length > 1) {
+    const error = new Error("duplicate_managed_knowledge_base");
+    error.status = 409;
+    throw error;
+  }
+
+  if (attached.length === 1) return attached[0];
+  if (attached.length > 1) {
+    const likelySarlotaKb = attached.filter((item) => {
+      const name = normalize(resourceName(item));
+      return name.includes("sarlota") && (name.includes("kb") || name.includes("knowledge"));
+    });
+    if (likelySarlotaKb.length === 1) return likelySarlotaKb[0];
+    const error = new Error("ambiguous_attached_knowledge_base");
+    error.status = 409;
+    throw error;
+  }
+
+  const managedAvailable = available.filter((item) => resourceName(item) === SARLOTA_LANGUAGE_KB_NAME);
+  if (managedAvailable.length === 1) return managedAvailable[0];
+  if (managedAvailable.length > 1) {
+    const error = new Error("duplicate_managed_knowledge_base");
+    error.status = 409;
+    throw error;
+  }
+  return null;
+}
+
 async function elevenLabsRequest(apiKey, path, { method = "GET", body = null } = {}) {
   const controller = typeof AbortController === "function" ? new AbortController() : null;
   const timeout = controller ? setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : null;
@@ -134,13 +171,7 @@ async function readLiveContent(env, assistantConfig) {
     elevenLabsRequest(apiKey, "/convai/knowledge-base?page_size=100")
   ]);
   const prompt = promptPathFromAgent(agentConfig);
-  const matches = knowledgeDocuments(knowledgePayload).filter((item) => resourceName(item) === SARLOTA_LANGUAGE_KB_NAME);
-  if (matches.length > 1) {
-    const error = new Error("duplicate_managed_knowledge_base");
-    error.status = 409;
-    throw error;
-  }
-  const knowledge = matches[0] || null;
+  const knowledge = selectKnowledgeDocument(agentConfig, knowledgePayload);
   const kbContent = knowledge
     ? knowledgeContent(await elevenLabsRequest(apiKey, `/convai/knowledge-base/${encodeURIComponent(resourceId(knowledge))}/content`))
     : "";
@@ -151,6 +182,7 @@ async function readLiveContent(env, assistantConfig) {
     promptPath: prompt.path,
     prompt: prompt.value,
     knowledge,
+    knowledgeTitle: resourceName(knowledge) || SARLOTA_LANGUAGE_KB_NAME,
     knowledgeBase: kbContent
   };
 }
@@ -197,8 +229,8 @@ export function validateManagedContent(kind, content) {
   return { valid: errors.length === 0, errors: [...new Set(errors)] };
 }
 
-function titleForKind(kind) {
-  return kind === "prompt" ? "Hlavní prompt Šarloty" : SARLOTA_LANGUAGE_KB_NAME;
+function titleForKind(kind, live = null) {
+  return kind === "prompt" ? "Hlavní prompt Šarloty" : (live?.knowledgeTitle || SARLOTA_LANGUAGE_KB_NAME);
 }
 
 function liveContentForKind(live, kind) {
@@ -217,7 +249,7 @@ async function publishContent(live, kind, content) {
   if (live.knowledge) {
     await elevenLabsRequest(live.apiKey, `/convai/knowledge-base/${encodeURIComponent(resourceId(live.knowledge))}`, {
       method: "PATCH",
-      body: { name: SARLOTA_LANGUAGE_KB_NAME, content }
+      body: { name: resourceName(live.knowledge) || SARLOTA_LANGUAGE_KB_NAME, content }
     });
     return;
   }
@@ -236,7 +268,7 @@ async function publishContent(live, kind, content) {
   });
 }
 
-async function documentPayload(db, assistantKey, kind, liveContent) {
+async function documentPayload(db, assistantKey, kind, liveContent, live = null) {
   const document = await getSarlotaContentDocument(db, assistantKey, kind);
   const documentId = document?.id || contentDocumentId(assistantKey, kind);
   const liveFingerprint = fingerprint(liveContent);
@@ -244,7 +276,7 @@ async function documentPayload(db, assistantKey, kind, liveContent) {
   const draftBase = document?.draft_base_live_fingerprint || liveFingerprint;
   return {
     kind,
-    title: titleForKind(kind),
+    title: titleForKind(kind, live),
     liveContent,
     liveFingerprint,
     liveLength: liveContent.length,
@@ -269,8 +301,8 @@ async function editorPayload(env, assistantConfig) {
     assistant: assistantPublicMetadata(assistantConfig),
     readOnlyLoad: true,
     documents: {
-      prompt: await documentPayload(db, assistantConfig.assistantKey, "prompt", live.prompt),
-      knowledge_base: await documentPayload(db, assistantConfig.assistantKey, "knowledge_base", live.knowledgeBase)
+      prompt: await documentPayload(db, assistantConfig.assistantKey, "prompt", live.prompt, live),
+      knowledge_base: await documentPayload(db, assistantConfig.assistantKey, "knowledge_base", live.knowledgeBase, live)
     }
   };
 }
@@ -456,5 +488,6 @@ export async function onRequestPost({ request, env }) {
 export const __test = {
   fingerprint,
   nestedPatch,
+  selectKnowledgeDocument,
   validateManagedContent
 };
