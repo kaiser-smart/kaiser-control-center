@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.621"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.622"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: chráněná jazyková KB a výslovnost",
+    text: "Správce nejdřív načte read-only plán a až samostatným potvrzením připojí přesně pojmenovanou jazykovou referenci a aliasový výslovnostní slovník. Backend před i po změně hlídá prompt, první zprávu, model a tools; jiné KB ani slovníky nemaže a výsledek odděluje od následné poslechové kontroly."
+  },
   {
     title: "Šarlota: jazykový manuál bez úniku neověřeného vozidla",
     text: "Úvod i hlasový kontext skryjí název, interní označení a SPZ, dokud backend nepotvrdí bezpečné přiřazení vozidla. Hlavní prompt má výslovně označené bezpečné příklady; očištěná jazyková reference a návrh TTS slovníku zůstávají verzované odděleně a do ElevenLabs se nezapisují bez nového read-only ověření."

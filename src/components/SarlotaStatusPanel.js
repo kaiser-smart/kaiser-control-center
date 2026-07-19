@@ -469,6 +469,49 @@ function promptSyncPreview(plan = null, syncing = false) {
   `;
 }
 
+function languageSyncPreview(plan = null, syncing = false) {
+  if (!plan) return "";
+
+  const knowledge = plan.knowledgeBase || {};
+  const dictionary = plan.pronunciationDictionary || {};
+  const alreadyApplied = plan.alreadyApplied === true;
+  const ready = plan.ready === true;
+  const badgeTone = alreadyApplied ? "ok" : ready ? "waiting" : "error";
+  const badgeLabel = alreadyApplied ? "SYNCHRONIZOVÁNO" : ready ? "NÁHLED · BEZ ZÁPISU" : "NELZE BEZPEČNĚ ZAPSAT";
+  const actionLabel = (action) => ({
+    create: "vytvořit a připojit",
+    update: "aktualizovat a připojit",
+    attach: "připojit existující",
+    replace_rules: "nahradit pravidla a připojit",
+    none: "beze změny"
+  })[action] || "neověřeno";
+
+  return `
+    <section class="sarlota-status__prompt-plan" data-sarlota-language-plan>
+      <div class="sarlota-status__prompt-plan-head">
+        <div>
+          <span class="sarlota-status__badge sarlota-status__badge--${escapeHtml(badgeTone)}">${escapeHtml(badgeLabel)}</span>
+          <h3>Náhled jazykové KB a výslovnosti</h3>
+          <p>Tento náhled je pouze čtecí. Spravuje jen dva přesně pojmenované zdroje Šarloty.</p>
+        </div>
+      </div>
+      <dl class="sarlota-status__prompt-plan-grid">
+        ${diagnosticLine("Balík", escapeHtml(plan.packageVersion || "neuveden"))}
+        ${diagnosticLine("Jazyková KB", escapeHtml(`${knowledge.name || "neuvedena"} · ${actionLabel(knowledge.action)}`))}
+        ${diagnosticLine("KB rozsah", escapeHtml(`${Number(knowledge.currentLength || 0)} → ${Number(knowledge.targetLength || 0)} znaků`))}
+        ${diagnosticLine("Výslovnost", escapeHtml(`${dictionary.name || "neuvedena"} · ${actionLabel(dictionary.action)}`))}
+        ${diagnosticLine("Pravidla", escapeHtml(`${Number(dictionary.currentRuleCount || 0)} → ${Number(dictionary.targetRuleCount || 0)}`))}
+        ${diagnosticLine("Agent", escapeHtml(plan.agent?.nameMatches && plan.agent?.firstMessageMatches ? "ověřen" : "nesedí"))}
+      </dl>
+      <p class="sarlota-status__prompt-plan-safety">Prompt, první zpráva, model a tools se nemění. Cizí KB ani cizí výslovnostní slovníky se nemažou. Text KB, API klíč a plná ID se do prohlížeče nevracejí.</p>
+      <div class="sarlota-status__prompt-plan-actions">
+        ${ready ? `<button class="primary-action" type="button" data-sarlota-language-apply ${syncing ? "disabled" : ""}>PŘIPOJIT JAZYKOVÝ BALÍK</button>` : ""}
+        <button class="secondary-link" type="button" data-sarlota-language-plan-cancel ${syncing ? "disabled" : ""}>${alreadyApplied ? "ZAVŘÍT NÁHLED" : "ZRUŠIT NÁHLED"}</button>
+      </div>
+    </section>
+  `;
+}
+
 export function SarlotaStatusPanel({
   status = null,
   loading = false,
@@ -479,7 +522,8 @@ export function SarlotaStatusPanel({
   selectedAssistantKey = "sarlota",
   voiceDiagnostics = {},
   voiceWriteTest = {},
-  promptSyncPlan = null
+  promptSyncPlan = null,
+  languageSyncPlan = null
 } = {}) {
   const data = status || {};
   const selectedConfig = ELEVENLABS_ASSISTANT_CONFIGS[selectedAssistantKey] || ELEVENLABS_ASSISTANT_CONFIGS.sarlota;
@@ -582,6 +626,9 @@ export function SarlotaStatusPanel({
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-prompt-sync ${promptSyncDisabled ? "disabled" : ""}>
             Načíst náhled promptu
           </button>
+          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-language-sync ${diagnosticSyncDisabled ? "disabled" : ""}>
+            Načíst jazykový balík
+          </button>
           <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-voice-write-test ${voiceWriteTestDisabled ? "disabled" : ""}>
             Test voice zápisu
           </button>
@@ -595,6 +642,7 @@ export function SarlotaStatusPanel({
       ${syncError ? `<p class="module-feedback__error" role="alert">${escapeHtml(syncError)}</p>` : ""}
       ${syncMessage ? `<p class="module-feedback__success" role="status">${escapeHtml(syncMessage)}</p>` : ""}
       ${promptSyncPreview(promptSyncPlan, syncing)}
+      ${languageSyncPreview(languageSyncPlan, syncing)}
       ${voiceWriteTestControls(voiceWriteTest, syncing)}
       <dl class="sarlota-status__grid">
         ${rows}

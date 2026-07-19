@@ -888,6 +888,7 @@ const sarlotaStatusState = {
   syncMessage: "",
   syncError: "",
   promptSyncPlan: null,
+  languageSyncPlan: null,
   voiceWriteTest: {
     plan: null,
     selectedVehicleId: ""
@@ -6695,7 +6696,8 @@ function settingsManagementSection(user) {
       selectedAssistantKey: sarlotaStatusState.assistantKey,
       voiceDiagnostics: sarlotaVoiceDiagnosticsState,
       voiceWriteTest: sarlotaStatusState.voiceWriteTest,
-      promptSyncPlan: sarlotaStatusState.promptSyncPlan
+      promptSyncPlan: sarlotaStatusState.promptSyncPlan,
+      languageSyncPlan: sarlotaStatusState.languageSyncPlan
     })}
     ${AppearanceSettingsBox({
       draftSettings: themeState.draft,
@@ -46899,6 +46901,7 @@ function selectSarlotaAssistant(assistantKey) {
   sarlotaStatusState.syncError = "";
   sarlotaStatusState.syncMessage = "";
   sarlotaStatusState.promptSyncPlan = null;
+  sarlotaStatusState.languageSyncPlan = null;
   void loadSarlotaStatus({ force: true });
 }
 
@@ -47020,6 +47023,103 @@ async function applySarlotaPromptSync() {
   } catch (error) {
     console.error("smart_odpady_sarlota_prompt_sync_failed", error);
     sarlotaStatusState.syncError = error.payload?.error || "Synchronizace promptu ElevenLabs se nepodařila.";
+    sarlotaStatusState.syncMessage = "";
+  } finally {
+    sarlotaStatusState.syncing = false;
+    render();
+  }
+}
+
+function sarlotaLanguageSyncConfirmText(plan = {}) {
+  const knowledge = plan.knowledgeBase || {};
+  const dictionary = plan.pronunciationDictionary || {};
+  return [
+    "Připojit ostré Šarlotě spravovanou jazykovou KB a výslovnostní slovník?",
+    "",
+    `Jazyková KB: ${knowledge.name || "neuvedena"}`,
+    `Výslovnostní slovník: ${dictionary.name || "neuveden"}`,
+    `Počet pravidel: ${Number(dictionary.targetRuleCount || 0)}`,
+    `Verze: ${plan.packageVersion || "neuvedena"}`,
+    "",
+    "Aktuální otisk se před zápisem znovu ověří; při změně se zápis zastaví.",
+    "Prompt, first message, model a tools zůstanou beze změny.",
+    "Jiné KB ani jiné slovníky se nemažou.",
+    "Bez potvrzení se nic neprovede."
+  ].join("\n");
+}
+
+async function syncSarlotaLanguagePackage() {
+  if (!authState.user || sarlotaStatusState.syncing || !canManageAppearanceSettings(authState.user)) return;
+
+  sarlotaStatusState.syncing = true;
+  sarlotaStatusState.syncError = "";
+  sarlotaStatusState.syncMessage = "Načítám read-only stav jazykové KB a výslovnosti...";
+  render();
+
+  try {
+    const plan = await apiJson(`/api/ai/elevenlabs/sarlota-language-sync?${sarlotaAssistantApiQuery()}`);
+    sarlotaStatusState.languageSyncPlan = plan;
+    if (plan.alreadyApplied) {
+      sarlotaStatusState.syncMessage = "Jazyková KB i výslovnostní slovník už jsou aktuální a připojené.";
+      await loadSarlotaStatus({ force: true, renderAfter: false });
+    } else if (!plan.ready) {
+      sarlotaStatusState.syncError = plan.message || "Jazykový balík nejde bezpečně synchronizovat.";
+      sarlotaStatusState.syncMessage = "";
+    } else {
+      sarlotaStatusState.syncMessage = "Read-only náhled jazykového balíku je připravený. Nic se nezapsalo.";
+    }
+  } catch (error) {
+    console.error("smart_odpady_sarlota_language_sync_preview_failed", error);
+    sarlotaStatusState.languageSyncPlan = null;
+    sarlotaStatusState.syncError = error.payload?.error || "Náhled jazykového balíku se nepodařilo načíst.";
+    sarlotaStatusState.syncMessage = "";
+  } finally {
+    sarlotaStatusState.syncing = false;
+    render();
+  }
+}
+
+function cancelSarlotaLanguageSyncPreview() {
+  if (sarlotaStatusState.syncing) return;
+  sarlotaStatusState.languageSyncPlan = null;
+  sarlotaStatusState.syncMessage = "Náhled jazykového balíku byl zavřený. Nic se nezapsalo.";
+  sarlotaStatusState.syncError = "";
+  render();
+}
+
+async function applySarlotaLanguageSync() {
+  const plan = sarlotaStatusState.languageSyncPlan;
+  if (!authState.user || sarlotaStatusState.syncing || !canManageAppearanceSettings(authState.user) || plan?.ready !== true) return;
+
+  if (!window.confirm(sarlotaLanguageSyncConfirmText(plan))) {
+    sarlotaStatusState.syncMessage = "Připojení jazykového balíku zrušeno. Nic se nezměnilo.";
+    sarlotaStatusState.syncError = "";
+    render();
+    return;
+  }
+
+  sarlotaStatusState.syncing = true;
+  sarlotaStatusState.syncError = "";
+  sarlotaStatusState.syncMessage = "Synchronizuji jazykovou KB a výslovnostní slovník...";
+  render();
+
+  try {
+    const result = await apiJson("/api/ai/elevenlabs/sarlota-language-sync", {
+      method: "POST",
+      body: JSON.stringify({
+        apply: true,
+        assistant: selectedSarlotaAssistantConfig().assistantKey,
+        expectedCurrentFingerprint: plan.currentFingerprint || ""
+      })
+    });
+    sarlotaStatusState.languageSyncPlan = null;
+    sarlotaStatusState.syncMessage = result.status === "ok"
+      ? "Jazyková KB a výslovnostní slovník jsou připojené. Poslechová kontrola výslovnosti ještě zůstává samostatný krok."
+      : "Jazykový balík byl uložen jen částečně, zkontroluj stav.";
+    await loadSarlotaStatus({ force: true, renderAfter: false });
+  } catch (error) {
+    console.error("smart_odpady_sarlota_language_sync_failed", error);
+    sarlotaStatusState.syncError = error.payload?.error || "Synchronizace jazykového balíku se nepodařila.";
     sarlotaStatusState.syncMessage = "";
   } finally {
     sarlotaStatusState.syncing = false;
@@ -52286,6 +52386,27 @@ document.addEventListener("click", async (event) => {
   if (sarlotaPromptPlanCancel) {
     event.preventDefault();
     cancelSarlotaPromptSyncPreview();
+    return;
+  }
+
+  const sarlotaLanguageSync = event.target.closest("[data-sarlota-language-sync]");
+  if (sarlotaLanguageSync) {
+    event.preventDefault();
+    await syncSarlotaLanguagePackage();
+    return;
+  }
+
+  const sarlotaLanguageApply = event.target.closest("[data-sarlota-language-apply]");
+  if (sarlotaLanguageApply) {
+    event.preventDefault();
+    await applySarlotaLanguageSync();
+    return;
+  }
+
+  const sarlotaLanguagePlanCancel = event.target.closest("[data-sarlota-language-plan-cancel]");
+  if (sarlotaLanguagePlanCancel) {
+    event.preventDefault();
+    cancelSarlotaLanguageSyncPreview();
     return;
   }
 
