@@ -7,7 +7,7 @@ import { onRequestPost as driverReportContextVoiceWebhook } from "../../voice/dr
 import { ELEVENLABS_CLIENT_TOOL_SCHEMAS } from "../../../../src/elevenLabsClientTools.js";
 import {
   driverReportPromptForbiddenPhrases as forbiddenDriverReportPromptPhrases,
-  driverReportPromptHasCurrentRule
+  driverReportPromptSafetyAnalysis
 } from "../../../../src/sarlota/sarlotaPromptSafety.js";
 import {
   assistantConfigFromRequest,
@@ -210,8 +210,8 @@ function promptFromAgent(agentConfig) {
   return "";
 }
 
-function driverReportPromptRuleMatches(agentConfig) {
-  return driverReportPromptHasCurrentRule(promptFromAgent(agentConfig));
+function driverReportPromptAnalysis(agentConfig) {
+  return driverReportPromptSafetyAnalysis(promptFromAgent(agentConfig));
 }
 
 function driverReportPromptForbiddenPhrases(agentConfig) {
@@ -449,9 +449,14 @@ async function readElevenLabsAgentConfig({ apiKey, agentId, assistantConfig }) {
     const modelMatches = normalizeStatusText(observedModel) === LLM_MODEL_EXPECTED_NORMALIZED;
     const firstMessage = firstMessageFromAgent(agentConfig);
     const firstMessageMatches = cleanString(firstMessage) === FIRST_MESSAGE_TEMPLATE;
-    const driverReportPromptRulePresent = assistantConfig?.promptSyncAllowed === true
-      ? driverReportPromptRuleMatches(agentConfig)
-      : false;
+    const driverReportPromptAnalysisResult = assistantConfig?.promptSyncAllowed === true
+      ? driverReportPromptAnalysis(agentConfig)
+      : {
+        safeRulePresent: false,
+        canonicalRulePresent: false,
+        manuallyAdjusted: false,
+        missingRequirements: []
+      };
     const driverReportPromptForbidden = driverReportPromptForbiddenPhrases(agentConfig);
     const configuredToolNames = toolNamesFromAgent(agentConfig);
     const configuredToolEntries = collectToolEntriesFromAgent(agentConfig);
@@ -465,7 +470,10 @@ async function readElevenLabsAgentConfig({ apiKey, agentId, assistantConfig }) {
       observedModel,
       modelMatches,
       firstMessageMatches,
-      driverReportPromptRulePresent,
+      driverReportPromptRulePresent: driverReportPromptAnalysisResult.safeRulePresent,
+      driverReportPromptCanonicalRulePresent: driverReportPromptAnalysisResult.canonicalRulePresent,
+      driverReportPromptManuallyAdjusted: driverReportPromptAnalysisResult.manuallyAdjusted,
+      driverReportPromptMissingRequirements: driverReportPromptAnalysisResult.missingRequirements,
       driverReportPromptForbidden,
       configuredToolNames,
       configuredToolEntries,
@@ -812,7 +820,9 @@ export async function sarlotaStatusPayload(env, user, assistantConfig = resolveE
     : (liveAgentError ? "error" : "unverified");
   const driverReportPromptStatus = liveAgentVerified
     ? (assistantConfig.promptSyncAllowed === true
-      ? (elevenLabsAgentConfig.driverReportPromptRulePresent && !elevenLabsAgentConfig.driverReportPromptForbidden?.length ? "ok" : "error")
+      ? (elevenLabsAgentConfig.driverReportPromptRulePresent && !elevenLabsAgentConfig.driverReportPromptForbidden?.length
+        ? (elevenLabsAgentConfig.driverReportPromptManuallyAdjusted ? "review" : "ok")
+        : "error")
       : "unverified")
     : (liveAgentError ? "error" : "unverified");
 
@@ -872,6 +882,9 @@ export async function sarlotaStatusPayload(env, user, assistantConfig = resolveE
     driverReportPrompt: {
       status: driverReportPromptStatus,
       rulePresent: liveAgentVerified ? elevenLabsAgentConfig.driverReportPromptRulePresent : null,
+      canonicalRulePresent: liveAgentVerified ? elevenLabsAgentConfig.driverReportPromptCanonicalRulePresent : null,
+      manuallyAdjusted: liveAgentVerified ? elevenLabsAgentConfig.driverReportPromptManuallyAdjusted : null,
+      missingRequirements: liveAgentVerified ? (elevenLabsAgentConfig.driverReportPromptMissingRequirements || []) : [],
       forbiddenPhrasesPresent: liveAgentVerified ? (elevenLabsAgentConfig.driverReportPromptForbidden || []) : [],
       promptTextReturned: false,
       syncAllowed: assistantConfig.promptSyncAllowed === true,

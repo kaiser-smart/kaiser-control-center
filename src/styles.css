@@ -11953,6 +11953,259 @@ button:not(:disabled):active,
   background: rgba(248, 250, 246, 0.78);
 }
 
+.sarlota-status__service-actions--write {
+  border-color: rgba(154, 52, 18, 0.22);
+  background: #fffaf5;
+}
+
+.sarlota-status__read-only-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(45, 90, 22, 0.16);
+  border-radius: 10px;
+  background: #f4faef;
+  color: #33422c;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.sarlota-status__read-only-note strong {
+  flex: 0 0 auto;
+  color: #2d5a16;
+}
+
+.sarlota-content-editor {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(35, 40, 33, 0.14);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.sarlota-content-editor__head,
+.sarlota-content-editor__status,
+.sarlota-content-editor__actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sarlota-content-editor__comparison {
+  padding: 10px 12px;
+  border: 1px solid rgba(35, 40, 33, 0.1);
+  border-radius: 9px;
+  background: #fafbf8;
+}
+
+.sarlota-content-editor__comparison summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.sarlota-content-editor__comparison > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.sarlota-content-editor__comparison section {
+  min-width: 0;
+}
+
+.sarlota-content-editor__comparison pre {
+  max-height: 360px;
+  overflow: auto;
+  margin: 7px 0 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #30362d;
+  font: 600 0.76rem/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sarlota-content-editor__comparison p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.sarlota-content-editor__head h3,
+.sarlota-content-editor__head p {
+  margin: 0;
+}
+
+.sarlota-content-editor__head h3 {
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 1.18rem;
+}
+
+.sarlota-content-editor__head p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.sarlota-content-editor__tabs {
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px;
+  border-radius: 10px;
+  background: #eef1eb;
+}
+
+.sarlota-content-editor__tabs button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.sarlota-content-editor__tabs button.is-active {
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgba(35, 40, 33, 0.08);
+}
+
+.sarlota-content-editor__status {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.sarlota-content-editor__field {
+  display: grid;
+  gap: 7px;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.sarlota-content-editor__field textarea {
+  width: 100%;
+  min-height: 480px;
+  resize: vertical;
+  border: 1px solid rgba(35, 40, 33, 0.18);
+  border-radius: 10px;
+  padding: 14px;
+  background: #fbfcfa;
+  color: #252b22;
+  font: 650 0.88rem/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  tab-size: 2;
+}
+
+.sarlota-content-editor__field textarea:focus {
+  outline: none;
+  border-color: var(--theme-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-primary) 16%, transparent);
+}
+
+.sarlota-content-editor__field small {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.sarlota-content-editor__valid,
+.sarlota-content-editor__invalid {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.sarlota-content-editor__valid {
+  background: #eef8e8;
+  color: #2d5a16;
+}
+
+.sarlota-content-editor__invalid {
+  background: #fff0ed;
+  color: #9a3412;
+}
+
+.sarlota-content-editor__invalid ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.sarlota-content-editor__actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.sarlota-content-editor__history {
+  padding-top: 4px;
+  border-top: 1px solid rgba(35, 40, 33, 0.1);
+}
+
+.sarlota-content-editor__history summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.sarlota-content-editor__history ul {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sarlota-content-editor__history li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: #f7f8f5;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 760px) {
+  .sarlota-content-editor__head,
+  .sarlota-content-editor__actions,
+  .sarlota-content-editor__history li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sarlota-content-editor__tabs {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .sarlota-content-editor__field textarea {
+    min-height: 400px;
+  }
+
+  .sarlota-content-editor__comparison > div {
+    grid-template-columns: 1fr;
+  }
+}
+
 .sarlota-status__service-actions summary {
   cursor: pointer;
   color: var(--muted);
@@ -11969,6 +12222,11 @@ button:not(:disabled):active,
   margin: 10px 0 0;
   color: var(--muted);
   font-size: 0.86rem;
+}
+
+.sarlota-status__service-actions .sarlota-status__service-warning {
+  color: #7c2d12;
+  font-weight: 750;
 }
 
 .sarlota-status__assistant-select {
@@ -12122,6 +12380,11 @@ button:not(:disabled):active,
 .sarlota-status__badge--error {
   background: #fff0ed;
   color: #9a3412;
+}
+
+.sarlota-status__badge--review {
+  background: #fff7d6;
+  color: #7a4a00;
 }
 
 .sarlota-status__badge--unverified,

@@ -890,6 +890,25 @@ const sarlotaStatusState = {
   promptSyncPlan: null,
   promptSyncConfirmationPending: false,
   languageSyncPlan: null,
+  contentEditor: {
+    loaded: false,
+    loading: false,
+    saving: false,
+    publishing: false,
+    data: null,
+    error: "",
+    message: "",
+    activeKind: "prompt",
+    drafts: {
+      prompt: "",
+      knowledge_base: ""
+    },
+    dirty: {
+      prompt: false,
+      knowledge_base: false
+    },
+    validation: {}
+  },
   voiceWriteTest: {
     plan: null,
     selectedVehicleId: ""
@@ -6689,6 +6708,7 @@ function settingsManagementSection(user) {
   }
 
   ensureSarlotaStatusData();
+  ensureSarlotaContentData();
   ensureCommunicationInfrastructureData();
   const dashboardModule = orderedModules.find((moduleItem) => moduleItem.id === "dashboard");
 
@@ -6708,7 +6728,10 @@ function settingsManagementSection(user) {
       voiceWriteTest: sarlotaStatusState.voiceWriteTest,
       promptSyncPlan: sarlotaStatusState.promptSyncPlan,
       promptSyncConfirmationPending: sarlotaStatusState.promptSyncConfirmationPending,
-      languageSyncPlan: sarlotaStatusState.languageSyncPlan
+      languageSyncPlan: sarlotaStatusState.languageSyncPlan,
+      contentEditor: selectedSarlotaAssistantConfig().assistantKey === "sarlota"
+        ? sarlotaStatusState.contentEditor
+        : {}
     })}
     ${AppearanceSettingsBox({
       draftSettings: themeState.draft,
@@ -46861,6 +46884,157 @@ function ensureSarlotaStatusData(options = {}) {
   }
 }
 
+function ensureSarlotaContentData(options = {}) {
+  const editor = sarlotaStatusState.contentEditor;
+  if (!authState.user || !canManageAppearanceSettings(authState.user) || selectedSarlotaAssistantConfig().assistantKey !== "sarlota") {
+    return;
+  }
+  if (!editor.loaded || options.force) {
+    void loadSarlotaContent(options);
+  }
+}
+
+function sarlotaContentDocument(kind) {
+  return sarlotaStatusState.contentEditor.data?.documents?.[kind] || null;
+}
+
+async function loadSarlotaContent(options = {}) {
+  const editor = sarlotaStatusState.contentEditor;
+  if (!authState.user || editor.loading || !canManageAppearanceSettings(authState.user)) return;
+  editor.loading = true;
+  editor.error = "";
+  if (options.keepMessage !== true) editor.message = "";
+  if (options.renderAfter !== false) render();
+
+  try {
+    const result = await apiJson("/api/ai/elevenlabs/sarlota-content?assistant=sarlota");
+    editor.data = result;
+    editor.loaded = true;
+    editor.drafts = {
+      prompt: String(result.documents?.prompt?.draftContent ?? result.documents?.prompt?.liveContent ?? ""),
+      knowledge_base: String(result.documents?.knowledge_base?.draftContent ?? result.documents?.knowledge_base?.liveContent ?? "")
+    };
+    editor.dirty = { prompt: false, knowledge_base: false };
+    editor.validation = {
+      prompt: result.documents?.prompt?.validation || { valid: false, errors: [] },
+      knowledge_base: result.documents?.knowledge_base?.validation || { valid: false, errors: [] }
+    };
+  } catch (error) {
+    console.error("smart_odpady_sarlota_content_load_failed", error);
+    editor.loaded = true;
+    editor.error = error.payload?.error || "Prompt a Knowledge Base se nepodařilo načíst.";
+  } finally {
+    editor.loading = false;
+    if (options.renderAfter !== false) render();
+  }
+}
+
+async function saveSarlotaContentDraft(kind) {
+  const editor = sarlotaStatusState.contentEditor;
+  const contentDocument = sarlotaContentDocument(kind);
+  if (!contentDocument || editor.saving || editor.publishing) return;
+  editor.saving = true;
+  editor.error = "";
+  editor.message = "Ukládám koncept pouze do KSO…";
+  render();
+  try {
+    const result = await apiJson("/api/ai/elevenlabs/sarlota-content", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "save_draft",
+        assistant: "sarlota",
+        kind,
+        content: editor.drafts[kind],
+        baseLiveFingerprint: contentDocument.liveFingerprint
+      })
+    });
+    editor.message = result.message || "Koncept je uložený pouze v KSO.";
+    editor.validation[kind] = result.validation || { valid: false, errors: [] };
+    editor.dirty[kind] = false;
+    await loadSarlotaContent({ renderAfter: false, keepMessage: true });
+  } catch (error) {
+    console.error("smart_odpady_sarlota_content_draft_save_failed", error);
+    editor.error = error.payload?.error || "Koncept se nepodařilo uložit.";
+    editor.message = "";
+  } finally {
+    editor.saving = false;
+    render();
+  }
+}
+
+async function publishSarlotaContent(kind) {
+  const editor = sarlotaStatusState.contentEditor;
+  const document = sarlotaContentDocument(kind);
+  if (!document || editor.saving || editor.publishing || editor.dirty[kind]) {
+    editor.error = editor.dirty[kind] ? "Nejdřív ulož aktuální koncept v KSO." : editor.error;
+    render();
+    return;
+  }
+  const label = kind === "prompt" ? "hlavní Prompt" : "Knowledge Base";
+  if (!window.confirm(`Publikovat uložený ${label} z KSO do produkčního ElevenLabs?\n\nPředchozí živá verze se automaticky uloží do historie.`)) return;
+  editor.publishing = true;
+  editor.error = "";
+  editor.message = `Publikuji ${label} do ElevenLabs…`;
+  render();
+  try {
+    const result = await apiJson("/api/ai/elevenlabs/sarlota-content", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "publish",
+        assistant: "sarlota",
+        kind,
+        expectedLiveFingerprint: document.liveFingerprint,
+        expectedDraftFingerprint: document.draftFingerprint,
+        confirm: "PUBLIKOVAT"
+      })
+    });
+    editor.message = result.message || `${label} je publikovaný v ElevenLabs.`;
+    await loadSarlotaContent({ renderAfter: false, keepMessage: true });
+    await loadSarlotaStatus({ force: true, renderAfter: false });
+  } catch (error) {
+    console.error("smart_odpady_sarlota_content_publish_failed", error);
+    editor.error = error.payload?.error || `${label} se nepodařilo publikovat.`;
+    editor.message = "";
+  } finally {
+    editor.publishing = false;
+    render();
+  }
+}
+
+async function rollbackSarlotaContent(kind, versionId) {
+  const editor = sarlotaStatusState.contentEditor;
+  const document = sarlotaContentDocument(kind);
+  if (!document || !versionId || editor.publishing) return;
+  if (!window.confirm("Vrátit vybranou historickou verzi do produkčního ElevenLabs?\n\nSoučasná živá verze se před změnou znovu uloží do historie.")) return;
+  editor.publishing = true;
+  editor.error = "";
+  editor.message = "Obnovuji vybranou historickou verzi…";
+  render();
+  try {
+    const result = await apiJson("/api/ai/elevenlabs/sarlota-content", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "rollback",
+        assistant: "sarlota",
+        kind,
+        versionId,
+        expectedLiveFingerprint: document.liveFingerprint,
+        confirm: "VRATIT VERZI"
+      })
+    });
+    editor.message = result.message || "Historická verze je znovu publikovaná.";
+    await loadSarlotaContent({ renderAfter: false, keepMessage: true });
+    await loadSarlotaStatus({ force: true, renderAfter: false });
+  } catch (error) {
+    console.error("smart_odpady_sarlota_content_rollback_failed", error);
+    editor.error = error.payload?.error || "Historickou verzi se nepodařilo obnovit.";
+    editor.message = "";
+  } finally {
+    editor.publishing = false;
+    render();
+  }
+}
+
 function selectedSarlotaAssistantConfig() {
   return ELEVENLABS_ASSISTANT_CONFIGS[sarlotaStatusState.assistantKey] || ELEVENLABS_ASSISTANT_CONFIGS.sarlota;
 }
@@ -51647,6 +51821,21 @@ document.addEventListener("submit", async (event) => {
 });
 
 document.addEventListener("input", (event) => {
+  const sarlotaContentTextarea = event.target.closest("[data-sarlota-content-textarea]");
+  if (sarlotaContentTextarea) {
+    const kind = sarlotaContentTextarea.dataset.sarlotaContentKind === "knowledge_base" ? "knowledge_base" : "prompt";
+    const editor = sarlotaStatusState.contentEditor;
+    editor.drafts[kind] = sarlotaContentTextarea.value;
+    editor.dirty[kind] = true;
+    editor.validation[kind] = { valid: false, errors: ["Ulož koncept v KSO a spusť bezpečnostní kontrolu."] };
+    const field = sarlotaContentTextarea.closest(".sarlota-content-editor__field");
+    const counter = field?.querySelector("[data-sarlota-content-count]");
+    if (counter) counter.textContent = `${sarlotaContentTextarea.value.length} znaků · koncept ještě není uložený`;
+    const publish = sarlotaContentTextarea.closest(".sarlota-content-editor")?.querySelector("[data-sarlota-content-publish]");
+    if (publish) publish.disabled = true;
+    return;
+  }
+
   const fuelSearch = event.target.closest("[data-fuel-filter='search']");
   if (fuelSearch) {
     const start = fuelSearch.selectionStart;
@@ -52610,6 +52799,49 @@ document.addEventListener("click", async (event) => {
   if (sarlotaStatusRefresh) {
     event.preventDefault();
     await loadSarlotaStatus({ force: true });
+    return;
+  }
+
+  const sarlotaContentTab = event.target.closest("[data-sarlota-content-tab]");
+  if (sarlotaContentTab) {
+    event.preventDefault();
+    sarlotaStatusState.contentEditor.activeKind = sarlotaContentTab.dataset.sarlotaContentTab === "knowledge_base" ? "knowledge_base" : "prompt";
+    sarlotaStatusState.contentEditor.error = "";
+    sarlotaStatusState.contentEditor.message = "";
+    render();
+    return;
+  }
+
+  const sarlotaContentRefresh = event.target.closest("[data-sarlota-content-refresh]");
+  if (sarlotaContentRefresh) {
+    event.preventDefault();
+    const editor = sarlotaStatusState.contentEditor;
+    if ((editor.dirty.prompt || editor.dirty.knowledge_base) && !window.confirm("Zahodit neuložené úpravy a znovu načíst obsah z ElevenLabs?")) return;
+    await loadSarlotaContent({ force: true });
+    return;
+  }
+
+  const sarlotaContentSave = event.target.closest("[data-sarlota-content-save]");
+  if (sarlotaContentSave) {
+    event.preventDefault();
+    await saveSarlotaContentDraft(sarlotaContentSave.dataset.sarlotaContentKind === "knowledge_base" ? "knowledge_base" : "prompt");
+    return;
+  }
+
+  const sarlotaContentPublish = event.target.closest("[data-sarlota-content-publish]");
+  if (sarlotaContentPublish) {
+    event.preventDefault();
+    await publishSarlotaContent(sarlotaContentPublish.dataset.sarlotaContentKind === "knowledge_base" ? "knowledge_base" : "prompt");
+    return;
+  }
+
+  const sarlotaContentRollback = event.target.closest("[data-sarlota-content-rollback]");
+  if (sarlotaContentRollback) {
+    event.preventDefault();
+    await rollbackSarlotaContent(
+      sarlotaContentRollback.dataset.sarlotaContentKind === "knowledge_base" ? "knowledge_base" : "prompt",
+      sarlotaContentRollback.dataset.sarlotaContentRollback || ""
+    );
     return;
   }
 
