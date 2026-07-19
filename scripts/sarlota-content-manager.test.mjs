@@ -22,4 +22,46 @@ assert.deepEqual(
 );
 assert.match(__test.fingerprint("obsah"), /^fnv1a-[a-f0-9]{8}-5$/);
 
+const attachedFile = {
+  conversation_config: {
+    agent: {
+      prompt: {
+        knowledge_base: [{
+          type: "file",
+          id: "kb-live-file",
+          name: "02_Sarlota_KB_jazyk_vyslovnost_sloucena.txt"
+        }]
+      }
+    }
+  }
+};
+const selectedAttachedFile = __test.selectKnowledgeDocument(attachedFile, {
+  documents: [{
+    type: "file",
+    id: "kb-live-file",
+    name: "02_Sarlota_KB_jazyk_vyslovnost_sloucena.txt"
+  }, {
+    type: "text",
+    id: "kb-unrelated",
+    name: "Jiný dokument"
+  }]
+});
+assert.equal(selectedAttachedFile.id, "kb-live-file");
+
+assert.throws(
+  () => __test.selectKnowledgeDocument({
+    conversation_config: {
+      agent: {
+        prompt: {
+          knowledge_base: [
+            { type: "file", id: "kb-a", name: "Obecné provozní informace" },
+            { type: "file", id: "kb-b", name: "Kontakty" }
+          ]
+        }
+      }
+    }
+  }, { documents: [] }),
+  /ambiguous_attached_knowledge_base/
+);
+
 console.log("sarlota content manager tests: OK");
