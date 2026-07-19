@@ -151,6 +151,7 @@ runVisible("node", ["scripts/check-syntax.mjs"]);
 runVisible("node", ["scripts/version-module-imports.test.mjs"]);
 runVisible("node", ["scripts/collection-route-source-parser.test.mjs"]);
 runVisible("node", ["scripts/collection-daily-routes.test.mjs"]);
+runVisible("node", ["scripts/collection-routes-admin-tablet-test.test.mjs"]);
 runVisible("node", ["scripts/collection-daily-routes-scale.test.mjs"]);
 runVisible("node", ["scripts/collection-routes-test-data.test.mjs"]);
 runVisible("node", ["scripts/collection-routes-test-store.test.mjs"]);
