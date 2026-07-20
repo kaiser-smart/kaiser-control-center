@@ -11987,11 +11987,46 @@ button:not(:disabled):active,
 
 .sarlota-content-editor__head,
 .sarlota-content-editor__status,
-.sarlota-content-editor__actions {
+.sarlota-content-editor__actions,
+.sarlota-content-editor__next-step {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.sarlota-content-editor__steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sarlota-content-editor__steps li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: #f4f6f1;
+  color: #45503f;
+  font-size: 0.82rem;
+}
+
+.sarlota-content-editor__steps li span {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--theme-primary);
+  color: #ffffff;
+  font-size: 0.76rem;
+  font-weight: 900;
 }
 
 .sarlota-content-editor__comparison {
@@ -12057,37 +12092,81 @@ button:not(:disabled):active,
 }
 
 .sarlota-content-editor__tabs {
-  display: inline-flex;
-  width: fit-content;
-  padding: 4px;
-  border-radius: 10px;
-  background: #eef1eb;
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .sarlota-content-editor__tabs button {
-  min-height: 40px;
-  padding: 8px 14px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
+  display: grid;
+  min-height: 70px;
+  align-content: center;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid rgba(35, 40, 33, 0.14);
+  border-radius: 10px;
+  background: #f7f9f5;
   color: var(--muted);
   font: inherit;
-  font-size: 0.82rem;
-  font-weight: 900;
+  text-align: left;
   cursor: pointer;
+}
+
+.sarlota-content-editor__tabs button strong {
+  color: var(--ink);
+  font-size: 0.94rem;
+}
+
+.sarlota-content-editor__tabs button small {
+  font-size: 0.78rem;
+  font-weight: 650;
 }
 
 .sarlota-content-editor__tabs button.is-active {
   background: #ffffff;
-  color: var(--ink);
-  box-shadow: 0 2px 8px rgba(35, 40, 33, 0.08);
+  border-color: color-mix(in srgb, var(--theme-primary) 58%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-primary) 11%, transparent);
 }
 
 .sarlota-content-editor__status {
   justify-content: flex-start;
   flex-wrap: wrap;
+  align-items: center;
   color: var(--muted);
   font-size: 0.84rem;
+}
+
+.sarlota-content-editor__status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sarlota-content-editor__state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.035em;
+}
+
+.sarlota-content-editor__state--active {
+  background: #eaf7df;
+  color: #2d5a16;
+}
+
+.sarlota-content-editor__state--waiting {
+  background: #fff4d6;
+  color: #7a4a00;
+}
+
+.sarlota-content-editor__state--error {
+  background: #fff0ed;
+  color: #9a3412;
 }
 
 .sarlota-content-editor__field {
@@ -12151,6 +12230,33 @@ button:not(:disabled):active,
   flex-wrap: wrap;
 }
 
+.sarlota-content-editor__next-step {
+  align-items: center;
+  padding: 13px 14px;
+  border: 1px solid rgba(45, 90, 22, 0.16);
+  border-radius: 10px;
+  background: #f4faef;
+}
+
+.sarlota-content-editor__next-step > div:first-child {
+  display: grid;
+  gap: 3px;
+  color: #33422c;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.sarlota-content-editor__next-step > div:first-child strong {
+  color: #2d5a16;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sarlota-content-editor__next-step .primary-action {
+  min-width: 230px;
+}
+
 .sarlota-content-editor__history {
   padding-top: 4px;
   border-top: 1px solid rgba(35, 40, 33, 0.1);
@@ -12186,15 +12292,25 @@ button:not(:disabled):active,
 @media (max-width: 760px) {
   .sarlota-content-editor__head,
   .sarlota-content-editor__actions,
+  .sarlota-content-editor__next-step,
   .sarlota-content-editor__history li {
     align-items: stretch;
     flex-direction: column;
   }
 
+  .sarlota-content-editor__steps {
+    grid-template-columns: 1fr;
+  }
+
   .sarlota-content-editor__tabs {
     display: grid;
     width: 100%;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
+  }
+
+  .sarlota-content-editor__next-step .primary-action {
+    width: 100%;
+    min-width: 0;
   }
 
   .sarlota-content-editor__field textarea {
@@ -12227,6 +12343,45 @@ button:not(:disabled):active,
 .sarlota-status__service-actions .sarlota-status__service-warning {
   color: #7c2d12;
   font-weight: 750;
+}
+
+.sarlota-status__advanced {
+  padding: 12px 14px;
+  border-style: dashed;
+  background: #f7f8f5;
+}
+
+.sarlota-status__advanced > summary {
+  font-size: 0.88rem;
+}
+
+.sarlota-status__advanced-section {
+  margin-top: 12px;
+  padding: 13px 14px;
+  border: 1px solid rgba(35, 40, 33, 0.1);
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.sarlota-status__advanced-section h3,
+.sarlota-status__advanced-section p {
+  margin: 0;
+}
+
+.sarlota-status__advanced-section h3 {
+  color: var(--ink);
+  font-size: 0.94rem;
+}
+
+.sarlota-status__advanced-section p {
+  margin-top: 5px;
+}
+
+.sarlota-status__advanced-diagnostics > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
 }
 
 .sarlota-status__assistant-select {

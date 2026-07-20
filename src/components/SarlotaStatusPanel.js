@@ -465,6 +465,7 @@ function sarlotaContentEditor(editor = {}, syncing = false) {
   const hasChanges = document.draftFingerprint
     ? document.draftFingerprint !== document.liveFingerprint
     : draft !== liveContent;
+  const isDirty = editor.dirty?.[kind] === true;
   const publishDisabled = syncing
     || editor.saving
     || editor.publishing
@@ -472,6 +473,33 @@ function sarlotaContentEditor(editor = {}, syncing = false) {
     || document.hasSavedDraft !== true
     || !hasChanges
     || validation.valid !== true;
+  const publishReady = !publishDisabled && !isDirty;
+  const saveDisabled = syncing || editor.saving || editor.publishing || !isDirty;
+  const saveLabel = editor.saving
+    ? "UKLÁDÁM…"
+    : isDirty
+      ? "ULOŽIT ÚPRAVY V KSO"
+      : hasChanges && validation.valid !== true
+        ? "OPRAV UPOZORNĚNÍ VÝŠE"
+        : "NEJDŘÍV UPRAV TEXT";
+  const nextStep = isDirty
+    ? "Máš neuložené úpravy. Nejdřív je bezpečně ulož v KSO."
+    : publishReady
+      ? "Uložené změny prošly kontrolou. Teď je můžeš publikovat do ElevenLabs."
+      : hasChanges && validation.valid !== true
+        ? "Uprav označená místa a znovu ulož změny."
+        : "Aktuální obsah je načtený. Klikni do textu a začni upravovat.";
+  const contentState = document.conflict
+    ? { label: "KONFLIKT", tone: "error" }
+    : isDirty
+      ? { label: "NEULOŽENO", tone: "waiting" }
+      : hasChanges
+        ? validation.valid === true
+          ? { label: "ČEKÁ NA PUBLIKOVÁNÍ", tone: "waiting" }
+          : { label: "VYŽADUJE ÚPRAVU", tone: "error" }
+        : document.liveAvailable && validation.valid === true
+          ? { label: "AKTIVNÍ", tone: "active" }
+          : { label: "CHYBÍ", tone: "error" };
   const versionsHtml = versions.length
     ? versions.map((version) => `
       <li>
@@ -481,38 +509,43 @@ function sarlotaContentEditor(editor = {}, syncing = false) {
     `).join("")
     : "<li>Zatím není uložená žádná historická verze.</li>";
   const validationHtml = validation.valid
-    ? '<p class="sarlota-content-editor__valid">Bezpečnostní kontrola: připraveno</p>'
-    : `<div class="sarlota-content-editor__invalid"><strong>Nelze publikovat</strong><ul>${safeArray(validation.errors).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>`;
+    ? '<p class="sarlota-content-editor__valid" data-sarlota-content-validation>Kontrola obsahu: v pořádku</p>'
+    : `<div class="sarlota-content-editor__invalid" data-sarlota-content-validation><strong>Než bude možné publikovat</strong><ul>${safeArray(validation.errors).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>`;
 
   return `
     <section class="sarlota-content-editor" aria-labelledby="sarlota-content-editor-title">
       <div class="sarlota-content-editor__head">
         <div>
-          <span class="module-feedback__eyebrow">Zdroj pravdy v KSO</span>
-          <h3 id="sarlota-content-editor-title">Prompt a Knowledge Base</h3>
-          <p>Nejdřív uprav a ulož koncept. Produkční ElevenLabs se změní až samostatným potvrzením publikování.</p>
+          <span class="module-feedback__eyebrow">Správa obsahu Šarloty</span>
+          <h3 id="sarlota-content-editor-title">Prompt a znalosti</h3>
+          <p>Vyber obsah, uprav text a pokračuj jediným doporučeným tlačítkem.</p>
         </div>
         <button class="secondary-link" type="button" data-sarlota-content-refresh ${syncing || editor.saving || editor.publishing ? "disabled" : ""}>NAČÍST Z ELEVENLABS</button>
       </div>
+      <ol class="sarlota-content-editor__steps" aria-label="Postup úpravy obsahu Šarloty">
+        <li><span>1</span><strong>Vyber obsah</strong></li>
+        <li><span>2</span><strong>Uprav text</strong></li>
+        <li><span>3</span><strong>Ulož a publikuj</strong></li>
+      </ol>
       <div class="sarlota-content-editor__tabs" role="tablist" aria-label="Obsah Šarloty">
-        <button type="button" role="tab" aria-selected="${kind === "prompt"}" class="${kind === "prompt" ? "is-active" : ""}" data-sarlota-content-tab="prompt">HLAVNÍ PROMPT</button>
-        <button type="button" role="tab" aria-selected="${kind === "knowledge_base"}" class="${kind === "knowledge_base" ? "is-active" : ""}" data-sarlota-content-tab="knowledge_base">KNOWLEDGE BASE</button>
+        <button type="button" role="tab" aria-selected="${kind === "prompt"}" class="${kind === "prompt" ? "is-active" : ""}" data-sarlota-content-tab="prompt"><strong>Prompt Šarloty</strong><small>Pravidla a chování</small></button>
+        <button type="button" role="tab" aria-selected="${kind === "knowledge_base"}" class="${kind === "knowledge_base" ? "is-active" : ""}" data-sarlota-content-tab="knowledge_base"><strong>Znalosti Šarloty</strong><small>Jazyk a výslovnost</small></button>
       </div>
       ${document.conflict ? '<p class="module-feedback__error" role="alert">Obsah v ElevenLabs se od uloženého konceptu změnil. Publikování je zablokované; nejdřív změny bezpečně porovnej a spoj.</p>' : ""}
       ${editor.message ? `<p class="module-feedback__success" role="status">${escapeHtml(editor.message)}</p>` : ""}
       ${editor.error ? `<p class="module-feedback__error" role="alert">${escapeHtml(editor.error)}</p>` : ""}
       <div class="sarlota-content-editor__status">
-        <span><strong>Živá verze:</strong> ${escapeHtml(document.liveAvailable ? `${Number(document.liveLength || 0)} znaků` : "chybí")}</span>
-        <span><strong>Koncept:</strong> ${escapeHtml(document.hasSavedDraft ? (document.draftStatus === "published" ? "publikovaný" : "uložený v KSO") : "načtený z ElevenLabs")}</span>
+        <span><strong>Stav:</strong> <b class="sarlota-content-editor__state sarlota-content-editor__state--${escapeHtml(contentState.tone)}">${escapeHtml(contentState.label)}</b></span>
+        <span><strong>Načteno z ElevenLabs:</strong> ${escapeHtml(document.liveAvailable ? `${Number(document.liveLength || 0)} znaků` : "chybí")}</span>
       </div>
       <label class="sarlota-content-editor__field">
-        <span>${escapeHtml(document.title || (kind === "prompt" ? "Hlavní prompt Šarloty" : "Knowledge Base"))}</span>
+        <span>${escapeHtml(kind === "prompt" ? "Text Promptu Šarloty" : "Text znalostí Šarloty")}</span>
         <textarea rows="24" spellcheck="true" data-sarlota-content-textarea data-sarlota-content-kind="${escapeHtml(kind)}" ${syncing || editor.publishing ? "disabled" : ""}>${escapeHtml(draft)}</textarea>
-        <small data-sarlota-content-count>${escapeHtml(`${draft.length} znaků · úpravy se automaticky neposílají do ElevenLabs`)}</small>
+        <small data-sarlota-content-count>${escapeHtml(`${draft.length} znaků · samotná úprava textu nic neposílá do ElevenLabs`)}</small>
       </label>
       ${validationHtml}
       <details class="sarlota-content-editor__comparison">
-        <summary>${hasChanges ? "Porovnat koncept s živou verzí ElevenLabs" : "Koncept odpovídá živé verzi ElevenLabs"}</summary>
+        <summary>${hasChanges ? "Zkontrolovat rozdíly před publikováním" : "Žádné rozdíly oproti ElevenLabs"}</summary>
         ${hasChanges ? `
           <div>
             <section><strong>ŽIVĚ V ELEVENLABS</strong><pre>${escapeHtml(liveContent)}</pre></section>
@@ -520,12 +553,15 @@ function sarlotaContentEditor(editor = {}, syncing = false) {
           </div>
         ` : '<p>Mezi konceptem a právě načteným živým obsahem není rozdíl.</p>'}
       </details>
-      <div class="sarlota-content-editor__actions">
-        <button class="secondary-link" type="button" data-sarlota-content-save data-sarlota-content-kind="${escapeHtml(kind)}" ${syncing || editor.saving || editor.publishing ? "disabled" : ""}>${editor.saving ? "UKLÁDÁM…" : "ULOŽIT KONCEPT V KSO"}</button>
-        <button class="primary-action" type="button" data-sarlota-content-publish data-sarlota-content-kind="${escapeHtml(kind)}" ${publishDisabled ? "disabled" : ""}>${editor.publishing ? "PUBLIKUJI…" : "PUBLIKOVAT DO ELEVENLABS"}</button>
+      <div class="sarlota-content-editor__next-step">
+        <div><strong>Co udělat teď</strong><span data-sarlota-content-next-step>${escapeHtml(nextStep)}</span></div>
+        <div class="sarlota-content-editor__actions">
+          <button class="primary-action" type="button" data-sarlota-content-save data-sarlota-content-kind="${escapeHtml(kind)}" ${publishReady ? "hidden" : ""} ${saveDisabled ? "disabled" : ""}>${escapeHtml(saveLabel)}</button>
+          <button class="primary-action" type="button" data-sarlota-content-publish data-sarlota-content-kind="${escapeHtml(kind)}" ${publishReady ? "" : "hidden"} ${publishDisabled ? "disabled" : ""}>${editor.publishing ? "PUBLIKUJI…" : "PUBLIKOVAT DO ELEVENLABS"}</button>
+        </div>
       </div>
       <details class="sarlota-content-editor__history">
-        <summary>Historie a návrat k předchozí verzi</summary>
+        <summary>Historie verzí</summary>
         <ul>${versionsHtml}</ul>
       </details>
     </section>
@@ -745,31 +781,29 @@ export function SarlotaStatusPanel({
         <span>Tlačítko Ověřit ElevenLabs pouze načte aktuální stav agenta, promptu, tools a připojené Knowledge Base. Nic nemění.</span>
       </section>
       ${sarlotaContentEditor(contentEditor, syncing)}
-      <details class="sarlota-status__service-actions sarlota-status__service-actions--write">
-        <summary>Tools v ElevenLabs</summary>
-        <p class="sarlota-status__service-warning">Aktualizace tools zapisuje jedním směrem z KSO do ElevenLabs a před provedením má vlastní potvrzení.</p>
-        <div class="sarlota-status__actions sarlota-status__actions--service">
-          <button class="primary-action sarlota-status__sync" type="button" data-sarlota-tools-sync ${loading || syncing ? "disabled" : ""}>
-            ${syncing ? "Synchronizuji..." : "AKTUALIZOVAT TOOLS · KSO → ELEVENLABS"}
-          </button>
-        </div>
-        <p>Prompt a Knowledge Base se publikují výhradně z verzovaného editoru výše.</p>
-      </details>
-      <details class="sarlota-status__service-actions">
-        <summary>Technické servisní nástroje</summary>
-        <div class="sarlota-status__actions sarlota-status__actions--service">
-          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-smart-2-repair ${smart2RepairDisabled ? "disabled" : ""}>Opravit Smart 2 základ</button>
-          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-smart-2-delete ${smart2DeleteDisabled ? "disabled" : ""}>Smazat test Smart 2</button>
-          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-tools-diagnostic ${diagnosticSyncDisabled ? "disabled" : ""}>Odpojit tools pro diagnostiku</button>
-          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-vehicle-context-diagnostic ${loading || syncing ? "disabled" : ""}>${omitDriverReportVehicleContext ? "Vypnout test bez vozidel" : "Test bez vozidel v hlasu"}</button>
-          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-voice-write-test ${voiceWriteTestDisabled ? "disabled" : ""}>
-            Test voice zápisu
-          </button>
-          <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-test-call ${loading || syncing ? "disabled" : ""}>
-            Testovací hovor
-          </button>
-        </div>
-        <p>Určeno pro diagnostiku. Některé kroky mění testovací nebo produkční napojení a vždy mají vlastní potvrzení.</p>
+      <details class="sarlota-status__service-actions sarlota-status__advanced">
+        <summary>Pokročilé nastavení pro správce</summary>
+        <section class="sarlota-status__advanced-section">
+          <h3>Funkce Šarloty</h3>
+          <p>Použij pouze po změně funkcí Šarloty. Běžné úpravy textu se dělají výše.</p>
+          <div class="sarlota-status__actions sarlota-status__actions--service">
+            <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-tools-sync ${loading || syncing ? "disabled" : ""}>
+              ${syncing ? "Aktualizuji funkce…" : "AKTUALIZOVAT FUNKCE ŠARLOTY"}
+            </button>
+          </div>
+        </section>
+        <details class="sarlota-status__advanced-section sarlota-status__advanced-diagnostics">
+          <summary>Servisní diagnostika</summary>
+          <div class="sarlota-status__actions sarlota-status__actions--service">
+            <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-smart-2-repair ${smart2RepairDisabled ? "disabled" : ""}>Opravit Smart 2 základ</button>
+            <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-smart-2-delete ${smart2DeleteDisabled ? "disabled" : ""}>Smazat test Smart 2</button>
+            <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-tools-diagnostic ${diagnosticSyncDisabled ? "disabled" : ""}>Odpojit tools pro diagnostiku</button>
+            <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-vehicle-context-diagnostic ${loading || syncing ? "disabled" : ""}>${omitDriverReportVehicleContext ? "Vypnout test bez vozidel" : "Test bez vozidel v hlasu"}</button>
+            <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-voice-write-test ${voiceWriteTestDisabled ? "disabled" : ""}>Test voice zápisu</button>
+            <button class="secondary-link sarlota-status__sync" type="button" data-sarlota-test-call ${loading || syncing ? "disabled" : ""}>Testovací hovor</button>
+          </div>
+          <p>Určeno pro diagnostiku. Některé kroky mění testovací nebo produkční napojení a vždy mají vlastní potvrzení.</p>
+        </details>
       </details>
       ${error ? `<p class="module-feedback__error" role="alert">${escapeHtml(error)}</p>` : ""}
       ${syncError ? `<p class="module-feedback__error" role="alert">${escapeHtml(syncError)}</p>` : ""}
