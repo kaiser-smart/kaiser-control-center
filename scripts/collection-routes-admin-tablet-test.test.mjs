@@ -193,7 +193,8 @@ assert.equal(voiceContext.simulation.active, true);
 assert.equal(voiceContext.route.driverVerified, true);
 assert.equal(voiceContext.vehicle.status, "verified");
 assert.equal(voiceContext.memory.apiStatus, "unavailable_test_scope");
-assert.match(voiceContext.introAnnouncement, /Mirku/);
+assert.equal(voiceContext.introAnnouncement, "KSO_INTRO_GENERATION_PENDING");
+assert.doesNotMatch(voiceContext.introAnnouncement, /Mirku|Dnešní trasu|můžeme vyrazit/i);
 await assert.rejects(
   getCollectionDailyRouteTabletTestContext(env, otherAdmin, started.session.id),
   (error) => error.code === "collection_daily_route_tablet_test_session_missing"
@@ -221,6 +222,7 @@ assert.match(appSource, /Tato funkce zatím není v testovacím režimu dostupn�
 assert.match(appSource, /Stav testu/);
 assert.match(appSource, /prepareVoiceInput/);
 assert.match(appSource, /Prompt Šarloty načten/);
+assert.match(appSource, /Úvod přes Prompt \+ KB/);
 assert.match(appSource, /Znalosti Šarloty načteny/);
 assert.match(appSource, /Tools Šarloty načteny/);
 const restoreTestStart = appSource.indexOf("async function loadCollectionRoutesAdminTabletTest");

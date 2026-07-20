@@ -92,7 +92,7 @@ import {
   assert.equal(patched.includes("PŘÍKLADY CHOVÁNÍ – NEJSOU TO PROVOZNÍ DATA"), true);
   assert.equal(patched.includes("PRAKTICKÉ VZORY ODPOVĚDÍ – JEN S OVĚŘENÝM KONTEXTEM"), true);
   assert.equal(patched.includes("Nevidím bezpečně přiřazené vozidlo. Nadiktuj mi prosím SPZ."), true);
-  assert.equal(patched.includes("Na potvrzení trasy se znovu neptej."), true);
+  assert.equal(patched.includes("na potvrzení trasy se znovu neptej."), true);
   assert.equal(patched.includes("Pokyny typu odboč, pokračuj rovně nebo jeď určitý počet metrů říká výhradně HERE"), true);
   assert.equal(patched.includes(SARLOTA_PROMPT_VERSION), true);
   assert.equal(patched.includes(SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE), true);

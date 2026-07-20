@@ -278,80 +278,7 @@ function safeVehicles(result = {}) {
   };
 }
 
-function deterministicVariant(seed = "") {
-  return [...cleanString(seed)].reduce((sum, character) => sum + character.codePointAt(0), 0);
-}
-
-function stopCountText(value) {
-  const count = Math.max(0, Number(value || 0));
-  const lastTwo = count % 100;
-  const last = count % 10;
-  const noun = lastTwo >= 11 && lastTwo <= 14
-    ? "stanovišť"
-    : last >= 1 && last <= 4
-      ? "stanoviště"
-      : "stanovišť";
-  return `${count} ${noun}`;
-}
-
-function introAnnouncement(user, route, vehicle, crew, weather, memory, readiness) {
-  const variables = userDynamicVariablesForAi(user);
-  const firstName = cleanString(user?.name).split(/\s+/)[0].toLocaleLowerCase("cs-CZ");
-  const vocative = firstName === "miroslav"
-    ? "Mirku"
-    : cleanString(variables.user_first_name_friendly_vocative) || "řidiči";
-  if (readiness.blockers.length) {
-    return `Ahoj ${vocative}. Dnešní údaje se neshodují a trasu teď nemůžeme bezpečně zahájit. ${readiness.blockers[0].message}`.slice(0, 520);
-  }
-  const crewConfirmed = crew.verified && crew.members.length;
-  const variant = deterministicVariant(`${route.id}:${route.routeDate}`) % 3;
-  const greetings = crewConfirmed
-    ? [`Ahoj ${vocative}, ahoj posádko.`, `Dobré ráno ${vocative}, zdravím posádku.`, `Ahoj ${vocative}, zdravím všechny na palubě.`]
-    : [`Ahoj ${vocative}.`, `Dobré ráno ${vocative}.`, `Ahoj ${vocative}, jsem připravená.`];
-  const parts = [greetings[variant]];
-  parts.push(route.status === "active"
-    ? "Dnešní trasu mám načtenou a potvrzenou."
-    : route.assigned
-      ? "Dnešní trasu mám načtenou."
-      : "Dnešní trasu zatím nemám potvrzenou.");
-  if (route.title && route.totalCount) {
-    parts.push(`${route.title}. Čeká nás ${stopCountText(route.totalCount)}.`);
-  } else if (route.totalCount) {
-    parts.push(`Čeká nás ${stopCountText(route.totalCount)}.`);
-  }
-  if (vehicle.status === "verified" && vehicle.fleetVerified === true && vehicle.fleetMatch === true && vehicle.label) {
-    parts.push(`Vozidlo ${vehicle.label} sedí s denní trasou.`);
-  }
-  if (weather?.verified && cleanString(weather.summary)) {
-    parts.push(cleanString(weather.summary));
-  } else {
-    parts.push("Aktuální počasí se mi teď nepodařilo ověřit.");
-  }
-  if (memory?.previouslySpoken && cleanString(memory.summary)) {
-    parts.push("Navážu i na naše předchozí pracovní témata.");
-  }
-  const riskyWeather = Array.isArray(weather?.hazards)
-    && weather.hazards.some((hazard) => ["warning", "danger"].includes(cleanString(hazard?.severity)));
-  if (riskyWeather) {
-    parts.push("Můžeme vyrazit, první zastávky ale vezměte opatrně.");
-  } else if (crewConfirmed) {
-    const lightLines = [
-      "Jestli máte svačiny, můžeme vyrazit.",
-      "Jestli máte kafe a svačiny, můžeme vyrazit.",
-      "Jestli je posádka připravená, můžeme vyrazit."
-    ];
-    parts.push(lightLines[variant]);
-  } else {
-    const lightLines = [
-      "Jestli máš svačinu, můžeme vyrazit.",
-      "Jestli máš kafe po ruce, můžeme vyrazit.",
-      "Můžeme vyrazit."
-    ];
-    parts.push(lightLines[variant]);
-  }
-  parts.push("Budu hlídat trasu, zastávky i všechno důležité po cestě.");
-  return parts.join(" ").replace(/\.\./g, ".").slice(0, 520);
-}
+export const COLLECTION_ROUTES_INTRO_GENERATION_MARKER = "KSO_INTRO_GENERATION_PENDING";
 
 async function safeLoad(loader, fallback) {
   try {
@@ -476,7 +403,7 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
       message: "Aktuální přehled zpráv iROZHLAS se teď nepodařilo bezpečně načíst."
     },
     memory,
-    introAnnouncement: introAnnouncement(operationalUser, route, vehicle, crew, weather, memory, readiness),
+    introAnnouncement: COLLECTION_ROUTES_INTRO_GENERATION_MARKER,
     safety: {
       readOnlyContext: true,
       requiresPhysicalConfirmationForWrites: true,

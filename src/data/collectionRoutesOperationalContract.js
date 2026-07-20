@@ -30,8 +30,11 @@ export const COLLECTION_ROUTES_OPERATIONAL_CONTRACT = Object.freeze({
     currentModule: "Svozové trasy",
     routePrefix: "/trasy-svozu",
     introVariable: "intro_announcement",
-    introSource: "collection_routes_context",
+    introSource: "elevenlabs_agent_prompt_kb",
     firstMessageTemplate: "{{intro_announcement}}",
+    technicalFirstMessageMarker: "KSO_INTRO_GENERATION_PENDING",
+    suppressTechnicalFirstMessage: true,
+    generateAudibleIntroWithActiveAgent: true,
     requireLivePromptInTest: true,
     requireLiveKnowledgeBaseInTest: true
   }),

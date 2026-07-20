@@ -18,8 +18,11 @@ assert.equal(collectionRoutesDriverTabletCssSizeLabel(), "960 × 600 CSS px");
 assert.equal(contract.driverTablet.physicalWidth, 1920);
 assert.equal(contract.driverTablet.physicalHeight, 1200);
 assert.equal(contract.driverTablet.simulatorDevice, "blackview");
-assert.equal(contract.voice.introSource, "collection_routes_context");
 assert.equal(contract.voice.firstMessageTemplate, "{{intro_announcement}}");
+assert.equal(contract.voice.introSource, "elevenlabs_agent_prompt_kb");
+assert.equal(contract.voice.technicalFirstMessageMarker, "KSO_INTRO_GENERATION_PENDING");
+assert.equal(contract.voice.suppressTechnicalFirstMessage, true);
+assert.equal(contract.voice.generateAudibleIntroWithActiveAgent, true);
 
 for (const marker of [
   "Blackview Active 7 LTE",
@@ -31,6 +34,15 @@ for (const marker of [
   assert.ok(handbook.includes(marker), `PŘÍRUČKA postrádá závazný marker: ${marker}`);
 }
 
+for (const marker of [
+  "KSO_INTRO_GENERATION_PENDING",
+  "skutečně aktivní ElevenLabs agent",
+  "publikovaného system Promptu",
+  "pevnou backendovou ani frontendovou šablonu"
+]) {
+  assert.ok(handbook.includes(marker), `PŘÍRUČKA postrádá závazný hlasový marker: ${marker}`);
+}
+
 assert.ok(appSource.includes("COLLECTION_ROUTES_DRIVER_TABLET_DEVICE"));
 assert.ok(appSource.includes("collectionRoutesDriverTabletLabel()"));
 assert.ok(appSource.includes("collectionRoutesDriverTabletCssSizeLabel()"));
@@ -39,7 +51,7 @@ const variables = {
   current_module: "Svozové trasy",
   current_module_route: "/trasy-svozu/test",
   current_module_context: JSON.stringify({ module: "Svozové trasy", route: "/trasy-svozu/test" }),
-  intro_announcement: "Ahoj Mirku. Dnešní TEST trasu mám načtenou."
+  intro_announcement: contract.voice.technicalFirstMessageMarker
 };
 assert.equal(validateSarlotaModuleVoiceVariables("/trasy-svozu/test", variables).ready, true);
 assert.equal(validateSarlotaModuleVoiceVariables("/trasy-svozu/test", { ...variables, current_module: "Jiný modul" }).ready, false);

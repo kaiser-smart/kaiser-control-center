@@ -14,7 +14,10 @@ import {
   SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE,
   SARLOTA_DRIVER_REPORT_EL_PROMPT_RULE
 } from "../src/sarlota/sarlotaSystemPrompt.js";
-import { useElevenLabsAssistant } from "../src/useElevenLabsAssistant.js";
+import {
+  useElevenLabsAssistant,
+  voiceInputResumeDelayMs
+} from "../src/useElevenLabsAssistant.js";
 
 const REQUIRED_DRIVER_REPORT_TOOLS = [
   "open_module",
@@ -33,6 +36,19 @@ function assertNoSecret(value = "") {
   assert.equal(text.includes("sk_"), false);
   assert.equal(text.includes("ELEVENLABS_API_KEY"), false);
   assert.equal(text.includes("wss://signed.example.invalid/private-token"), false);
+}
+
+{
+  assert.equal(
+    voiceInputResumeDelayMs(1400, 0),
+    1400,
+    "Bez čekajícího audia zůstává běžná ochranná mezera."
+  );
+  assert.equal(
+    voiceInputResumeDelayMs(900, 6200),
+    6650,
+    "Mikrofon se nesmí obnovit, dokud nedohraje celé dlouhé intro a ochranný dozvuk."
+  );
 }
 
 {

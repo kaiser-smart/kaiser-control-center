@@ -189,6 +189,8 @@ async function readLiveContent(env, assistantConfig) {
 
 const PROMPT_REQUIREMENTS = [
   ["intro_announcement", "úvodní hlášení Šarloty"],
+  ["KSO_INTRO_GENERATION_PENDING", "technický marker úvodu Svozových tras"],
+  ["aktivního Promptu, připojené Knowledge Base a ověřených dynamic variables", "generování úvodu aktivní Šarlotou"],
   ["get_collection_routes_context", "bezpečný kontext Svozových tras"],
   ["prepare_collection_route_gps_capture", "příprava GPS stanoviště"],
   ["prepare_collection_route_test_incident", "příprava TEST hlášení stanoviště"],
@@ -198,6 +200,14 @@ const PROMPT_REQUIREMENTS = [
 ];
 
 const KB_REQUIREMENTS = [
+  {
+    markers: ["KSO_INTRO_GENERATION_PENDING"],
+    label: "technický marker úvodu Svozových tras"
+  },
+  {
+    markers: ["slysitelne uvodni hlaseni vytvari aktivni agent"],
+    label: "generování slyšitelného úvodu aktivní Šarlotou"
+  },
   {
     markers: ["neni zdrojem provoznich faktu"],
     label: "oddělení KB od provozních faktů"

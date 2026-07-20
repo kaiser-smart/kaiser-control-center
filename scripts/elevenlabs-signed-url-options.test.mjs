@@ -23,7 +23,7 @@ import { useElevenLabsAssistant } from "../src/useElevenLabsAssistant.js";
     current_module: "Svozové trasy",
     current_module_route: "/trasy-svozu/test",
     current_module_context: JSON.stringify({ module: "Svozové trasy", route: "/trasy-svozu/test" }),
-    intro_announcement: "Ahoj Mirku. TEST trasu mám načtenou."
+    intro_announcement: "KSO_INTRO_GENERATION_PENDING"
   };
   const ready = tabletTestVoiceRuntimeVerification({
     requestedRoute: "/trasy-svozu/test",
@@ -38,7 +38,7 @@ import { useElevenLabsAssistant } from "../src/useElevenLabsAssistant.js";
     }
   });
   assert.equal(ready.status, "ready");
-  assert.equal(ready.introSource, "collection_routes_context");
+  assert.equal(ready.introSource, "elevenlabs_agent_prompt_kb");
   assert.equal(tabletTestVoiceRuntimeVerification({
     requestedRoute: "/trasy-svozu/test",
     dynamicVariables,

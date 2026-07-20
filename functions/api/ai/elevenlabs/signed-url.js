@@ -477,7 +477,7 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
     });
     if (voiceRuntime.status !== "ready") {
       return json({
-        error: "Hlasová Šarlota není pro TEST bezpečně připravená. Ověř Prompt, první zprávu, znalosti, tools a kontext Svozových tras.",
+        error: "Hlasová Šarlota není pro TEST bezpečně připravená. Ověř Prompt, technický start úvodu, znalosti, tools a kontext Svozových tras.",
         code: "SARLOTA_TEST_VOICE_RUNTIME_NOT_READY",
         ...assistantPublicMetadata(assistant),
         configured: true,

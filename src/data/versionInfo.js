@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.636"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.637"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: úvod už není pevná backendová šablona",
+    text: "Svozové trasy předávají aktivnímu ElevenLabs agentovi ověřený kontext a slyšitelné intro vytváří skutečný Prompt s připojenou Knowledge Base. Technická First Message se řidiči nepřehraje, pevné věty byly z backendu odstraněné a mikrofon se obnoví až po dohrání celé odpovědi."
+  },
   {
     title: "TEST: Šarlota načte správný kontext Toolu",
     text: "Kontextový Tool v administrátorském TESTU nyní předává ID aktivní bezpečné relace a používá TEST scope. Šarlota proto načte simulovaného řidiče, vybranou trasu a testovací vozidlo místo opakování pevné chyby určené pro chybějící kontext. PŘÍRUČKA současně nově vyžaduje skutečný funkční průchod každého TESTU a blokuje jen produkční účinky."
@@ -70,7 +74,7 @@ export const versionNews = [
   },
   {
     title: "Šarlota: úvod podle promptu osádky",
-    text: "Po potvrzení trasy přečte Šarlota jediné backendové přivítání podle ověřeného řidiče, trasy, vozidla, osádky, počasí a povolené pracovní paměti. Mluví přirozeně, může lehce zmínit svačinu nebo kafe, nic si nevymýšlí a na potvrzení trasy se znovu neptá."
+    text: "Historická verze skládala jediné přivítání v backendu. Aktuální verze tuto pevnou šablonu odstranila a slyšitelný úvod nechává vytvořit aktivní Šarlotu podle publikovaného Promptu, KB a ověřeného modulového kontextu."
   },
   {
     title: "Svozové trasy: správce připraví správný TEST",

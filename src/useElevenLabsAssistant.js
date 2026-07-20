@@ -6,6 +6,7 @@ const TEXT_METADATA_FALLBACK_MS = 1200;
 const VOICE_CONNECTION_TIMEOUT_MS = 15000;
 const VOICE_RESPONSE_TIMEOUT_MS = 45000;
 const VOICE_FINISH_GRACE_MS = 1400;
+const VOICE_PLAYBACK_TAIL_GUARD_MS = 450;
 const VOICE_AUDIO_UNLOCK_TIMEOUT_MS = 8000;
 const VOICE_MICROPHONE_TIMEOUT_MS = 12000;
 const DEFAULT_AGENT_AUDIO_FORMAT = "pcm_16000";
@@ -281,6 +282,12 @@ function dynamicVariablesForSession(signedUrlSession, interfaceMode) {
     .filter(([key, value]) => String(key || "").trim() && value !== ""));
 }
 
+export function voiceInputResumeDelayMs(baseDelayMs = VOICE_FINISH_GRACE_MS, playbackRemainingMs = 0) {
+  const safeBaseDelayMs = Math.max(0, Number(baseDelayMs) || 0);
+  const safePlaybackRemainingMs = Math.max(0, Number(playbackRemainingMs) || 0);
+  return Math.max(safeBaseDelayMs, safePlaybackRemainingMs + VOICE_PLAYBACK_TAIL_GUARD_MS);
+}
+
 function createVoiceAudioPlayer() {
   let audioContext = null;
   let nextStartTime = 0;
@@ -377,9 +384,18 @@ function createVoiceAudioPlayer() {
     return true;
   }
 
+  function remainingPlaybackMs() {
+    if (!audioContext || audioContext.state === "closed") {
+      return 0;
+    }
+
+    return Math.max(0, Math.ceil((nextStartTime - audioContext.currentTime) * 1000));
+  }
+
   return {
     getContext: () => audioContext,
     playPcmChunk,
+    remainingPlaybackMs,
     stop,
     unlock
   };
@@ -777,6 +793,7 @@ export function useElevenLabsAssistant({
 
   async function startVoiceConversation(assistantId = DEFAULT_AI_ASSISTANT_ID, callbacks = {}) {
     const assistant = assistantById(assistantId);
+    const introGenerationRequest = String(callbacks.introGenerationRequest || "").trim();
 
     if (typeof WebSocket === "undefined") {
       throw new Error("Hlasový režim Šarloty není v tomto prohlížeči dostupný.");
@@ -854,7 +871,9 @@ export function useElevenLabsAssistant({
       let audioPlaybackFailed = false;
       let audioInputStarted = false;
       let audioInputStopped = false;
-      let audioInputPaused = false;
+      let audioInputPaused = Boolean(introGenerationRequest);
+      let introGenerationPhase = introGenerationRequest ? "suppressing-technical-first-message" : "complete";
+      let technicalFirstMessageComplete = false;
       let sourceNode = null;
       let processorNode = null;
       let silentGainNode = null;
@@ -862,6 +881,7 @@ export function useElevenLabsAssistant({
       let responseTimer = 0;
       let metadataFallbackTimer = 0;
       let finishTimer = 0;
+      let introGenerationTimer = 0;
       let lastInputLevelAt = 0;
       const audioTrack = mediaStream.getAudioTracks?.()[0] || null;
 
@@ -870,6 +890,7 @@ export function useElevenLabsAssistant({
         window.clearTimeout(responseTimer);
         window.clearTimeout(metadataFallbackTimer);
         window.clearTimeout(finishTimer);
+        window.clearTimeout(introGenerationTimer);
       }
 
       function stopAudioInput() {
@@ -971,19 +992,51 @@ export function useElevenLabsAssistant({
         };
       }
 
+      function resetAgentTurn() {
+        streamedAgentText = "";
+        finalAgentText = "";
+        audioChunkCount = 0;
+        audioPlaybackStarted = false;
+        audioPlaybackFailed = false;
+      }
+
+      function requestGeneratedIntro() {
+        if (introGenerationPhase !== "suppressing-technical-first-message" || settled) {
+          return;
+        }
+
+        introGenerationPhase = "waiting-for-generated-intro";
+        audioInputPaused = true;
+        resetAgentTurn();
+        if (!sendJson({ type: "user_message", text: introGenerationRequest })) {
+          settle(reject, new Error("Šarlota nedokázala převzít požadavek na úvodní hlášení."), "intro-generation-send-failed");
+          return;
+        }
+        startResponseTimer();
+      }
+
+      function scheduleGeneratedIntroRequest() {
+        if (!technicalFirstMessageComplete || introGenerationPhase !== "suppressing-technical-first-message") {
+          return;
+        }
+        window.clearTimeout(introGenerationTimer);
+        introGenerationTimer = window.setTimeout(requestGeneratedIntro, 600);
+      }
+
       function scheduleReady(delay = VOICE_FINISH_GRACE_MS) {
         if (!String(finalAgentText || streamedAgentText).trim() && audioChunkCount === 0) {
           return;
         }
 
         window.clearTimeout(finishTimer);
+        const resumeDelayMs = voiceInputResumeDelayMs(delay, voiceAudioPlayer.remainingPlaybackMs());
         finishTimer = window.setTimeout(() => {
           audioInputPaused = false;
           callbacks.onReady?.({
             ...resultPayload(),
             state: "listening"
           });
-        }, delay);
+        }, resumeDelayMs);
       }
 
       function startResponseTimer() {
@@ -1103,6 +1156,9 @@ export function useElevenLabsAssistant({
           conversationId,
           voiceRuntime: signedUrlSession.voiceRuntime || null
         });
+        if (introGenerationPhase === "suppressing-technical-first-message") {
+          startResponseTimer();
+        }
         metadataFallbackTimer = window.setTimeout(startAudioInput, TEXT_METADATA_FALLBACK_MS);
       });
 
@@ -1133,12 +1189,20 @@ export function useElevenLabsAssistant({
         }
 
         if (payload.type === "client_tool_call") {
+          if (introGenerationPhase === "suppressing-technical-first-message") {
+            return;
+          }
           sendClientToolResult(socket, payload.client_tool_call);
           return;
         }
 
         if (payload.type === "user_transcript") {
           userTranscript = String(payload.user_transcription_event?.user_transcript || userTranscript).trim();
+          if (introGenerationPhase === "waiting-for-generated-intro" && userTranscript === introGenerationRequest) {
+            userTranscript = "";
+            audioInputPaused = true;
+            return;
+          }
           if (userTranscript) {
             audioInputPaused = true;
             streamedAgentText = "";
@@ -1157,6 +1221,11 @@ export function useElevenLabsAssistant({
 
         if (payload.type === "audio") {
           const audioBase64 = payload.audio_event?.audio_base_64;
+          if (introGenerationPhase === "suppressing-technical-first-message") {
+            audioInputPaused = true;
+            scheduleGeneratedIntroRequest();
+            return;
+          }
           if (audioBase64) {
             audioInputPaused = true;
             audioChunkCount += 1;
@@ -1186,6 +1255,15 @@ export function useElevenLabsAssistant({
         }
 
         if (payload.type === "agent_response") {
+          if (introGenerationPhase === "suppressing-technical-first-message") {
+            window.clearTimeout(responseTimer);
+            technicalFirstMessageComplete = true;
+            scheduleGeneratedIntroRequest();
+            return;
+          }
+          if (introGenerationPhase === "waiting-for-generated-intro") {
+            introGenerationPhase = "complete";
+          }
           window.clearTimeout(responseTimer);
           rememberAgentText(payload.agent_response_event?.agent_response);
           return;
@@ -1194,6 +1272,18 @@ export function useElevenLabsAssistant({
         if (payload.type === "agent_chat_response_part") {
           const part = payload.text_response_part || {};
           const partType = String(part.type || "").trim();
+
+          if (introGenerationPhase === "suppressing-technical-first-message") {
+            if (partType === "stop") {
+              window.clearTimeout(responseTimer);
+              technicalFirstMessageComplete = true;
+              scheduleGeneratedIntroRequest();
+            }
+            return;
+          }
+          if (introGenerationPhase === "waiting-for-generated-intro") {
+            introGenerationPhase = "complete";
+          }
 
           if (partType === "start") {
             streamedAgentText = "";
@@ -1215,6 +1305,15 @@ export function useElevenLabsAssistant({
         }
 
         if (payload.type === "agent_response_complete") {
+          if (introGenerationPhase === "suppressing-technical-first-message") {
+            window.clearTimeout(responseTimer);
+            technicalFirstMessageComplete = true;
+            scheduleGeneratedIntroRequest();
+            return;
+          }
+          if (introGenerationPhase === "waiting-for-generated-intro") {
+            introGenerationPhase = "complete";
+          }
           window.clearTimeout(responseTimer);
           if (streamedAgentText && !finalAgentText) {
             finalAgentText = streamedAgentText;

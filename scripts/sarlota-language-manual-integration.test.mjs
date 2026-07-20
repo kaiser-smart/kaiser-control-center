@@ -34,7 +34,7 @@ assert.match(promptSources, /SARLOTA_LANGUAGE_REFERENCE_KB\.md/);
 assert.match(promptSources, /SARLOTA_PRONUNCIATION_DICTIONARY_SOURCE\.md/);
 
 assert.match(SARLOTA_SAFE_EXAMPLES_PROMPT_RULE, /NEJSOU TO PROVOZNÍ DATA/);
-assert.match(SARLOTA_SAFE_EXAMPLES_PROMPT_RULE, /Na potvrzení trasy se znovu neptej/);
+assert.match(SARLOTA_SAFE_EXAMPLES_PROMPT_RULE, /na potvrzení trasy se znovu neptej/i);
 assert.match(SARLOTA_SAFE_EXAMPLES_PROMPT_RULE, /říká výhradně HERE/);
 assert.equal(prompt.includes(SARLOTA_SAFE_EXAMPLES_PROMPT_RULE), true);
 

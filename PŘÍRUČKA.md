@@ -1440,9 +1440,13 @@ Nesmí se z nich odvozovat role, oprávnění ani právo provést citlivou akci.
 
 ### 17.3 `intro_announcement`
 
-- `intro_announcement` je kompletní hotový úvodní text pro Šarlotu.
+- Význam `intro_announcement` určuje hlasový kontrakt konkrétního modulu. U běžných modulů může být kompletním hotovým úvodním textem; nesmí se však automaticky předpokládat, že stejný způsob platí pro všechny moduly.
 - `intro_announcement` není jeden globální text pro všechny moduly. Každý modul vlastní svůj zdroj úvodu a musí být zaregistrovaný ve strojově čitelném hlasovém kontraktu.
-- `Svozové trasy` smějí úvod sestavit pouze z ověřeného backendového kontextu Svozových tras. Nesmějí převzít úvod jiného modulu, obecný mock ani lokálně napsanou náhradní hlášku.
+- Ve `Svozových trasách` je `intro_announcement` výhradně technický marker `KSO_INTRO_GENERATION_PENDING`. KSO technickou First Message řidiči nesmí přehrát ani zobrazit jako odpověď.
+- Slyšitelný úvod `Svozových tras` vytváří až skutečně aktivní ElevenLabs agent na interní požadavek KSO podle publikovaného system Promptu, všech připojených Knowledge Base a ověřených dynamic variables stejné testovací nebo produkční relace.
+- `Svozové trasy` nesmějí obsahovat pevnou backendovou ani frontendovou šablonu slyšitelného přivítání, lokálně napsanou náhradní hlášku, obecný mock ani úvod jiného modulu. Backend dodává fakta a bezpečnostní stav, nikoli hotovou lidskou větu.
+- Technický marker a interní požadavek KSO se nikdy nevyslovují. Mikrofon zůstává pozastavený, dokud technická First Message neskončí a nedohraje agentem vytvořený skutečný úvod.
+- Úvod aktivního agenta musí být krátký, přirozený, bez opakování stejného údaje a nesmí znovu žádat potvrzení již fyzicky potvrzené trasy.
 - `current_module`, `current_module_route`, `current_module_context` a `intro_announcement` musí patřit ke stejné trase a stejnému modulovému kontraktu; rozpor hlasovou relaci zablokuje.
 - TEST tabletu smí získat signed URL až po read-only ověření skutečného ElevenLabs agenta, neprázdného Promptu, First Message `{{intro_announcement}}`, připojené Knowledge Base a všech očekávaných Tools.
 - Nový modul nebo změna zdroje úvodu vyžaduje úpravu kontraktu a automatický regresní test. Nestačí změnit pouze frontendový text.
@@ -1451,7 +1455,7 @@ Nesmí se z nich odvozovat role, oprávnění ani právo provést citlivou akci.
 - Do First message nepřidávat současně `{{user_greeting}}` ani další pevný úvodní text.
 - Pozdrav a otázka se nesmí skládat dvakrát.
 
-Správně:
+Správně pro modul s kontraktem hotového textu:
 
 ```text
 intro_announcement = "Dobré odpoledne, Radime. Co potřebuješ?"
@@ -1462,6 +1466,14 @@ First message:
 ```text
 {{intro_announcement}}
 ```
+
+Správně pro `Svozové trasy`:
+
+```text
+intro_announcement = "KSO_INTRO_GENERATION_PENDING"
+```
+
+Marker se nepřehraje. KSO po jeho dokončení pošle interní požadavek aktivnímu agentovi a řidič slyší pouze odpověď vytvořenou z publikovaného Promptu, připojené KB a ověřeného kontextu Svozových tras.
 
 Špatně:
 
@@ -1553,7 +1565,7 @@ Při každé změně Šarloty ověřit:
 - mikrofon povolen -> pokračuje signed URL / WebSocket,
 - WebSocket disconnect -> UI ukáže skutečný disconnect,
 - nechybí žádná required dynamic variable,
-- `intro_announcement` zazní jen jednou,
+- u modulů s hotovým textem `intro_announcement` zazní jen jednou; ve Svozových trasách technický marker nezazní vůbec a slyšitelný agentem vytvořený úvod zazní jen jednou,
 - Šarlota tyká,
 - denní pozdrav odpovídá `Europe/Prague`,
 - hlasová akce se zápisem, změnou stavu, notifikací nebo externím dopadem vyžaduje potvrzovací popup v UI,

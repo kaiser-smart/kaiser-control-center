@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import {
   buildCollectionRoutesSarlotaContext,
+  COLLECTION_ROUTES_INTRO_GENERATION_MARKER,
   sanitizeKaiserDirectoryForSarlota
 } from "../functions/_lib/collection-routes-sarlota-context.js";
 import {
@@ -259,15 +260,8 @@ assert.equal(context.vehicles.verified, true);
 assert.equal(context.news.status, "ready");
 assert.equal(context.news.source, "iROZHLAS");
 assert.equal(context.news.items.length, 3);
-assert.match(context.introAnnouncement, /Mirku/);
-assert.match(context.introAnnouncement, /posádku|posádko|všechny na palubě/);
-assert.match(context.introAnnouncement, /Dnešní trasu mám načtenou a potvrzenou\./);
-assert.match(context.introAnnouncement, /TEST trasa\. Čeká nás 2 stanoviště\./);
-assert.match(context.introAnnouncement, /Vozidlo Míra · 1BP 8373 sedí s denní trasou/);
-assert.match(context.introAnnouncement, /Brno: 24 °C, jasno/);
-assert.match(context.introAnnouncement, /můžeme vyrazit|Můžeme vyrazit/);
-assert.match(context.introAnnouncement, /Budu hlídat trasu, zastávky i všechno důležité po cestě\./);
-assert.doesNotMatch(context.introAnnouncement, /Potvrdíš|potvrdit trasu/);
+assert.equal(context.introAnnouncement, COLLECTION_ROUTES_INTRO_GENERATION_MARKER);
+assert.doesNotMatch(context.introAnnouncement, /Mirku|posádko|Dnešní trasu|Míra|Brno|vyrazit/);
 assert.equal(JSON.stringify(context).includes("Tomáš Gaží"), false, "Fyzický TESTER nesmí vstoupit do hlasového kontextu řidiče.");
 assert.deepEqual(context.safety, {
   readOnlyContext: true,
@@ -300,10 +294,7 @@ assert.equal(unconfirmedCrew.route.vehicleLabel, "");
 assert.equal(unconfirmedCrew.route.vehicleRegistration, "");
 assert.ok(unconfirmedCrew.readiness.warnings.some((item) => item.code === "crew_unconfirmed"));
 assert.ok(unconfirmedCrew.readiness.warnings.some((item) => item.code === "weather_unavailable"));
-assert.doesNotMatch(unconfirmedCrew.introAnnouncement, /kluci|posádko/);
-assert.doesNotMatch(unconfirmedCrew.introAnnouncement, /Míra|1BP 8373/);
-assert.match(unconfirmedCrew.introAnnouncement, /Dnešní trasu mám načtenou/);
-assert.match(unconfirmedCrew.introAnnouncement, /Aktuální počasí se mi teď nepodařilo ověřit/);
+assert.equal(unconfirmedCrew.introAnnouncement, COLLECTION_ROUTES_INTRO_GENERATION_MARKER);
 assert.equal(JSON.stringify(unconfirmedCrew).includes("Míra · 1BP 8373"), false);
 
 const vehicleMismatch = await buildCollectionRoutesSarlotaContext({}, miroslav, {
@@ -328,7 +319,7 @@ const vehicleMismatch = await buildCollectionRoutesSarlotaContext({}, miroslav, 
 });
 assert.equal(vehicleMismatch.readiness.canStart, false);
 assert.ok(vehicleMismatch.readiness.blockers.some((item) => item.code === "vehicle_mismatch"));
-assert.match(vehicleMismatch.introAnnouncement, /trasu teď nemůžeme bezpečně zahájit/);
+assert.equal(vehicleMismatch.introAnnouncement, COLLECTION_ROUTES_INTRO_GENERATION_MARKER);
 
 await assert.rejects(
   () => buildCollectionRoutesSarlotaContext({}, { ...miroslav, id: "cizi", role: "readonly" }, {
@@ -348,6 +339,7 @@ assert.equal(variables.collection_route_news_status, "test_override");
 assert.equal(variables.collection_route_total_count, "2");
 assert.equal(variables.collection_route_vehicle, "");
 assert.equal(variables.collection_route_vehicle_status, "route_assigned");
+assert.equal(variables.intro_announcement, COLLECTION_ROUTES_INTRO_GENERATION_MARKER);
 assert.doesNotMatch(variables.intro_announcement, /Míra|1BP 8373/);
 assert.equal(variables.collection_route_crew_status, "incomplete");
 assert.match(variables.current_module_context, /HERE truck navigation/);

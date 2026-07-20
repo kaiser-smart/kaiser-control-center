@@ -5,6 +5,8 @@ const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8"
 const styleSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const mantraSource = readFileSync(new URL("../src/data/collectionRoutesMantra.js", import.meta.url), "utf8");
 const systemPromptSource = readFileSync(new URL("../src/sarlota/sarlotaSystemPrompt.js", import.meta.url), "utf8");
+const voiceClientSource = readFileSync(new URL("../src/useElevenLabsAssistant.js", import.meta.url), "utf8");
+const contextSource = readFileSync(new URL("../functions/_lib/collection-routes-sarlota-context.js", import.meta.url), "utf8");
 const sourcePrompt = readFileSync(new URL("../docs/SARLOTA_COLLECTION_CREW_TABLET_SOURCE_PROMPT.md", import.meta.url), "utf8");
 
 const transitionStart = appSource.indexOf("async function transitionMyCollectionDailyRoute(action)");
@@ -87,12 +89,19 @@ assert.match(mantraSource, /paměť výslovně nezaškrtne, nezapne se ani se ni
 assert.match(mantraSource, /mikrofonový panel se ukáže jen při ručním ZAPNOUT ŠARLOTU/);
 assert.match(mantraSource, /Mluvím, Poslouchám a Přemýšlím/);
 assert.match(mantraSource, /signed URL, WebSocket nebo audio selže/);
-assert.match(mantraSource, /přečte přesně jednou kompletní backendové intro_announcement/);
-assert.match(mantraSource, /Na potvrzení trasy se znovu neptá/);
+assert.match(mantraSource, /nesmí přečíst pevnou backendovou šablonu/);
+assert.match(mantraSource, /skutečně aktivního Promptu, připojené Knowledge Base, Tools a dynamic variables/);
+assert.match(mantraSource, /na potvrzení trasy se znovu neptá/);
 assert.match(systemPromptSource, /SVOZOVÉ TRASY \/ TABLET OSÁDKY A ÚVODNÍ HLÁŠENÍ/);
-assert.match(systemPromptSource, /Přečti ji jednou beze změny/);
-assert.match(systemPromptSource, /neptej se znovu na potvrzení trasy/);
+assert.match(systemPromptSource, /přesnou technickou hodnotu KSO_INTRO_GENERATION_PENDING/);
+assert.match(systemPromptSource, /aktivního Promptu, připojené Knowledge Base a ověřených dynamic variables/);
+assert.match(systemPromptSource, /Na potvrzení se znovu neptej|na potvrzení trasy se znovu neptej/);
 assert.match(systemPromptSource, /Hlas HERE navigace je samostatný systém/);
+assert.match(contextSource, /COLLECTION_ROUTES_INTRO_GENERATION_MARKER = "KSO_INTRO_GENERATION_PENDING"/);
+assert.doesNotMatch(contextSource, /Jestli máš kafe po ruce|Budu hlídat trasu, zastávky i všechno důležité/);
+assert.match(voiceClientSource, /suppressing-technical-first-message/);
+assert.match(voiceClientSource, /waiting-for-generated-intro/);
+assert.match(voiceClientSource, /sendJson\(\{ type: "user_message", text: introGenerationRequest \}\)/);
 assert.match(sourcePrompt, /BEZPEČNÝ PROVOZNÍ VÝTAH JE AKTIVNÍ/);
 
 console.log("Šarlota route confirmation intro tests passed.");

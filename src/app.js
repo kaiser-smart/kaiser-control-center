@@ -83,6 +83,7 @@ import {
   summarizeCollectionRouteGpsSamples
 } from "./data/collectionRouteGps.js";
 import {
+  COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST,
   COLLECTION_ROUTES_SARLOTA_VOICE_ASSISTANT_ID,
   COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER,
   collectionRoutesSarlotaAudioWasPlayed,
@@ -3423,6 +3424,7 @@ async function startElevenLabsVoiceRecognition(options = {}) {
 
   try {
     const result = await elevenLabsAssistant.startVoiceConversation(assistant.id, {
+      introGenerationRequest: String(options.introGenerationRequest || "").trim(),
       onAudioWarning: (message) => {
         if (requestId !== aiTextRequestId) {
           return;
@@ -24242,7 +24244,7 @@ function collectionRoutesAdminTabletTestDiagnostics(detail, currentStop) {
     ["Trasa načtena", Boolean(detail?.run && Array.isArray(detail?.stops)), "Chyba"],
     ["Počasí načteno", context.weather?.verified === true, "Chybí"],
     ["Prompt Šarloty načten", voiceRuntime.promptVerified === true, voiceError ? "Chyba" : "Chybí"],
-    ["První zpráva nastavena", voiceRuntime.firstMessageVerified === true, voiceError ? "Chyba" : "Chybí"],
+    ["Úvod přes Prompt + KB", voiceRuntime.firstMessageVerified === true && voiceRuntime.introSource === "elevenlabs_agent_prompt_kb", voiceError ? "Chyba" : "Chybí"],
     ["Znalosti Šarloty načteny", voiceRuntime.knowledgeBaseVerified === true, voiceError ? "Chyba" : "Chybí"],
     ["Tools Šarloty načteny", voiceRuntime.toolsVerified === true, voiceError ? "Chyba" : "Chybí"],
     ["Šarlota připojena", collectionRoutesPilotState.myDailyRouteSarlotaEnabled === true, voiceError ? "Chyba" : "Chybí"],
@@ -41806,6 +41808,7 @@ async function startCollectionDailyDriverSarlota(options = {}) {
   }
   render();
   void startElevenLabsVoiceRecognition({
+    introGenerationRequest: COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST,
     onConnected: (session) => {
       collectionRoutesPilotState.myDailyRouteSarlotaEnabled = true;
       collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;

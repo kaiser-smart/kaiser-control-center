@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import {
+  COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST,
   COLLECTION_ROUTES_SARLOTA_VOICE_ASSISTANT_ID,
   COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER,
   collectionRoutesSarlotaAudioWasPlayed,
@@ -10,6 +11,10 @@ import {
 
 assert.equal(COLLECTION_ROUTES_SARLOTA_VOICE_ASSISTANT_ID, "sarlota");
 assert.equal(COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER, "elevenlabs");
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /aktivního system Promptu/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /připojené Knowledge Base/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Neopakuj stejný údaj/);
+assert.doesNotMatch(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Ahoj Mirku|Můžeme vyrazit/);
 
 const exactInstruction = "Tomáši, až zastavíš přímo u nádob, klepni na Potvrdit GPS stanoviště.";
 const voiceRequest = collectionRoutesSarlotaVoiceRequest(exactInstruction);
@@ -60,6 +65,10 @@ assert.match(closeFunctionSource, /elevenLabsAssistant\.stopVoiceAudio/);
 assert.doesNotMatch(closeFunctionSource, /speechSynthesis/);
 
 const elevenLabsSource = readFileSync(new URL("../src/useElevenLabsAssistant.js", import.meta.url), "utf8");
+assert.match(elevenLabsSource, /introGenerationRequest/);
+assert.match(elevenLabsSource, /suppressing-technical-first-message/);
+assert.match(elevenLabsSource, /waiting-for-generated-intro/);
+assert.match(elevenLabsSource, /requestGeneratedIntro/);
 const sendVoiceStart = elevenLabsSource.indexOf("async function sendVoiceMessage");
 const sendVoiceEnd = elevenLabsSource.indexOf("\n  return {\n    clientTools", sendVoiceStart);
 assert.ok(sendVoiceStart >= 0 && sendVoiceEnd > sendVoiceStart);

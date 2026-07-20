@@ -18,6 +18,7 @@ assert.equal(__test.validateManagedContent("knowledge_base", incompleteKb).valid
 
 const liveLanguageKbWording = `
 Tento dokument není zdrojem provozních faktů, identity ani oprávnění.
+Slyšitelné úvodní hlášení vytváří aktivní agent. Technický marker KSO_INTRO_GENERATION_PENDING se nevyslovuje.
 Hlasové ano není fyzické potvrzení v KSO.
 Neověřený údaj se nesmí doplnit bez ověření; test je neověřený údaj bez domýšlení.
 Soukromý kontakt nesděluj, pokud jej hlavní prompt nebo oprávnění nepovolují.
