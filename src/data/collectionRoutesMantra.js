@@ -2,7 +2,7 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
   version: "1.37",
   updatedAt: "20. 7. 2026 04:05",
   updatedAtIso: "2026-07-20T04:05:00+02:00",
-  lastChange: "Živý Prompt, KB a provozní kontrakt TEST tabletu",
+  lastChange: "Živý Prompt a KB tabletu",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
