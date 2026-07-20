@@ -15,10 +15,10 @@ assert.ok(transitionStart >= 0 && transitionEnd > transitionStart);
 const transitionSource = appSource.slice(transitionStart, transitionEnd);
 
 assert.match(transitionSource, /if \(action === "start"\) \{[\s\S]*unlockVoiceAudio/);
-assert.match(
+assert.doesNotMatch(
   transitionSource.slice(0, transitionSource.indexOf("let startSarlotaAfterTransition")),
   /prepareVoiceInput/,
-  "Automatický úvod musí v potvrzovacím gestu připravit mikrofon pro pětisekundovou odpověď."
+  "Automatický úvod nesmí připravit ani otevřít mikrofon."
 );
 assert.match(transitionSource, /startSarlotaAfterTransition = action === "start";/);
 assert.match(transitionSource, /await enableCollectionDailyDriverSarlota\(\{ promptForMemory: false, invocation: "automatic" \}\);/);
@@ -39,7 +39,7 @@ assert.match(appSource, /myDailyRouteSarlotaAutoAttemptedRunId === run\.id/);
 assert.match(loadRouteSource, /const sarlotaAutoStartRunId = collectionDailyDriverSarlotaAutoStartRunId\(\);/);
 assert.match(loadRouteSource, /myDailyRouteSarlotaAutoAttemptedRunId = sarlotaAutoStartRunId;/);
 assert.match(loadRouteSource, /await enableCollectionDailyDriverSarlota\(\{ promptForMemory: false, invocation: "automatic" \}\);/);
-assert.match(appSource, /Automatický start čeká na mikrofon\. Povol mikrofon pro tento web/);
+assert.match(appSource, /Automatický úvod chybně požadoval mikrofon a byl zastaven/);
 
 const enableStart = appSource.indexOf("async function enableCollectionDailyDriverSarlota(options = {})");
 const enableEnd = appSource.indexOf("async function grantCollectionRoutesSarlotaMemoryAndStart", enableStart);
@@ -55,11 +55,11 @@ assert.match(appSource, /const automaticSession = options\.invocation === "autom
 assert.match(appSource, /const automaticRetryCount = Math\.max\(0, Number\(options\.automaticRetryCount \|\| 0\)\);/);
 assert.match(appSource, /myDailyRouteSarlotaAutoSession = automaticSession;/);
 assert.match(appSource, /myDailyRouteSarlotaIntroCompleted = false;/);
-assert.match(appSource, /continueAfterGeneratedIntro: automaticSession/);
-assert.match(appSource, /introSilenceTimeoutMs: COLLECTION_ROUTES_SARLOTA_INTRO_SILENCE_TIMEOUT_MS/);
+assert.match(appSource, /endAfterGeneratedIntro: automaticSession/);
+assert.match(appSource, /continueAfterGeneratedIntro: false/);
 assert.match(appSource, /options\.validateGeneratedIntro[\s\S]*Ověřuji úvod[\s\S]*Zvuk zatím neběží/);
 assert.match(appSource, /COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST/);
-assert.match(appSource, /Řidič 5 sekund neodpověděl\. Zazněl outro gong/);
+assert.match(appSource, /Úvodní hlášení skončilo\. Šarlota je vypnutá a mikrofon nebyl zapnutý/);
 assert.match(appSource, /ŠARLOTA PŘIPRAVUJE OVĚŘENÝ ÚVOD/);
 assert.match(appSource, /SPUSTIT ZVUK A PŘEHRÁT ÚVOD/);
 assert.match(appSource, /ZAPNOUT ŠARLOTU MIKROFONEM/);
@@ -101,8 +101,8 @@ assert.match(styleSource, /\.collection-daily-driver-modal > section \{\s*max-he
 assert.match(mantraSource, /v jednom okně a jedním finálním klepnutím/);
 assert.match(mantraSource, /paměť výslovně nezaškrtne, nezapne se ani se nic neuloží/);
 assert.match(mantraSource, /ZAPNOUT ŠARLOTU MIKROFONEM/);
-assert.match(mantraSource, /mikrofon pět sekund poslouchá/);
-assert.match(mantraSource, /outro gong/);
+assert.match(mantraSource, /Automatický úvod nikdy nezapíná mikrofon/);
+assert.match(mantraSource, /Mikrofon smí spustit až samostatné fyzické tlačítko/);
 assert.match(mantraSource, /Mirku, s čím mohu pomoct/);
 assert.match(mantraSource, /signed URL, WebSocket, validace nebo audio selže/);
 assert.match(mantraSource, /nesmí přečíst pevnou backendovou šablonu/);

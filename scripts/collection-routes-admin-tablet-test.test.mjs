@@ -262,7 +262,15 @@ assert.match(appSource, /TEST REŽIM · ŘIDIČ: VAŠEK MIROSLAV/);
 assert.match(appSource, /UKONČIT A RESETOVAT TEST/);
 assert.match(appSource, /Tato funkce zatím není v testovacím režimu dostupná/);
 assert.match(appSource, /Stav testu/);
-assert.match(appSource, /prepareVoiceInput/);
+const tabletTestStart = appSource.indexOf("async function startCollectionRoutesAdminTabletTest()");
+const tabletTestStartEnd = appSource.indexOf("async function resetCollectionRoutesAdminTabletTest", tabletTestStart);
+assert.ok(tabletTestStart >= 0 && tabletTestStartEnd > tabletTestStart);
+assert.doesNotMatch(
+  appSource.slice(tabletTestStart, tabletTestStartEnd),
+  /prepareVoiceInput/,
+  "Spuštění TEST tabletu nesmí připravit ani otevřít mikrofon."
+);
+assert.match(appSource, /if \(!automaticSession\) void elevenLabsAssistant\.prepareVoiceInput/);
 assert.match(appSource, /Prompt Šarloty načten/);
 assert.match(appSource, /Úvod přes Prompt \+ KB/);
 assert.match(appSource, /Znalosti Šarloty načteny/);

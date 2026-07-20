@@ -72,7 +72,7 @@ import {
   collectionRoutesDriverTabletCssSizeLabel,
   collectionRoutesDriverTabletLabel
 } from "./data/collectionRoutesOperationalContract.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.40";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.41";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -85,8 +85,6 @@ import {
 import {
   COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST,
   COLLECTION_ROUTES_SARLOTA_INTRO_GONG_URL,
-  COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL,
-  COLLECTION_ROUTES_SARLOTA_INTRO_SILENCE_TIMEOUT_MS,
   COLLECTION_ROUTES_SARLOTA_VOICE_ASSISTANT_ID,
   COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER,
   collectionRoutesSarlotaAudioWasPlayed,
@@ -3421,12 +3419,15 @@ async function startElevenLabsVoiceRecognition(options = {}) {
   resetAiVoiceHapticSession();
   clearAiVoiceWeakInputNotice();
   const assistant = selectedAiAssistant();
+  const microphoneFreeIntro = options.endAfterGeneratedIntro === true;
   aiAssistantState.demoStatus = "";
   aiAssistantState.voiceNotice = "";
   aiAssistantState.voiceTranscript = "";
   aiAssistantState.voiceAnswer = "";
   aiAssistantState.isListening = false;
-  setAiVoiceUiState("connecting", AI_VOICE_CONNECTING_LABEL, ["Připojuji", "Mikrofon", "ElevenLabs"]);
+  setAiVoiceUiState("connecting", AI_VOICE_CONNECTING_LABEL, microphoneFreeIntro
+    ? ["Připojuji", "Bez mikrofonu", "ElevenLabs"]
+    : ["Připojuji", "Mikrofon", "ElevenLabs"]);
   renderAiAssistantLayerOnly();
 
   try {
@@ -3443,7 +3444,7 @@ async function startElevenLabsVoiceRecognition(options = {}) {
       onIntroListening: (event) => {
         if (requestId !== aiTextRequestId) return;
         aiAssistantState.isListening = true;
-        setAiVoiceUiState("listening", AI_VOICE_LISTENING_LABEL, ["Čekám 5 sekund", "Mikrofon aktivní", "ElevenLabs"]);
+        setAiVoiceUiState("listening", AI_VOICE_LISTENING_LABEL, ["Poslouchám", "Mikrofon aktivní", "ElevenLabs"]);
         options.onIntroListening?.(event);
         renderAiAssistantLayerOnly();
       },
@@ -3461,7 +3462,9 @@ async function startElevenLabsVoiceRecognition(options = {}) {
         aiAssistantState.elevenLabsConfigured = true;
         aiAssistantState.elevenLabsConfiguredByAssistant[assistant.id] = true;
         aiAssistantState.elevenLabsStatus = `ElevenLabs agent ${session.assistantName || assistant.name} je připojený.`;
-        setAiVoiceUiState("ready", AI_VOICE_READY_LABEL, ["Připojeno", "Mikrofon", "ElevenLabs"]);
+        setAiVoiceUiState("ready", AI_VOICE_READY_LABEL, microphoneFreeIntro
+          ? ["Připojeno", "Bez mikrofonu", "ElevenLabs"]
+          : ["Připojeno", "Mikrofon", "ElevenLabs"]);
         options.onConnected?.(session);
         triggerAiVoiceSessionHaptic("connected");
         renderAiAssistantLayerOnly();
@@ -40504,7 +40507,6 @@ async function startCollectionRoutesAdminTabletTest() {
   const runId = String(collectionRoutesPilotState.adminTabletTestSelectedRunId || "").trim();
   if (!runId || collectionRoutesPilotState.adminTabletTestLoading) return;
   const audioReady = await elevenLabsAssistant.unlockVoiceAudio?.();
-  void elevenLabsAssistant.prepareVoiceInput?.();
   collectionRoutesPilotState.adminTabletTestLoading = true;
   collectionRoutesPilotState.adminTabletTestError = "";
   render();
@@ -41832,7 +41834,6 @@ async function confirmAndStartMyCollectionDailyRoute(form) {
   const run = collectionRoutesPilotState.myDailyRoute?.run;
   if (!run?.id || run.status !== "confirmed" || collectionRoutesPilotState.myDailyRoutePending) return;
   void elevenLabsAssistant.unlockVoiceAudio?.();
-  void elevenLabsAssistant.prepareVoiceInput?.();
   const requestedMemory = Boolean(form?.elements?.useMemory?.checked);
   const context = await loadCollectionRoutesSarlotaContext();
   if (!context) return;
@@ -41874,7 +41875,6 @@ async function startCollectionDailyDriverSarlota(options = {}) {
   const automaticRetryCount = Math.max(0, Number(options.automaticRetryCount || 0));
   if (!automaticSession) void elevenLabsAssistant.prepareVoiceInput?.();
   let introPlaybackToken = "";
-  let outroGongPlayed = false;
   collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
   collectionRoutesPilotState.myDailyRouteSarlotaConnecting = true;
   collectionRoutesPilotState.myDailyRouteSarlotaRuntime = null;
@@ -41883,7 +41883,7 @@ async function startCollectionDailyDriverSarlota(options = {}) {
   collectionRoutesPilotState.myDailyRouteSarlotaIntroCompleted = false;
   const memory = collectionRoutesPilotState.myDailyRouteSarlotaMemory;
   collectionRoutesPilotState.myDailyRouteSarlotaMessage = automaticSession
-    ? "Připravuji jednorázový ověřený úvod Šarloty. Po otázce bude 5 sekund čekat na odpověď."
+    ? "Připravuji jednorázový ověřený úvod Šarloty bez zapnutí mikrofonu. Po přehrání se Šarlota sama vypne."
     : "Připojuji Šarlotu přes ElevenLabs…";
   openAiAssistant("voice", { assistantId: "sarlota", renderAfter: false });
   if (automaticSession) setAiVoiceUiState("processing", AI_VOICE_PROCESSING_LABEL, ["Připravuji úvod", "Ověřuji KSO fakta", "Zvuk zatím neběží"]);
@@ -41893,9 +41893,8 @@ async function startCollectionDailyDriverSarlota(options = {}) {
     introGenerationRequest: automaticSession
       ? collectionRoutesSarlotaIntroGenerationRequest(collectionRoutesPilotState.myDailyRouteSarlotaContext || {})
       : COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST,
-    endAfterGeneratedIntro: false,
-    continueAfterGeneratedIntro: automaticSession,
-    introSilenceTimeoutMs: COLLECTION_ROUTES_SARLOTA_INTRO_SILENCE_TIMEOUT_MS,
+    endAfterGeneratedIntro: automaticSession,
+    continueAfterGeneratedIntro: false,
     validateGeneratedIntro: automaticSession
       ? (text) => validateCollectionRoutesSarlotaIntro(text, introFacts)
       : null,
@@ -41913,45 +41912,28 @@ async function startCollectionDailyDriverSarlota(options = {}) {
       }
       return true;
     } : null,
-    onIntroListening: automaticSession ? () => {
-      collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Šarlota čeká 5 sekund na tvoji odpověď. Když promluvíš, běžný rozhovor pokračuje.";
-      render();
-    } : null,
-    onIntroEngaged: automaticSession ? () => {
-      void updateCollectionRoutesVoiceIntro("engaged", introPlaybackToken).catch((error) => {
-        console.error("collection_routes.sarlota_voice_intro_engaged_failed", { message: error.message });
-      });
-      collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = false;
-      collectionRoutesPilotState.myDailyRouteSarlotaIntroCompleted = true;
-      collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Řidič odpověděl. Šarlota pokračuje v běžném hlasovém rozhovoru.";
-      render();
-    } : null,
-    onIntroSilenceTimeout: automaticSession ? async () => {
-      setAiVoiceUiState("assistantSpeaking", "Outro gong", ["Bez odpovědi", "Ukončuji úvod", "Mikrofon se vypne"]);
-      renderAiAssistantLayerOnly();
-      outroGongPlayed = await elevenLabsAssistant.playVoiceCue?.(COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL) === true;
-      await updateCollectionRoutesVoiceIntro("complete", introPlaybackToken);
-    } : null,
     onConnected: (session) => {
       collectionRoutesPilotState.myDailyRouteSarlotaEnabled = true;
       collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
       collectionRoutesPilotState.myDailyRouteSarlotaRuntime = session?.voiceRuntime || null;
       collectionRoutesPilotState.myDailyRouteSarlotaMessage = automaticSession
-        ? "Šarlota připravuje úvod přes aktivní Prompt a KB. KSO kontroluje oslovení, počet a první stanoviště, počasí, T-Cars a dostupnost dispečerů."
+        ? "Šarlota připravuje úvod bez mikrofonu přes aktivní Prompt a KB. KSO kontroluje oslovení, počet a první stanoviště, počasí, T-Cars a dostupnost dispečerů."
         : memory?.consent
           ? "Šarlota zná aktuální trasu a tvoje pracovní témata. Můžeš s ní rovnou mluvit; zápis vždy čeká na klepnutí."
           : "Šarlota zná aktuální trasu. Můžeš s ní rovnou mluvit; paměť je vypnutá a zápis vždy čeká na klepnutí.";
       render();
     },
-    onIntroComplete: () => {
+    onIntroComplete: async () => {
+      if (automaticSession && introPlaybackToken) {
+        await updateCollectionRoutesVoiceIntro("complete", introPlaybackToken);
+        introPlaybackToken = "";
+      }
       collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
       collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
       collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = false;
       collectionRoutesPilotState.myDailyRouteSarlotaIntroCompleted = true;
       closeAiAssistant({ launcherVisible: false, renderAfter: false });
-      collectionRoutesPilotState.myDailyRouteSarlotaMessage = outroGongPlayed
-        ? "Řidič 5 sekund neodpověděl. Zazněl outro gong a Šarlota je vypnutá; ručně ji zapneš mikrofonem."
-        : "Řidič 5 sekund neodpověděl. Šarlota je vypnutá; outro gong se nepodařilo přehrát. Ručně ji zapneš mikrofonem.";
+      collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Úvodní hlášení skončilo. Šarlota je vypnutá a mikrofon nebyl zapnutý; ručně ji zapneš tlačítkem mikrofonu.";
       render();
     },
     onFailed: (error) => {
@@ -41993,7 +41975,7 @@ async function startCollectionDailyDriverSarlota(options = {}) {
       collectionRoutesPilotState.myDailyRouteSarlotaMessage = error?.code === "voice_stopped"
         ? "Šarlota je vypnutá. Klepnutím ji můžeš znovu připojit."
         : automaticSession && microphonePermissionFailure
-          ? "Automatický start čeká na mikrofon. Povol mikrofon pro tento web a potom klepni na ZAPNOUT ŠARLOTU."
+          ? "Automatický úvod chybně požadoval mikrofon a byl zastaven. Mikrofon pro automatický úvod nepovoluj."
         : automaticSession && error?.code === "voice_intro_already_played"
           ? "Automatický úvod už v této relaci proběhl. Šarlotu můžeš zapnout ručně mikrofonem."
         : automaticSession && error?.code === "voice_intro_validation_failed"
@@ -42480,7 +42462,6 @@ async function transitionMyCollectionDailyRoute(action) {
   if (!runId || !action) return;
   if (action === "start") {
     void elevenLabsAssistant.unlockVoiceAudio?.();
-    void elevenLabsAssistant.prepareVoiceInput?.();
   }
   let startSarlotaAfterTransition = false;
   collectionRoutesPilotState.myDailyRoutePending = action;

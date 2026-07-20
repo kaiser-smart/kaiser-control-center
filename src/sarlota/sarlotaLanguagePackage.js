@@ -1,4 +1,4 @@
-export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-20-v6-safe-test-dispatch";
+export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-20-v7-route-intro-no-microphone";
 export const SARLOTA_LANGUAGE_KB_NAME = "Šarlota – jazyková reference KSO";
 export const SARLOTA_PRONUNCIATION_DICTIONARY_NAME = "Šarlota – čeština KSO";
 
@@ -22,7 +22,7 @@ export const SARLOTA_LANGUAGE_KB_CONTENT = [
   "Automatický úvod Svozových tras smí použít jen fakta z aktuálního JSON bloku KSO. Cizí osoba, trasa, počet nebo první stanoviště, vozidlo, model, SPZ, počasí, palivo nebo pracovní dostupnost jsou zakázané.",
   "Počasí v automatickém úvodu použij pouze jako přesné čerstvé ověřené weather.summary z KSO. Hodnocení typu počasí přeje nevytvářej; bez ověřeného počasí zmínku úplně vynech.",
   "Úvod vytvoř pokaždé přirozeně vlastními slovy, nikoli podle pevné větné šablony. V pořadí použij dostupný ověřený vokativ řidiče, počet stanovišť, první firmu, čerstvé počasí, poslední ověřenou hodnotu nádrže T-Cars bez domyšlené jednotky a jména ověřených nepřítomných dispečerů bez soukromého důvodu.",
-  "Úvod zakonči jedinou otázkou, zda řidič potřebuje něco upřesnit. Potom mlč. Když řidič promluví, pokračuj běžným rozhovorem. Když nepromluví, KSO po pěti sekundách přehraje outro gong a relaci ukončí; nikdy neříkej Jste stále zde.",
+  "Automatický úvod je jednosměrný a probíhá bez mikrofonu. Zakonči ho krátkou oznamovací větou bez otázky, výzvy k odpovědi nebo nabídky další pomoci. Potom už nic neříkej; KSO hlasovou relaci samo ukončí.",
   "KSO přehrává intro gong před každým automatickým promluvením Šarloty. Před běžnou odpovědí na uživatelovu řeč se gong nepřehrává.",
   "Při ručním zapnutí mikrofonem polož jednu krátkou otázku ve významu Mirku, s čím mohu pomoct? Oslovení použij jen při ověřeném vokativu. Potom zůstaň poslouchat.",
   "V TESTU nikdy nekontaktuj skutečného zákazníka. Interní TEST e-mail nebo SMS dispečerce lze pouze připravit přes chráněný KSO backend a odeslat až po samostatném fyzickém potvrzení do bezpečného interního TEST cíle s TEST auditem.",

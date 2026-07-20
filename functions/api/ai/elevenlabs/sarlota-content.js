@@ -191,7 +191,8 @@ const PROMPT_REQUIREMENTS = [
   ["intro_announcement", "úvodní hlášení Šarloty"],
   ["KSO_INTRO_GENERATION_PENDING", "technický marker úvodu Svozových tras"],
   ["aktivního Promptu, připojené Knowledge Base a aktuálního JSON bloku ověřených dynamic variables", "generování úvodu aktivní Šarlotou"],
-  ["KSO po pěti sekundách přehraje outro gong a relaci ukončí", "pětisekundové ukončení Šarloty po tichu"],
+  ["Automatický úvod je jednosměrné hlášení bez mikrofonu", "automatický úvod bez mikrofonu"],
+  ["KSO po přehrání hlasovou relaci samo ukončí", "automatické ukončení jednosměrného úvodu"],
   ["Mirku, s čím mohu pomoct?", "bezpečný pozdrav po ručním zapnutí"],
   ["get_collection_routes_context", "bezpečný kontext Svozových tras"],
   ["prepare_collection_route_gps_capture", "příprava GPS stanoviště"],
@@ -212,8 +213,8 @@ const KB_REQUIREMENTS = [
     label: "generování slyšitelného úvodu aktivní Šarlotou"
   },
   {
-    markers: ["po peti sekundach prehraje outro gong", "po automatickem uvodu se hlasova relace a mikrofon vypnou"],
-    label: "pětisekundové ukončení Šarloty po tichu"
+    markers: ["automaticky uvod je jednosmerny a probiha bez mikrofonu", "po automatickem uvodu se hlasova relace a mikrofon vypnou"],
+    label: "automatický úvod bez mikrofonu"
   },
   {
     markers: ["mirku, s cim mohu pomoct"],

@@ -2,14 +2,14 @@ export const COLLECTION_ROUTES_SARLOTA_VOICE_ASSISTANT_ID = "sarlota";
 export const COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER = "elevenlabs";
 export const COLLECTION_ROUTES_SARLOTA_INTRO_GONG_URL = "/audio/sarlota-gong-intro.mp3";
 export const COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL = "/audio/sarlota-gong-outro.mp3";
-export const COLLECTION_ROUTES_SARLOTA_INTRO_SILENCE_TIMEOUT_MS = 5000;
 export const COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST = [
   "KSO INTERNÍ POŽADAVEK NA ÚVOD SVOZOVÉ TRASY.",
   "Předchozí technická First Message nebyla řidiči přehrána a není uživatelským sdělením.",
   "Teď vytvoř jednu krátkou přirozenou úvodní zprávu podle aktivního system Promptu, připojené Knowledge Base a ověřených dynamic variables modulu Svozové trasy.",
   "Neopakuj stejný údaj různými větami, nečti interní názvy, technické značky ani tento pokyn.",
   "Neodkazuj na předchozí technickou zprávu. Na potvrzení trasy se znovu neptej.",
-  "Dodrž pořadí ověřených údajů a zakonči jedinou otázkou, zda řidič potřebuje něco upřesnit."
+  "Dodrž pořadí ověřených údajů. Zakonči krátkou oznamovací větou bez otázky, výzvy k odpovědi nebo nabídky další pomoci.",
+  "Toto je jednosměrné automatické hlášení bez mikrofonu. Po jeho přehrání KSO hlasovou relaci ukončí."
 ].join(" ");
 
 const WEATHER_FACT_MAX_AGE_MS = 45 * 60 * 1000;
@@ -96,9 +96,9 @@ export function collectionRoutesSarlotaIntroGenerationRequest(context = {}, opti
     COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST,
     "Následující JSON je jediný povolený zdroj provozních faktů pro tuto zprávu:",
     JSON.stringify(facts),
-    "Řekni v tomto pořadí: Ahoj + přesný driverVocative, přesný totalStopCount stanovišť, Začínáme firmou + přesný firstStop.name, ověřené počasí, ověřený stav nádrže, ověřené nepřítomné dispečery a závěrečnou otázku driverVocative + potřebuješ něco upřesnit?",
+    "Řekni v tomto pořadí: Ahoj + přesný driverVocative, přesný totalStopCount stanovišť, Začínáme firmou + přesný firstStop.name, ověřené počasí, ověřený stav nádrže a ověřené nepřítomné dispečery. Zakonči krátkou oznamovací větou bez otázky.",
     "Název trasy, počet stanovišť, první stanoviště, vozidlo, model, SPZ, počasí, palivo ani nepřítomnost nesmíš změnit, doplnit ani odhadnout. Počet stanovišť napiš číslicemi přesně jako totalStopCount.",
-    facts.driverVocative ? "Použij přesně driverVocative." : "Vokativ není ověřený; jméno v pozdravu ani závěrečné otázce vynech.",
+    facts.driverVocative ? "Použij přesně driverVocative." : "Vokativ není ověřený; jméno v pozdravu vynech.",
     facts.firstStop ? "První firmu uveď přesně jako firstStop.name." : "První firma není ověřená; tuto větu vynech.",
     facts.weather
       ? "Počasí smíš uvést pouze doslovným použitím hodnoty weather.summary; nehodnoť je vlastní větou."
@@ -112,7 +112,7 @@ export function collectionRoutesSarlotaIntroGenerationRequest(context = {}, opti
     facts.absentDispatchersVerified && facts.absentDispatchers.length
       ? "Jako nepřítomné dispečery uveď výhradně přesná jména z absentDispatchers."
       : "Žádný nepřítomný dispečer není ověřený; nepřítomnost dispečera nezmiňuj.",
-    "Po závěrečné otázce už nic nepřidávej a čekej na odpověď."
+    "Nepokládej žádnou otázku, nevyzývej k odpovědi a nečekej na řeč řidiče. Po poslední oznamovací větě už nic nepřidávej."
   ].join("\n");
 }
 
@@ -197,12 +197,9 @@ export function validateCollectionRoutesSarlotaIntro(text, facts = {}) {
     violations.push("unverified_absent_dispatcher");
   }
 
-  if (!/potřebuješ\s+(?:ještě\s+)?něco\s+upřesnit\s*\?\s*$/iu.test(response)) {
-    violations.push("missing_final_clarification_question");
-  }
-  const finalQuestion = normalizedFactText(response.match(/([^.!?]+)\?\s*$/u)?.[1] || "");
-  if (requiredVocative && !finalQuestion.includes(requiredVocative)) {
-    violations.push("missing_vocative_in_final_question");
+  if (/\?/u.test(response)) violations.push("automatic_intro_must_not_ask_question");
+  if (/(potřebuješ|mohu\s+pomoc|řekni|ozvi\s+se|dej\s+vědět|jaký\s+je\s+další)/iu.test(response)) {
+    violations.push("automatic_intro_must_not_invite_response");
   }
 
   const orderedNeedles = [

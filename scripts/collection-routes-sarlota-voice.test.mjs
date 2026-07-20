@@ -5,7 +5,6 @@ import {
   COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST,
   COLLECTION_ROUTES_SARLOTA_INTRO_GONG_URL,
   COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL,
-  COLLECTION_ROUTES_SARLOTA_INTRO_SILENCE_TIMEOUT_MS,
   COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST,
   COLLECTION_ROUTES_SARLOTA_VOICE_ASSISTANT_ID,
   COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER,
@@ -22,10 +21,11 @@ assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /aktivního sys
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /připojené Knowledge Base/);
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Neopakuj stejný údaj/);
 assert.doesNotMatch(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Ahoj Mirku|Můžeme vyrazit/);
-assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /potřebuje něco upřesnit/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /bez mikrofonu/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /bez otázky/);
+assert.doesNotMatch(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /potřebuje něco upřesnit/);
 assert.equal(COLLECTION_ROUTES_SARLOTA_INTRO_GONG_URL, "/audio/sarlota-gong-intro.mp3");
 assert.equal(COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL, "/audio/sarlota-gong-outro.mp3");
-assert.equal(COLLECTION_ROUTES_SARLOTA_INTRO_SILENCE_TIMEOUT_MS, 5000);
 assert.match(COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST, /Mirku, s čím mohu pomoct\?/);
 assert.match(COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST, /Po otázce zůstaň připravená poslouchat/);
 
@@ -58,7 +58,7 @@ assert.match(introRequest, /Během směny hrozí bouřka/);
 assert.match(introRequest, /Test 1 s\.r\.o\./);
 assert.match(introRequest, /63\.5/);
 assert.equal(validateCollectionRoutesSarlotaIntro(
-  "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová. Mirku, potřebuješ něco upřesnit?",
+  "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová. Můžeme vyrazit.",
   introFacts
 ).valid, true);
 
@@ -81,6 +81,14 @@ const inventedWeather = validateCollectionRoutesSarlotaIntro(
 );
 assert.equal(inventedWeather.valid, false);
 assert.ok(inventedWeather.violations.includes("unverified_or_paraphrased_weather"));
+
+const interactiveAutomaticIntro = validateCollectionRoutesSarlotaIntro(
+  "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová. Potřebuješ něco upřesnit?",
+  introFacts
+);
+assert.equal(interactiveAutomaticIntro.valid, false);
+assert.ok(interactiveAutomaticIntro.violations.includes("automatic_intro_must_not_ask_question"));
+assert.ok(interactiveAutomaticIntro.violations.includes("automatic_intro_must_not_invite_response"));
 
 const staleWeatherFacts = collectionRoutesSarlotaIntroFacts(introContext, {
   now: Date.parse("2026-07-20T12:00:00+02:00")
@@ -131,8 +139,10 @@ assert.match(appSource, /data-collection-routes-test-voice-provider/);
 assert.match(appSource, /Hlas: ElevenLabs Šarlota · systémové čtení vypnuto/);
 assert.match(appSource, /Šarlota pokračuje skutečným hlasem ElevenLabs; gong je označený jako chyba/);
 assert.doesNotMatch(appSource, /error\.code = "voice_intro_gong_failed"/);
-assert.match(appSource, /outroGongPlayed = await elevenLabsAssistant\.playVoiceCue/);
-assert.match(appSource, /outro gong se nepodařilo přehrát/);
+assert.match(appSource, /endAfterGeneratedIntro: automaticSession/);
+assert.match(appSource, /continueAfterGeneratedIntro: false/);
+assert.match(appSource, /mikrofon nebyl zapnutý/);
+assert.doesNotMatch(appSource, /outroGongPlayed = await elevenLabsAssistant\.playVoiceCue/);
 
 const closeFunctionStart = appSource.indexOf("function closeCollectionRoutesTestTablet");
 const closeFunctionEnd = appSource.indexOf("async function loadLatestCollectionRoutesTestNotificationJob", closeFunctionStart);
@@ -160,6 +170,8 @@ assert.match(elevenLabsSource, /continueAfterGeneratedIntro/);
 assert.match(elevenLabsSource, /introSilenceTimeoutMs/);
 assert.match(elevenLabsSource, /introAwaitingUser/);
 assert.match(elevenLabsSource, /state: "intro-silence-complete"/);
+assert.match(elevenLabsSource, /if \(!endAfterGeneratedIntro\) \{[\s\S]*takePreparedVoiceInput/);
+assert.match(elevenLabsSource, /if \(!endAfterGeneratedIntro && \(typeof navigator/);
 assert.match(elevenLabsSource, /playCue/);
 assert.match(elevenLabsSource, /playCueWithMediaElement/);
 assert.match(elevenLabsSource, /window\.Audio/);

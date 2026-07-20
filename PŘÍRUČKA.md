@@ -1455,7 +1455,8 @@ Nesmí se z nich odvozovat role, oprávnění ani právo provést citlivou akci.
 - Automaticky spuštěná Šarlota smí po potvrzení trasy říct právě jeden úvod za ID produkční jízdy nebo aktivní TEST relace. Jednorázovost je serverový auditovaný stav, nikoli jen proměnná frontendu; návrat na obrazovku, remount, refresh, reconnect ani souběžná karta nesmějí úvod spustit znovu.
 - Každé automatické promluvení Holografické Šarloty začíná schváleným intro gongem. Běžná odpověď na uživatelovu řeč gong nemá. Gong se přehrává ve stejném odemčeném `AudioContextu` jako ElevenLabs audio, aby fungoval v Safari, Chrome i na Blackview.
 - Úvod musí v pořadí použít dostupné ověřené údaje: vokativ řidiče, počet stanovišť, první firmu, čerstvé počasí, stav nádrže T-Cars a nepřítomné dispečery jen jménem a bezpečným pracovním stavem. Chybějící údaj se přirozeně vynechá; soukromý nebo zdravotní důvod se nikdy nevysloví.
-- Úvod končí právě jednou otázkou, zda řidič potřebuje něco upřesnit. Potom mikrofon poslouchá přesně pět sekund. Jakmile řidič promluví, timeout se zruší a pokračuje běžná hlasová komunikace bez gongu před odpovědí. Když nepromluví, KSO potlačí samovolné audio i text agenta, přehraje outro gong, auditovaně označí úvod za ukončený a zavře hlasovou relaci i mikrofon.
+- Automatický úvod je jednosměrný: nesmí skončit otázkou, vyzvat řidiče k odpovědi ani nabídnout další pomoc. KSO při něm vůbec nesmí požádat o mikrofon, volat `getUserMedia`, připravovat hlasový vstup ani zobrazit stav poslouchání. Po přehrání ověřeného úvodu se hlasová relace sama ukončí.
+- Mikrofon se smí otevřít pouze po samostatném fyzickém klepnutí na tlačítko `ZAPNOUT ŠARLOTU MIKROFONEM`. Teprve tato ruční relace může začít krátkou otázkou s ověřeným oslovením a čekat na odpověď.
 - Během pětisekundového čekání Šarlota nesmí sama říct `Jste stále zde`, nabízet další krok ani jinak prodlužovat relaci.
 - Ruční `ZAPNOUT ŠARLOTU MIKROFONEM` je nová samostatná hlasová relace. Šarlota ji zahájí jednou krátkou otázkou ve významu `Mirku, s čím mohu pomoct?`, přičemž oslovení smí použít jen z ověřeného vokativu. Po této otázce zůstane poslouchat až do ručního ukončení nebo bezpečného timeoutu.
 - `current_module`, `current_module_route`, `current_module_context` a `intro_announcement` musí patřit ke stejné trase a stejnému modulovému kontraktu; rozpor hlasovou relaci zablokuje.
@@ -1573,16 +1574,17 @@ Marker se nepřehraje. KSO po jeho dokončení pošle interní požadavek aktivn
 
 Při každé změně Šarloty ověřit:
 
-- mikrofon zakázán -> UI ukáže `Mikrofon není povolený`,
-- mikrofon povolen -> pokračuje signed URL / WebSocket,
+- automatický úvod nevyžádá oprávnění mikrofonu, neotevře mikrofon a nezobrazí stav poslouchání ani při prvním spuštění v novém prohlížeči,
+- ruční zapnutí mikrofonu se zakázaným oprávněním -> UI ukáže `Mikrofon není povolený`,
+- ruční zapnutí s povoleným mikrofonem -> pokračuje signed URL / WebSocket,
 - WebSocket disconnect -> UI ukáže skutečný disconnect,
 - nechybí žádná required dynamic variable,
 - u modulů s hotovým textem `intro_announcement` zazní jen jednou; ve Svozových trasách technický marker nezazní vůbec a slyšitelný agentem vytvořený úvod zazní jen jednou,
 - jednorázovost úvodu je potvrzená serverovým stavem při obnovení stránky, remountu, reconnectu i souběžném pokusu,
 - před automatickým úvodem zazní intro gong; před běžnou odpovědí uživateli nezazní,
 - úvod používá jen ověřený vokativ, počet a první stanoviště, čerstvé počasí, čerstvou hodnotu T-Cars bez domyšlené jednotky a bezpečný stav nepřítomných dispečerů,
-- po závěrečné otázce odpověď řidiče do pěti sekund ponechá hlasový rozhovor otevřený,
-- pět sekund ticha přehraje outro gong a relaci ukončí bez věty `Jste stále zde`,
+- automatický úvod nekončí otázkou ani výzvou k odpovědi a po přehrání relaci zavře bez aktivace mikrofonu,
+- běžný hlasový rozhovor se otevře až fyzickým tlačítkem `ZAPNOUT ŠARLOTU MIKROFONEM`,
 - Šarlota tyká,
 - denní pozdrav odpovídá `Europe/Prague`,
 - hlasová akce se zápisem, změnou stavu, notifikací nebo externím dopadem vyžaduje potvrzovací popup v UI,
