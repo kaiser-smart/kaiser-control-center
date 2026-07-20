@@ -393,6 +393,7 @@ export function useElevenLabsAssistant({
 } = {}) {
   let activeTextSession = null;
   let activeVoiceSession = null;
+  let preparedVoiceInput = null;
   const voiceAudioPlayer = createVoiceAudioPlayer();
 
   async function defaultFetchJson(path) {
@@ -476,6 +477,56 @@ export function useElevenLabsAssistant({
     } catch {
       return false;
     }
+  }
+
+  function prepareVoiceInput() {
+    if (preparedVoiceInput) {
+      return preparedVoiceInput.promise.then((outcome) => Boolean(outcome.stream));
+    }
+
+    const entry = { cancelled: false, promise: null };
+    entry.promise = (async () => {
+      if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+        const error = new Error("Mikrofon není v tomto prohlížeči dostupný.");
+        error.code = "voice_microphone_unavailable";
+        error.voiceReason = "microphone-api-unavailable";
+        return { stream: null, error };
+      }
+      try {
+        const stream = await withTimeout(
+          navigator.mediaDevices.getUserMedia(voiceMicrophoneConstraints()),
+          VOICE_MICROPHONE_TIMEOUT_MS,
+          createMicrophoneTimeoutError,
+          stopMediaStreamTracks
+        );
+        if (entry.cancelled) {
+          stopMediaStreamTracks(stream);
+          return { stream: null, error: createVoiceStoppedError() };
+        }
+        return { stream, error: null };
+      } catch (error) {
+        return { stream: null, error: createMicrophoneStartError(error) };
+      }
+    })();
+    preparedVoiceInput = entry;
+    return entry.promise.then((outcome) => Boolean(outcome.stream));
+  }
+
+  function discardVoiceInput() {
+    const entry = preparedVoiceInput;
+    preparedVoiceInput = null;
+    if (!entry) return;
+    entry.cancelled = true;
+    void entry.promise.then((outcome) => stopMediaStreamTracks(outcome.stream));
+  }
+
+  async function takePreparedVoiceInput() {
+    const entry = preparedVoiceInput;
+    preparedVoiceInput = null;
+    if (!entry) return null;
+    const outcome = await entry.promise;
+    if (outcome.error) throw outcome.error;
+    return outcome.stream;
   }
 
   function stopVoiceAudio() {
@@ -759,13 +810,19 @@ export function useElevenLabsAssistant({
 
     let mediaStream = null;
     try {
-      mediaStream = await withTimeout(
-        navigator.mediaDevices.getUserMedia(voiceMicrophoneConstraints()),
-        VOICE_MICROPHONE_TIMEOUT_MS,
-        createMicrophoneTimeoutError,
-        stopMediaStreamTracks
-      );
+      mediaStream = await takePreparedVoiceInput();
+      if (!mediaStream) {
+        mediaStream = await withTimeout(
+          navigator.mediaDevices.getUserMedia(voiceMicrophoneConstraints()),
+          VOICE_MICROPHONE_TIMEOUT_MS,
+          createMicrophoneTimeoutError,
+          stopMediaStreamTracks
+        );
+      }
     } catch (error) {
+      if (String(error?.code || "").startsWith("voice_microphone_")) {
+        throw error;
+      }
       throw createMicrophoneStartError(error);
     }
 
@@ -1043,7 +1100,8 @@ export function useElevenLabsAssistant({
         callbacks.onConnected?.({
           assistantId: signedUrlSession.assistantId || assistant.id,
           assistantName: signedUrlSession.assistantName || assistant.name,
-          conversationId
+          conversationId,
+          voiceRuntime: signedUrlSession.voiceRuntime || null
         });
         metadataFallbackTimer = window.setTimeout(startAudioInput, TEXT_METADATA_FALLBACK_MS);
       });
@@ -1463,6 +1521,8 @@ export function useElevenLabsAssistant({
     clientTools,
     closeVoiceSession,
     closeTextSession,
+    discardVoiceInput,
+    prepareVoiceInput,
     prepareSignedUrl,
     sendTextMessage,
     startVoiceConversation,

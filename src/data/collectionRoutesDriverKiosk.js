@@ -1,8 +1,10 @@
 import { isUserActive, normalizeRole } from "../permissions.js";
+import { COLLECTION_ROUTES_OPERATIONAL_CONTRACT } from "./collectionRoutesOperationalContract.js";
 
 export const COLLECTION_ROUTES_DRIVER_KIOSK_ROUTE = "/trasy-svozu";
 export const COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE = "/trasy-svozu/test";
 export const COLLECTION_ROUTES_DRIVER_SIMULATED_GPS_VALUE = "simulated";
+export const COLLECTION_ROUTES_DRIVER_TABLET_DEVICE = COLLECTION_ROUTES_OPERATIONAL_CONTRACT.driverTablet;
 
 function normalizedPathname(pathname) {
   const value = String(pathname || "/").trim() || "/";

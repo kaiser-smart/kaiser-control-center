@@ -219,7 +219,13 @@ assert.match(appSource, /TEST REŽIM · ŘIDIČ: VAŠEK MIROSLAV/);
 assert.match(appSource, /UKONČIT A RESETOVAT TEST/);
 assert.match(appSource, /Tato funkce zatím není v testovacím režimu dostupná/);
 assert.match(appSource, /Stav testu/);
+assert.match(appSource, /prepareVoiceInput/);
+assert.match(appSource, /Prompt Šarloty načten/);
+assert.match(appSource, /Znalosti Šarloty načteny/);
+assert.match(appSource, /Tools Šarloty načteny/);
 assert.match(signedUrlSource, /voiceIdentity = tabletTest\?\.simulatedUser \|\| user/);
+assert.match(signedUrlSource, /SARLOTA_TEST_VOICE_RUNTIME_NOT_READY/);
+assert.match(signedUrlSource, /tabletTestVoiceRuntimeVerification/);
 assert.match(signedUrlSource, /if \(!tabletTest\) await recordAiAction/);
 assert.match(signedUrlSource, /if \(!tabletTest\) await recordSarlotaIntroAnnouncement/);
 

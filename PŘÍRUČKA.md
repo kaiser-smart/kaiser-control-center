@@ -4,15 +4,22 @@
 
 Tento soubor je hlavní pracovní příručka projektu a má přednost před běžným zadáním.
 
+Pro každý modul je současně závazným provozním zdrojem pravdy jeho aktuální Mantra v repozitáři. `PŘÍRUČKA.md` určuje pracovní a bezpečnostní pravidla; Mantra určuje schválený účel, zařízení, datové zdroje, chování a provozní hranice konkrétního modulu. Vývojář nesmí Mantru nahradit vlastní domněnkou, obecnou best practice, podobným modulem ani externě dohledaným zařízením.
+
 Pokud je zadání v rozporu s tímto souborem, zastav práci a upozorni na rozpor.
 
 ## Povinný pracovní postup Codexu / vývojáře
 
 ### 1. Před zahájením práce
 
-Před jakoukoli prací musí Codex/vývojář otevřít a přečíst `PŘÍRUČKA.md`.
+Před jakoukoli prací musí Codex/vývojář otevřít a přečíst:
+- celou `PŘÍRUČKA.md`,
+- aktuální Mantru každého modulu, kterého se práce týká,
+- existující strojově čitelný provozní kontrakt daného modulu, pokud existuje.
 
-Bez přečtení `PŘÍRUČKA.md` se nesmí:
+U Svozových tras je povinným zdrojem Mantry `src/data/collectionRoutesMantra.js` a strojově čitelným kontraktem `src/data/collectionRoutesOperationalContract.js`.
+
+Bez přečtení Příručky, dotčené Mantry a existujícího kontraktu se nesmí:
 - analyzovat změna
 - implementovat
 - upravovat soubory
@@ -22,6 +29,8 @@ Bez přečtení `PŘÍRUČKA.md` se nesmí:
 - commitovat
 - pushovat
 - nasazovat
+
+Pokud jsou Příručka, Mantra, kontrakt, zadání nebo stávající implementace v rozporu, práce se musí zastavit a rozpor se musí pravdivě pojmenovat. Vývojář nesmí zvolit jednu variantu potichu.
 
 ### 2. Návrh před implementací
 
@@ -542,6 +551,7 @@ Adresní a provozní pole se nesmí zaměňovat:
 
 ### 12.1 Řidičský displej a oprávnění role Řidič
 
+- Závazné referenční zařízení je výhradně `Blackview Active 7 LTE`, 11″, Android 15, na šířku; fyzické rozlišení `1920 × 1200`, poměr `16:10` a akceptační viewport `960 × 600 CSS px`. Samsung ani obecný 11palcový tablet nesmí být použit jako náhrada bez předchozí výslovné změny Mantry potvrzené Radimem/Martinem.
 - Aktivní uživatel s rolí `Řidič` se po přihlášení i při pokusu otevřít jiný interní modul vždy vrací přímo na `/trasy-svozu`.
 - Řidič nesmí vidět HP, postranní menu, administraci, Mantru, TEST management ani dispečerský pohled Svozových tras.
 - Řidičský displej je na tabletu jediná uzamčená pracovní obrazovka bez hlavního posouvání; vyskakovací hlášení a přehled celé trasy mají vlastní posun a zřetelné zavření.
@@ -1408,6 +1418,11 @@ Nesmí se z nich odvozovat role, oprávnění ani právo provést citlivou akci.
 ### 17.3 `intro_announcement`
 
 - `intro_announcement` je kompletní hotový úvodní text pro Šarlotu.
+- `intro_announcement` není jeden globální text pro všechny moduly. Každý modul vlastní svůj zdroj úvodu a musí být zaregistrovaný ve strojově čitelném hlasovém kontraktu.
+- `Svozové trasy` smějí úvod sestavit pouze z ověřeného backendového kontextu Svozových tras. Nesmějí převzít úvod jiného modulu, obecný mock ani lokálně napsanou náhradní hlášku.
+- `current_module`, `current_module_route`, `current_module_context` a `intro_announcement` musí patřit ke stejné trase a stejnému modulovému kontraktu; rozpor hlasovou relaci zablokuje.
+- TEST tabletu smí získat signed URL až po read-only ověření skutečného ElevenLabs agenta, neprázdného Promptu, First Message `{{intro_announcement}}`, připojené Knowledge Base a všech očekávaných Tools.
+- Nový modul nebo změna zdroje úvodu vyžaduje úpravu kontraktu a automatický regresní test. Nestačí změnit pouze frontendový text.
 - First message v ElevenLabs má používat pouze:
   `{{intro_announcement}}`
 - Do First message nepřidávat současně `{{user_greeting}}` ani další pevný úvodní text.

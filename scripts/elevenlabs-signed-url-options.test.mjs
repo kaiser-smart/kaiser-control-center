@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 
 import {
   collectionRoutesContextVariables,
-  dynamicVariablesWithConversationId
+  dynamicVariablesWithConversationId,
+  tabletTestVoiceRuntimeVerification
 } from "../functions/api/ai/elevenlabs/signed-url.js";
 import { useElevenLabsAssistant } from "../src/useElevenLabsAssistant.js";
 
@@ -15,6 +16,34 @@ import { useElevenLabsAssistant } from "../src/useElevenLabsAssistant.js";
 {
   const variables = dynamicVariablesWithConversationId({ user_id: "radim-oplustil" }, "", "kso-session-fallback");
   assert.equal(variables.conversation_id, "kso-session-fallback");
+}
+
+{
+  const dynamicVariables = {
+    current_module: "Svozové trasy",
+    current_module_route: "/trasy-svozu/test",
+    current_module_context: JSON.stringify({ module: "Svozové trasy", route: "/trasy-svozu/test" }),
+    intro_announcement: "Ahoj Mirku. TEST trasu mám načtenou."
+  };
+  const ready = tabletTestVoiceRuntimeVerification({
+    requestedRoute: "/trasy-svozu/test",
+    dynamicVariables,
+    agentConfig: {
+      verified: true,
+      agentNameMatches: true,
+      promptAvailable: true,
+      firstMessageMatches: true,
+      knowledgeEntries: [{ idMasked: "kb...01" }],
+      toolsMatch: true
+    }
+  });
+  assert.equal(ready.status, "ready");
+  assert.equal(ready.introSource, "collection_routes_context");
+  assert.equal(tabletTestVoiceRuntimeVerification({
+    requestedRoute: "/trasy-svozu/test",
+    dynamicVariables,
+    agentConfig: { ...ready, verified: true, agentNameMatches: true, promptAvailable: true, firstMessageMatches: true, knowledgeEntries: [], toolsMatch: true }
+  }).status, "error");
 }
 
 {
@@ -55,7 +84,11 @@ import { useElevenLabsAssistant } from "../src/useElevenLabsAssistant.js";
 }
 
 const requestedPaths = [];
-globalThis.window = { location: { pathname: "/datove-schranky-plus" } };
+globalThis.window = {
+  location: { pathname: "/datove-schranky-plus" },
+  setTimeout,
+  clearTimeout
+};
 const assistant = useElevenLabsAssistant({
   signedUrlOptions: (assistantId, sessionContext = {}) => ({
     omitDriverReportVehicleContext: ["sarlota", "sarlota-smart-2"].includes(assistantId) && sessionContext.interfaceMode === "voice"
@@ -93,6 +126,28 @@ const collectionAssistant = useElevenLabsAssistant({
 });
 await collectionAssistant.prepareSignedUrl("sarlota", { interfaceMode: "voice" });
 assert.match(requestedPaths.at(-1), /currentRoute=%2Ftrasy-svozu/);
+
+{
+  let microphoneRequests = 0;
+  let trackStopped = false;
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      mediaDevices: {
+        getUserMedia: async () => {
+          microphoneRequests += 1;
+          return { getTracks: () => [{ stop: () => { trackStopped = true; } }] };
+        }
+      }
+    }
+  });
+  assert.equal(await collectionAssistant.prepareVoiceInput(), true);
+  assert.equal(await collectionAssistant.prepareVoiceInput(), true);
+  assert.equal(microphoneRequests, 1, "Jedno uživatelské gesto smí připravit mikrofon jen jednou.");
+  collectionAssistant.discardVoiceInput();
+  await Promise.resolve();
+  assert.equal(trackStopped, true);
+}
 
 globalThis.window.location.pathname = "/trasy-svozu/test";
 await collectionAssistant.prepareSignedUrl("sarlota", { interfaceMode: "voice" });

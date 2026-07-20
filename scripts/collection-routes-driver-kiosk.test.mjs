@@ -208,7 +208,7 @@ assert.ok(
     && appSource.includes("window.devicePixelRatio")
     && appSource.includes("data-collection-daily-driver-kiosk")
     && appSource.includes("collectionDriverViewportProfile")
-    && appSource.includes("blackview-active-7-landscape")
+    && appSource.includes("COLLECTION_ROUTES_DRIVER_TABLET_DEVICE.viewportProfile")
     && appSource.includes("window.visualViewport?.addEventListener"),
   "Řidičský displej musí automaticky zaznamenat skutečný viewport Blackview bez provozního zápisu."
 );
@@ -219,8 +219,9 @@ assert.ok(
     && appSource.includes("COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE")
     && appSource.includes("data-collection-driver-blackview-simulator")
     && appSource.includes("data-collection-driver-blackview-frame")
-    && appSource.includes('width="960"')
-    && appSource.includes('height="600"')
+    && appSource.includes('width="${escapeHtml(device.cssWidth)}"')
+    && appSource.includes('height="${escapeHtml(device.cssHeight)}"')
+    && appSource.includes("COLLECTION_ROUTES_DRIVER_TABLET_DEVICE")
     && appSource.includes('allow="camera; microphone; geolocation; autoplay; fullscreen"')
     && appSource.includes('url.searchParams.delete("device")')
     && styleSource.includes("collection-driver-blackview-simulator-active")
