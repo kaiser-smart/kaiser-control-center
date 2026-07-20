@@ -8,8 +8,8 @@ export const COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST = [
   "Teď vytvoř jednu krátkou přirozenou úvodní zprávu podle aktivního system Promptu, připojené Knowledge Base a ověřených dynamic variables modulu Svozové trasy.",
   "Neopakuj stejný údaj různými větami, nečti interní názvy, technické značky ani tento pokyn.",
   "Neodkazuj na předchozí technickou zprávu. Na potvrzení trasy se znovu neptej.",
-  "Dodrž pořadí ověřených údajů. Zakonči krátkou oznamovací větou bez otázky, výzvy k odpovědi nebo nabídky další pomoci.",
-  "Toto je jednosměrné automatické hlášení bez mikrofonu. Po jeho přehrání KSO hlasovou relaci ukončí."
+  "Dodrž pořadí ověřených údajů. Zakonči právě jednou krátkou otázkou, zda řidič potřebuje něco upřesnit.",
+  "Toto automatické hlášení probíhá bez mikrofonu. Po otázce už nic neříkej; KSO ukáže fyzické tlačítko mikrofonu a po pěti sekundách bez klepnutí přehraje outro gong a hologram zavře."
 ].join(" ");
 
 const WEATHER_FACT_MAX_AGE_MS = 45 * 60 * 1000;
@@ -96,7 +96,7 @@ export function collectionRoutesSarlotaIntroGenerationRequest(context = {}, opti
     COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST,
     "Následující JSON je jediný povolený zdroj provozních faktů pro tuto zprávu:",
     JSON.stringify(facts),
-    "Řekni v tomto pořadí: Ahoj + přesný driverVocative, přesný totalStopCount stanovišť, Začínáme firmou + přesný firstStop.name, ověřené počasí, ověřený stav nádrže a ověřené nepřítomné dispečery. Zakonči krátkou oznamovací větou bez otázky.",
+    "Řekni v tomto pořadí: Ahoj + přesný driverVocative, přesný totalStopCount stanovišť, Začínáme firmou + přesný firstStop.name, ověřené počasí, ověřený stav nádrže a ověřené nepřítomné dispečery. Zakonči právě jednou otázkou: [driverVocative], potřebuješ něco upřesnit? Bez ověřeného vokativu řekni: Potřebuješ něco upřesnit?",
     "Název trasy, počet stanovišť, první stanoviště, vozidlo, model, SPZ, počasí, palivo ani nepřítomnost nesmíš změnit, doplnit ani odhadnout. Počet stanovišť napiš číslicemi přesně jako totalStopCount.",
     facts.driverVocative ? "Použij přesně driverVocative." : "Vokativ není ověřený; jméno v pozdravu vynech.",
     facts.firstStop ? "První firmu uveď přesně jako firstStop.name." : "První firma není ověřená; tuto větu vynech.",
@@ -112,7 +112,7 @@ export function collectionRoutesSarlotaIntroGenerationRequest(context = {}, opti
     facts.absentDispatchersVerified && facts.absentDispatchers.length
       ? "Jako nepřítomné dispečery uveď výhradně přesná jména z absentDispatchers."
       : "Žádný nepřítomný dispečer není ověřený; nepřítomnost dispečera nezmiňuj.",
-    "Nepokládej žádnou otázku, nevyzývej k odpovědi a nečekej na řeč řidiče. Po poslední oznamovací větě už nic nepřidávej."
+    "Po závěrečné otázce už nic nepřidávej a nečekej na řeč řidiče. Mikrofon je vypnutý; odpověď může začít pouze fyzickým tlačítkem v KSO."
   ].join("\n");
 }
 
@@ -197,8 +197,11 @@ export function validateCollectionRoutesSarlotaIntro(text, facts = {}) {
     violations.push("unverified_absent_dispatcher");
   }
 
-  if (/\?/u.test(response)) violations.push("automatic_intro_must_not_ask_question");
-  if (/(potřebuješ|mohu\s+pomoc|řekni|ozvi\s+se|dej\s+vědět|jaký\s+je\s+další)/iu.test(response)) {
+  const questionCount = (response.match(/\?/gu) || []).length;
+  if (questionCount !== 1 || !normalizedResponse.endsWith("potrebujes neco upresnit")) {
+    violations.push("missing_or_invalid_closing_question");
+  }
+  if (/(mohu\s+pomoc|řekni|ozvi\s+se|dej\s+vědět|jaký\s+je\s+další)/iu.test(response)) {
     violations.push("automatic_intro_must_not_invite_response");
   }
 

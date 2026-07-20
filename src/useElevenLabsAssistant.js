@@ -884,6 +884,7 @@ export function useElevenLabsAssistant({
     const introGenerationRequest = String(callbacks.introGenerationRequest || "").trim();
     const endAfterGeneratedIntro = Boolean(introGenerationRequest && callbacks.endAfterGeneratedIntro === true);
     const continueAfterGeneratedIntro = Boolean(introGenerationRequest && callbacks.continueAfterGeneratedIntro === true);
+    const listenAfterTechnicalFirstMessage = Boolean(introGenerationRequest && callbacks.listenAfterTechnicalFirstMessage === true);
     const validateGeneratedIntro = typeof callbacks.validateGeneratedIntro === "function";
     const bufferGeneratedIntro = Boolean(introGenerationRequest && validateGeneratedIntro);
 
@@ -1127,6 +1128,21 @@ export function useElevenLabsAssistant({
         }
         window.clearTimeout(introGenerationTimer);
         introGenerationTimer = window.setTimeout(requestGeneratedIntro, 600);
+      }
+
+      function completeTechnicalFirstMessage() {
+        window.clearTimeout(responseTimer);
+        technicalFirstMessageComplete = true;
+        if (!listenAfterTechnicalFirstMessage) {
+          scheduleGeneratedIntroRequest();
+          return;
+        }
+        introGenerationPhase = "complete";
+        audioInputPaused = false;
+        callbacks.onReady?.({
+          ...resultPayload(),
+          state: "listening-after-technical-first-message"
+        });
       }
 
       async function finishValidatedGeneratedIntro() {
@@ -1502,9 +1518,7 @@ export function useElevenLabsAssistant({
 
         if (payload.type === "agent_response") {
           if (introGenerationPhase === "suppressing-technical-first-message") {
-            window.clearTimeout(responseTimer);
-            technicalFirstMessageComplete = true;
-            scheduleGeneratedIntroRequest();
+            completeTechnicalFirstMessage();
             return;
           }
           if (introGenerationPhase === "waiting-for-generated-intro") {
@@ -1524,9 +1538,7 @@ export function useElevenLabsAssistant({
 
           if (introGenerationPhase === "suppressing-technical-first-message") {
             if (partType === "stop") {
-              window.clearTimeout(responseTimer);
-              technicalFirstMessageComplete = true;
-              scheduleGeneratedIntroRequest();
+              completeTechnicalFirstMessage();
             }
             return;
           }
@@ -1558,9 +1570,7 @@ export function useElevenLabsAssistant({
 
         if (payload.type === "agent_response_complete") {
           if (introGenerationPhase === "suppressing-technical-first-message") {
-            window.clearTimeout(responseTimer);
-            technicalFirstMessageComplete = true;
-            scheduleGeneratedIntroRequest();
+            completeTechnicalFirstMessage();
             return;
           }
           if (introGenerationPhase === "waiting-for-generated-intro") {

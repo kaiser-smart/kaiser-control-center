@@ -139,5 +139,8 @@ assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.includes("Kaiser servis použív
 assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.some((item) => item.includes("Radime, Mirku, Petře, Patriku, Kamile a Tomáši.")));
 assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.some((item) => item.includes("AI, API, KSO, GPS, SMS, RCS, IČO, DIČ, DPH, PDF a CSV.")));
 assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.some((item) => item.includes("SPZ jsem nerozpoznala jistě")));
+assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.some((item) => item.includes("patnáct stupňů Celsia")));
+assert.match(SARLOTA_LANGUAGE_KB_CONTENT, /15 °C je patnáct stupňů Celsia/);
+assert.match(SARLOTA_LANGUAGE_KB_CONTENT, /fyzické tlačítko mikrofonu/);
 
 console.log("sarlota language sync plan: ok");

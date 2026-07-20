@@ -1455,10 +1455,10 @@ Nesmí se z nich odvozovat role, oprávnění ani právo provést citlivou akci.
 - Automaticky spuštěná Šarlota smí po potvrzení trasy říct právě jeden úvod za ID produkční jízdy nebo aktivní TEST relace. Jednorázovost je serverový auditovaný stav, nikoli jen proměnná frontendu; návrat na obrazovku, remount, refresh, reconnect ani souběžná karta nesmějí úvod spustit znovu.
 - Každé automatické promluvení Holografické Šarloty začíná schváleným intro gongem. Běžná odpověď na uživatelovu řeč gong nemá. Gong se přehrává ve stejném odemčeném `AudioContextu` jako ElevenLabs audio, aby fungoval v Safari, Chrome i na Blackview.
 - Úvod musí v pořadí použít dostupné ověřené údaje: vokativ řidiče, počet stanovišť, první firmu, čerstvé počasí, stav nádrže T-Cars a nepřítomné dispečery jen jménem a bezpečným pracovním stavem. Chybějící údaj se přirozeně vynechá; soukromý nebo zdravotní důvod se nikdy nevysloví.
-- Automatický úvod je jednosměrný: nesmí skončit otázkou, vyzvat řidiče k odpovědi ani nabídnout další pomoc. KSO při něm vůbec nesmí požádat o mikrofon, volat `getUserMedia`, připravovat hlasový vstup ani zobrazit stav poslouchání. Po přehrání ověřeného úvodu se hlasová relace sama ukončí.
-- Mikrofon se smí otevřít pouze po samostatném fyzickém klepnutí na tlačítko `ZAPNOUT ŠARLOTU MIKROFONEM`. Teprve tato ruční relace může začít krátkou otázkou s ověřeným oslovením a čekat na odpověď.
-- Během pětisekundového čekání Šarlota nesmí sama říct `Jste stále zde`, nabízet další krok ani jinak prodlužovat relaci.
-- Ruční `ZAPNOUT ŠARLOTU MIKROFONEM` je nová samostatná hlasová relace. Šarlota ji zahájí jednou krátkou otázkou ve významu `Mirku, s čím mohu pomoct?`, přičemž oslovení smí použít jen z ověřeného vokativu. Po této otázce zůstane poslouchat až do ručního ukončení nebo bezpečného timeoutu.
+- Automatický úvod musí skončit právě jednou otázkou ve významu `[ověřený vokativ], potřebuješ něco upřesnit?`, ale KSO při něm vůbec nesmí požádat o mikrofon, volat `getUserMedia`, připravovat hlasový vstup ani zobrazit stav poslouchání. Odpověď se nezjišťuje z okolního zvuku.
+- Po dohrání otázky zůstane hologram pět sekund viditelný a tablet nabídne fyzické tlačítko `ZAPNOUT ŠARLOTU MIKROFONEM`. Klepnutí otevře novou ruční hlasovou relaci bez zopakování závěrečné otázky; bez klepnutí KSO přehraje krátký outro gong a hologram i automatický úvod ukončí.
+- Během pětisekundového okna Šarlota nesmí sama říct `Jste stále zde`, nabízet další krok ani jinak prodlužovat relaci. Mikrofon zůstává vypnutý až do fyzického klepnutí řidiče.
+- Ruční `ZAPNOUT ŠARLOTU MIKROFONEM` je nová samostatná hlasová relace. Při běžném pozdějším spuštění ji Šarlota zahájí jednou krátkou otázkou ve významu `Mirku, s čím mohu pomoct?`, přičemž oslovení smí použít jen z ověřeného vokativu. Pokud řidič klepne v pětisekundovém okně bezprostředně po automatické závěrečné otázce, nová relace otázku neopakuje a rovnou začne poslouchat. Poslech trvá do ručního ukončení nebo bezpečného timeoutu.
 - `current_module`, `current_module_route`, `current_module_context` a `intro_announcement` musí patřit ke stejné trase a stejnému modulovému kontraktu; rozpor hlasovou relaci zablokuje.
 - TEST tabletu smí získat signed URL až po read-only ověření skutečného ElevenLabs agenta, neprázdného Promptu, First Message `{{intro_announcement}}`, připojené Knowledge Base a všech očekávaných Tools.
 - Nový modul nebo změna zdroje úvodu vyžaduje úpravu kontraktu a automatický regresní test. Nestačí změnit pouze frontendový text.
@@ -1583,8 +1583,8 @@ Při každé změně Šarloty ověřit:
 - jednorázovost úvodu je potvrzená serverovým stavem při obnovení stránky, remountu, reconnectu i souběžném pokusu,
 - před automatickým úvodem zazní intro gong; před běžnou odpovědí uživateli nezazní,
 - úvod používá jen ověřený vokativ, počet a první stanoviště, čerstvé počasí, čerstvou hodnotu T-Cars bez domyšlené jednotky a bezpečný stav nepřítomných dispečerů,
-- automatický úvod nekončí otázkou ani výzvou k odpovědi a po přehrání relaci zavře bez aktivace mikrofonu,
-- běžný hlasový rozhovor se otevře až fyzickým tlačítkem `ZAPNOUT ŠARLOTU MIKROFONEM`,
+- automatický úvod skončí jedinou otázkou, ale mikrofon zůstane vypnutý; hologram po pěti sekundách bez fyzického klepnutí přehraje outro gong a zavře se,
+- běžný hlasový rozhovor se otevře až fyzickým tlačítkem `ZAPNOUT ŠARLOTU MIKROFONEM`; klepnutí v pětisekundovém okně otázku neopakuje,
 - Šarlota tyká,
 - denní pozdrav odpovídá `Europe/Prague`,
 - hlasová akce se zápisem, změnou stavu, notifikací nebo externím dopadem vyžaduje potvrzovací popup v UI,

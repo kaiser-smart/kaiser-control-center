@@ -22,8 +22,8 @@ assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /připojené Kn
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Neopakuj stejný údaj/);
 assert.doesNotMatch(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Ahoj Mirku|Můžeme vyrazit/);
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /bez mikrofonu/);
-assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /bez otázky/);
-assert.doesNotMatch(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /potřebuje něco upřesnit/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /potřebuje něco upřesnit/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /fyzické tlačítko mikrofonu/);
 assert.equal(COLLECTION_ROUTES_SARLOTA_INTRO_GONG_URL, "/audio/sarlota-gong-intro.mp3");
 assert.equal(COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL, "/audio/sarlota-gong-outro.mp3");
 assert.match(COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST, /Mirku, s čím mohu pomoct\?/);
@@ -58,7 +58,7 @@ assert.match(introRequest, /Během směny hrozí bouřka/);
 assert.match(introRequest, /Test 1 s\.r\.o\./);
 assert.match(introRequest, /63\.5/);
 assert.equal(validateCollectionRoutesSarlotaIntro(
-  "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová. Můžeme vyrazit.",
+  "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová. Mirku, potřebuješ něco upřesnit?",
   introFacts
 ).valid, true);
 
@@ -86,9 +86,18 @@ const interactiveAutomaticIntro = validateCollectionRoutesSarlotaIntro(
   "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová. Potřebuješ něco upřesnit?",
   introFacts
 );
-assert.equal(interactiveAutomaticIntro.valid, false);
-assert.ok(interactiveAutomaticIntro.violations.includes("automatic_intro_must_not_ask_question"));
-assert.ok(interactiveAutomaticIntro.violations.includes("automatic_intro_must_not_invite_response"));
+assert.equal(interactiveAutomaticIntro.valid, true);
+
+const introWithoutClosingQuestion = validateCollectionRoutesSarlotaIntro(
+  "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová.",
+  introFacts
+);
+assert.equal(introWithoutClosingQuestion.valid, false);
+assert.ok(introWithoutClosingQuestion.violations.includes("missing_or_invalid_closing_question"));
+assert.equal(validateCollectionRoutesSarlotaIntro(
+  "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová. Potřebuješ něco upřesnit? Dobře.",
+  introFacts
+).valid, false, "Závěrečná otázka musí být skutečně poslední větou automatického úvodu.");
 
 const staleWeatherFacts = collectionRoutesSarlotaIntroFacts(introContext, {
   now: Date.parse("2026-07-20T12:00:00+02:00")
@@ -141,8 +150,11 @@ assert.match(appSource, /Šarlota pokračuje skutečným hlasem ElevenLabs; gong
 assert.doesNotMatch(appSource, /error\.code = "voice_intro_gong_failed"/);
 assert.match(appSource, /endAfterGeneratedIntro: automaticSession/);
 assert.match(appSource, /continueAfterGeneratedIntro: false/);
-assert.match(appSource, /mikrofon nebyl zapnutý/);
-assert.doesNotMatch(appSource, /outroGongPlayed = await elevenLabsAssistant\.playVoiceCue/);
+assert.match(appSource, /Mikrofon nebyl zapnutý/);
+assert.match(appSource, /finishCollectionRoutesSarlotaIntroResponseWindow/);
+assert.match(appSource, /COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL/);
+assert.match(appSource, /introSilenceTimeoutMs/);
+assert.match(appSource, /myDailyRouteSarlotaAwaitingResponse/);
 
 const closeFunctionStart = appSource.indexOf("function closeCollectionRoutesTestTablet");
 const closeFunctionEnd = appSource.indexOf("async function loadLatestCollectionRoutesTestNotificationJob", closeFunctionStart);
@@ -167,6 +179,8 @@ assert.match(elevenLabsSource, /waiting-for-generated-intro/);
 assert.match(elevenLabsSource, /requestGeneratedIntro/);
 assert.match(elevenLabsSource, /endAfterGeneratedIntro/);
 assert.match(elevenLabsSource, /continueAfterGeneratedIntro/);
+assert.match(elevenLabsSource, /listenAfterTechnicalFirstMessage/);
+assert.match(elevenLabsSource, /listening-after-technical-first-message/);
 assert.match(elevenLabsSource, /introSilenceTimeoutMs/);
 assert.match(elevenLabsSource, /introAwaitingUser/);
 assert.match(elevenLabsSource, /state: "intro-silence-complete"/);

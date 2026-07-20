@@ -23,6 +23,10 @@ assert.equal(contract.voice.introSource, "elevenlabs_agent_prompt_kb");
 assert.equal(contract.voice.technicalFirstMessageMarker, "KSO_INTRO_GENERATION_PENDING");
 assert.equal(contract.voice.suppressTechnicalFirstMessage, true);
 assert.equal(contract.voice.generateAudibleIntroWithActiveAgent, true);
+assert.equal(contract.voice.automaticIntroMicrophoneEnabled, false);
+assert.equal(contract.voice.automaticIntroClosingQuestion, true);
+assert.equal(contract.voice.automaticIntroResponseMode, "physical_microphone_button");
+assert.equal(contract.voice.introSilenceTimeoutMs, 5000);
 
 for (const marker of [
   "Blackview Active 7 LTE",

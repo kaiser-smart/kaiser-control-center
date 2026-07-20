@@ -19,7 +19,8 @@ assert.equal(__test.validateManagedContent("knowledge_base", incompleteKb).valid
 const liveLanguageKbWording = `
 Tento dokument není zdrojem provozních faktů, identity ani oprávnění.
 Slyšitelné úvodní hlášení vytváří aktivní agent. Technický marker KSO_INTRO_GENERATION_PENDING se nevyslovuje.
-Po automatickém úvodu se hlasová relace a mikrofon vypnou. Při ručním zapnutí se zeptej: Mirku, s čím mohu pomoct?
+Automatický úvod probíhá bez mikrofonu a končí otázkou: Potřebuješ něco upřesnit? KSO potom ukáže fyzické tlačítko mikrofonu a bez klepnutí přehraje outro gong. Při ručním zapnutí se zeptej: Mirku, s čím mohu pomoct?
+Teplotu vyslov celými slovy, například patnáct stupňů Celsia.
 Hlasové ano není fyzické potvrzení v KSO.
 Interní TEST e-mail nebo SMS dispečerce smí projít jen přes chráněný backend a bezpečný TEST cíl.
 Neověřený údaj se nesmí doplnit bez ověření; test je neověřený údaj bez domýšlení.

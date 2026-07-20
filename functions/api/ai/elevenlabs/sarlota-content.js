@@ -191,8 +191,11 @@ const PROMPT_REQUIREMENTS = [
   ["intro_announcement", "úvodní hlášení Šarloty"],
   ["KSO_INTRO_GENERATION_PENDING", "technický marker úvodu Svozových tras"],
   ["aktivního Promptu, připojené Knowledge Base a aktuálního JSON bloku ověřených dynamic variables", "generování úvodu aktivní Šarlotou"],
-  ["Automatický úvod je jednosměrné hlášení bez mikrofonu", "automatický úvod bez mikrofonu"],
-  ["KSO po přehrání hlasovou relaci samo ukončí", "automatické ukončení jednosměrného úvodu"],
+  ["Automatický úvod probíhá bez mikrofonu", "automatický úvod bez mikrofonu"],
+  ["potřebuješ něco upřesnit?", "závěrečná otázka automatického úvodu"],
+  ["fyzické tlačítko mikrofonu", "fyzická reakce řidiče bez automatického poslechu"],
+  ["outro gong", "ukončení po pěti sekundách bez klepnutí"],
+  ["stupňů Celsia", "výslovnost teploty"],
   ["Mirku, s čím mohu pomoct?", "bezpečný pozdrav po ručním zapnutí"],
   ["get_collection_routes_context", "bezpečný kontext Svozových tras"],
   ["prepare_collection_route_gps_capture", "příprava GPS stanoviště"],
@@ -213,8 +216,16 @@ const KB_REQUIREMENTS = [
     label: "generování slyšitelného úvodu aktivní Šarlotou"
   },
   {
-    markers: ["automaticky uvod je jednosmerny a probiha bez mikrofonu", "po automatickem uvodu se hlasova relace a mikrofon vypnou"],
+    markers: ["automaticky uvod probiha bez mikrofonu"],
     label: "automatický úvod bez mikrofonu"
+  },
+  {
+    markers: ["potrebujes neco upresnit", "fyzicke tlacitko mikrofonu", "outro gong"],
+    label: "závěrečná otázka a fyzická reakce řidiče"
+  },
+  {
+    markers: ["stupnu celsia"],
+    label: "výslovnost stupňů Celsia"
   },
   {
     markers: ["mirku, s cim mohu pomoct"],

@@ -1,4 +1,4 @@
-export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-20-v7-route-intro-no-microphone";
+export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-20-v8-route-intro-physical-response";
 export const SARLOTA_LANGUAGE_KB_NAME = "Šarlota – jazyková reference KSO";
 export const SARLOTA_PRONUNCIATION_DICTIONARY_NAME = "Šarlota – čeština KSO";
 
@@ -22,7 +22,8 @@ export const SARLOTA_LANGUAGE_KB_CONTENT = [
   "Automatický úvod Svozových tras smí použít jen fakta z aktuálního JSON bloku KSO. Cizí osoba, trasa, počet nebo první stanoviště, vozidlo, model, SPZ, počasí, palivo nebo pracovní dostupnost jsou zakázané.",
   "Počasí v automatickém úvodu použij pouze jako přesné čerstvé ověřené weather.summary z KSO. Hodnocení typu počasí přeje nevytvářej; bez ověřeného počasí zmínku úplně vynech.",
   "Úvod vytvoř pokaždé přirozeně vlastními slovy, nikoli podle pevné větné šablony. V pořadí použij dostupný ověřený vokativ řidiče, počet stanovišť, první firmu, čerstvé počasí, poslední ověřenou hodnotu nádrže T-Cars bez domyšlené jednotky a jména ověřených nepřítomných dispečerů bez soukromého důvodu.",
-  "Automatický úvod je jednosměrný a probíhá bez mikrofonu. Zakonči ho krátkou oznamovací větou bez otázky, výzvy k odpovědi nebo nabídky další pomoci. Potom už nic neříkej; KSO hlasovou relaci samo ukončí.",
+  "Automatický úvod probíhá bez mikrofonu. Zakonči ho právě jednou otázkou ve významu: [ověřený vokativ], potřebuješ něco upřesnit? Bez bezpečného vokativu řekni jen: Potřebuješ něco upřesnit? Potom už nic neříkej.",
+  "KSO po otázce ponechá pět sekund viditelný hologram a fyzické tlačítko mikrofonu. Samo neposlouchá. Klepnutí otevře novou ruční relaci bez opakování otázky; bez klepnutí KSO přehraje outro gong a hologram zavře.",
   "KSO přehrává intro gong před každým automatickým promluvením Šarloty. Před běžnou odpovědí na uživatelovu řeč se gong nepřehrává.",
   "Při ručním zapnutí mikrofonem polož jednu krátkou otázku ve významu Mirku, s čím mohu pomoct? Oslovení použij jen při ověřeném vokativu. Potom zůstaň poslouchat.",
   "V TESTU nikdy nekontaktuj skutečného zákazníka. Interní TEST e-mail nebo SMS dispečerce lze pouze připravit přes chráněný KSO backend a odeslat až po samostatném fyzickém potvrzení do bezpečného interního TEST cíle s TEST auditem.",
@@ -47,6 +48,7 @@ export const SARLOTA_LANGUAGE_KB_CONTENT = [
   "Datum čti jako datum a rok nečti po jednotlivých číslicích. Přesný pracovní čas čti ve dvacetičtyřhodinovém tvaru.",
   "Rozsah čti jako od do nebo až. Záporná teplota zachovává slovo minus.",
   "Jednotku, měnu a procento vyslov a skloň podle hodnoty. Přibližný zdroj neprezentuj s falešnou přesností.",
+  "Teplotu se znakem °C vyslov celými slovy stupně Celsia se správným skloňováním. 1 °C je jeden stupeň Celsia, 2 °C jsou dva stupně Celsia, 15 °C je patnáct stupňů Celsia a −5 °C je minus pět stupňů Celsia. Znak °C nikdy nečti jako písmeno cé.",
   "",
   "## Kontakty, adresy a identifikátory",
   "Telefon, SPZ, VIN, IČO, DIČ, verzi ani jiný identifikátor nezaokrouhluj a nedoplňuj odhadem.",
@@ -140,6 +142,7 @@ export const SARLOTA_PRONUNCIATION_LISTENING_TESTS = [
   "Partslink24 je externí pracovní nástroj.",
   "Nula, jedna, dvě, pět, jedenáct, dvacet jedna a sto pět.",
   "Jeden tisíc dvě stě padesát korun, dvanáct tisíc pět set korun a minus pět stupňů Celsia.",
+  "Jeden stupeň Celsia, dva stupně Celsia, patnáct stupňů Celsia a minus pět stupňů Celsia.",
   "V šest hodin pět minut, ve čtrnáct třicet a od šesti do čtrnácti třiceti.",
   "Osmnáctého července dva tisíce dvacet šest a v pondělí dvacátého července.",
   "Jeden kilometr, dva kilometry, pět kilometrů, osmdesát kilometrů za hodinu, jeden a půl litru a dvě stě padesát kilogramů.",
