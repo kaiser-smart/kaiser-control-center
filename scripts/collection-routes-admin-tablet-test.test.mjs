@@ -252,6 +252,17 @@ assert.match(appSource, /Prompt Šarloty načten/);
 assert.match(appSource, /Úvod přes Prompt \+ KB/);
 assert.match(appSource, /Znalosti Šarloty načteny/);
 assert.match(appSource, /Tools Šarloty načteny/);
+const voiceIntroUpdateStart = appSource.indexOf("async function updateCollectionRoutesVoiceIntro");
+const voiceIntroUpdateEnd = appSource.indexOf("async function loadCollectionRoutesSarlotaContext", voiceIntroUpdateStart);
+assert.ok(voiceIntroUpdateStart >= 0 && voiceIntroUpdateEnd > voiceIntroUpdateStart);
+const voiceIntroUpdateSource = appSource.slice(voiceIntroUpdateStart, voiceIntroUpdateEnd);
+assert.match(voiceIntroUpdateSource, /run\.scope === "test"/);
+assert.match(voiceIntroUpdateSource, /scope: "test"/);
+assert.doesNotMatch(
+  voiceIntroUpdateSource,
+  /collectionDailyRouteScopePayload/,
+  "Hlasový úvod musí určit TEST databázi z načtené trasy, ne z administračního filtru stránky."
+);
 const restoreTestStart = appSource.indexOf("async function loadCollectionRoutesAdminTabletTest");
 const restoreTestEnd = appSource.indexOf("async function openCollectionRoutesAdminTabletTest", restoreTestStart);
 assert.ok(restoreTestStart >= 0 && restoreTestEnd > restoreTestStart);

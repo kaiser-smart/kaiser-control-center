@@ -41789,7 +41789,9 @@ async function updateCollectionRoutesVoiceIntro(action, playbackToken = "") {
   const sessionId = collectionRoutesPilotState.adminTabletTestSession?.id || "";
   const result = await apiJson(`/api/collection-routes/daily-routes/${encodeURIComponent(run.id)}/voice-intro`, {
     method: "POST",
-    body: JSON.stringify(collectionDailyRouteScopePayload({ action, playbackToken, sessionId }))
+    body: JSON.stringify(run.scope === "test"
+      ? { action, playbackToken, sessionId, scope: "test" }
+      : { action, playbackToken, sessionId })
   });
   if (collectionRoutesPilotState.myDailyRouteSarlotaContext && result.voiceIntro?.state) {
     collectionRoutesPilotState.myDailyRouteSarlotaContext.voiceIntro = result.voiceIntro.state;
