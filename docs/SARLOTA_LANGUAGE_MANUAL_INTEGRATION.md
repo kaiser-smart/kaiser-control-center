@@ -53,7 +53,8 @@ Očištěný KB dokument neobsahuje konkrétní provozní příklady, které by 
 
 1. Výběr vozidla v pickeru potvrzuje vozidlo, ne finální zápis servisního hlášení.
 2. `voice-intake` už není důvěryhodný zdroj finálního potvrzení zápisu.
-3. Trasu řidič fyzicky potvrzuje před spuštěním hlasu; Šarlota čte `{{intro_announcement}}` jednou a potvrzení neopakuje.
-4. Veřejné zprávy jsou nejvýše dva ověřené titulky z iROZHLAS, ne provozní zdroj dopravních omezení.
-5. Paměť používá jen `memory.consent: true` a `memory.summary`; neukládá celý přepis.
-6. Firemní lidskost používá jen backendový návrh a nejvýše jednou za hovor.
+3. Trasu řidič fyzicky potvrzuje před spuštěním hlasu; technický `{{intro_announcement}}` se nevyslovuje. KSO jednou za trasu nebo TEST relaci přehraje intro gong a vyžádá ověřený úvod od aktivního agenta.
+4. Úvod skončí otázkou, zda řidič potřebuje něco upřesnit. Odpověď pokračuje běžným rozhovorem; po pěti sekundách ticha zazní outro gong a relace se bez další věty ukončí.
+5. Veřejné zprávy jsou nejvýše dva ověřené titulky z iROZHLAS, ne provozní zdroj dopravních omezení.
+6. Paměť používá jen `memory.consent: true` a `memory.summary`; neukládá celý přepis.
+7. Firemní lidskost používá jen backendový návrh a nejvýše jednou za hovor.

@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 
 import {
   COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST,
+  COLLECTION_ROUTES_SARLOTA_INTRO_GONG_URL,
+  COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL,
+  COLLECTION_ROUTES_SARLOTA_INTRO_SILENCE_TIMEOUT_MS,
   COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST,
   COLLECTION_ROUTES_SARLOTA_VOICE_ASSISTANT_ID,
   COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER,
@@ -19,20 +22,30 @@ assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /aktivního sys
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /připojené Knowledge Base/);
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Neopakuj stejný údaj/);
 assert.doesNotMatch(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Ahoj Mirku|Můžeme vyrazit/);
-assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /jediná zpráva automatického spuštění/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /potřebuje něco upřesnit/);
+assert.equal(COLLECTION_ROUTES_SARLOTA_INTRO_GONG_URL, "/audio/sarlota-gong-intro.mp3");
+assert.equal(COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL, "/audio/sarlota-gong-outro.mp3");
+assert.equal(COLLECTION_ROUTES_SARLOTA_INTRO_SILENCE_TIMEOUT_MS, 5000);
 assert.match(COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST, /Mirku, s čím mohu pomoct\?/);
 assert.match(COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST, /Po otázce zůstaň připravená poslouchat/);
 
 const introContext = {
-  actor: { name: "Miroslav Vašek" },
-  route: { title: "pondělí 2026-07-13 · Vůz A · 3BN 3558", totalCount: 198 },
+  actor: { name: "Miroslav Vašek", vocative: "Mirku" },
+  route: {
+    title: "pondělí 2026-07-13 · Vůz A · 3BN 3558",
+    totalCount: 198,
+    currentStop: { customerName: "Test 1 s.r.o." }
+  },
   vehicle: { status: "verified", fleetMatch: true, label: "Vůz A · 3BN 3558", registration: "3BN 3558" },
   weather: {
     verified: true,
     summary: "Brno: 22 °C, zataženo. Během směny hrozí bouřka.",
     observedAt: "2026-07-20T10:00:00+02:00",
     source: "open_meteo"
-  }
+  },
+  fuel: { verified: true, value: 63.5, unit: "", measuredAt: "2026-07-20T09:55:00+02:00" },
+  absentDispatchersVerified: true,
+  absentDispatchers: [{ name: "Jana Dispečerová", label: "Mimo pracoviště" }]
 };
 const introFacts = collectionRoutesSarlotaIntroFacts(introContext, {
   now: Date.parse("2026-07-20T10:10:00+02:00")
@@ -42,8 +55,10 @@ const introRequest = collectionRoutesSarlotaIntroGenerationRequest(introContext,
 });
 assert.match(introRequest, /3BN 3558/);
 assert.match(introRequest, /Během směny hrozí bouřka/);
+assert.match(introRequest, /Test 1 s\.r\.o\./);
+assert.match(introRequest, /63\.5/);
 assert.equal(validateCollectionRoutesSarlotaIntro(
-  "Dobrý den, posádko. Dnešní trasu mám načtenou. Budu hlídat důležité změny.",
+  "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová. Mirku, potřebuješ něco upřesnit?",
   introFacts
 ).valid, true);
 
@@ -137,13 +152,17 @@ assert.match(elevenLabsSource, /suppressing-technical-first-message/);
 assert.match(elevenLabsSource, /waiting-for-generated-intro/);
 assert.match(elevenLabsSource, /requestGeneratedIntro/);
 assert.match(elevenLabsSource, /endAfterGeneratedIntro/);
-assert.match(elevenLabsSource, /state: "intro-complete"/);
-assert.match(elevenLabsSource, /settle\(resolve, payload, "intro-complete"\)/);
+assert.match(elevenLabsSource, /continueAfterGeneratedIntro/);
+assert.match(elevenLabsSource, /introSilenceTimeoutMs/);
+assert.match(elevenLabsSource, /introAwaitingUser/);
+assert.match(elevenLabsSource, /state: "intro-silence-complete"/);
+assert.match(elevenLabsSource, /playCue/);
 const sendVoiceStart = elevenLabsSource.indexOf("async function sendVoiceMessage");
 const sendVoiceEnd = elevenLabsSource.indexOf("\n  return {\n    clientTools", sendVoiceStart);
 assert.ok(sendVoiceStart >= 0 && sendVoiceEnd > sendVoiceStart);
 const sendVoiceSource = elevenLabsSource.slice(sendVoiceStart, sendVoiceEnd);
 assert.match(sendVoiceSource, /instructionOnly/);
+assert.match(sendVoiceSource, /automaticSpeechCueUrl/);
 assert.match(sendVoiceSource, /disabled_for_voice_instruction/);
 assert.match(sendVoiceSource, /Přehrání pevného hlasového pokynu nesmí spouštět nástroje ani měnit stav/);
 

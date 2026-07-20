@@ -188,6 +188,7 @@ export async function collectionRoutesContextVariables(env, user, requestedRoute
   const scope = requestedRoute === "/trasy-svozu/test" || options.simulatedUser ? "test" : "production";
   const context = await buildCollectionRoutesSarlotaContext(env, user, {
     scope,
+    tabletTestSessionId: cleanString(options.tabletTestSessionId),
     ...(options.simulatedUser ? {
       simulatedUser: options.simulatedUser,
       trustTestRouteVehicle: true,
@@ -248,6 +249,7 @@ export async function collectionRoutesContextVariables(env, user, requestedRoute
       actorName: cleanString(user?.name || user?.email),
       simulatedDriverUserId: cleanString(context.actor?.id),
       simulatedDriverName: cleanString(context.actor?.name),
+      simulatedDriverVocative: cleanString(context.actor?.friendlyVocative || context.actor?.vocative),
       tabletTestSessionId: cleanString(options.tabletTestSessionId),
       vehicle: cleanString(route.vehicleLabel),
       assignedVehicle: context.vehicle,
@@ -262,6 +264,10 @@ export async function collectionRoutesContextVariables(env, user, requestedRoute
       currentStop: route.currentStop,
       followingStop: route.followingStop,
       weather: context.weather?.verified ? cleanString(context.weather.summary) : "neověřeno",
+      fuel: context.fuel,
+      absentDispatchers: context.absentDispatchers,
+      absentDispatchersVerified: context.absentDispatchersVerified === true,
+      voiceIntro: context.voiceIntro,
       memorySummary: context.memory?.consent ? cleanString(context.memory.summary) : "paměť není povolená",
       navigationMode: "HERE truck navigation; spuštění vždy fyzickým klepnutím",
       safety: "Šarlota smí vysvětlovat aktuální trasu a připravit hlášení. Nesmí sama označit HOTOVO, spustit či ukončit přestávku nebo výsyp ani uložit hlášení. Každý zápis vyžaduje fyzické klepnutí řidiče. Nikdy neposílej zákaznickou zprávu a nikdy nezapisuj do Vistosu."
@@ -287,6 +293,14 @@ export async function collectionRoutesContextVariables(env, user, requestedRoute
     collection_route_following_stop: cleanString(route.followingStop?.customerName || route.followingStop?.stationName),
     collection_route_following_address: cleanString(route.followingStop?.address),
     collection_route_weather: context.weather?.verified ? cleanString(context.weather.summary) : "Počasí se nepodařilo ověřit.",
+    collection_route_driver_vocative: cleanString(context.actor?.friendlyVocative || context.actor?.vocative),
+    collection_route_first_stop: cleanString(route.currentStop?.customerName || route.currentStop?.stationName),
+    collection_route_fuel_verified: context.fuel?.verified === true ? "ano" : "ne",
+    collection_route_fuel_value: context.fuel?.verified === true ? String(context.fuel.value) : "",
+    collection_route_absent_dispatchers: context.absentDispatchersVerified === true
+      ? context.absentDispatchers.map((item) => cleanString(item.name)).filter(Boolean).join(", ")
+      : "",
+    collection_route_voice_intro_can_auto_start: context.voiceIntro?.canAutoStart === true ? "ano" : "ne",
     collection_route_memory_enabled: context.memory?.consent ? "ano" : "ne",
     collection_route_memory_summary: context.memory?.consent ? cleanString(context.memory.summary) : "",
     collection_route_news_status: cleanString(context.news?.status || "unavailable"),

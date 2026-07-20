@@ -1447,11 +1447,16 @@ Nesmí se z nich odvozovat role, oprávnění ani právo provést citlivou akci.
 - `Svozové trasy` nesmějí obsahovat pevnou backendovou ani frontendovou šablonu slyšitelného přivítání, lokálně napsanou náhradní hlášku, obecný mock ani úvod jiného modulu. Backend dodává fakta a bezpečnostní stav, nikoli hotovou lidskou větu.
 - Technický marker a interní požadavek KSO se nikdy nevyslovují. Mikrofon zůstává pozastavený, dokud technická First Message neskončí a nedohraje agentem vytvořený skutečný úvod.
 - Úvod aktivního agenta musí být krátký, přirozený, bez opakování stejného údaje a nesmí znovu žádat potvrzení již fyzicky potvrzené trasy.
-- Automatický úvod se před přehráním celý přijme do dočasné paměti a KSO jej porovná s backendem ověřenými fakty aktuální relace. Cizí název trasy, počet stanovišť, vozidlo, model, SPZ nebo počasí zablokují celý zvuk; chybná věta se nesmí ani částečně přehrát.
+- Automatický úvod se před přehráním celý přijme do dočasné paměti a KSO jej porovná s backendem ověřenými fakty aktuální relace. Cizí osoba, název trasy, počet nebo první stanoviště, vozidlo, model, SPZ, počasí, palivo nebo pracovní dostupnost zablokují celý zvuk; chybná věta se nesmí ani částečně přehrát.
 - Hologram smí ukázat stav `Mluvím` až po úspěšné kontrole faktů a skutečném naplánování zvuku v běžícím `AudioContextu`. Stav `suspended`, zakázané automatické přehrávání, čekání na audio ani pouhé přijetí textu nejsou přehrávání.
 - Po obnovení stránky bez uživatelského gesta musí tablet nabídnout konkrétní tlačítko `SPUSTIT ZVUK A PŘEHRÁT ÚVOD` a nesmí předstírat hlas.
 - Počasí v automatickém úvodu musí být backendem ověřené, obsahovat čas pozorování a při přehrání nesmí být starší než 45 minut. Šarlota smí použít pouze přesné ověřené shrnutí; nesmí vytvářet obecné hodnocení typu `počasí přeje`. Chybějící nebo zastaralé počasí v úvodu úplně vynechá. Příklady v Promptu nebo Knowledge Base nikdy nejsou aktuální počasí.
-- Automaticky spuštěná Šarlota smí po potvrzení trasy říct právě jeden úvod. Po jeho dohrání KSO ukončí hlasovou relaci i mikrofon; Šarlota nesmí zůstat poslouchat, sama navazovat, ptát se `Jste stále zde` ani vyžadovat další odpověď.
+- Stav nádrže smí pocházet pouze z read-only T-Cars `knihaJizdVozidlo.jizdaStavPhm`, z poslední čerstvé jízdy přesně shodného vozidla. Protože WSDL neurčuje jednotku, KSO ani Šarlota ji nesmějí domyslet. Zastaralá, chybějící nebo neshodná hodnota se vynechá.
+- Automaticky spuštěná Šarlota smí po potvrzení trasy říct právě jeden úvod za ID produkční jízdy nebo aktivní TEST relace. Jednorázovost je serverový auditovaný stav, nikoli jen proměnná frontendu; návrat na obrazovku, remount, refresh, reconnect ani souběžná karta nesmějí úvod spustit znovu.
+- Každé automatické promluvení Holografické Šarloty začíná schváleným intro gongem. Běžná odpověď na uživatelovu řeč gong nemá. Gong se přehrává ve stejném odemčeném `AudioContextu` jako ElevenLabs audio, aby fungoval v Safari, Chrome i na Blackview.
+- Úvod musí v pořadí použít dostupné ověřené údaje: vokativ řidiče, počet stanovišť, první firmu, čerstvé počasí, stav nádrže T-Cars a nepřítomné dispečery jen jménem a bezpečným pracovním stavem. Chybějící údaj se přirozeně vynechá; soukromý nebo zdravotní důvod se nikdy nevysloví.
+- Úvod končí právě jednou otázkou, zda řidič potřebuje něco upřesnit. Potom mikrofon poslouchá přesně pět sekund. Jakmile řidič promluví, timeout se zruší a pokračuje běžná hlasová komunikace bez gongu před odpovědí. Když nepromluví, KSO potlačí samovolné audio i text agenta, přehraje outro gong, auditovaně označí úvod za ukončený a zavře hlasovou relaci i mikrofon.
+- Během pětisekundového čekání Šarlota nesmí sama říct `Jste stále zde`, nabízet další krok ani jinak prodlužovat relaci.
 - Ruční `ZAPNOUT ŠARLOTU MIKROFONEM` je nová samostatná hlasová relace. Šarlota ji zahájí jednou krátkou otázkou ve významu `Mirku, s čím mohu pomoct?`, přičemž oslovení smí použít jen z ověřeného vokativu. Po této otázce zůstane poslouchat až do ručního ukončení nebo bezpečného timeoutu.
 - `current_module`, `current_module_route`, `current_module_context` a `intro_announcement` musí patřit ke stejné trase a stejnému modulovému kontraktu; rozpor hlasovou relaci zablokuje.
 - TEST tabletu smí získat signed URL až po read-only ověření skutečného ElevenLabs agenta, neprázdného Promptu, First Message `{{intro_announcement}}`, připojené Knowledge Base a všech očekávaných Tools.
@@ -1572,6 +1577,11 @@ Při každé změně Šarloty ověřit:
 - WebSocket disconnect -> UI ukáže skutečný disconnect,
 - nechybí žádná required dynamic variable,
 - u modulů s hotovým textem `intro_announcement` zazní jen jednou; ve Svozových trasách technický marker nezazní vůbec a slyšitelný agentem vytvořený úvod zazní jen jednou,
+- jednorázovost úvodu je potvrzená serverovým stavem při obnovení stránky, remountu, reconnectu i souběžném pokusu,
+- před automatickým úvodem zazní intro gong; před běžnou odpovědí uživateli nezazní,
+- úvod používá jen ověřený vokativ, počet a první stanoviště, čerstvé počasí, čerstvou hodnotu T-Cars bez domyšlené jednotky a bezpečný stav nepřítomných dispečerů,
+- po závěrečné otázce odpověď řidiče do pěti sekund ponechá hlasový rozhovor otevřený,
+- pět sekund ticha přehraje outro gong a relaci ukončí bez věty `Jste stále zde`,
 - Šarlota tyká,
 - denní pozdrav odpovídá `Europe/Prague`,
 - hlasová akce se zápisem, změnou stavu, notifikací nebo externím dopadem vyžaduje potvrzovací popup v UI,

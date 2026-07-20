@@ -18,6 +18,7 @@ export async function onRequestGet({ request, env }) {
     const context = await buildCollectionRoutesSarlotaContext(env, user, {
       scope: tabletTest ? "test" : url.searchParams.get("scope"),
       date: url.searchParams.get("date"),
+      tabletTestSessionId,
       ...(tabletTest ? {
         simulatedUser: tabletTest.simulatedUser,
         detailOverride: tabletTest.route,

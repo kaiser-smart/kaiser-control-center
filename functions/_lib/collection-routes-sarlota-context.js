@@ -1,11 +1,15 @@
 import { getUsers } from "./auth.js";
 import { listEmployeeAvailabilityForSarlota } from "./absence-requests-store.js";
-import { getMyCollectionDailyRoute } from "./collection-daily-routes-store.js";
+import {
+  collectionDailyRouteVoiceIntroState,
+  getMyCollectionDailyRoute
+} from "./collection-daily-routes-store.js";
 import { driverReportContextForUser } from "./driver-report-context.js";
 import { userDynamicVariablesForAi } from "./ai-people-summary.js";
 import { currentSarlotaWeather } from "./sarlota-weather.js";
 import { currentSarlotaNews } from "./sarlota-news.js";
 import { getSarlotaUserMemory } from "./sarlota-user-memory.js";
+import { loadVerifiedTcarsFuelState } from "./tcars-client.js";
 import { hasPermission, isUserActive, normalizeRole, roleLabel } from "../../src/permissions.js";
 
 export class CollectionRoutesSarlotaContextError extends Error {
@@ -215,6 +219,22 @@ function availabilityByEmployee(items = []) {
   return result;
 }
 
+function safeAbsentDispatchers(users = [], availability = []) {
+  const unavailable = availabilityByEmployee(availability);
+  return users
+    .filter((user) => isUserActive(user) && normalizeRole(user.role) === "dispecer")
+    .map((user) => ({ user, absence: unavailable.get(cleanString(user.id).toLowerCase()) }))
+    .filter((item) => item.absence && item.absence.availability !== "available")
+    .map(({ user, absence }) => ({
+      id: cleanString(user.id),
+      name: cleanString(user.name),
+      status: cleanString(absence.availability || "unavailable"),
+      label: cleanString(absence.label || "Mimo pracoviště")
+    }))
+    .filter((item) => item.id && item.name)
+    .slice(0, 20);
+}
+
 function weatherLocationForRoute(detail) {
   const points = (Array.isArray(detail?.stops) ? detail.stops : [])
     .map((stop) => ({ latitude: Number(stop?.latitude), longitude: Number(stop?.longitude) }))
@@ -366,12 +386,35 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
         }
       }
     : safeVehicleAssignment(route, vehicles);
+  const fuel = options.fuelOverride !== undefined
+    ? options.fuelOverride
+    : vehicle.status === "verified" && vehicle.fleetVerified === true && vehicle.fleetMatch === true
+      ? await safeLoad(
+        () => loadVerifiedTcarsFuelState(env, {
+          vehicleId: /^\d+$/.test(cleanString(vehicle.fleetVehicle?.id)) ? cleanString(vehicle.fleetVehicle?.id) : "",
+          registration: vehicle.registration,
+          licensePlate: vehicle.registration
+        }),
+        { verified: false, status: "tcars_fuel_unavailable", value: null, unit: "", source: "T-Cars" }
+      )
+      : { verified: false, status: "vehicle_unverified", value: null, unit: "", source: "T-Cars" };
   const schedule = safeSchedule(detail);
   const readiness = startReadiness({ user: operationalUser, route, vehicle, crew, weather, schedule, scope, date });
   const voiceRoute = voiceSafeRoute(route, vehicle);
   const voiceVehicle = voiceSafeVehicleAssignment(vehicle);
+  const actorVariables = userDynamicVariablesForAi(operationalUser);
+  const absentDispatchers = safeAbsentDispatchers(users, availability);
+  const voiceIntro = collectionDailyRouteVoiceIntroState(detail?.run || {}, {
+    sessionId: options.tabletTestSessionId
+  });
   return {
-    actor: { id: cleanString(operationalUser.id), name: cleanString(operationalUser.name), role: cleanString(operationalUser.role) },
+    actor: {
+      id: cleanString(operationalUser.id),
+      name: cleanString(operationalUser.name),
+      role: cleanString(operationalUser.role),
+      vocative: cleanString(actorVariables.user_first_name_vocative),
+      friendlyVocative: cleanString(actorVariables.user_first_name_friendly_vocative)
+    },
     authenticatedActor: { id: cleanString(user.id), name: cleanString(user.name || user.email), role: cleanString(user.role) },
     simulation: simulationAllowed ? {
       active: true,
@@ -384,6 +427,16 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
     vehicle: voiceVehicle,
     crew,
     schedule,
+    fuel: fuel?.verified === true ? fuel : {
+      verified: false,
+      status: cleanString(fuel?.status || "unavailable"),
+      value: null,
+      unit: "",
+      source: "T-Cars"
+    },
+    absentDispatchers,
+    absentDispatchersVerified: true,
+    voiceIntro,
     readiness,
     vehicles,
     weather: weather?.verified ? weather : {

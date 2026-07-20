@@ -190,8 +190,8 @@ async function readLiveContent(env, assistantConfig) {
 const PROMPT_REQUIREMENTS = [
   ["intro_announcement", "úvodní hlášení Šarloty"],
   ["KSO_INTRO_GENERATION_PENDING", "technický marker úvodu Svozových tras"],
-  ["aktivního Promptu, připojené Knowledge Base a ověřených dynamic variables", "generování úvodu aktivní Šarlotou"],
-  ["KSO po dohrání úvodu hlasovou relaci a mikrofon ukončí", "automatické vypnutí Šarloty po úvodu"],
+  ["aktivního Promptu, připojené Knowledge Base a aktuálního JSON bloku ověřených dynamic variables", "generování úvodu aktivní Šarlotou"],
+  ["KSO po pěti sekundách přehraje outro gong a relaci ukončí", "pětisekundové ukončení Šarloty po tichu"],
   ["Mirku, s čím mohu pomoct?", "bezpečný pozdrav po ručním zapnutí"],
   ["get_collection_routes_context", "bezpečný kontext Svozových tras"],
   ["prepare_collection_route_gps_capture", "příprava GPS stanoviště"],
@@ -211,8 +211,8 @@ const KB_REQUIREMENTS = [
     label: "generování slyšitelného úvodu aktivní Šarlotou"
   },
   {
-    markers: ["po automatickem uvodu se hlasova relace a mikrofon vypnou"],
-    label: "automatické vypnutí Šarloty po úvodu"
+    markers: ["po peti sekundach prehraje outro gong", "po automatickem uvodu se hlasova relace a mikrofon vypnou"],
+    label: "pětisekundové ukončení Šarloty po tichu"
   },
   {
     markers: ["mirku, s cim mohu pomoct"],

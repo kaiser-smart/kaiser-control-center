@@ -388,6 +388,34 @@ function createVoiceAudioPlayer() {
     return true;
   }
 
+  async function playCue(url) {
+    const sourceUrl = String(url || "").trim();
+    if (!sourceUrl || !(await unlock()) || !audioContext) return false;
+    try {
+      const response = await fetch(sourceUrl, { credentials: "same-origin" });
+      if (!response.ok) return false;
+      const encoded = await response.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(encoded.slice(0));
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.destination);
+      const startAt = Math.max(audioContext.currentTime + 0.02, nextStartTime);
+      const ended = new Promise((resolve) => {
+        source.onended = () => {
+          activeSources.delete(source);
+          resolve(true);
+        };
+      });
+      activeSources.add(source);
+      source.start(startAt);
+      nextStartTime = startAt + audioBuffer.duration;
+      await ended;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function remainingPlaybackMs() {
     if (!audioContext || audioContext.state === "closed") {
       return 0;
@@ -398,6 +426,7 @@ function createVoiceAudioPlayer() {
 
   return {
     getContext: () => audioContext,
+    playCue,
     playPcmChunk,
     remainingPlaybackMs,
     stop,
@@ -799,6 +828,9 @@ export function useElevenLabsAssistant({
     const assistant = assistantById(assistantId);
     const introGenerationRequest = String(callbacks.introGenerationRequest || "").trim();
     const endAfterGeneratedIntro = Boolean(introGenerationRequest && callbacks.endAfterGeneratedIntro === true);
+    const continueAfterGeneratedIntro = Boolean(introGenerationRequest && callbacks.continueAfterGeneratedIntro === true);
+    const validateGeneratedIntro = typeof callbacks.validateGeneratedIntro === "function";
+    const bufferGeneratedIntro = Boolean(introGenerationRequest && validateGeneratedIntro);
 
     if (typeof WebSocket === "undefined") {
       throw new Error("Hlasový režim Šarloty není v tomto prohlížeči dostupný.");
@@ -878,6 +910,9 @@ export function useElevenLabsAssistant({
       let audioPlaybackFailed = false;
       let bufferedIntroAudio = [];
       let introFinalizing = false;
+      let introPlaybackFinished = false;
+      let introAwaitingUser = false;
+      let introUserEngaged = false;
       let introValidation = null;
       let audioInputStarted = false;
       let audioInputStopped = false;
@@ -892,6 +927,7 @@ export function useElevenLabsAssistant({
       let metadataFallbackTimer = 0;
       let finishTimer = 0;
       let introGenerationTimer = 0;
+      let introSilenceTimer = 0;
       let lastInputLevelAt = 0;
       const audioTrack = mediaStream?.getAudioTracks?.()[0] || null;
 
@@ -901,6 +937,7 @@ export function useElevenLabsAssistant({
         window.clearTimeout(metadataFallbackTimer);
         window.clearTimeout(finishTimer);
         window.clearTimeout(introGenerationTimer);
+        window.clearTimeout(introSilenceTimer);
       }
 
       function stopAudioInput() {
@@ -1041,7 +1078,7 @@ export function useElevenLabsAssistant({
         if (settled || introFinalizing) return;
         introFinalizing = true;
         const text = String(finalAgentText || streamedAgentText).trim();
-        const validation = typeof callbacks.validateGeneratedIntro === "function"
+        const validation = validateGeneratedIntro
           ? callbacks.validateGeneratedIntro(text)
           : { valid: true, violations: [] };
         introValidation = validation && typeof validation === "object"
@@ -1064,6 +1101,27 @@ export function useElevenLabsAssistant({
           error.payload = { ...resultPayload(), voiceRuntime: signedUrlSession.voiceRuntime || null };
           settle(reject, error, "intro-audio-missing");
           return;
+        }
+
+
+        if (typeof callbacks.onBeforeIntroPlayback === "function") {
+          let allowed = false;
+          try {
+            allowed = await callbacks.onBeforeIntroPlayback({
+              ...resultPayload(),
+              state: "intro-ready"
+            });
+          } catch (cause) {
+            const error = cause instanceof Error ? cause : new Error("Automatický úvod se nepodařilo bezpečně zahájit.");
+            settle(reject, error, "intro-before-playback-failed");
+            return;
+          }
+          if (allowed === false) {
+            const error = new Error("Automatický úvod už v této relaci proběhl.");
+            error.code = "voice_intro_already_played";
+            settle(reject, error, "intro-already-played");
+            return;
+          }
         }
 
         for (const chunk of bufferedIntroAudio) {
@@ -1090,6 +1148,34 @@ export function useElevenLabsAssistant({
         });
         const playbackDelay = voiceInputResumeDelayMs(0, voiceAudioPlayer.remainingPlaybackMs());
         finishTimer = window.setTimeout(() => {
+          introPlaybackFinished = true;
+          if (continueAfterGeneratedIntro) {
+            introAwaitingUser = true;
+            audioInputPaused = false;
+            callbacks.onIntroListening?.({
+              ...resultPayload(),
+              state: "intro-waiting-for-driver",
+              microphoneActive: true
+            });
+            const timeoutMs = Math.max(1000, Number(callbacks.introSilenceTimeoutMs || 5000));
+            introSilenceTimer = window.setTimeout(async () => {
+              if (settled || introUserEngaged) return;
+              audioInputPaused = true;
+              callbacks.onIntroSilence?.({ ...resultPayload(), state: "intro-silence" });
+              try {
+                await callbacks.onIntroSilenceTimeout?.({ ...resultPayload(), state: "intro-silence" });
+              } finally {
+                const payload = {
+                  ...resultPayload(),
+                  state: "intro-silence-complete",
+                  microphoneActive: false
+                };
+                callbacks.onIntroComplete?.(payload);
+                settle(resolve, payload, "intro-silence-complete");
+              }
+            }, timeoutMs);
+            return;
+          }
           const payload = {
             ...resultPayload(),
             state: "intro-complete",
@@ -1102,7 +1188,7 @@ export function useElevenLabsAssistant({
 
       function scheduleReady(delay = VOICE_FINISH_GRACE_MS) {
         const responseText = String(finalAgentText || streamedAgentText).trim();
-        if (endAfterGeneratedIntro && (!responseText || audioChunkCount === 0)) {
+        if (bufferGeneratedIntro && !introPlaybackFinished && (!responseText || audioChunkCount === 0)) {
           return;
         }
         if (!responseText && audioChunkCount === 0) {
@@ -1110,7 +1196,7 @@ export function useElevenLabsAssistant({
         }
 
         window.clearTimeout(finishTimer);
-        if (endAfterGeneratedIntro) {
+        if (bufferGeneratedIntro && !introPlaybackFinished) {
           finishTimer = window.setTimeout(() => {
             void finishValidatedGeneratedIntro();
           }, Math.max(300, Number(delay) || 0));
@@ -1295,6 +1381,12 @@ export function useElevenLabsAssistant({
             return;
           }
           if (userTranscript) {
+            if (introAwaitingUser && !introUserEngaged) {
+              introUserEngaged = true;
+              introAwaitingUser = false;
+              window.clearTimeout(introSilenceTimer);
+              callbacks.onIntroEngaged?.({ text: userTranscript, conversationId });
+            }
             audioInputPaused = true;
             streamedAgentText = "";
             finalAgentText = "";
@@ -1318,10 +1410,13 @@ export function useElevenLabsAssistant({
             return;
           }
           if (audioBase64) {
+            if (introAwaitingUser && !introUserEngaged) {
+              return;
+            }
             audioInputPaused = true;
             audioChunkCount += 1;
             window.clearTimeout(finishTimer);
-            if (endAfterGeneratedIntro) {
+            if (bufferGeneratedIntro && !introPlaybackFinished) {
               bufferedIntroAudio.push({ audioBase64, format: agentAudioFormat });
               scheduleReady(900);
               return;
@@ -1360,6 +1455,9 @@ export function useElevenLabsAssistant({
           if (introGenerationPhase === "waiting-for-generated-intro") {
             introGenerationPhase = "complete";
           }
+          if (introAwaitingUser && !introUserEngaged) {
+            return;
+          }
           window.clearTimeout(responseTimer);
           rememberAgentText(payload.agent_response_event?.agent_response);
           return;
@@ -1379,6 +1477,9 @@ export function useElevenLabsAssistant({
           }
           if (introGenerationPhase === "waiting-for-generated-intro") {
             introGenerationPhase = "complete";
+          }
+          if (introAwaitingUser && !introUserEngaged) {
+            return;
           }
 
           if (partType === "start") {
@@ -1409,6 +1510,9 @@ export function useElevenLabsAssistant({
           }
           if (introGenerationPhase === "waiting-for-generated-intro") {
             introGenerationPhase = "complete";
+          }
+          if (introAwaitingUser && !introUserEngaged) {
+            return;
           }
           window.clearTimeout(responseTimer);
           if (streamedAgentText && !finalAgentText) {
@@ -1465,6 +1569,8 @@ export function useElevenLabsAssistant({
     const assistant = assistantById(assistantId);
     const text = String(message || "").trim();
     const instructionOnly = options.instructionOnly === true;
+    const automaticSpeech = options.automaticSpeech === true;
+    const automaticSpeechCueUrl = String(options.automaticSpeechCueUrl || "").trim();
 
     if (!text) {
       throw new Error("Napište nebo nadiktujte dotaz pro Šarlotu.");
@@ -1498,6 +1604,7 @@ export function useElevenLabsAssistant({
       let audioChunkCount = 0;
       let audioPlaybackStarted = false;
       let audioPlaybackFailed = false;
+      let automaticCuePromise = null;
 
       const connectionTimer = window.setTimeout(() => {
         settle(reject, new Error("Hlasový režim Šarloty se nepodařilo připojit."));
@@ -1654,7 +1761,11 @@ export function useElevenLabsAssistant({
           const audioBase64 = payload.audio_event?.audio_base_64;
           if (audioBase64) {
             audioChunkCount += 1;
-            voiceAudioPlayer.playPcmChunk(audioBase64, agentAudioFormat)
+            if (automaticSpeech && !automaticCuePromise) {
+              automaticCuePromise = voiceAudioPlayer.playCue(automaticSpeechCueUrl);
+            }
+            Promise.resolve(automaticCuePromise)
+              .then(() => voiceAudioPlayer.playPcmChunk(audioBase64, agentAudioFormat))
               .then((played) => {
                 audioPlaybackStarted = audioPlaybackStarted || Boolean(played);
                 audioPlaybackFailed = audioPlaybackFailed || !played;
@@ -1719,6 +1830,7 @@ export function useElevenLabsAssistant({
     discardVoiceInput,
     prepareVoiceInput,
     prepareSignedUrl,
+    playVoiceCue: voiceAudioPlayer.playCue,
     sendTextMessage,
     startVoiceConversation,
     sendVoiceMessage,

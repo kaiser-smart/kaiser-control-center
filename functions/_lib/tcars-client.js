@@ -5,6 +5,7 @@ const TCARS_MIN_POLL_INTERVAL_SECONDS = 30;
 const TCARS_DEFAULT_POLL_INTERVAL_SECONDS = 60;
 const TCARS_REQUEST_TIMEOUT_MS = 15000;
 const TCARS_STALE_LOCATION_SECONDS = 30 * 60;
+const TCARS_FUEL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export class TcarsClientError extends Error {
   constructor(message, status = 503, code = "tcars_unavailable") {
@@ -371,6 +372,33 @@ function parseTcarsPosition(block, refs) {
   };
 }
 
+function parseTcarsTrip(block) {
+  return {
+    id: tagValue(block, "jizdaId"),
+    startedAt: tagValue(block, "jizdaOd"),
+    endedAt: tagValue(block, "jizdaDo"),
+    fuelState: parseNumber(tagValue(block, "jizdaStavPhm")),
+    fuelStateSecondary: parseNumber(tagValue(block, "jizdaStavPhm2"))
+  };
+}
+
+export function parseTcarsTripsXml(xml) {
+  return typedBlocks(xml, "jizda", "tJizda").map(parseTcarsTrip);
+}
+
+function normalizeRegistration(value) {
+  return cleanString(value).toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function cleanString(value) {
+  return String(value ?? "").trim();
+}
+
+function dateTimeValue(value) {
+  const date = new Date(cleanString(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function loginDataXml(config) {
   return `
     <loginData xsi:type="tns:tLoginData">
@@ -499,6 +527,85 @@ export async function fetchTcarsPositions(env = {}) {
   const refs = multiRefMap(xml);
 
   return typedBlocks(xml, "pozice", "tPozice").map((block) => parseTcarsPosition(block, refs));
+}
+
+export async function fetchTcarsVehicleTrips(env = {}, vehicle = {}, options = {}) {
+  const config = tcarsConfig(env);
+  const now = dateTimeValue(options.now) || new Date();
+  const from = dateTimeValue(options.from) || new Date(now.getTime() - TCARS_FUEL_MAX_AGE_MS);
+  const vehicleId = cleanString(vehicle.tcarsVehicleId || vehicle.externalVehicleId || vehicle.vehicleId);
+  const licensePlate = cleanString(vehicle.tcarsLicensePlate || vehicle.licensePlate || vehicle.registration);
+  if (!vehicleId && !licensePlate) {
+    throw new TcarsClientError("Pro načtení stavu nádrže chybí ověřené vozidlo.", 400, "tcars_vehicle_required");
+  }
+  const xml = await tcarsSoapRequest(env, "knihaJizdVozidlo", `
+    ${loginDataXml(config)}
+    <vozidloId xsi:type="xsd:int">${xmlEscape(vehicleId || 0)}</vozidloId>
+    <vozidloRz xsi:type="xsd:string">${xmlEscape(licensePlate)}</vozidloRz>
+    <datumOd xsi:type="xsd:date">${xmlEscape(from.toISOString().slice(0, 10))}</datumOd>
+    <datumDo xsi:type="xsd:date">${xmlEscape(now.toISOString().slice(0, 10))}</datumDo>
+  `);
+  return parseTcarsTripsXml(xml);
+}
+
+export function verifiedTcarsFuelState(trips = [], vehicle = {}, options = {}) {
+  const now = dateTimeValue(options.now) || new Date();
+  const maxAgeMs = Number.isFinite(Number(options.maxAgeMs))
+    ? Math.max(0, Number(options.maxAgeMs))
+    : TCARS_FUEL_MAX_AGE_MS;
+  const exactVehicleId = cleanString(vehicle.tcarsVehicleId || vehicle.externalVehicleId || vehicle.vehicleId);
+  const exactRegistration = normalizeRegistration(
+    vehicle.tcarsLicensePlate || vehicle.licensePlate || vehicle.registration
+  );
+  if (!exactVehicleId && !exactRegistration) {
+    return { verified: false, status: "vehicle_unverified", value: null, unit: "", source: "T-Cars" };
+  }
+  const latest = (Array.isArray(trips) ? trips : [])
+    .filter((trip) => trip && trip.fuelState !== null && Number.isFinite(Number(trip.fuelState)))
+    .map((trip) => ({ ...trip, endedDate: dateTimeValue(trip.endedAt || trip.startedAt) }))
+    .filter((trip) => trip.endedDate)
+    .sort((left, right) => right.endedDate.getTime() - left.endedDate.getTime())[0] || null;
+  if (!latest) {
+    return { verified: false, status: "fuel_unavailable", value: null, unit: "", source: "T-Cars" };
+  }
+  const ageMs = now.getTime() - latest.endedDate.getTime();
+  if (ageMs < 0 || ageMs > maxAgeMs) {
+    return {
+      verified: false,
+      status: "fuel_stale",
+      value: null,
+      unit: "",
+      source: "T-Cars",
+      measuredAt: latest.endedDate.toISOString()
+    };
+  }
+  return {
+    verified: true,
+    status: "verified",
+    value: Number(latest.fuelState),
+    unit: "",
+    unitStatus: "not_provided_by_api",
+    source: "T-Cars",
+    measuredAt: latest.endedDate.toISOString(),
+    vehicleId: exactVehicleId,
+    registration: exactRegistration
+  };
+}
+
+export async function loadVerifiedTcarsFuelState(env = {}, vehicle = {}, options = {}) {
+  try {
+    const trips = await fetchTcarsVehicleTrips(env, vehicle, options);
+    return verifiedTcarsFuelState(trips, vehicle, options);
+  } catch (error) {
+    console.error("tcars.read_fuel_failed", { code: error?.code || "unknown", message: error?.message || "unknown" });
+    return {
+      verified: false,
+      status: error?.code || "tcars_fuel_read_failed",
+      value: null,
+      unit: "",
+      source: "T-Cars"
+    };
+  }
 }
 
 function tcarsErrorPayload(basePayload, error) {

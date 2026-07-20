@@ -6,7 +6,8 @@ import {
   getCollectionDailyRouteTabletTestContext,
   getCollectionDailyRouteTabletTestLauncher,
   resetCollectionDailyRouteTabletTestSession,
-  startCollectionDailyRouteTabletTestSession
+  startCollectionDailyRouteTabletTestSession,
+  updateCollectionDailyRouteVoiceIntro
 } from "../functions/_lib/collection-daily-routes-store.js";
 import { buildCollectionRoutesSarlotaContext } from "../functions/_lib/collection-routes-sarlota-context.js";
 
@@ -179,11 +180,13 @@ const voiceContext = await buildCollectionRoutesSarlotaContext(env, admin, {
   scope: "test",
   simulatedUser: context.simulatedUser,
   detailOverride: context.route,
+  tabletTestSessionId: started.session.id,
   trustTestRouteVehicle: true,
   vehiclesOverride: { vehiclesVerified: false, vehicles: [] },
   usersOverride: [admin, driver],
   weatherOverride: { verified: true, status: "ready", summary: "TEST počasí načteno." },
   availabilityOverride: [],
+  fuelOverride: { verified: false, status: "unavailable", value: null },
   memoryOverride: { available: false, consent: false, apiStatus: "unavailable_test_scope" },
   newsOverride: { ok: true, status: "ready", source: "test", sourceUrl: "", fetchedAt: "", items: [] }
 });
@@ -194,11 +197,35 @@ assert.equal(voiceContext.route.driverVerified, true);
 assert.equal(voiceContext.vehicle.status, "verified");
 assert.equal(voiceContext.memory.apiStatus, "unavailable_test_scope");
 assert.equal(voiceContext.introAnnouncement, "KSO_INTRO_GENERATION_PENDING");
+assert.equal(voiceContext.voiceIntro.canAutoStart, true);
 assert.doesNotMatch(voiceContext.introAnnouncement, /Mirku|Dnešní trasu|můžeme vyrazit/i);
 await assert.rejects(
   getCollectionDailyRouteTabletTestContext(env, otherAdmin, started.session.id),
   (error) => error.code === "collection_daily_route_tablet_test_session_missing"
 );
+
+const voiceIntroStarted = await updateCollectionDailyRouteVoiceIntro(env, admin, started.session.runId, {
+  scope: "test",
+  sessionId: started.session.id,
+  action: "begin_playback"
+});
+assert.equal(voiceIntroStarted.allowed, true);
+assert.ok(voiceIntroStarted.playbackToken);
+assert.equal(voiceIntroStarted.state.canAutoStart, false);
+const duplicateVoiceIntro = await updateCollectionDailyRouteVoiceIntro(env, admin, started.session.runId, {
+  scope: "test",
+  sessionId: started.session.id,
+  action: "begin_playback"
+});
+assert.equal(duplicateVoiceIntro.allowed, false);
+assert.equal(duplicateVoiceIntro.reason, "already_started");
+const voiceIntroCompleted = await updateCollectionDailyRouteVoiceIntro(env, admin, started.session.runId, {
+  scope: "test",
+  sessionId: started.session.id,
+  action: "complete",
+  playbackToken: voiceIntroStarted.playbackToken
+});
+assert.equal(voiceIntroCompleted.state.completed, true);
 
 const reset = await resetCollectionDailyRouteTabletTestSession(env, admin, {
   runId: started.session.runId,
@@ -209,8 +236,8 @@ assert.equal(testSqlite.prepare("SELECT status FROM collection_daily_route_runs 
 assert.equal(testSqlite.prepare("SELECT status FROM collection_daily_route_stops WHERE id = 'tablet-stop-1'").get().status, "planned");
 assert.equal((await getCollectionDailyRouteTabletTestLauncher(env, admin)).session, null);
 assert.equal(
-  testSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_events WHERE event_type IN ('tablet_test_session_started', 'tablet_test_session_reset')").get().count,
-  2
+  testSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_events WHERE event_type IN ('tablet_test_session_started', 'tablet_test_session_reset', 'sarlota_voice_intro_started', 'sarlota_voice_intro_completed')").get().count,
+  4
 );
 
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
@@ -230,6 +257,7 @@ const restoreTestEnd = appSource.indexOf("async function openCollectionRoutesAdm
 assert.ok(restoreTestStart >= 0 && restoreTestEnd > restoreTestStart);
 const restoreTestSource = appSource.slice(restoreTestStart, restoreTestEnd);
 assert.match(restoreTestSource, /shouldRestoreSarlota/);
+assert.match(restoreTestSource, /voiceIntro\?\.canAutoStart === true/);
 assert.match(restoreTestSource, /myDailyRouteSarlotaAutoAttemptedRunId !== restoredRun\.id/);
 assert.match(restoreTestSource, /enableCollectionDailyDriverSarlota\(\{ promptForMemory: false, invocation: "automatic" \}\)/);
 const startTestStart = appSource.indexOf("async function startCollectionRoutesAdminTabletTest");

@@ -1,4 +1,4 @@
-export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-20-v4";
+export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-20-v5-route-intro-gongs";
 export const SARLOTA_LANGUAGE_KB_NAME = "Šarlota – jazyková reference KSO";
 export const SARLOTA_PRONUNCIATION_DICTIONARY_NAME = "Šarlota – čeština KSO";
 
@@ -19,10 +19,11 @@ export const SARLOTA_LANGUAGE_KB_CONTENT = [
   "## Úvod Svozové trasy",
   "Slyšitelné úvodní hlášení vytváří aktivní agent až na interní požadavek KSO z ověřeného kontextu Svozových tras.",
   "Technický marker KSO_INTRO_GENERATION_PENDING, interní požadavek ani názvy dynamic variables se nikdy nevyslovují.",
-  "Automatický úvod Svozových tras smí použít jen fakta z aktuálního JSON bloku KSO. Cizí trasa, počet stanovišť, vozidlo, model, SPZ nebo počasí jsou zakázané.",
+  "Automatický úvod Svozových tras smí použít jen fakta z aktuálního JSON bloku KSO. Cizí osoba, trasa, počet nebo první stanoviště, vozidlo, model, SPZ, počasí, palivo nebo pracovní dostupnost jsou zakázané.",
   "Počasí v automatickém úvodu použij pouze jako přesné čerstvé ověřené weather.summary z KSO. Hodnocení typu počasí přeje nevytvářej; bez ověřeného počasí zmínku úplně vynech.",
-  "Úvod vytvoř pokaždé přirozeně vlastními slovy, nikoli podle pevné větné šablony. Řidiče pozdrav, rozhodující ověřené údaje řekni nejvýše jednou a na potvrzení trasy se znovu neptej.",
-  "Po automatickém úvodu se hlasová relace a mikrofon vypnou. Nepokládej navazující ani kontrolní otázku a neříkej Jste stále zde.",
+  "Úvod vytvoř pokaždé přirozeně vlastními slovy, nikoli podle pevné větné šablony. V pořadí použij dostupný ověřený vokativ řidiče, počet stanovišť, první firmu, čerstvé počasí, poslední ověřenou hodnotu nádrže T-Cars bez domyšlené jednotky a jména ověřených nepřítomných dispečerů bez soukromého důvodu.",
+  "Úvod zakonči jedinou otázkou, zda řidič potřebuje něco upřesnit. Potom mlč. Když řidič promluví, pokračuj běžným rozhovorem. Když nepromluví, KSO po pěti sekundách přehraje outro gong a relaci ukončí; nikdy neříkej Jste stále zde.",
+  "KSO přehrává intro gong před každým automatickým promluvením Šarloty. Před běžnou odpovědí na uživatelovu řeč se gong nepřehrává.",
   "Při ručním zapnutí mikrofonem polož jednu krátkou otázku ve významu Mirku, s čím mohu pomoct? Oslovení použij jen při ověřeném vokativu. Potom zůstaň poslouchat.",
   "",
   "## Oslovení a jména",

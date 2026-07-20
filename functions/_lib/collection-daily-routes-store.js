@@ -1345,6 +1345,149 @@ function publicTabletTestSession(session = {}, run = null) {
   };
 }
 
+function voiceIntroSessionKey(run = {}, options = {}) {
+  const metadata = run?.metadata && typeof run.metadata === "object"
+    ? run.metadata
+    : parseJson(run?.metadata_json, {});
+  const scope = runDataScope(run);
+  if (scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST) {
+    const session = metadata.adminTabletTestSession;
+    const requestedSessionId = cleanString(options.sessionId);
+    if (
+      !session
+      || session.active !== true
+      || !cleanString(session.id)
+      || (requestedSessionId && cleanString(session.id) !== requestedSessionId)
+    ) return "";
+    return `test:${cleanString(session.id)}`;
+  }
+  const startedAt = cleanString(run?.started_at || run?.startedAt);
+  return cleanString(run?.id) && startedAt ? `route:${cleanString(run.id)}:${startedAt}` : "";
+}
+
+export function collectionDailyRouteVoiceIntroState(run = {}, options = {}) {
+  const metadata = run?.metadata && typeof run.metadata === "object"
+    ? run.metadata
+    : parseJson(run?.metadata_json, {});
+  const sessionKey = voiceIntroSessionKey(run, options);
+  const stored = metadata.sarlotaVoiceIntro && typeof metadata.sarlotaVoiceIntro === "object"
+    ? metadata.sarlotaVoiceIntro
+    : {};
+  const sameSession = Boolean(sessionKey && cleanString(stored.sessionKey) === sessionKey);
+  const status = sameSession ? cleanString(stored.status || "started") : "ready";
+  return {
+    sessionKey,
+    status: sessionKey ? status : "unavailable",
+    started: sameSession && Boolean(stored.startedAt),
+    completed: sameSession && ["completed", "engaged"].includes(status),
+    engaged: sameSession && status === "engaged",
+    canAutoStart: Boolean(
+      sessionKey
+      && cleanString(run?.status) === "active"
+      && (!sameSession || !stored.startedAt)
+    ),
+    startedAt: sameSession ? cleanString(stored.startedAt) : "",
+    completedAt: sameSession ? cleanString(stored.completedAt) : ""
+  };
+}
+
+export async function updateCollectionDailyRouteVoiceIntro(env, user, runId, input = {}) {
+  const scope = collectionDailyRouteScope(input.scope);
+  assertTestScopeReader(user, scope);
+  const action = cleanString(input.action);
+  if (!new Set(["begin_playback", "engaged", "complete"]).has(action)) {
+    throw new CollectionDailyRoutesError("Neplatná akce hlasového úvodu.", 400, "collection_route_voice_intro_action_invalid");
+  }
+  const db = database(env, true, scope);
+  try {
+    const run = await loadRunRow(db, cleanString(runId));
+    assertRunMatchesScope(run, scope);
+    assertTestRunAccess(user, run, scope);
+    assertCanOperateRun(user, run);
+    const sessionKey = voiceIntroSessionKey(run, { sessionId: input.sessionId });
+    if (!sessionKey || cleanString(run.status) !== "active") {
+      throw new CollectionDailyRoutesError(
+        "Hlasový úvod lze spustit jen v aktivní relaci trasy.",
+        409,
+        "collection_route_voice_intro_session_inactive"
+      );
+    }
+    const metadata = parseJson(run.metadata_json, {});
+    const stored = metadata.sarlotaVoiceIntro && typeof metadata.sarlotaVoiceIntro === "object"
+      ? metadata.sarlotaVoiceIntro
+      : {};
+    const actorName = cleanString(user.name || user.email || user.phone);
+    const changedAt = nowIso();
+
+    if (action === "begin_playback") {
+      const idempotencyKey = `collection-route-voice-intro-begin:${sessionKey}`;
+      const playbackToken = randomId("voice-intro-playback");
+      const insert = await db.prepare(`
+        INSERT OR IGNORE INTO collection_daily_route_events (
+          id, run_id, event_type, before_status, after_status, note, idempotency_key,
+          actor_user_id, actor_name, created_at, payload_json
+        ) VALUES (?, ?, 'sarlota_voice_intro_started', ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        randomId("collection-daily-event"), run.id, cleanString(run.status), cleanString(run.status),
+        "Automatický hlasový úvod Šarloty byl jednorázově zahájen.", idempotencyKey,
+        cleanString(user.id), actorName, changedAt, jsonString({ sessionKey, scope })
+      ).run();
+      if (Number(insert?.meta?.changes || 0) !== 1) {
+        return { allowed: false, reason: "already_started", state: collectionDailyRouteVoiceIntroState(await loadRunRow(db, run.id), { sessionId: input.sessionId }) };
+      }
+      const next = {
+        sessionKey,
+        playbackToken,
+        status: "started",
+        startedAt: changedAt,
+        startedByUserId: cleanString(user.id)
+      };
+      await db.prepare("UPDATE collection_daily_route_runs SET metadata_json = ?, updated_at = ? WHERE id = ?")
+        .bind(jsonString({ ...metadata, sarlotaVoiceIntro: next }), changedAt, run.id).run();
+      return {
+        allowed: true,
+        playbackToken,
+        state: collectionDailyRouteVoiceIntroState({ ...run, metadata_json: jsonString({ ...metadata, sarlotaVoiceIntro: next }) }, { sessionId: input.sessionId })
+      };
+    }
+
+    if (cleanString(stored.sessionKey) !== sessionKey || !cleanString(stored.playbackToken)) {
+      throw new CollectionDailyRoutesError("Aktivní hlasový úvod nebyl nalezen.", 409, "collection_route_voice_intro_not_started");
+    }
+    if (cleanString(input.playbackToken) !== cleanString(stored.playbackToken)) {
+      throw new CollectionDailyRoutesError("Hlasový úvod nemá platné potvrzení přehrávání.", 403, "collection_route_voice_intro_token_invalid");
+    }
+    const status = action === "engaged" ? "engaged" : "completed";
+    const idempotencyKey = `collection-route-voice-intro-${status}:${sessionKey}`;
+    await db.prepare(`
+      INSERT OR IGNORE INTO collection_daily_route_events (
+        id, run_id, event_type, before_status, after_status, note, idempotency_key,
+        actor_user_id, actor_name, created_at, payload_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      randomId("collection-daily-event"), run.id, `sarlota_voice_intro_${status}`,
+      cleanString(run.status), cleanString(run.status),
+      status === "engaged" ? "Řidič na úvod odpověděl; hlasová konverzace pokračuje." : "Úvod byl po pěti sekundách bez odpovědi ukončen gongem.",
+      idempotencyKey, cleanString(user.id), actorName, changedAt, jsonString({ sessionKey, scope })
+    ).run();
+    const next = {
+      ...stored,
+      status,
+      completedAt: changedAt,
+      completedByUserId: cleanString(user.id)
+    };
+    await db.prepare("UPDATE collection_daily_route_runs SET metadata_json = ?, updated_at = ? WHERE id = ?")
+      .bind(jsonString({ ...metadata, sarlotaVoiceIntro: next }), changedAt, run.id).run();
+    return {
+      allowed: false,
+      playbackToken: "",
+      state: collectionDailyRouteVoiceIntroState({ ...run, metadata_json: jsonString({ ...metadata, sarlotaVoiceIntro: next }) }, { sessionId: input.sessionId })
+    };
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
 function assertTabletTestManager(user) {
   assertManage(user);
   if (!isCollectionDailyRouteTestManager(user)) {

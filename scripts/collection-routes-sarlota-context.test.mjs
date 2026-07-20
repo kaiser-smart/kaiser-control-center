@@ -242,6 +242,7 @@ const context = await buildCollectionRoutesSarlotaContext({}, miroslav, {
   },
   newsOverride: readyNews,
   availabilityOverride: [],
+  fuelOverride: { verified: false, status: "unavailable", value: null },
   memoryOverride: memory
 });
 assert.equal(context.route.id, "route-miroslav");

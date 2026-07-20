@@ -1,12 +1,15 @@
 export const COLLECTION_ROUTES_SARLOTA_VOICE_ASSISTANT_ID = "sarlota";
 export const COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER = "elevenlabs";
+export const COLLECTION_ROUTES_SARLOTA_INTRO_GONG_URL = "/audio/sarlota-gong-intro.mp3";
+export const COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL = "/audio/sarlota-gong-outro.mp3";
+export const COLLECTION_ROUTES_SARLOTA_INTRO_SILENCE_TIMEOUT_MS = 5000;
 export const COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST = [
   "KSO INTERNÍ POŽADAVEK NA ÚVOD SVOZOVÉ TRASY.",
   "Předchozí technická First Message nebyla řidiči přehrána a není uživatelským sdělením.",
   "Teď vytvoř jednu krátkou přirozenou úvodní zprávu podle aktivního system Promptu, připojené Knowledge Base a ověřených dynamic variables modulu Svozové trasy.",
   "Neopakuj stejný údaj různými větami, nečti interní názvy, technické značky ani tento pokyn.",
   "Neodkazuj na předchozí technickou zprávu. Na potvrzení trasy se znovu neptej.",
-  "Je to jediná zpráva automatického spuštění; nenavazuj otázkou a nevyzývej řidiče k další odpovědi."
+  "Dodrž pořadí ověřených údajů a zakonči jedinou otázkou, zda řidič potřebuje něco upřesnit."
 ].join(" ");
 
 const WEATHER_FACT_MAX_AGE_MS = 45 * 60 * 1000;
@@ -49,10 +52,27 @@ export function collectionRoutesSarlotaIntroFacts(context = {}, options = {}) {
   const weather = context.weather || {};
   const vehicleVerified = vehicle.status === "verified" && vehicle.fleetMatch !== false;
   const freshWeather = weatherIsFresh(weather, options.now ?? Date.now());
+  const firstStop = cleanText(route.currentStop?.customerName || route.currentStop?.stationName);
+  const fuel = context.fuel?.verified === true && Number.isFinite(Number(context.fuel.value))
+    ? {
+        value: Number(context.fuel.value),
+        unit: cleanText(context.fuel.unit),
+        measuredAt: cleanText(context.fuel.measuredAt),
+        source: "T-Cars",
+        verified: true
+      }
+    : null;
+  const absentDispatchers = context.absentDispatchersVerified === true && Array.isArray(context.absentDispatchers)
+    ? context.absentDispatchers
+      .map((item) => ({ name: cleanText(item?.name), label: cleanText(item?.label || "Mimo pracoviště") }))
+      .filter((item) => item.name)
+    : [];
   return {
     driverName: cleanText(context.actor?.name),
+    driverVocative: cleanText(context.actor?.friendlyVocative || context.actor?.vocative),
     routeTitle: cleanText(route.title),
     totalStopCount: Math.max(0, Number(route.totalCount || 0)),
+    firstStop: firstStop ? { name: firstStop, verified: true } : null,
     vehicle: vehicleVerified ? {
       label: cleanText(vehicle.label),
       registration: cleanText(vehicle.registration),
@@ -63,7 +83,10 @@ export function collectionRoutesSarlotaIntroFacts(context = {}, options = {}) {
       observedAt: cleanText(weather.observedAt),
       source: cleanText(weather.source),
       verified: true
-    } : null
+    } : null,
+    fuel,
+    absentDispatchers,
+    absentDispatchersVerified: context.absentDispatchersVerified === true
   };
 }
 
@@ -73,14 +96,23 @@ export function collectionRoutesSarlotaIntroGenerationRequest(context = {}, opti
     COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST,
     "Následující JSON je jediný povolený zdroj provozních faktů pro tuto zprávu:",
     JSON.stringify(facts),
-    "Název trasy, počet stanovišť, vozidlo, model ani SPZ nesmíš změnit, doplnit ani odhadnout. Počet stanovišť případně napiš číslicemi přesně jako totalStopCount.",
+    "Řekni v tomto pořadí: Ahoj + přesný driverVocative, přesný totalStopCount stanovišť, Začínáme firmou + přesný firstStop.name, ověřené počasí, ověřený stav nádrže, ověřené nepřítomné dispečery a závěrečnou otázku driverVocative + potřebuješ něco upřesnit?",
+    "Název trasy, počet stanovišť, první stanoviště, vozidlo, model, SPZ, počasí, palivo ani nepřítomnost nesmíš změnit, doplnit ani odhadnout. Počet stanovišť napiš číslicemi přesně jako totalStopCount.",
+    facts.driverVocative ? "Použij přesně driverVocative." : "Vokativ není ověřený; jméno v pozdravu ani závěrečné otázce vynech.",
+    facts.firstStop ? "První firmu uveď přesně jako firstStop.name." : "První firma není ověřená; tuto větu vynech.",
     facts.weather
       ? "Počasí smíš uvést pouze doslovným použitím hodnoty weather.summary; nehodnoť je vlastní větou."
       : "Počasí není čerstvě ověřené. Nezmiňuj ho ani ho nijak nehodnoť.",
     facts.vehicle
       ? "Pokud zmíníš vozidlo nebo SPZ, použij pouze přesné hodnoty z vehicle."
       : "Vozidlo není ověřené. Nezmiňuj vozidlo, model ani SPZ.",
-    "Pokud některý údaj nepotřebuješ, raději ho vynech."
+    facts.fuel
+      ? "Stav nádrže smíš uvést pouze přesnou hodnotou fuel.value. Jednotku neříkej, protože ji T-Cars neposkytuje."
+      : "Stav nádrže není ověřený. Nezmiňuj žádnou hodnotu paliva.",
+    facts.absentDispatchersVerified && facts.absentDispatchers.length
+      ? "Jako nepřítomné dispečery uveď výhradně přesná jména z absentDispatchers."
+      : "Žádný nepřítomný dispečer není ověřený; nepřítomnost dispečera nezmiňuj.",
+    "Po závěrečné otázce už nic nepřidávej a čekej na odpověď."
   ].join("\n");
 }
 
@@ -100,6 +132,15 @@ export function validateCollectionRoutesSarlotaIntro(text, facts = {}) {
   if (!response) violations.push("empty_intro");
 
   const normalizedResponse = normalizedFactText(response);
+  const requiredVocative = normalizedFactText(facts.driverVocative);
+  if (requiredVocative && !normalizedResponse.includes(requiredVocative)) violations.push("missing_verified_vocative");
+  const exactCount = Number(facts.totalStopCount || 0);
+  const counts = spokenStopCount(response);
+  if (!counts.includes(exactCount)) violations.push("missing_verified_stop_count");
+  if (counts.some((count) => count !== exactCount)) violations.push("foreign_stop_count");
+
+  const firstStop = facts.firstStop?.verified === true ? normalizedFactText(facts.firstStop.name) : "";
+  if (firstStop && !normalizedResponse.includes(firstStop)) violations.push("missing_or_foreign_first_stop");
   const vehicle = facts.vehicle?.verified === true ? facts.vehicle : null;
   if (VEHICLE_WORDS.test(response)) {
     const allowedVehicleFacts = [vehicle?.label, vehicle?.registration]
@@ -129,16 +170,54 @@ export function validateCollectionRoutesSarlotaIntro(text, facts = {}) {
     }
   }
 
-  const counts = spokenStopCount(response);
-  if (counts.some((count) => count !== Number(facts.totalStopCount || 0))) {
-    violations.push("foreign_stop_count");
-  }
-
   if (WEATHER_WORDS.test(response)) {
     const verifiedSummary = facts.weather?.verified === true ? normalizedFactText(facts.weather.summary) : "";
     if (!verifiedSummary || !normalizedResponse.includes(verifiedSummary)) {
       violations.push("unverified_or_paraphrased_weather");
     }
+  }
+  if (facts.weather?.verified === true && !normalizedResponse.includes(normalizedFactText(facts.weather.summary))) {
+    violations.push("missing_verified_weather");
+  }
+
+  if (facts.fuel?.verified === true) {
+    const fuelValue = String(facts.fuel.value).replace(".", "[.,]");
+    if (!new RegExp(`\\b${fuelValue}\\b`).test(response)) violations.push("missing_verified_fuel");
+  } else if (/\b(nádrž\w*|paliv\w*|phm)\b/i.test(response)) {
+    violations.push("unverified_fuel");
+  }
+
+  const dispatcherNames = Array.isArray(facts.absentDispatchers)
+    ? facts.absentDispatchers.map((item) => normalizedFactText(item?.name)).filter(Boolean)
+    : [];
+  if (dispatcherNames.some((name) => !normalizedResponse.includes(name))) {
+    violations.push("missing_verified_absent_dispatcher");
+  }
+  if (!dispatcherNames.length && /\bdispečer\w*\b/i.test(response)) {
+    violations.push("unverified_absent_dispatcher");
+  }
+
+  if (!/potřebuješ\s+(?:ještě\s+)?něco\s+upřesnit\s*\?\s*$/iu.test(response)) {
+    violations.push("missing_final_clarification_question");
+  }
+  const finalQuestion = normalizedFactText(response.match(/([^.!?]+)\?\s*$/u)?.[1] || "");
+  if (requiredVocative && !finalQuestion.includes(requiredVocative)) {
+    violations.push("missing_vocative_in_final_question");
+  }
+
+  const orderedNeedles = [
+    requiredVocative,
+    exactCount > 0 ? String(exactCount) : "",
+    firstStop,
+    facts.weather?.verified === true ? normalizedFactText(facts.weather.summary) : "",
+    facts.fuel?.verified === true ? normalizedFactText(facts.fuel.value) : "",
+    ...dispatcherNames
+  ].filter(Boolean);
+  let cursor = -1;
+  for (const needle of orderedNeedles) {
+    const index = normalizedResponse.indexOf(needle);
+    if (index >= 0 && index < cursor) violations.push("intro_fact_order_invalid");
+    if (index >= 0) cursor = index;
   }
 
   return {

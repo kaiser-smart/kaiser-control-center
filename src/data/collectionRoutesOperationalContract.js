@@ -41,6 +41,17 @@ export const COLLECTION_ROUTES_OPERATIONAL_CONTRACT = Object.freeze({
     requireRunningAudioContext: true,
     weatherMaxAgeMinutes: 45,
     weatherMustUseExactVerifiedSummary: true,
+    introGongUrl: "/audio/sarlota-gong-intro.mp3",
+    outroGongUrl: "/audio/sarlota-gong-outro.mp3",
+    automaticSpeechRequiresIntroGong: true,
+    ordinaryReplyRequiresIntroGong: false,
+    introSilenceTimeoutMs: 5000,
+    continueConversationAfterDriverReply: true,
+    suppressAgentSpeechBeforeDriverReply: true,
+    persistIntroStartServerSide: true,
+    oneIntroPerRouteOrTestSession: true,
+    fuelSource: "T-Cars.knihaJizdVozidlo.jizdaStavPhm",
+    fuelUnitMayBeInferred: false,
     requireLivePromptInTest: true,
     requireLiveKnowledgeBaseInTest: true
   }),
@@ -51,8 +62,8 @@ export const COLLECTION_ROUTES_OPERATIONAL_CONTRACT = Object.freeze({
       "vistos-write",
       "production-gps-write",
       "customer-contact",
-      "email",
-      "sms",
+      "unapproved-internal-email",
+      "unapproved-internal-sms",
       "rcs"
     ])
   })
