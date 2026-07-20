@@ -17,9 +17,20 @@ Před jakoukoli prací musí Codex/vývojář otevřít a přečíst:
 - aktuální Mantru každého modulu, kterého se práce týká,
 - existující strojově čitelný provozní kontrakt daného modulu, pokud existuje.
 
+Při jakékoli práci, která se týká Šarloty, ElevenLabs, hlasu, chatu, `intro_announcement`, dynamic variables, Tools, pracovního kontextu nebo správy jejího obsahu, musí Codex/vývojář před analýzou a úpravami navíc přečíst:
+- celý skutečně aktivní system Prompt přesně toho produkčního ElevenLabs agenta, kterého se práce týká, načtený read-only z produkčního zdroje,
+- celý obsah všech Knowledge Base dokumentů skutečně připojených k tomuto agentovi, načtený read-only z produkčního zdroje,
+- kanonický repo prompt `src/sarlota/sarlotaSystemPrompt.js`,
+- evidenci zdrojů `docs/SARLOTA_PROMPT_SOURCES.md`,
+- všechny modulové Prompt a Knowledge Base podklady, na které evidence zdrojů pro dotčený modul odkazuje.
+
+Nestačí přečíst název agenta, počet KB dokumentů, stav `AKTIVNÍ`, diagnostický přehled, uložený koncept ani starou lokální kopii. Musí být ověřená identita agenta a přečtený aktuální aktivní obsah Promptu i každého připojeného KB dokumentu. Koncept v KSO a aktivní obsah v ElevenLabs jsou dvě různé verze; pokud se práce týká editoru nebo publikace, musí vývojář načíst a porovnat obě.
+
+Pokud aktuální aktivní Prompt nebo obsah některé připojené Knowledge Base nelze bezpečně načíst read-only, práce na Šarlotě se nesmí zahájit ani pokračovat. Vývojář musí zastavit, uvést přesně, co nebylo dostupné, a nesmí chybějící obsah nahradit domněnkou, starým exportem, lokálním návrhem ani mockem.
+
 U Svozových tras je povinným zdrojem Mantry `src/data/collectionRoutesMantra.js` a strojově čitelným kontraktem `src/data/collectionRoutesOperationalContract.js`.
 
-Bez přečtení Příručky, dotčené Mantry a existujícího kontraktu se nesmí:
+Bez přečtení Příručky, dotčené Mantry, existujícího kontraktu a u práce na Šarlotě také jejího aktuálního aktivního Promptu a všech připojených Knowledge Base se nesmí:
 - analyzovat změna
 - implementovat
 - upravovat soubory
@@ -1519,6 +1530,10 @@ First message:
 - Pokud relevantní data nejdou načíst, Šarlota to řekne stručně a nespustí zápis ani notifikaci bez ručního potvrzení.
 
 ### 17.8 Testovací checklist pro Šarlotu
+
+- TEST režim slouží k otestování skutečné funkce, ne k jejímu plošnému vypnutí. Prompt, Knowledge Base, Tools, modulový kontext, úvodní hlášení, obousměrný hlas, navigační příprava a ostatní uživatelské kroky musí běžet stejnou logikou jako v produkci nad izolovanými TEST daty.
+- V TESTU se blokují nebo nahrazují výhradně produkční účinky: zápis do ostré trasy, Vistosu, produkční GPS, skutečný kontakt zákazníka, e-mail, SMS, RCS, absence, servisní hlášení a jiné provozní změny. Místo nich musí existovat TEST adaptér, TEST audit nebo bezpečný testovací příjemce podle schváleného kontraktu.
+- Ochrana produkce nesmí být záminkou pro stav, ve kterém nelze otestovat hlas, Prompt, Knowledge Base, Tools, pracovní kontext nebo celý uživatelský scénář. Funkce označená `Tato funkce zatím není v testovacím režimu dostupná.` je otevřený nedodělek a nesmí být započítaná jako úspěšně otestovaná ani jako splněná akceptace.
 
 Při každé změně Šarloty ověřit:
 

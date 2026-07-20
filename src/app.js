@@ -40410,6 +40410,21 @@ async function loadCollectionRoutesAdminTabletTest(options = {}) {
   if (restoredActive && !collectionRoutesPilotState.myDailyRouteSarlotaContext) {
     await loadCollectionRoutesSarlotaContext();
   }
+  const restoredRun = collectionRoutesPilotState.myDailyRoute?.run;
+  const shouldRestoreSarlota = Boolean(
+    restoredActive
+    && restoredRun?.id
+    && restoredRun.status === "active"
+    && !collectionRoutesPilotState.myDailyRouteSarlotaEnabled
+    && !collectionRoutesPilotState.myDailyRouteSarlotaConnecting
+    && collectionRoutesPilotState.myDailyRouteSarlotaAutoAttemptedRunId !== restoredRun.id
+  );
+  if (shouldRestoreSarlota) {
+    collectionRoutesPilotState.myDailyRouteSarlotaAutoAttemptedRunId = restoredRun.id;
+    collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Aktivní TEST je obnovený. Připojuji Šarlotu a spouštím úvodní hlášení…";
+    render();
+    await enableCollectionDailyDriverSarlota({ promptForMemory: false, invocation: "automatic" });
+  }
 }
 
 async function openCollectionRoutesAdminTabletTest() {
@@ -40450,6 +40465,10 @@ async function startCollectionRoutesAdminTabletTest() {
     collectionRoutesPilotState.myDailyRouteSarlotaContext = null;
     collectionRoutesPilotState.myDailyRouteSarlotaRuntime = null;
     collectionRoutesPilotState.myDailyRouteSarlotaLastError = null;
+    collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaAutoAttemptedRunId = "";
     collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded = false;
     collectionRoutesPilotState.myDailyRouteSarlotaMemory = null;
     applyMyCollectionDailyRoute(result.route || null, "TEST relace je aktivní. Všechny zápisy míří jen do TEST scope.");
