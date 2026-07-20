@@ -72,7 +72,7 @@ import {
   collectionRoutesDriverTabletCssSizeLabel,
   collectionRoutesDriverTabletLabel
 } from "./data/collectionRoutesOperationalContract.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.36";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.37";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.633"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.634"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: TEST používá živý Prompt a znalosti",
+    text: "TEST tabletu připraví mikrofon už při fyzickém spuštění a připojí skutečného ElevenLabs agenta jen po ověření Promptu, první zprávy, Knowledge Base, Tools a modulového kontextu Svozových tras. Diagnostika ukáže přesný stav i chybu. Blackview Active 7 LTE a modulový zdroj intro_announcement jsou nově chráněné provozním kontraktem; vývojář musí před prací číst PŘÍRUČKU i Mantru."
+  },
   {
     title: "Šarlota: přehledná správa Promptu a znalostí",
     text: "Editor v KSO ukazuje lidský stav AKTIVNÍ a vždy jen jeden doporučený další krok. Prompt a znalosti mají jasné názvy, postup je rozdělený do tří krátkých kroků a aktualizace funkcí i servisní nástroje jsou schované v pokročilém nastavení pro správce."
