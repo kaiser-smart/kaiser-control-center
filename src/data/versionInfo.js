@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.632"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.633"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: přehledná správa Promptu a znalostí",
+    text: "Editor v KSO ukazuje lidský stav AKTIVNÍ a vždy jen jeden doporučený další krok. Prompt a znalosti mají jasné názvy, postup je rozdělený do tří krátkých kroků a aktualizace funkcí i servisní nástroje jsou schované v pokročilém nastavení pro správce."
+  },
   {
     title: "Šarlota: Prompt a Knowledge Base se spravují přímo v KSO",
     text: "Oprávněný správce načte živý Prompt a Knowledge Base skutečně připojenou k agentovi do chráněného editoru, uloží koncept bez dopadu na hlasovou Šarlotu, projde významovou bezpečnostní kontrolou a až samostatným potvrzením publikuje do ElevenLabs. Kontrola přijímá bezpečné české formulace bez vynucování jediné doslovné věty; každá změna má zálohu, historii a bezpečný návrat k předchozí verzi."
