@@ -51831,8 +51831,30 @@ document.addEventListener("input", (event) => {
     const field = sarlotaContentTextarea.closest(".sarlota-content-editor__field");
     const counter = field?.querySelector("[data-sarlota-content-count]");
     if (counter) counter.textContent = `${sarlotaContentTextarea.value.length} znaků · koncept ještě není uložený`;
-    const publish = sarlotaContentTextarea.closest(".sarlota-content-editor")?.querySelector("[data-sarlota-content-publish]");
-    if (publish) publish.disabled = true;
+    const contentEditor = sarlotaContentTextarea.closest(".sarlota-content-editor");
+    const save = contentEditor?.querySelector("[data-sarlota-content-save]");
+    const publish = contentEditor?.querySelector("[data-sarlota-content-publish]");
+    const validation = contentEditor?.querySelector("[data-sarlota-content-validation]");
+    const nextStep = contentEditor?.querySelector("[data-sarlota-content-next-step]");
+    const contentState = contentEditor?.querySelector(".sarlota-content-editor__state");
+    if (save) {
+      save.hidden = false;
+      save.disabled = false;
+      save.textContent = "ULOŽIT ÚPRAVY V KSO";
+    }
+    if (publish) {
+      publish.hidden = true;
+      publish.disabled = true;
+    }
+    if (validation) {
+      validation.className = "sarlota-content-editor__invalid";
+      validation.textContent = "Úpravy ještě nejsou uložené a zkontrolované.";
+    }
+    if (nextStep) nextStep.textContent = "Máš neuložené úpravy. Nejdřív je bezpečně ulož v KSO.";
+    if (contentState) {
+      contentState.className = "sarlota-content-editor__state sarlota-content-editor__state--waiting";
+      contentState.textContent = "NEULOŽENO";
+    }
     return;
   }
 

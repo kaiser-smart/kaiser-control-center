@@ -65,9 +65,13 @@ const previewHtml = SarlotaStatusPanel({
 });
 
 assert.match(previewHtml, /OVĚŘIT ELEVENLABS/);
-assert.match(previewHtml, /Tools v ElevenLabs/);
-assert.match(previewHtml, /Technické servisní nástroje/);
-assert.match(previewHtml, /AKTUALIZOVAT TOOLS · KSO → ELEVENLABS/);
+assert.match(previewHtml, /Pokročilé nastavení pro správce/);
+assert.match(previewHtml, /Funkce Šarloty/);
+assert.match(previewHtml, /Servisní diagnostika/);
+assert.match(previewHtml, /AKTUALIZOVAT FUNKCE ŠARLOTY/);
+assert.doesNotMatch(previewHtml, /AKTUALIZOVAT TOOLS · KSO → ELEVENLABS/);
+assert.doesNotMatch(previewHtml, /Aktualizace tools zapisuje jedním směrem/);
+assert.doesNotMatch(previewHtml, /verzovaného editoru výše/);
 assert.doesNotMatch(previewHtml, /data-sarlota-prompt-sync/);
 assert.doesNotMatch(previewHtml, /data-sarlota-language-sync/);
 assert.doesNotMatch(previewHtml, />Obnovit</);
@@ -159,15 +163,59 @@ const editorHtml = SarlotaStatusPanel({
     }
   }
 });
-assert.match(editorHtml, /Zdroj pravdy v KSO/);
-assert.match(editorHtml, /HLAVNÍ PROMPT/);
-assert.match(editorHtml, /KNOWLEDGE BASE/);
-assert.match(editorHtml, /ULOŽIT KONCEPT V KSO/);
+assert.match(editorHtml, /Správa obsahu Šarloty/);
+assert.match(editorHtml, /Prompt Šarloty/);
+assert.match(editorHtml, /Znalosti Šarloty/);
+assert.match(editorHtml, /Vyber obsah/);
+assert.match(editorHtml, /Uprav text/);
+assert.match(editorHtml, /Ulož a publikuj/);
+assert.match(editorHtml, /NEJDŘÍV UPRAV TEXT/);
 assert.match(editorHtml, /PUBLIKOVAT DO ELEVENLABS/);
+assert.match(editorHtml, /data-sarlota-content-save[^>]*hidden/);
+assert.doesNotMatch(editorHtml, /data-sarlota-content-publish[^>]*hidden/);
 assert.match(editorHtml, /VRÁTIT TUTO VERZI/);
-assert.match(editorHtml, /Porovnat koncept s živou verzí ElevenLabs/);
+assert.match(editorHtml, /Zkontrolovat rozdíly před publikováním/);
+assert.match(editorHtml, /Co udělat teď/);
+assert.match(editorHtml, /ČEKÁ NA PUBLIKOVÁNÍ/);
 assert.match(editorHtml, /Bezpečný &amp; upravitelný prompt/);
 assert.doesNotMatch(editorHtml, /Bezpečný & upravitelný prompt/);
+
+const activeEditorHtml = SarlotaStatusPanel({
+  status,
+  selectedAssistantKey: "sarlota",
+  contentEditor: {
+    loaded: true,
+    activeKind: "prompt",
+    drafts: { prompt: "Aktivní prompt", knowledge_base: "Aktivní KB" },
+    validation: { prompt: { valid: true, errors: [] } },
+    data: {
+      documents: {
+        prompt: {
+          liveAvailable: true,
+          liveLength: 14,
+          liveContent: "Aktivní prompt",
+          liveFingerprint: "fnv-active",
+          draftFingerprint: "fnv-active",
+          draftContent: "Aktivní prompt",
+          hasSavedDraft: true,
+          validation: { valid: true, errors: [] },
+          versions: []
+        },
+        knowledge_base: {
+          liveAvailable: true,
+          liveLength: 10,
+          liveContent: "Aktivní KB",
+          draftContent: "Aktivní KB",
+          validation: { valid: true, errors: [] },
+          versions: []
+        }
+      }
+    }
+  }
+});
+assert.match(activeEditorHtml, /sarlota-content-editor__state--active/);
+assert.match(activeEditorHtml, />AKTIVNÍ</);
+assert.doesNotMatch(activeEditorHtml, /Koncept:/);
 
 const reviewedHtml = SarlotaStatusPanel({
   status: {
@@ -227,6 +275,10 @@ assert.match(appSource, /data-sarlota-prompt-plan-cancel/);
 assert.match(appSource, /sarlota-language-sync/);
 assert.match(appSource, /data-sarlota-language-apply/);
 assert.match(appSource, /expectedCurrentFingerprint: plan\.currentFingerprint/);
+assert.match(appSource, /save\.hidden = false/);
+assert.match(appSource, /publish\.hidden = true/);
+assert.match(appSource, /Úpravy ještě nejsou uložené a zkontrolované/);
+assert.match(appSource, /contentState\.textContent = "NEULOŽENO"/);
 assert.match(appSource, /myDailyRouteSarlotaConnecting/);
 assert.match(appSource, /options\.onFailed\?\.\(error\)/);
 
