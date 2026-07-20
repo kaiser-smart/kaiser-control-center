@@ -3451,6 +3451,12 @@ async function startElevenLabsVoiceRecognition(options = {}) {
         if (requestId !== aiTextRequestId) {
           return;
         }
+        if (options.endAfterGeneratedIntro === true) {
+          aiAssistantState.isListening = false;
+          setAiVoiceUiState("assistantSpeaking", AI_VOICE_SPEAKING_LABEL, ["Úvodní přivítání", "Mikrofon pozastavený", "ElevenLabs"]);
+          renderAiAssistantLayerOnly();
+          return;
+        }
         aiAssistantState.isListening = true;
         clearAiVoiceWeakInputNotice();
         setAiVoiceUiState("listening", AI_VOICE_LISTENING_LABEL, ["Poslouchám", "Mikrofon aktivní", "ElevenLabs"]);

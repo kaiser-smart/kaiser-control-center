@@ -51,6 +51,7 @@ assert.match(appSource, /const automaticRetryCount = Math\.max\(0, Number\(optio
 assert.match(appSource, /myDailyRouteSarlotaAutoSession = automaticSession;/);
 assert.match(appSource, /myDailyRouteSarlotaIntroCompleted = false;/);
 assert.match(appSource, /endAfterGeneratedIntro: automaticSession/);
+assert.match(appSource, /options\.endAfterGeneratedIntro === true[\s\S]*Mikrofon pozastavený/);
 assert.match(appSource, /COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST/);
 assert.match(appSource, /Úvodní hlášení skončilo\. Šarlota je vypnutá/);
 assert.match(appSource, /ŠARLOTA MLUVÍ · POTOM SE VYPNE/);
