@@ -1569,6 +1569,7 @@ Marker se nepřehraje. KSO po jeho dokončení pošle interní požadavek aktivn
 - TEST režim slouží k otestování skutečné funkce, ne k jejímu plošnému vypnutí. Prompt, Knowledge Base, Tools, modulový kontext, úvodní hlášení, obousměrný hlas, navigační příprava a ostatní uživatelské kroky musí běžet stejnou logikou jako v produkci nad izolovanými TEST daty.
 - V TESTU se blokují nebo nahrazují výhradně produkční účinky: zápis do ostré trasy, Vistosu, produkční GPS, skutečný kontakt zákazníka, e-mail, SMS, RCS, absence, servisní hlášení a jiné provozní změny. Místo nich musí existovat TEST adaptér, TEST audit nebo bezpečný testovací příjemce podle schváleného kontraktu.
 - Ochrana produkce nesmí být záminkou pro stav, ve kterém nelze otestovat hlas, Prompt, Knowledge Base, Tools, pracovní kontext nebo celý uživatelský scénář. Funkce označená `Tato funkce zatím není v testovacím režimu dostupná.` je otevřený nedodělek a nesmí být započítaná jako úspěšně otestovaná ani jako splněná akceptace.
+- Ve schváleném TESTU Svozových tras se nikdy nekontaktuje skutečný zákazník. Interní TEST e-mail nebo SMS dispečerce se ale nesmí plošně zakázat: smí projít pouze přes chráněný backend, po samostatném fyzickém potvrzení, na bezpečného interního TEST příjemce a s TEST auditem podle Mantry a provozního kontraktu modulu.
 
 Při každé změně Šarloty ověřit:
 

@@ -198,6 +198,7 @@ const PROMPT_REQUIREMENTS = [
   ["prepare_collection_route_test_incident", "příprava TEST hlášení stanoviště"],
   ["prepare_collection_route_driver_action", "příprava pracovního kroku řidiče"],
   ["test scope", "oddělení TEST scope"],
+  ["Interní TEST e-mail nebo SMS dispečerce smíš pouze připravit přes chráněný backend KSO", "bezpečný interní TEST kontakt dispečinku"],
   ["vistos", "zákaz zápisu do Vistosu"]
 ];
 
@@ -225,6 +226,10 @@ const KB_REQUIREMENTS = [
   {
     markers: ["fyzicke potvrzeni", "potvrd ho prosim na displeji", "akci jeste potvrd na displeji"],
     label: "fyzické potvrzení v KSO"
+  },
+  {
+    markers: ["interni test e-mail nebo sms dispecerce"],
+    label: "bezpečný interní TEST kontakt dispečinku"
   },
   {
     markers: ["neoverene vozidlo", "neovereny udaj bez domysleni", "neoverenou informaci si nevymyslej"],

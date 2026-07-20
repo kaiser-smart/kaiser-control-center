@@ -113,6 +113,8 @@ assert.match(systemPromptSource, /přesnou technickou hodnotu KSO_INTRO_GENERATI
 assert.match(systemPromptSource, /aktivního Promptu, připojené Knowledge Base a aktuálního JSON bloku ověřených dynamic variables/);
 assert.match(systemPromptSource, /Na potvrzení se znovu neptej|na potvrzení trasy se znovu neptej/);
 assert.match(systemPromptSource, /Hlas HERE navigace je samostatný systém/);
+assert.match(systemPromptSource, /Interní TEST e-mail nebo SMS dispečerce smíš pouze připravit přes chráněný backend KSO/);
+assert.doesNotMatch(systemPromptSource, /V TEST scope neposílej e-mail, SMS ani RCS, nekontaktuj zákazníka nebo dispečink/);
 assert.match(contextSource, /COLLECTION_ROUTES_INTRO_GENERATION_MARKER = "KSO_INTRO_GENERATION_PENDING"/);
 assert.doesNotMatch(contextSource, /Jestli máš kafe po ruce|Budu hlídat trasu, zastávky i všechno důležité/);
 assert.match(voiceClientSource, /suppressing-technical-first-message/);

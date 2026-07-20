@@ -38,6 +38,7 @@ Při budoucí implementaci platí vždy:
 - Aktivní: oficiální RSS iROZHLAS a ověřené počasí Open‑Meteo; při výpadku se nic nevymýšlí.
 - Aktivní: dobrovolná strukturovaná pracovní paměť bez audia, úplných přepisů a soukromých rozhovorů.
 - Aktivní: poslední čerstvá hodnota `jizdaStavPhm` z read-only T-Cars knihy jízd pro přesně shodné vozidlo; jednotka se nevymýšlí, protože ji WSDL neuvádí.
+- Aktivní: v TESTU se nikdy nekontaktuje skutečný zákazník. Interní TEST e-mail nebo SMS dispečerce může projít stejnou backendovou logikou jako produkce pouze po samostatném fyzickém potvrzení, výhradně na chráněného interního TEST příjemce a s TEST auditem.
 - Neaktivní do samostatného ověření: T‑Cars rozpoznání pohybu, automatické sledování závad a další nové nástroje, které backend zatím bezpečně neposkytuje.
 - Každá budoucí změna se synchronizuje jen z kanonického repo promptu po read-only náhledu a ověření otisku; tento úplný zdrojový dokument se do živého agenta nepřepisuje naslepo.
 

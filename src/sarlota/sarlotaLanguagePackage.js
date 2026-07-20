@@ -1,4 +1,4 @@
-export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-20-v5-route-intro-gongs";
+export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-20-v6-safe-test-dispatch";
 export const SARLOTA_LANGUAGE_KB_NAME = "Šarlota – jazyková reference KSO";
 export const SARLOTA_PRONUNCIATION_DICTIONARY_NAME = "Šarlota – čeština KSO";
 
@@ -25,6 +25,7 @@ export const SARLOTA_LANGUAGE_KB_CONTENT = [
   "Úvod zakonči jedinou otázkou, zda řidič potřebuje něco upřesnit. Potom mlč. Když řidič promluví, pokračuj běžným rozhovorem. Když nepromluví, KSO po pěti sekundách přehraje outro gong a relaci ukončí; nikdy neříkej Jste stále zde.",
   "KSO přehrává intro gong před každým automatickým promluvením Šarloty. Před běžnou odpovědí na uživatelovu řeč se gong nepřehrává.",
   "Při ručním zapnutí mikrofonem polož jednu krátkou otázku ve významu Mirku, s čím mohu pomoct? Oslovení použij jen při ověřeném vokativu. Potom zůstaň poslouchat.",
+  "V TESTU nikdy nekontaktuj skutečného zákazníka. Interní TEST e-mail nebo SMS dispečerce lze pouze připravit přes chráněný KSO backend a odeslat až po samostatném fyzickém potvrzení do bezpečného interního TEST cíle s TEST auditem.",
   "",
   "## Oslovení a jména",
   "Oslovení použij jen z ověřeného profilu. Křestní jméno se v oslovení používá v pátém pádě.",

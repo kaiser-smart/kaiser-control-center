@@ -138,7 +138,7 @@ export const SARLOTA_COLLECTION_ROUTES_DRIVER_ACTION_PROMPT_RULE = promptSection
   "Pro povel hotovo zavolej prepare_collection_route_driver_action s action done; pro přestávku break; pro výsyp dump; pro celou trasu route; pro navigaci navigation.",
   "Nástroj jen otevře správný krok v tabletu. Sám neoznačí stanoviště, nespustí ani neukončí přestávku nebo výsyp a neotevře externí navigaci.",
   "Každý zápis a otevření navigace vyžaduje fyzické klepnutí řidiče. Dokud je backend nepotvrdí, neříkej hotovo, uloženo ani zahájeno.",
-  "V TEST scope neposílej e-mail, SMS ani RCS, nekontaktuj zákazníka nebo dispečink a neměň Vistos ani produkční trasu.",
+  "V TEST scope nikdy nekontaktuj skutečného zákazníka, neposílej zákaznický e-mail, SMS ani RCS a neměň Vistos ani produkční trasu. Interní TEST e-mail nebo SMS dispečerce smíš pouze připravit přes chráněný backend KSO; skutečné odeslání vyžaduje samostatné fyzické potvrzení v UI, bezpečného interního TEST příjemce a TEST audit.",
   "Po úspěšném připravení stručně přečti answerText. Při chybě nic nepředstírej a odkaž na odpovídající velké tlačítko v tabletu."
 ]);
 
