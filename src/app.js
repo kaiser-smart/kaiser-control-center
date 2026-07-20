@@ -41906,6 +41906,8 @@ async function startCollectionDailyDriverSarlota(options = {}) {
       renderAiAssistantLayerOnly();
       const gongPlayed = await elevenLabsAssistant.playVoiceCue?.(COLLECTION_ROUTES_SARLOTA_INTRO_GONG_URL);
       if (!gongPlayed) {
+        await updateCollectionRoutesVoiceIntro("cancel", introPlaybackToken);
+        introPlaybackToken = "";
         const error = new Error("Intro gong se nepodařilo přehrát.");
         error.code = "voice_intro_gong_failed";
         throw error;
@@ -41952,6 +41954,12 @@ async function startCollectionDailyDriverSarlota(options = {}) {
       render();
     },
     onFailed: (error) => {
+      if (automaticSession && introPlaybackToken) {
+        void updateCollectionRoutesVoiceIntro("cancel", introPlaybackToken).catch((cancelError) => {
+          console.error("collection_routes.sarlota_voice_intro_cancel_failed", { message: cancelError.message });
+        });
+        introPlaybackToken = "";
+      }
       if (automaticSession && error?.code === "voice_disconnected" && automaticRetryCount < 1) {
         collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
         collectionRoutesPilotState.myDailyRouteSarlotaConnecting = true;
@@ -41991,6 +41999,8 @@ async function startCollectionDailyDriverSarlota(options = {}) {
           ? "Úvod obsahoval neověřený údaj. KSO zvuk zablokovalo; nic chybného nebylo přehráno. Klepni na SPUSTIT ZVUK A PŘEHRÁT ÚVOD a zkus bezpečný úvod znovu."
         : automaticSession && error?.code === "voice_audio_playback_failed"
           ? "Ověřený úvod byl připravený, ale prohlížeč zvuk nepovolil. Klepni na SPUSTIT ZVUK A PŘEHRÁT ÚVOD."
+        : automaticSession && error?.code === "voice_intro_gong_failed"
+          ? "Intro gong ani hlas se nepřehrály. Klepni na SPUSTIT ZVUK A PŘEHRÁT ÚVOD; TEST dovolí bezpečný nový pokus."
         : automaticSession
           ? "Automatický rozhovor se nepřipojil. Klepni na ZAPNOUT ŠARLOTU a použij ruční mikrofonový režim."
           : "Šarlota se nepřipojila. Zkontroluj hlášku u mikrofonu a klepni znovu na ZAPNOUT ŠARLOTU.";

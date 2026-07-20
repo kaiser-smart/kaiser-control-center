@@ -212,6 +212,21 @@ const voiceIntroStarted = await updateCollectionDailyRouteVoiceIntro(env, admin,
 assert.equal(voiceIntroStarted.allowed, true);
 assert.ok(voiceIntroStarted.playbackToken);
 assert.equal(voiceIntroStarted.state.canAutoStart, false);
+const cancelledVoiceIntro = await updateCollectionDailyRouteVoiceIntro(env, admin, started.session.runId, {
+  scope: "test",
+  sessionId: started.session.id,
+  action: "cancel",
+  playbackToken: voiceIntroStarted.playbackToken
+});
+assert.equal(cancelledVoiceIntro.state.canAutoStart, true);
+assert.equal(cancelledVoiceIntro.state.started, false);
+const retriedVoiceIntro = await updateCollectionDailyRouteVoiceIntro(env, admin, started.session.runId, {
+  scope: "test",
+  sessionId: started.session.id,
+  action: "begin_playback"
+});
+assert.equal(retriedVoiceIntro.allowed, true);
+assert.notEqual(retriedVoiceIntro.playbackToken, voiceIntroStarted.playbackToken);
 const duplicateVoiceIntro = await updateCollectionDailyRouteVoiceIntro(env, admin, started.session.runId, {
   scope: "test",
   sessionId: started.session.id,
@@ -223,7 +238,7 @@ const voiceIntroCompleted = await updateCollectionDailyRouteVoiceIntro(env, admi
   scope: "test",
   sessionId: started.session.id,
   action: "complete",
-  playbackToken: voiceIntroStarted.playbackToken
+  playbackToken: retriedVoiceIntro.playbackToken
 });
 assert.equal(voiceIntroCompleted.state.completed, true);
 
@@ -236,8 +251,8 @@ assert.equal(testSqlite.prepare("SELECT status FROM collection_daily_route_runs 
 assert.equal(testSqlite.prepare("SELECT status FROM collection_daily_route_stops WHERE id = 'tablet-stop-1'").get().status, "planned");
 assert.equal((await getCollectionDailyRouteTabletTestLauncher(env, admin)).session, null);
 assert.equal(
-  testSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_events WHERE event_type IN ('tablet_test_session_started', 'tablet_test_session_reset', 'sarlota_voice_intro_started', 'sarlota_voice_intro_completed')").get().count,
-  4
+  testSqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_events WHERE event_type IN ('tablet_test_session_started', 'tablet_test_session_reset', 'sarlota_voice_intro_started', 'sarlota_voice_intro_cancelled', 'sarlota_voice_intro_completed')").get().count,
+  6
 );
 
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");

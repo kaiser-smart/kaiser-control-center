@@ -1378,13 +1378,13 @@ export function collectionDailyRouteVoiceIntroState(run = {}, options = {}) {
   return {
     sessionKey,
     status: sessionKey ? status : "unavailable",
-    started: sameSession && Boolean(stored.startedAt),
+    started: sameSession && Boolean(stored.startedAt) && status !== "cancelled",
     completed: sameSession && ["completed", "engaged"].includes(status),
     engaged: sameSession && status === "engaged",
     canAutoStart: Boolean(
       sessionKey
       && cleanString(run?.status) === "active"
-      && (!sameSession || !stored.startedAt)
+      && (!sameSession || !stored.startedAt || status === "cancelled")
     ),
     startedAt: sameSession ? cleanString(stored.startedAt) : "",
     completedAt: sameSession ? cleanString(stored.completedAt) : ""
@@ -1395,7 +1395,7 @@ export async function updateCollectionDailyRouteVoiceIntro(env, user, runId, inp
   const scope = collectionDailyRouteScope(input.scope);
   assertTestScopeReader(user, scope);
   const action = cleanString(input.action);
-  if (!new Set(["begin_playback", "engaged", "complete"]).has(action)) {
+  if (!new Set(["begin_playback", "engaged", "complete", "cancel"]).has(action)) {
     throw new CollectionDailyRoutesError("Neplatná akce hlasového úvodu.", 400, "collection_route_voice_intro_action_invalid");
   }
   const db = database(env, true, scope);
@@ -1420,7 +1420,10 @@ export async function updateCollectionDailyRouteVoiceIntro(env, user, runId, inp
     const changedAt = nowIso();
 
     if (action === "begin_playback") {
-      const idempotencyKey = `collection-route-voice-intro-begin:${sessionKey}`;
+      const attempt = cleanString(stored.status) === "cancelled"
+        ? Math.max(1, Number(stored.attempt || 1) + 1)
+        : 1;
+      const idempotencyKey = `collection-route-voice-intro-begin:${sessionKey}:${attempt}`;
       const playbackToken = randomId("voice-intro-playback");
       const insert = await db.prepare(`
         INSERT OR IGNORE INTO collection_daily_route_events (
@@ -1438,6 +1441,7 @@ export async function updateCollectionDailyRouteVoiceIntro(env, user, runId, inp
       const next = {
         sessionKey,
         playbackToken,
+        attempt,
         status: "started",
         startedAt: changedAt,
         startedByUserId: cleanString(user.id)
@@ -1456,6 +1460,43 @@ export async function updateCollectionDailyRouteVoiceIntro(env, user, runId, inp
     }
     if (cleanString(input.playbackToken) !== cleanString(stored.playbackToken)) {
       throw new CollectionDailyRoutesError("Hlasový úvod nemá platné potvrzení přehrávání.", 403, "collection_route_voice_intro_token_invalid");
+    }
+    if (action === "cancel") {
+      if (cleanString(stored.status) !== "started") {
+        return {
+          allowed: false,
+          reason: "not_active",
+          state: collectionDailyRouteVoiceIntroState(run, { sessionId: input.sessionId })
+        };
+      }
+      const idempotencyKey = `collection-route-voice-intro-cancelled:${sessionKey}:${Math.max(1, Number(stored.attempt || 1))}`;
+      await db.prepare(`
+        INSERT OR IGNORE INTO collection_daily_route_events (
+          id, run_id, event_type, before_status, after_status, note, idempotency_key,
+          actor_user_id, actor_name, created_at, payload_json
+        ) VALUES (?, ?, 'sarlota_voice_intro_cancelled', ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        randomId("collection-daily-event"), run.id, cleanString(run.status), cleanString(run.status),
+        "Přehrání hlasového úvodu nezačalo; rezervace byla bezpečně uvolněná pro nový pokus.",
+        idempotencyKey, cleanString(user.id), actorName, changedAt,
+        jsonString({ sessionKey, scope, attempt: Math.max(1, Number(stored.attempt || 1)) })
+      ).run();
+      const next = {
+        ...stored,
+        status: "cancelled",
+        cancelledAt: changedAt,
+        cancelledByUserId: cleanString(user.id)
+      };
+      await db.prepare("UPDATE collection_daily_route_runs SET metadata_json = ?, updated_at = ? WHERE id = ?")
+        .bind(jsonString({ ...metadata, sarlotaVoiceIntro: next }), changedAt, run.id).run();
+      return {
+        allowed: false,
+        playbackToken: "",
+        state: collectionDailyRouteVoiceIntroState(
+          { ...run, metadata_json: jsonString({ ...metadata, sarlotaVoiceIntro: next }) },
+          { sessionId: input.sessionId }
+        )
+      };
     }
     const status = action === "engaged" ? "engaged" : "completed";
     const idempotencyKey = `collection-route-voice-intro-${status}:${sessionKey}`;
