@@ -40514,6 +40514,7 @@ async function resetCollectionRoutesAdminTabletTest() {
   collectionRoutesSarlotaVoiceRequestId += 1;
   elevenLabsAssistant.stopVoiceAudio?.();
   elevenLabsAssistant.discardVoiceInput?.();
+  closeAiAssistant({ launcherVisible: false, renderAfter: false });
   if (collectionRoutesPilotState.myDailyRouteNavigationActive) {
     stopCollectionDailyDriverNavigation({ renderAfter: false });
   }

@@ -68,6 +68,11 @@ const closeFunctionSource = appSource.slice(closeFunctionStart, closeFunctionEnd
 assert.match(closeFunctionSource, /elevenLabsAssistant\.stopVoiceAudio/);
 assert.doesNotMatch(closeFunctionSource, /speechSynthesis/);
 
+const resetAdminTestStart = appSource.indexOf("async function resetCollectionRoutesAdminTabletTest");
+const resetAdminTestEnd = appSource.indexOf("async function loadLatestCollectionRoutesTestNotificationJob", resetAdminTestStart);
+const resetAdminTestSource = appSource.slice(resetAdminTestStart, resetAdminTestEnd);
+assert.match(resetAdminTestSource, /closeAiAssistant\(\{ launcherVisible: false, renderAfter: false \}\)/);
+
 const elevenLabsSource = readFileSync(new URL("../src/useElevenLabsAssistant.js", import.meta.url), "utf8");
 assert.match(elevenLabsSource, /introGenerationRequest/);
 assert.match(elevenLabsSource, /suppressing-technical-first-message/);
