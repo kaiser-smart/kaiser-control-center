@@ -290,6 +290,7 @@ export function voiceInputResumeDelayMs(baseDelayMs = VOICE_FINISH_GRACE_MS, pla
 
 function createVoiceAudioPlayer() {
   let audioContext = null;
+  let cueAudioElement = null;
   let nextStartTime = 0;
   let outputPrimed = false;
   const activeSources = new Set();
@@ -346,9 +347,57 @@ function createVoiceAudioPlayer() {
 
     activeSources.clear();
 
+    if (cueAudioElement) {
+      try {
+        cueAudioElement.pause();
+        cueAudioElement.currentTime = 0;
+      } catch {
+        // The media element may not have started yet.
+      }
+    }
+
     if (audioContext) {
       nextStartTime = audioContext.currentTime;
     }
+  }
+
+  async function playCueWithMediaElement(sourceUrl) {
+    const AudioConstructor = typeof window === "undefined" ? null : window.Audio;
+    if (typeof AudioConstructor !== "function") return false;
+
+    cueAudioElement = cueAudioElement || new AudioConstructor();
+    const element = cueAudioElement;
+    element.preload = "auto";
+    element.playsInline = true;
+    element.muted = false;
+    element.volume = 1;
+    element.src = sourceUrl;
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (played) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        element.removeEventListener("ended", onEnded);
+        element.removeEventListener("error", onError);
+        resolve(played);
+      };
+      const onEnded = () => finish(true);
+      const onError = () => finish(false);
+      const timeoutId = window.setTimeout(() => finish(false), 15000);
+      element.addEventListener("ended", onEnded, { once: true });
+      element.addEventListener("error", onError, { once: true });
+      try {
+        element.currentTime = 0;
+        const started = element.play();
+        if (started && typeof started.catch === "function") {
+          started.catch(() => finish(false));
+        }
+      } catch {
+        finish(false);
+      }
+    });
   }
 
   async function playPcmChunk(base64Audio, format = DEFAULT_AGENT_AUDIO_FORMAT) {
@@ -393,7 +442,7 @@ function createVoiceAudioPlayer() {
     if (!sourceUrl || !(await unlock()) || !audioContext) return false;
     try {
       const response = await fetch(sourceUrl, { credentials: "same-origin" });
-      if (!response.ok) return false;
+      if (!response.ok) throw new Error(`voice_cue_http_${response.status}`);
       const encoded = await response.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(encoded.slice(0));
       const source = audioContext.createBufferSource();
@@ -411,8 +460,14 @@ function createVoiceAudioPlayer() {
       nextStartTime = startAt + audioBuffer.duration;
       await ended;
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      const fallbackPlayed = await playCueWithMediaElement(sourceUrl);
+      if (!fallbackPlayed) {
+        console.error("elevenlabs.voice_cue_playback_failed", {
+          message: String(error?.message || error || "unknown")
+        });
+      }
+      return fallbackPlayed;
     }
   }
 
