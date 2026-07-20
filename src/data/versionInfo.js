@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.634"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.635"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,14 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: obnovený TEST znovu spustí hlas",
+    text: "Když správce znovu otevře už aktivní TEST tabletu, aplikace po načtení trasy a bezpečného kontextu znovu připojí živou ElevenLabs Šarlotu a spustí modulové úvodní hlášení. Stav už nezůstane bez pokusu na Chybí; případná skutečná chyba se zobrazí přímo v diagnostice."
+  },
+  {
+    title: "Šarlota: povinné čtení aktivního Promptu a KB",
+    text: "Před každou prací na Šarlotě musí vývojář vedle PŘÍRUČKY, Mantry a provozního kontraktu read-only načíst a celý přečíst skutečně aktivní Prompt i všechny Knowledge Base připojené ke správnému produkčnímu agentovi. Pouhý stav AKTIVNÍ, počet dokumentů, koncept nebo stará lokální kopie nestačí; bez dostupného živého obsahu se práce zastaví."
+  },
   {
     title: "Šarlota: TEST používá živý Prompt a znalosti",
     text: "TEST tabletu připraví mikrofon už při fyzickém spuštění a připojí skutečného ElevenLabs agenta jen po ověření Promptu, první zprávy, Knowledge Base, Tools a modulového kontextu Svozových tras. Diagnostika ukáže přesný stav i chybu. Blackview Active 7 LTE a modulový zdroj intro_announcement jsou nově chráněné provozním kontraktem; vývojář musí před prací číst PŘÍRUČKU i Mantru."
