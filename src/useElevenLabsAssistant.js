@@ -794,6 +794,7 @@ export function useElevenLabsAssistant({
   async function startVoiceConversation(assistantId = DEFAULT_AI_ASSISTANT_ID, callbacks = {}) {
     const assistant = assistantById(assistantId);
     const introGenerationRequest = String(callbacks.introGenerationRequest || "").trim();
+    const endAfterGeneratedIntro = Boolean(introGenerationRequest && callbacks.endAfterGeneratedIntro === true);
 
     if (typeof WebSocket === "undefined") {
       throw new Error("Hlasový režim Šarloty není v tomto prohlížeči dostupný.");
@@ -1031,6 +1032,16 @@ export function useElevenLabsAssistant({
         window.clearTimeout(finishTimer);
         const resumeDelayMs = voiceInputResumeDelayMs(delay, voiceAudioPlayer.remainingPlaybackMs());
         finishTimer = window.setTimeout(() => {
+          if (endAfterGeneratedIntro) {
+            const payload = {
+              ...resultPayload(),
+              state: "intro-complete",
+              microphoneActive: false
+            };
+            callbacks.onIntroComplete?.(payload);
+            settle(resolve, payload, "intro-complete");
+            return;
+          }
           audioInputPaused = false;
           callbacks.onReady?.({
             ...resultPayload(),

@@ -49,6 +49,12 @@ assert.match(enableSource, /await startCollectionDailyDriverSarlota\(options\);/
 assert.match(appSource, /const automaticSession = options\.invocation === "automatic";/);
 assert.match(appSource, /const automaticRetryCount = Math\.max\(0, Number\(options\.automaticRetryCount \|\| 0\)\);/);
 assert.match(appSource, /myDailyRouteSarlotaAutoSession = automaticSession;/);
+assert.match(appSource, /myDailyRouteSarlotaIntroCompleted = false;/);
+assert.match(appSource, /endAfterGeneratedIntro: automaticSession/);
+assert.match(appSource, /COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST/);
+assert.match(appSource, /Úvodní hlášení skončilo\. Šarlota je vypnutá/);
+assert.match(appSource, /ŠARLOTA MLUVÍ · POTOM SE VYPNE/);
+assert.match(appSource, /ZAPNOUT ŠARLOTU MIKROFONEM/);
 assert.match(appSource, /Můžeš s ní rovnou mluvit/);
 assert.match(appSource, /automaticSession && error\?\.code === "voice_disconnected" && automaticRetryCount < 1/);
 assert.match(appSource, /Šarlotu jednou automaticky znovu připojuji/);
@@ -86,8 +92,9 @@ assert.match(styleSource, /\.collection-daily-driver-route-confirmation > \.prim
 assert.match(styleSource, /\.collection-daily-driver-modal > section \{\s*max-height: calc\(100dvh - 8px\);/);
 assert.match(mantraSource, /v jednom okně a jedním finálním klepnutím/);
 assert.match(mantraSource, /paměť výslovně nezaškrtne, nezapne se ani se nic neuloží/);
-assert.match(mantraSource, /mikrofonový panel se ukáže jen při ručním ZAPNOUT ŠARLOTU/);
-assert.match(mantraSource, /Mluvím, Poslouchám a Přemýšlím/);
+assert.match(mantraSource, /ZAPNOUT ŠARLOTU MIKROFONEM/);
+assert.match(mantraSource, /Po dohrání se hologram, hlasová relace i mikrofon automaticky vypnou/);
+assert.match(mantraSource, /Mirku, s čím mohu pomoct/);
 assert.match(mantraSource, /signed URL, WebSocket nebo audio selže/);
 assert.match(mantraSource, /nesmí přečíst pevnou backendovou šablonu/);
 assert.match(mantraSource, /skutečně aktivního Promptu, připojené Knowledge Base, Tools a dynamic variables/);
@@ -102,6 +109,8 @@ assert.doesNotMatch(contextSource, /Jestli máš kafe po ruce|Budu hlídat trasu
 assert.match(voiceClientSource, /suppressing-technical-first-message/);
 assert.match(voiceClientSource, /waiting-for-generated-intro/);
 assert.match(voiceClientSource, /sendJson\(\{ type: "user_message", text: introGenerationRequest \}\)/);
+assert.match(voiceClientSource, /endAfterGeneratedIntro/);
+assert.match(voiceClientSource, /state: "intro-complete"/);
 assert.match(sourcePrompt, /BEZPEČNÝ PROVOZNÍ VÝTAH JE AKTIVNÍ/);
 
 console.log("Šarlota route confirmation intro tests passed.");

@@ -30,7 +30,8 @@ Při budoucí implementaci platí vždy:
 
 ## Stav zapojení do živého promptu
 
-- Aktivní: řidič v jednom fyzickém kroku potvrdí trasu a volbu pracovní paměti; teprve potom zazní backendové úvodní hlášení a pokračuje obousměrný rozhovor.
+- Aktivní: řidič v jednom fyzickém kroku potvrdí trasu a volbu pracovní paměti; potom aktivní ElevenLabs agent vytvoří jeden krátký úvod a KSO po jeho dohrání hlasovou relaci i mikrofon vypne.
+- Aktivní: další rozhovor začne až novým automatickým krokem nebo ručním `ZAPNOUT ŠARLOTU MIKROFONEM`; ruční relace začne otázkou ve významu `Mirku, s čím mohu pomoct?` a potom poslouchá.
 - Aktivní: úvod vychází pouze z ověřeného řidiče, trasy, počtu stanovišť, vozidla, osádky, počasí a povolené paměti. Neověřené údaje přizná a nevymyslí.
 - Aktivní: český ženský hlas, krátké přirozené věty, lehký situační humor mimo rizikové situace a maximálně jedna otázka.
 - Aktivní: pracovní kontakty, funkce, nadřízený a bezpečný stav dostupnosti bez soukromých a zdravotních údajů.

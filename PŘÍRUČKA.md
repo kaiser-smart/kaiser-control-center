@@ -1447,6 +1447,8 @@ Nesmí se z nich odvozovat role, oprávnění ani právo provést citlivou akci.
 - `Svozové trasy` nesmějí obsahovat pevnou backendovou ani frontendovou šablonu slyšitelného přivítání, lokálně napsanou náhradní hlášku, obecný mock ani úvod jiného modulu. Backend dodává fakta a bezpečnostní stav, nikoli hotovou lidskou větu.
 - Technický marker a interní požadavek KSO se nikdy nevyslovují. Mikrofon zůstává pozastavený, dokud technická First Message neskončí a nedohraje agentem vytvořený skutečný úvod.
 - Úvod aktivního agenta musí být krátký, přirozený, bez opakování stejného údaje a nesmí znovu žádat potvrzení již fyzicky potvrzené trasy.
+- Automaticky spuštěná Šarlota smí po potvrzení trasy říct právě jeden úvod. Po jeho dohrání KSO ukončí hlasovou relaci i mikrofon; Šarlota nesmí zůstat poslouchat, sama navazovat, ptát se `Jste stále zde` ani vyžadovat další odpověď.
+- Ruční `ZAPNOUT ŠARLOTU MIKROFONEM` je nová samostatná hlasová relace. Šarlota ji zahájí jednou krátkou otázkou ve významu `Mirku, s čím mohu pomoct?`, přičemž oslovení smí použít jen z ověřeného vokativu. Po této otázce zůstane poslouchat až do ručního ukončení nebo bezpečného timeoutu.
 - `current_module`, `current_module_route`, `current_module_context` a `intro_announcement` musí patřit ke stejné trase a stejnému modulovému kontraktu; rozpor hlasovou relaci zablokuje.
 - TEST tabletu smí získat signed URL až po read-only ověření skutečného ElevenLabs agenta, neprázdného Promptu, First Message `{{intro_announcement}}`, připojené Knowledge Base a všech očekávaných Tools.
 - Nový modul nebo změna zdroje úvodu vyžaduje úpravu kontraktu a automatický regresní test. Nestačí změnit pouze frontendový text.

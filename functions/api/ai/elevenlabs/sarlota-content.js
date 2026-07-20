@@ -191,6 +191,8 @@ const PROMPT_REQUIREMENTS = [
   ["intro_announcement", "úvodní hlášení Šarloty"],
   ["KSO_INTRO_GENERATION_PENDING", "technický marker úvodu Svozových tras"],
   ["aktivního Promptu, připojené Knowledge Base a ověřených dynamic variables", "generování úvodu aktivní Šarlotou"],
+  ["KSO po dohrání úvodu hlasovou relaci a mikrofon ukončí", "automatické vypnutí Šarloty po úvodu"],
+  ["Mirku, s čím mohu pomoct?", "bezpečný pozdrav po ručním zapnutí"],
   ["get_collection_routes_context", "bezpečný kontext Svozových tras"],
   ["prepare_collection_route_gps_capture", "příprava GPS stanoviště"],
   ["prepare_collection_route_test_incident", "příprava TEST hlášení stanoviště"],
@@ -207,6 +209,14 @@ const KB_REQUIREMENTS = [
   {
     markers: ["slysitelne uvodni hlaseni vytvari aktivni agent"],
     label: "generování slyšitelného úvodu aktivní Šarlotou"
+  },
+  {
+    markers: ["po automatickem uvodu se hlasova relace a mikrofon vypnou"],
+    label: "automatické vypnutí Šarloty po úvodu"
+  },
+  {
+    markers: ["mirku, s cim mohu pomoct"],
+    label: "pozdrav po ručním zapnutí mikrofonem"
   },
   {
     markers: ["neni zdrojem provoznich faktu"],

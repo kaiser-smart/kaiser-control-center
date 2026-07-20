@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 import {
   COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST,
+  COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST,
   COLLECTION_ROUTES_SARLOTA_VOICE_ASSISTANT_ID,
   COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER,
   collectionRoutesSarlotaAudioWasPlayed,
@@ -15,6 +16,9 @@ assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /aktivního sys
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /připojené Knowledge Base/);
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Neopakuj stejný údaj/);
 assert.doesNotMatch(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Ahoj Mirku|Můžeme vyrazit/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /jediná zpráva automatického spuštění/);
+assert.match(COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST, /Mirku, s čím mohu pomoct\?/);
+assert.match(COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST, /Po otázce zůstaň připravená poslouchat/);
 
 const exactInstruction = "Tomáši, až zastavíš přímo u nádob, klepni na Potvrdit GPS stanoviště.";
 const voiceRequest = collectionRoutesSarlotaVoiceRequest(exactInstruction);
@@ -69,6 +73,9 @@ assert.match(elevenLabsSource, /introGenerationRequest/);
 assert.match(elevenLabsSource, /suppressing-technical-first-message/);
 assert.match(elevenLabsSource, /waiting-for-generated-intro/);
 assert.match(elevenLabsSource, /requestGeneratedIntro/);
+assert.match(elevenLabsSource, /endAfterGeneratedIntro/);
+assert.match(elevenLabsSource, /state: "intro-complete"/);
+assert.match(elevenLabsSource, /settle\(resolve, payload, "intro-complete"\)/);
 const sendVoiceStart = elevenLabsSource.indexOf("async function sendVoiceMessage");
 const sendVoiceEnd = elevenLabsSource.indexOf("\n  return {\n    clientTools", sendVoiceStart);
 assert.ok(sendVoiceStart >= 0 && sendVoiceEnd > sendVoiceStart);

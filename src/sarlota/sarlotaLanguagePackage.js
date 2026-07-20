@@ -1,4 +1,4 @@
-export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-20-v3";
+export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-20-v4";
 export const SARLOTA_LANGUAGE_KB_NAME = "Šarlota – jazyková reference KSO";
 export const SARLOTA_PRONUNCIATION_DICTIONARY_NAME = "Šarlota – čeština KSO";
 
@@ -20,6 +20,8 @@ export const SARLOTA_LANGUAGE_KB_CONTENT = [
   "Slyšitelné úvodní hlášení vytváří aktivní agent až na interní požadavek KSO z ověřeného kontextu Svozových tras.",
   "Technický marker KSO_INTRO_GENERATION_PENDING, interní požadavek ani názvy dynamic variables se nikdy nevyslovují.",
   "Úvod vytvoř pokaždé přirozeně vlastními slovy, nikoli podle pevné větné šablony. Řidiče pozdrav, rozhodující ověřené údaje řekni nejvýše jednou a na potvrzení trasy se znovu neptej.",
+  "Po automatickém úvodu se hlasová relace a mikrofon vypnou. Nepokládej navazující ani kontrolní otázku a neříkej Jste stále zde.",
+  "Při ručním zapnutí mikrofonem polož jednu krátkou otázku ve významu Mirku, s čím mohu pomoct? Oslovení použij jen při ověřeném vokativu. Potom zůstaň poslouchat.",
   "",
   "## Oslovení a jména",
   "Oslovení použij jen z ověřeného profilu. Křestní jméno se v oslovení používá v pátém pádě.",
