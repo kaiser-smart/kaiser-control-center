@@ -41906,11 +41906,9 @@ async function startCollectionDailyDriverSarlota(options = {}) {
       renderAiAssistantLayerOnly();
       const gongPlayed = await elevenLabsAssistant.playVoiceCue?.(COLLECTION_ROUTES_SARLOTA_INTRO_GONG_URL);
       if (!gongPlayed) {
-        await updateCollectionRoutesVoiceIntro("cancel", introPlaybackToken);
-        introPlaybackToken = "";
-        const error = new Error("Intro gong se nepodařilo přehrát.");
-        error.code = "voice_intro_gong_failed";
-        throw error;
+        collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Intro gong se nepodařilo přehrát. Šarlota pokračuje skutečným hlasem ElevenLabs; gong je označený jako chyba.";
+        setAiVoiceUiState("assistantSpeaking", "Šarlota mluví", ["ElevenLabs", "Intro bez gongu", "Gong: chyba"]);
+        render();
       }
       return true;
     } : null,
