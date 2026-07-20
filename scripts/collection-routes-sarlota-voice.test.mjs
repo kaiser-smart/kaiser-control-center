@@ -131,6 +131,8 @@ assert.match(appSource, /data-collection-routes-test-voice-provider/);
 assert.match(appSource, /Hlas: ElevenLabs Šarlota · systémové čtení vypnuto/);
 assert.match(appSource, /Šarlota pokračuje skutečným hlasem ElevenLabs; gong je označený jako chyba/);
 assert.doesNotMatch(appSource, /error\.code = "voice_intro_gong_failed"/);
+assert.match(appSource, /outroGongPlayed = await elevenLabsAssistant\.playVoiceCue/);
+assert.match(appSource, /outro gong se nepodařilo přehrát/);
 
 const closeFunctionStart = appSource.indexOf("function closeCollectionRoutesTestTablet");
 const closeFunctionEnd = appSource.indexOf("async function loadLatestCollectionRoutesTestNotificationJob", closeFunctionStart);

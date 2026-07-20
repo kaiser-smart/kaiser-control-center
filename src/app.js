@@ -41874,6 +41874,7 @@ async function startCollectionDailyDriverSarlota(options = {}) {
   const automaticRetryCount = Math.max(0, Number(options.automaticRetryCount || 0));
   if (!automaticSession) void elevenLabsAssistant.prepareVoiceInput?.();
   let introPlaybackToken = "";
+  let outroGongPlayed = false;
   collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
   collectionRoutesPilotState.myDailyRouteSarlotaConnecting = true;
   collectionRoutesPilotState.myDailyRouteSarlotaRuntime = null;
@@ -41928,7 +41929,7 @@ async function startCollectionDailyDriverSarlota(options = {}) {
     onIntroSilenceTimeout: automaticSession ? async () => {
       setAiVoiceUiState("assistantSpeaking", "Outro gong", ["Bez odpovědi", "Ukončuji úvod", "Mikrofon se vypne"]);
       renderAiAssistantLayerOnly();
-      await elevenLabsAssistant.playVoiceCue?.(COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL);
+      outroGongPlayed = await elevenLabsAssistant.playVoiceCue?.(COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL) === true;
       await updateCollectionRoutesVoiceIntro("complete", introPlaybackToken);
     } : null,
     onConnected: (session) => {
@@ -41948,7 +41949,9 @@ async function startCollectionDailyDriverSarlota(options = {}) {
       collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = false;
       collectionRoutesPilotState.myDailyRouteSarlotaIntroCompleted = true;
       closeAiAssistant({ launcherVisible: false, renderAfter: false });
-      collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Řidič 5 sekund neodpověděl. Zazněl outro gong a Šarlota je vypnutá; ručně ji zapneš mikrofonem.";
+      collectionRoutesPilotState.myDailyRouteSarlotaMessage = outroGongPlayed
+        ? "Řidič 5 sekund neodpověděl. Zazněl outro gong a Šarlota je vypnutá; ručně ji zapneš mikrofonem."
+        : "Řidič 5 sekund neodpověděl. Šarlota je vypnutá; outro gong se nepodařilo přehrát. Ručně ji zapneš mikrofonem.";
       render();
     },
     onFailed: (error) => {
