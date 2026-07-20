@@ -14,7 +14,12 @@ const transitionEnd = appSource.indexOf("async function optimizeMyCollectionDail
 assert.ok(transitionStart >= 0 && transitionEnd > transitionStart);
 const transitionSource = appSource.slice(transitionStart, transitionEnd);
 
-assert.match(transitionSource, /if \(action === "start"\) \{[\s\S]*unlockVoiceAudio[\s\S]*prepareVoiceInput/);
+assert.match(transitionSource, /if \(action === "start"\) \{[\s\S]*unlockVoiceAudio/);
+assert.doesNotMatch(
+  transitionSource.slice(0, transitionSource.indexOf("let startSarlotaAfterTransition")),
+  /prepareVoiceInput/,
+  "Automatický úvod pouze přehrává ověřené audio a nesmí žádat mikrofon."
+);
 assert.match(transitionSource, /startSarlotaAfterTransition = action === "start";/);
 assert.match(transitionSource, /await enableCollectionDailyDriverSarlota\(\{ promptForMemory: false, invocation: "automatic" \}\);/);
 assert.match(transitionSource, /Trasa je zahájená\. Připravuji úvodní přivítání Šarloty/);
@@ -51,10 +56,11 @@ assert.match(appSource, /const automaticRetryCount = Math\.max\(0, Number\(optio
 assert.match(appSource, /myDailyRouteSarlotaAutoSession = automaticSession;/);
 assert.match(appSource, /myDailyRouteSarlotaIntroCompleted = false;/);
 assert.match(appSource, /endAfterGeneratedIntro: automaticSession/);
-assert.match(appSource, /options\.endAfterGeneratedIntro === true[\s\S]*Mikrofon pozastavený/);
+assert.match(appSource, /options\.endAfterGeneratedIntro === true[\s\S]*Ověřuji fakta[\s\S]*Zvuk zatím neběží/);
 assert.match(appSource, /COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST/);
 assert.match(appSource, /Úvodní hlášení skončilo\. Šarlota je vypnutá/);
-assert.match(appSource, /ŠARLOTA MLUVÍ · POTOM SE VYPNE/);
+assert.match(appSource, /ŠARLOTA PŘIPRAVUJE OVĚŘENÝ ÚVOD/);
+assert.match(appSource, /SPUSTIT ZVUK A PŘEHRÁT ÚVOD/);
 assert.match(appSource, /ZAPNOUT ŠARLOTU MIKROFONEM/);
 assert.match(appSource, /Můžeš s ní rovnou mluvit/);
 assert.match(appSource, /automaticSession && error\?\.code === "voice_disconnected" && automaticRetryCount < 1/);

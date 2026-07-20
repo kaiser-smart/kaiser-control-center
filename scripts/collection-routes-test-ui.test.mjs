@@ -158,7 +158,7 @@ for (const marker of [
   "/api/ai/collection-routes/context",
   "/api/ai/sarlota/memory",
   "remember_exchange",
-  "await enableCollectionDailyDriverSarlota()",
+  "await enableCollectionDailyDriverSarlota({",
   "data-collection-routes-test-gps-voice",
   "data-collection-routes-test-gps-save",
   "prepareCollectionRouteGpsCapture",

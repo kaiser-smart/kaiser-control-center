@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.38",
-  updatedAt: "20. 7. 2026 10:43",
-  updatedAtIso: "2026-07-20T10:43:00+02:00",
-  lastChange: "Automatické vypnutí Šarloty po úvodu",
+  version: "1.39",
+  updatedAt: "20. 7. 2026 11:51",
+  updatedAtIso: "2026-07-20T11:51:00+02:00",
+  lastChange: "Ověření faktů před přehráním úvodu",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
@@ -218,6 +218,8 @@ HLAS NAVIGACE A HLASOVÁ ŠARLOTA
 Hlas navigace a hlasová Šarlota jsou dva oddělené systémy. Hlas navigace v češtině pouze přehrává deterministické pokyny HERE, například vzdálenost k manévru, odbočení, změnu trasy nebo bezpečnostní upozornění. Nevede rozhovor, nepoužívá agentic AI a neprovádí provozní úkony. Navigační pokyn má vždy zvukovou prioritu a při manévru Šarlotu ztiší nebo pozastaví.
 
 Hlasová Šarlota je samostatná přátelská konverzační asistentka. Po fyzickém potvrzení dnešní trasy nesmí přečíst pevnou backendovou šablonu. Backend předá pouze technický marker a strukturovaný ověřený kontext; KSO technickou First Message umlčí a vyžádá si skutečné úvodní hlášení od aktivního ElevenLabs agenta. Slyšitelné přivítání proto vytváří LLM podle skutečně aktivního Promptu, připojené Knowledge Base, Tools a dynamic variables modulu Svozové trasy. Musí být krátké, nesmí opakovat název trasy nebo vozidlo různými větami, přirozeně dá najevo, že lze vyrazit, na potvrzení trasy se znovu neptá a nenavazuje další otázkou. Po dohrání automatického úvodu KSO hlasovou relaci i mikrofon ukončí. Oslovuje jen osoby skutečně potvrzené backendem a nesmí si domýšlet posádku, vozidlo, počasí ani paměť.
+
+Automatický úvod se před přehráním celý uloží jen do dočasné paměti prohlížeče a KSO jej tvrdě porovná s backendem ověřenými fakty relace. Cizí trasa, počet stanovišť, vozidlo, model, SPZ nebo počasí zablokují celý zvuk. Hologram smí ukázat Mluvím až po validaci a skutečném naplánování audia v běžícím AudioContextu; suspended kontext, pouhý text ani čekání na audio nejsou mluvení. Bez uživatelského gesta tablet nabídne SPUSTIT ZVUK A PŘEHRÁT ÚVOD. Počasí musí být ověřené, mít čas pozorování, být nejvýše 45 minut staré a smí se použít pouze jako přesné backendové shrnutí. Jinak se z úvodu zcela vynechá; obecná věta počasí přeje je zakázaná.
 
 Když automaticky spuštěná Šarlota přehrává úvod, Řidičský displej místo technického obrazu mikrofonu ukáže kompaktní holografickou Šarlotu. Po dohrání se hologram, hlasová relace i mikrofon automaticky vypnou. Hologram nezakrývá navigační pokyn ani mapové ovládání a respektuje omezení animací zařízení. Mikrofonový panel se zobrazí pouze po ručním ZAPNOUT ŠARLOTU MIKROFONEM; ruční relace začne krátkou otázkou ve významu „Mirku, s čím mohu pomoct?“ a potom poslouchá. První systémová žádost prohlížeče o povolení mikrofonu zůstává pravdivě viditelná. Blackview simulátor vykreslí hologram jen uvnitř skutečného řidičského displeje, nikdy současně také v obalovém náhledu. Technický intro_announcement vlastní výhradně modul Svozové trasy, ale není slyšitelným textem. Slyšitelné intro vytváří aktivní agent z ověřeného backendového kontextu. TEST se nesmí připojit, pokud skutečný ElevenLabs agent nemá ověřený Prompt, First Message, Knowledge Base, Tools nebo odpovídající modulový kontext.
 

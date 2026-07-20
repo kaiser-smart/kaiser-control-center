@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.640"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.641"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: neověřený úvod se už nepřehraje",
+    text: "KSO nejdřív přijme celé audio do dočasné paměti a porovná text s ověřenou trasou, vozidlem, SPZ, počtem stanovišť a čerstvým počasím. Cizí údaj zablokuje celý zvuk i hologram. Počasí se smí použít jen jako přesné aktuální backendové shrnutí; šablony typu počasí přeje byly odstraněné."
+  },
   {
     title: "Šarlota: úvod už není pevná backendová šablona",
     text: "Svozové trasy předávají aktivnímu ElevenLabs agentovi ověřený kontext a slyšitelné intro vytváří skutečný Prompt s připojenou Knowledge Base. Technická First Message se řidiči nepřehraje, pevné věty byly z backendu odstraněné a mikrofon se obnoví až po dohrání celé odpovědi."

@@ -7,6 +7,9 @@ import {
   COLLECTION_ROUTES_SARLOTA_VOICE_ASSISTANT_ID,
   COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER,
   collectionRoutesSarlotaAudioWasPlayed,
+  collectionRoutesSarlotaIntroFacts,
+  collectionRoutesSarlotaIntroGenerationRequest,
+  validateCollectionRoutesSarlotaIntro,
   collectionRoutesSarlotaVoiceRequest
 } from "../src/data/collectionRoutesSarlotaVoice.js";
 
@@ -19,6 +22,56 @@ assert.doesNotMatch(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Ahoj Mi
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /jediná zpráva automatického spuštění/);
 assert.match(COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST, /Mirku, s čím mohu pomoct\?/);
 assert.match(COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST, /Po otázce zůstaň připravená poslouchat/);
+
+const introContext = {
+  actor: { name: "Miroslav Vašek" },
+  route: { title: "pondělí 2026-07-13 · Vůz A · 3BN 3558", totalCount: 198 },
+  vehicle: { status: "verified", fleetMatch: true, label: "Vůz A · 3BN 3558", registration: "3BN 3558" },
+  weather: {
+    verified: true,
+    summary: "Brno: 22 °C, zataženo. Během směny hrozí bouřka.",
+    observedAt: "2026-07-20T10:00:00+02:00",
+    source: "open_meteo"
+  }
+};
+const introFacts = collectionRoutesSarlotaIntroFacts(introContext, {
+  now: Date.parse("2026-07-20T10:10:00+02:00")
+});
+const introRequest = collectionRoutesSarlotaIntroGenerationRequest(introContext, {
+  now: Date.parse("2026-07-20T10:10:00+02:00")
+});
+assert.match(introRequest, /3BN 3558/);
+assert.match(introRequest, /Během směny hrozí bouřka/);
+assert.equal(validateCollectionRoutesSarlotaIntro(
+  "Dobrý den, posádko. Dnešní trasu mám načtenou. Budu hlídat důležité změny.",
+  introFacts
+).valid, true);
+
+const hallucinatedIntro = validateCollectionRoutesSarlotaIntro(
+  "Dobré dopoledne, posádko. Dnes jedete trasu Severní průmyslová zóna s osmi stanovišti. Pro jízdu je přiřazené vozidlo Mercedes Atego, SPZ 5A4 1234.",
+  introFacts
+);
+assert.equal(hallucinatedIntro.valid, false);
+assert.ok(hallucinatedIntro.violations.includes("foreign_route_title"));
+assert.ok(hallucinatedIntro.violations.includes("foreign_stop_count"));
+assert.ok(hallucinatedIntro.violations.includes("unverified_vehicle_or_registration"));
+assert.equal(validateCollectionRoutesSarlotaIntro(
+  "Vozidlo Mercedes Atego s SPZ 3BN 3558 je připravené.",
+  introFacts
+).valid, false, "Cizí značka nebo model se nesmí schovat za správnou SPZ.");
+
+const inventedWeather = validateCollectionRoutesSarlotaIntro(
+  "Dobrý den, posádko. Počasí nám přeje, můžeme vyrazit.",
+  introFacts
+);
+assert.equal(inventedWeather.valid, false);
+assert.ok(inventedWeather.violations.includes("unverified_or_paraphrased_weather"));
+
+const staleWeatherFacts = collectionRoutesSarlotaIntroFacts(introContext, {
+  now: Date.parse("2026-07-20T12:00:00+02:00")
+});
+assert.equal(staleWeatherFacts.weather, null);
+assert.equal(validateCollectionRoutesSarlotaIntro("Venku je jasno.", staleWeatherFacts).valid, false);
 
 const exactInstruction = "Tomáši, až zastavíš přímo u nádob, klepni na Potvrdit GPS stanoviště.";
 const voiceRequest = collectionRoutesSarlotaVoiceRequest(exactInstruction);
@@ -74,6 +127,11 @@ const resetAdminTestSource = appSource.slice(resetAdminTestStart, resetAdminTest
 assert.match(resetAdminTestSource, /closeAiAssistant\(\{ launcherVisible: false, renderAfter: false \}\)/);
 
 const elevenLabsSource = readFileSync(new URL("../src/useElevenLabsAssistant.js", import.meta.url), "utf8");
+assert.match(elevenLabsSource, /if \(audioContext\.state !== "running"\) \{\s*return false;/);
+assert.match(elevenLabsSource, /bufferedIntroAudio\.push\(\{ audioBase64, format: agentAudioFormat \}\)/);
+assert.match(elevenLabsSource, /validateGeneratedIntro/);
+assert.match(elevenLabsSource, /voice_intro_validation_failed/);
+assert.match(elevenLabsSource, /introValidated: true/);
 assert.match(elevenLabsSource, /introGenerationRequest/);
 assert.match(elevenLabsSource, /suppressing-technical-first-message/);
 assert.match(elevenLabsSource, /waiting-for-generated-intro/);

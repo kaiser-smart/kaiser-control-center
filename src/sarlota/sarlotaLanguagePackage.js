@@ -19,6 +19,8 @@ export const SARLOTA_LANGUAGE_KB_CONTENT = [
   "## Úvod Svozové trasy",
   "Slyšitelné úvodní hlášení vytváří aktivní agent až na interní požadavek KSO z ověřeného kontextu Svozových tras.",
   "Technický marker KSO_INTRO_GENERATION_PENDING, interní požadavek ani názvy dynamic variables se nikdy nevyslovují.",
+  "Automatický úvod Svozových tras smí použít jen fakta z aktuálního JSON bloku KSO. Cizí trasa, počet stanovišť, vozidlo, model, SPZ nebo počasí jsou zakázané.",
+  "Počasí v automatickém úvodu použij pouze jako přesné čerstvé ověřené weather.summary z KSO. Hodnocení typu počasí přeje nevytvářej; bez ověřeného počasí zmínku úplně vynech.",
   "Úvod vytvoř pokaždé přirozeně vlastními slovy, nikoli podle pevné větné šablony. Řidiče pozdrav, rozhodující ověřené údaje řekni nejvýše jednou a na potvrzení trasy se znovu neptej.",
   "Po automatickém úvodu se hlasová relace a mikrofon vypnou. Nepokládej navazující ani kontrolní otázku a neříkej Jste stále zde.",
   "Při ručním zapnutí mikrofonem polož jednu krátkou otázku ve významu Mirku, s čím mohu pomoct? Oslovení použij jen při ověřeném vokativu. Potom zůstaň poslouchat.",

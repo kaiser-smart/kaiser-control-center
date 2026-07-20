@@ -326,9 +326,13 @@ function createVoiceAudioPlayer() {
       await audioContext.resume();
     }
 
+    if (audioContext.state !== "running") {
+      return false;
+    }
+
     primeOutput();
     nextStartTime = Math.max(nextStartTime, audioContext.currentTime);
-    return audioContext.state !== "closed";
+    return audioContext.state === "running";
   }
 
   function stop() {
@@ -800,7 +804,7 @@ export function useElevenLabsAssistant({
       throw new Error("Hlasový režim Šarloty není v tomto prohlížeči dostupný.");
     }
 
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    if (!endAfterGeneratedIntro && (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia)) {
       const error = new Error("Mikrofon není v tomto prohlížeči dostupný.");
       error.code = "voice_microphone_unavailable";
       error.voiceReason = "microphone-api-unavailable";
@@ -827,21 +831,23 @@ export function useElevenLabsAssistant({
     }
 
     let mediaStream = null;
-    try {
-      mediaStream = await takePreparedVoiceInput();
-      if (!mediaStream) {
-        mediaStream = await withTimeout(
-          navigator.mediaDevices.getUserMedia(voiceMicrophoneConstraints()),
-          VOICE_MICROPHONE_TIMEOUT_MS,
-          createMicrophoneTimeoutError,
-          stopMediaStreamTracks
-        );
+    if (!endAfterGeneratedIntro) {
+      try {
+        mediaStream = await takePreparedVoiceInput();
+        if (!mediaStream) {
+          mediaStream = await withTimeout(
+            navigator.mediaDevices.getUserMedia(voiceMicrophoneConstraints()),
+            VOICE_MICROPHONE_TIMEOUT_MS,
+            createMicrophoneTimeoutError,
+            stopMediaStreamTracks
+          );
+        }
+      } catch (error) {
+        if (String(error?.code || "").startsWith("voice_microphone_")) {
+          throw error;
+        }
+        throw createMicrophoneStartError(error);
       }
-    } catch (error) {
-      if (String(error?.code || "").startsWith("voice_microphone_")) {
-        throw error;
-      }
-      throw createMicrophoneStartError(error);
     }
 
     let signedUrlSession = null;
@@ -870,6 +876,9 @@ export function useElevenLabsAssistant({
       let audioChunkCount = 0;
       let audioPlaybackStarted = false;
       let audioPlaybackFailed = false;
+      let bufferedIntroAudio = [];
+      let introFinalizing = false;
+      let introValidation = null;
       let audioInputStarted = false;
       let audioInputStopped = false;
       let audioInputPaused = Boolean(introGenerationRequest);
@@ -884,7 +893,7 @@ export function useElevenLabsAssistant({
       let finishTimer = 0;
       let introGenerationTimer = 0;
       let lastInputLevelAt = 0;
-      const audioTrack = mediaStream.getAudioTracks?.()[0] || null;
+      const audioTrack = mediaStream?.getAudioTracks?.()[0] || null;
 
       function clearTimers() {
         window.clearTimeout(connectionTimer);
@@ -925,7 +934,7 @@ export function useElevenLabsAssistant({
           sourceNode = null;
         }
 
-        mediaStream.getTracks().forEach((track) => track.stop());
+        mediaStream?.getTracks?.().forEach((track) => track.stop());
       }
 
       function cleanup(reason = "done") {
@@ -989,7 +998,8 @@ export function useElevenLabsAssistant({
           configured: Boolean(signedUrlSession.configured),
           audioChunkCount,
           audioPlaybackFailed,
-          audioPlaybackStarted
+          audioPlaybackStarted,
+          introValidation
         };
       }
 
@@ -999,6 +1009,9 @@ export function useElevenLabsAssistant({
         audioChunkCount = 0;
         audioPlaybackStarted = false;
         audioPlaybackFailed = false;
+        bufferedIntroAudio = [];
+        introFinalizing = false;
+        introValidation = null;
       }
 
       function requestGeneratedIntro() {
@@ -1024,24 +1037,87 @@ export function useElevenLabsAssistant({
         introGenerationTimer = window.setTimeout(requestGeneratedIntro, 600);
       }
 
+      async function finishValidatedGeneratedIntro() {
+        if (settled || introFinalizing) return;
+        introFinalizing = true;
+        const text = String(finalAgentText || streamedAgentText).trim();
+        const validation = typeof callbacks.validateGeneratedIntro === "function"
+          ? callbacks.validateGeneratedIntro(text)
+          : { valid: true, violations: [] };
+        introValidation = validation && typeof validation === "object"
+          ? validation
+          : { valid: validation === true, violations: [] };
+
+        if (introValidation.valid !== true) {
+          const error = new Error("Šarlota vytvořila úvod s neověřenými údaji. Zvuk nebyl přehrán.");
+          error.code = "voice_intro_validation_failed";
+          error.violations = Array.isArray(introValidation.violations) ? introValidation.violations : [];
+          error.payload = { ...resultPayload(), voiceRuntime: signedUrlSession.voiceRuntime || null };
+          callbacks.onIntroValidationFailed?.(error);
+          settle(reject, error, "intro-validation-failed");
+          return;
+        }
+
+        if (!bufferedIntroAudio.length) {
+          const error = new Error("Šarlota vrátila ověřený text, ale neposlala žádný zvuk.");
+          error.code = "voice_audio_missing";
+          error.payload = { ...resultPayload(), voiceRuntime: signedUrlSession.voiceRuntime || null };
+          settle(reject, error, "intro-audio-missing");
+          return;
+        }
+
+        for (const chunk of bufferedIntroAudio) {
+          const played = await voiceAudioPlayer.playPcmChunk(chunk.audioBase64, chunk.format).catch(() => false);
+          audioPlaybackStarted = audioPlaybackStarted || played;
+          audioPlaybackFailed = audioPlaybackFailed || !played;
+          if (!played) break;
+        }
+        bufferedIntroAudio = [];
+
+        if (!audioPlaybackStarted || audioPlaybackFailed) {
+          const error = new Error("Ověřený úvod se nepodařilo přehrát. Zkontroluj povolený zvuk pro prohlížeč a spusť ho klepnutím.");
+          error.code = "voice_audio_playback_failed";
+          error.payload = { ...resultPayload(), voiceRuntime: signedUrlSession.voiceRuntime || null };
+          settle(reject, error, "intro-audio-playback-failed");
+          return;
+        }
+
+        callbacks.onAudio?.({
+          audioChunkCount,
+          audioPlaybackStarted,
+          audioPlaybackFailed,
+          introValidated: true
+        });
+        const playbackDelay = voiceInputResumeDelayMs(0, voiceAudioPlayer.remainingPlaybackMs());
+        finishTimer = window.setTimeout(() => {
+          const payload = {
+            ...resultPayload(),
+            state: "intro-complete",
+            microphoneActive: false
+          };
+          callbacks.onIntroComplete?.(payload);
+          settle(resolve, payload, "intro-complete");
+        }, playbackDelay);
+      }
+
       function scheduleReady(delay = VOICE_FINISH_GRACE_MS) {
-        if (!String(finalAgentText || streamedAgentText).trim() && audioChunkCount === 0) {
+        const responseText = String(finalAgentText || streamedAgentText).trim();
+        if (endAfterGeneratedIntro && (!responseText || audioChunkCount === 0)) {
+          return;
+        }
+        if (!responseText && audioChunkCount === 0) {
           return;
         }
 
         window.clearTimeout(finishTimer);
+        if (endAfterGeneratedIntro) {
+          finishTimer = window.setTimeout(() => {
+            void finishValidatedGeneratedIntro();
+          }, Math.max(300, Number(delay) || 0));
+          return;
+        }
         const resumeDelayMs = voiceInputResumeDelayMs(delay, voiceAudioPlayer.remainingPlaybackMs());
         finishTimer = window.setTimeout(() => {
-          if (endAfterGeneratedIntro) {
-            const payload = {
-              ...resultPayload(),
-              state: "intro-complete",
-              microphoneActive: false
-            };
-            callbacks.onIntroComplete?.(payload);
-            settle(resolve, payload, "intro-complete");
-            return;
-          }
           audioInputPaused = false;
           callbacks.onReady?.({
             ...resultPayload(),
@@ -1059,6 +1135,10 @@ export function useElevenLabsAssistant({
 
       function startAudioInput() {
         if (audioInputStarted || audioInputStopped || settled) {
+          return;
+        }
+        if (endAfterGeneratedIntro) {
+          audioInputPaused = true;
           return;
         }
 
@@ -1241,6 +1321,11 @@ export function useElevenLabsAssistant({
             audioInputPaused = true;
             audioChunkCount += 1;
             window.clearTimeout(finishTimer);
+            if (endAfterGeneratedIntro) {
+              bufferedIntroAudio.push({ audioBase64, format: agentAudioFormat });
+              scheduleReady(900);
+              return;
+            }
             voiceAudioPlayer.playPcmChunk(audioBase64, agentAudioFormat)
               .then((played) => {
                 audioPlaybackStarted = audioPlaybackStarted || Boolean(played);

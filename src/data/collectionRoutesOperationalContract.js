@@ -35,6 +35,12 @@ export const COLLECTION_ROUTES_OPERATIONAL_CONTRACT = Object.freeze({
     technicalFirstMessageMarker: "KSO_INTRO_GENERATION_PENDING",
     suppressTechnicalFirstMessage: true,
     generateAudibleIntroWithActiveAgent: true,
+    bufferGeneratedIntroUntilValidated: true,
+    rejectForeignOperationalFacts: true,
+    hologramRequiresScheduledAudio: true,
+    requireRunningAudioContext: true,
+    weatherMaxAgeMinutes: 45,
+    weatherMustUseExactVerifiedSummary: true,
     requireLivePromptInTest: true,
     requireLiveKnowledgeBaseInTest: true
   }),

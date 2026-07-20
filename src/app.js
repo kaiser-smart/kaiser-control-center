@@ -72,7 +72,7 @@ import {
   collectionRoutesDriverTabletCssSizeLabel,
   collectionRoutesDriverTabletLabel
 } from "./data/collectionRoutesOperationalContract.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.38";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.39";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -83,11 +83,13 @@ import {
   summarizeCollectionRouteGpsSamples
 } from "./data/collectionRouteGps.js";
 import {
-  COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST,
   COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST,
   COLLECTION_ROUTES_SARLOTA_VOICE_ASSISTANT_ID,
   COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER,
   collectionRoutesSarlotaAudioWasPlayed,
+  collectionRoutesSarlotaIntroFacts,
+  collectionRoutesSarlotaIntroGenerationRequest,
+  validateCollectionRoutesSarlotaIntro,
   collectionRoutesSarlotaVoiceRequest
 } from "./data/collectionRoutesSarlotaVoice.js";
 import {
@@ -3428,6 +3430,7 @@ async function startElevenLabsVoiceRecognition(options = {}) {
     const result = await elevenLabsAssistant.startVoiceConversation(assistant.id, {
       introGenerationRequest: String(options.introGenerationRequest || "").trim(),
       endAfterGeneratedIntro: options.endAfterGeneratedIntro === true,
+      validateGeneratedIntro: options.validateGeneratedIntro,
       onAudioWarning: (message) => {
         if (requestId !== aiTextRequestId) {
           return;
@@ -3453,7 +3456,7 @@ async function startElevenLabsVoiceRecognition(options = {}) {
         }
         if (options.endAfterGeneratedIntro === true) {
           aiAssistantState.isListening = false;
-          setAiVoiceUiState("assistantSpeaking", AI_VOICE_SPEAKING_LABEL, ["Úvodní přivítání", "Mikrofon pozastavený", "ElevenLabs"]);
+          setAiVoiceUiState("processing", AI_VOICE_PROCESSING_LABEL, ["Připravuji úvod", "Ověřuji fakta", "Zvuk zatím neběží"]);
           renderAiAssistantLayerOnly();
           return;
         }
@@ -3511,9 +3514,13 @@ async function startElevenLabsVoiceRecognition(options = {}) {
           return;
         }
         aiAssistantState.isListening = false;
-        aiAssistantState.voiceAnswer = event.text || "";
-        scheduleCollectionRoutesSarlotaMemoryExchange(event.conversationId, aiAssistantState.voiceAnswer);
-        setAiVoiceUiState("assistantSpeaking", AI_VOICE_SPEAKING_LABEL, ["Šarlota odpovídá", "Čekám na audio", "ElevenLabs"]);
+        if (options.endAfterGeneratedIntro === true) {
+          setAiVoiceUiState("processing", AI_VOICE_PROCESSING_LABEL, ["Ověřuji úvod", "Kontroluji KSO fakta", "Zvuk zatím neběží"]);
+        } else {
+          aiAssistantState.voiceAnswer = event.text || "";
+          scheduleCollectionRoutesSarlotaMemoryExchange(event.conversationId, aiAssistantState.voiceAnswer);
+          setAiVoiceUiState("assistantSpeaking", AI_VOICE_SPEAKING_LABEL, ["Šarlota odpovídá", "Čekám na audio", "ElevenLabs"]);
+        }
         renderAiAssistantLayerOnly();
       },
       onAudio: (event) => {
@@ -3523,11 +3530,13 @@ async function startElevenLabsVoiceRecognition(options = {}) {
         if (event.audioPlaybackFailed) {
           aiAssistantState.voiceNotice = "Odpověď přišla, ale zvuk se v mobilním prohlížeči nepodařilo přehrát. Zkontroluj hlasitost, tichý režim a povolený zvuk pro prohlížeč.";
         }
-        setAiVoiceUiState("assistantSpeaking", AI_VOICE_SPEAKING_LABEL, [
-          event.audioPlaybackStarted ? "Zvuk přehrávám" : "Zvuk připravuji",
-          "Výstup maximum",
-          "ElevenLabs audio"
-        ]);
+        if (event.audioPlaybackStarted === true && event.audioPlaybackFailed !== true) {
+          setAiVoiceUiState("assistantSpeaking", AI_VOICE_SPEAKING_LABEL, [
+            "Ověřený zvuk přehrávám",
+            "KSO fakta potvrzena",
+            "ElevenLabs audio"
+          ]);
+        }
         renderAiAssistantLayerOnly();
       }
     });
@@ -3771,10 +3780,7 @@ function renderAiAssistantLayer() {
     || (
       isCollectionRoutesPath(normalizePath(window.location.pathname))
       && aiAssistantState.mode === "voice"
-      && (
-        aiAssistantState.voiceUiState === "assistantSpeaking"
-        || collectionRoutesPilotState.myDailyRouteSarlotaAutoSession
-      )
+      && aiAssistantState.voiceUiState === "assistantSpeaking"
     )
   );
 
@@ -24388,7 +24394,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
                 <button class="collection-daily-driver-action ${collectionDailyDriverLatestOperation(detail, "break") ? "is-active" : ""}" type="button" data-collection-driver-panel="break" data-stop-id="${escapeHtml(eventStopId)}" ${pending ? "disabled" : ""}>${collectionDailyDriverLatestOperation(detail, "break") ? "PŘESTÁVKA BĚŽÍ" : "PŘESTÁVKA"}</button>
                 <button class="collection-daily-driver-action" type="button" data-collection-driver-panel="route">CELÁ TRASA</button>
                 ${testScope ? `<button class="collection-daily-driver-action collection-daily-driver-action--mapping" type="button" data-collection-driver-panel="mapping">MAPOVÁNÍ STANOVIŠTĚ</button>` : ""}
-                <button class="collection-daily-driver-action collection-daily-driver-action--sarlota ${collectionRoutesPilotState.myDailyRouteSarlotaEnabled ? "is-active" : ""}" type="button" data-collection-driver-sarlota ${collectionRoutesPilotState.myDailyRouteSarlotaConnecting || collectionRoutesPilotState.myDailyRouteSarlotaAutoSession ? "disabled" : ""}>${collectionRoutesPilotState.myDailyRouteSarlotaConnecting ? "PŘIPOJUJI ŠARLOTU…" : collectionRoutesPilotState.myDailyRouteSarlotaAutoSession ? "ŠARLOTA MLUVÍ · POTOM SE VYPNE" : collectionRoutesPilotState.myDailyRouteSarlotaEnabled ? "ŠARLOTA POSLOUCHÁ" : collectionRoutesPilotState.myDailyRouteSarlotaIntroCompleted ? "ZAPNOUT ŠARLOTU MIKROFONEM" : "ZAPNOUT ŠARLOTU"}</button>
+                <button class="collection-daily-driver-action collection-daily-driver-action--sarlota ${collectionRoutesPilotState.myDailyRouteSarlotaEnabled ? "is-active" : ""}" type="button" data-collection-driver-sarlota ${collectionRoutesPilotState.myDailyRouteSarlotaConnecting || collectionRoutesPilotState.myDailyRouteSarlotaAutoSession ? "disabled" : ""}>${collectionRoutesPilotState.myDailyRouteSarlotaConnecting ? "PŘIPOJUJI ŠARLOTU…" : collectionRoutesPilotState.myDailyRouteSarlotaAutoSession ? "ŠARLOTA PŘIPRAVUJE OVĚŘENÝ ÚVOD" : collectionRoutesPilotState.myDailyRouteSarlotaEnabled ? "ŠARLOTA POSLOUCHÁ" : collectionRoutesPilotState.myDailyRouteSarlotaIntroCompleted ? "ZAPNOUT ŠARLOTU MIKROFONEM" : "SPUSTIT ZVUK A PŘEHRÁT ÚVOD"}</button>
                 ${collectionRoutesPilotState.myDailyRouteSarlotaMessage ? `<p class="collection-daily-driver-sarlota-status">${escapeHtml(collectionRoutesPilotState.myDailyRouteSarlotaMessage)}</p>` : ""}
                 ${collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded ? adminTabletTest
                   ? `<button class="collection-daily-driver-sarlota-memory-button" type="button" disabled title="Tato funkce zatím není v testovacím režimu dostupná.">PAMĚŤ: NEDOSTUPNÁ V TESTU</button>`
@@ -40472,8 +40478,7 @@ function closeCollectionRoutesAdminTabletTest() {
 async function startCollectionRoutesAdminTabletTest() {
   const runId = String(collectionRoutesPilotState.adminTabletTestSelectedRunId || "").trim();
   if (!runId || collectionRoutesPilotState.adminTabletTestLoading) return;
-  void elevenLabsAssistant.unlockVoiceAudio?.();
-  void elevenLabsAssistant.prepareVoiceInput?.();
+  const audioReady = await elevenLabsAssistant.unlockVoiceAudio?.();
   collectionRoutesPilotState.adminTabletTestLoading = true;
   collectionRoutesPilotState.adminTabletTestError = "";
   render();
@@ -40498,6 +40503,9 @@ async function startCollectionRoutesAdminTabletTest() {
     collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded = false;
     collectionRoutesPilotState.myDailyRouteSarlotaMemory = null;
     applyMyCollectionDailyRoute(result.route || null, "TEST relace je aktivní. Všechny zápisy míří jen do TEST scope.");
+    if (!audioReady) {
+      collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Prohlížeč nepovolil automatický zvuk. Klepni na SPUSTIT ZVUK A PŘEHRÁT ÚVOD.";
+    }
   } catch (error) {
     elevenLabsAssistant.discardVoiceInput?.();
     collectionRoutesPilotState.adminTabletTestError = error.payload?.error || error.message || "TEST relaci se nepodařilo spustit.";
@@ -41825,21 +41833,23 @@ async function startCollectionDailyDriverSarlota(options = {}) {
     ? "Šarlota tě přivítá jednou krátkou zprávou a potom se automaticky vypne."
     : "Připojuji Šarlotu přes ElevenLabs…";
   openAiAssistant("voice", { assistantId: "sarlota", renderAfter: false });
-  if (automaticSession) {
-    setAiVoiceUiState("assistantSpeaking", AI_VOICE_SPEAKING_LABEL, ["Úvodní přivítání", "Hologram", "ElevenLabs"]);
-  }
+  if (automaticSession) setAiVoiceUiState("processing", AI_VOICE_PROCESSING_LABEL, ["Připravuji úvod", "Ověřuji KSO fakta", "Zvuk zatím neběží"]);
   render();
+  const introFacts = collectionRoutesSarlotaIntroFacts(collectionRoutesPilotState.myDailyRouteSarlotaContext || {});
   void startElevenLabsVoiceRecognition({
     introGenerationRequest: automaticSession
-      ? COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST
+      ? collectionRoutesSarlotaIntroGenerationRequest(collectionRoutesPilotState.myDailyRouteSarlotaContext || {})
       : COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST,
     endAfterGeneratedIntro: automaticSession,
+    validateGeneratedIntro: automaticSession
+      ? (text) => validateCollectionRoutesSarlotaIntro(text, introFacts)
+      : null,
     onConnected: (session) => {
       collectionRoutesPilotState.myDailyRouteSarlotaEnabled = true;
       collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
       collectionRoutesPilotState.myDailyRouteSarlotaRuntime = session?.voiceRuntime || null;
       collectionRoutesPilotState.myDailyRouteSarlotaMessage = automaticSession
-        ? "Šarlota právě přehrává jediné úvodní hlášení. Po jeho dokončení se hlas i mikrofon automaticky vypnou."
+        ? "Šarlota připravuje úvod přes Prompt a KB. Nejdřív kontroluji trasu, vozidlo, SPZ, počet stanovišť a čerstvé počasí; teprve potom se smí pustit zvuk."
         : memory?.consent
           ? "Šarlota zná aktuální trasu a tvoje pracovní témata. Můžeš s ní rovnou mluvit; zápis vždy čeká na klepnutí."
           : "Šarlota zná aktuální trasu. Můžeš s ní rovnou mluvit; paměť je vypnutá a zápis vždy čeká na klepnutí.";
@@ -41872,6 +41882,7 @@ async function startCollectionDailyDriverSarlota(options = {}) {
       }
       collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
       collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
+      collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = false;
       collectionRoutesPilotState.myDailyRouteSarlotaRuntime = error?.payload?.voiceRuntime || null;
       collectionRoutesPilotState.myDailyRouteSarlotaLastError = {
         code: String(error?.code || error?.payload?.code || "voice_error"),
@@ -41887,6 +41898,10 @@ async function startCollectionDailyDriverSarlota(options = {}) {
         ? "Šarlota je vypnutá. Klepnutím ji můžeš znovu připojit."
         : automaticSession && microphonePermissionFailure
           ? "Automatický start čeká na mikrofon. Povol mikrofon pro tento web a potom klepni na ZAPNOUT ŠARLOTU."
+        : automaticSession && error?.code === "voice_intro_validation_failed"
+          ? "Úvod obsahoval neověřený údaj. KSO zvuk zablokovalo; nic chybného nebylo přehráno. Klepni na SPUSTIT ZVUK A PŘEHRÁT ÚVOD a zkus bezpečný úvod znovu."
+        : automaticSession && error?.code === "voice_audio_playback_failed"
+          ? "Ověřený úvod byl připravený, ale prohlížeč zvuk nepovolil. Klepni na SPUSTIT ZVUK A PŘEHRÁT ÚVOD."
         : automaticSession
           ? "Automatický rozhovor se nepřipojil. Klepni na ZAPNOUT ŠARLOTU a použij ruční mikrofonový režim."
           : "Šarlota se nepřipojila. Zkontroluj hlášku u mikrofonu a klepni znovu na ZAPNOUT ŠARLOTU.";
@@ -41897,7 +41912,14 @@ async function startCollectionDailyDriverSarlota(options = {}) {
 
 async function enableCollectionDailyDriverSarlota(options = {}) {
   if (collectionRoutesPilotState.myDailyRouteSarlotaEnabled || collectionRoutesPilotState.myDailyRouteSarlotaConnecting) return;
-  void elevenLabsAssistant.unlockVoiceAudio?.();
+  const audioReady = await elevenLabsAssistant.unlockVoiceAudio?.();
+  if (!audioReady) {
+    collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
+    collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Zvuk prohlížeče není odemčený. Klepni znovu na SPUSTIT ZVUK A PŘEHRÁT ÚVOD a povol zvuk webu.";
+    render();
+    return;
+  }
   if (options.invocation !== "automatic") void elevenLabsAssistant.prepareVoiceInput?.();
   const context = await loadCollectionRoutesSarlotaContext();
   if (!context) {
@@ -42350,7 +42372,6 @@ async function transitionMyCollectionDailyRoute(action) {
   if (!runId || !action) return;
   if (action === "start") {
     void elevenLabsAssistant.unlockVoiceAudio?.();
-    void elevenLabsAssistant.prepareVoiceInput?.();
   }
   let startSarlotaAfterTransition = false;
   collectionRoutesPilotState.myDailyRoutePending = action;
@@ -53634,7 +53655,10 @@ document.addEventListener("click", async (event) => {
   const collectionDailyDriverSarlota = event.target.closest("[data-collection-driver-sarlota]");
   if (collectionDailyDriverSarlota) {
     event.preventDefault();
-    await enableCollectionDailyDriverSarlota();
+    await enableCollectionDailyDriverSarlota({
+      promptForMemory: false,
+      invocation: collectionRoutesPilotState.myDailyRouteSarlotaIntroCompleted ? "manual" : "automatic"
+    });
     return;
   }
 

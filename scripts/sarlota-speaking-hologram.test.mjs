@@ -76,7 +76,14 @@ assert.match(appSource, /if \(collectionDriverBlackviewSimulatorRequested\(\)\) 
 assert.match(appSource, /params\.get\("gps"\) === COLLECTION_ROUTES_DRIVER_SIMULATED_GPS_VALUE/);
 assert.match(appSource, /params\.get\("sarlota"\) === "speaking"/);
 assert.match(appSource, /aiAssistantState\.voiceUiState === "assistantSpeaking"/);
-assert.match(appSource, /collectionRoutesPilotState\.myDailyRouteSarlotaAutoSession/);
+const hologramStateStart = appSource.indexOf("const collectionRoutesSpeakingHologram");
+const hologramStateEnd = appSource.indexOf("const content =", hologramStateStart);
+assert.ok(hologramStateStart >= 0 && hologramStateEnd > hologramStateStart);
+assert.doesNotMatch(
+  appSource.slice(hologramStateStart, hologramStateEnd),
+  /myDailyRouteSarlotaAutoSession/,
+  "Hologram nesmí tvrdit, že Šarlota mluví, dokud nezačalo ověřené audio."
+);
 assert.match(appSource, /open: aiAssistantState\.chatOpen && !collectionRoutesSpeakingHologram/);
 assert.match(styleSource, /body:has\(\.collection-daily-driver-map\.is-fullscreen\) \.ai-sarlota-speaking-hologram/);
 assert.match(styleSource, /\.collection-driver-kiosk-active \.ai-sarlota-speaking-hologram/);
