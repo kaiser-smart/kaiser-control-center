@@ -417,7 +417,7 @@ function safeAgentNameMatches(agentConfig, assistantConfig) {
   return elevenLabsAgentNameMatchesExpected(agentName, assistantConfig);
 }
 
-async function readElevenLabsAgentConfig({ apiKey, agentId, assistantConfig }) {
+export async function readElevenLabsAgentConfig({ apiKey, agentId, assistantConfig }) {
   if (!apiKey || !agentId) {
     return {
       verified: false,
@@ -467,6 +467,7 @@ async function readElevenLabsAgentConfig({ apiKey, agentId, assistantConfig }) {
       verified: true,
       status: "ok",
       agentNameMatches: safeAgentNameMatches(agentConfig, assistantConfig),
+      promptAvailable: Boolean(cleanString(promptFromAgent(agentConfig))),
       observedModel,
       modelMatches,
       firstMessageMatches,

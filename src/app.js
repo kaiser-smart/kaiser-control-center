@@ -59,6 +59,7 @@ import {
 import {
   COLLECTION_ROUTES_DRIVER_KIOSK_ROUTE,
   COLLECTION_ROUTES_DRIVER_SIMULATED_GPS_VALUE,
+  COLLECTION_ROUTES_DRIVER_TABLET_DEVICE,
   COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE,
   collectionRoutesDriverKioskCanonicalPath,
   collectionRoutesDriverKioskRedirectPath,
@@ -67,6 +68,10 @@ import {
   isCollectionRoutesDriverKioskPath,
   isCollectionRoutesDriverKioskUser
 } from "./data/collectionRoutesDriverKiosk.js?v=1.1";
+import {
+  collectionRoutesDriverTabletCssSizeLabel,
+  collectionRoutesDriverTabletLabel
+} from "./data/collectionRoutesOperationalContract.js";
 import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.36";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
@@ -1465,6 +1470,8 @@ const collectionRoutesPilotState = {
   myDailyRouteSarlotaAutoSession: false,
   myDailyRouteSarlotaAutoAttemptedRunId: "",
   myDailyRouteSarlotaMessage: "",
+  myDailyRouteSarlotaRuntime: null,
+  myDailyRouteSarlotaLastError: null,
   myDailyRouteSarlotaContext: null,
   myDailyRouteSarlotaMemoryLoaded: false,
   myDailyRouteSarlotaMemory: null,
@@ -3227,7 +3234,9 @@ function closeAiAssistant(options = {}) {
     collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
     collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
     collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = false;
-    collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Šarlota je vypnutá. Klepnutím ji můžeš znovu připojit.";
+    if (!collectionRoutesPilotState.myDailyRouteSarlotaLastError) {
+      collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Šarlota je vypnutá. Klepnutím ji můžeš znovu připojit.";
+    }
   }
   clearSarlotaDeepLinkUrl();
   if (options.renderAfter !== false) {
@@ -3668,7 +3677,9 @@ function stopAiVoiceRecognition() {
     collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
     collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
     collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = false;
-    collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Šarlota je vypnutá. Klepnutím ji můžeš znovu připojit.";
+    if (!collectionRoutesPilotState.myDailyRouteSarlotaLastError) {
+      collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Šarlota je vypnutá. Klepnutím ji můžeš znovu připojit.";
+    }
   }
   void releaseAiVoiceWakeLock({ renderAfter: false });
   if (collectionRoutesVoiceStopped) {
@@ -24217,13 +24228,19 @@ function collectionDailyDriverPanel(detail, currentStop, visibleStops, remaining
 function collectionRoutesAdminTabletTestDiagnostics(detail, currentStop) {
   if (!collectionRoutesAdminTabletTestActive()) return "";
   const context = collectionRoutesPilotState.myDailyRouteSarlotaContext || {};
+  const voiceRuntime = collectionRoutesPilotState.myDailyRouteSarlotaRuntime || {};
+  const voiceError = collectionRoutesPilotState.myDailyRouteSarlotaLastError;
   const diagnostics = [
     ["Řidič načten", detail?.run?.driverUserId === "pneumatiky-miroslav-vasek", "Chyba"],
     ["Vozidlo načteno", context.vehicle?.status === "verified", context.vehicle ? "Chybí" : "Chybí"],
     ["Osádka načtena", context.crew?.verified === true, "Chybí"],
     ["Trasa načtena", Boolean(detail?.run && Array.isArray(detail?.stops)), "Chyba"],
     ["Počasí načteno", context.weather?.verified === true, "Chybí"],
-    ["Šarlota připojena", collectionRoutesPilotState.myDailyRouteSarlotaEnabled === true, collectionRoutesPilotState.myDailyRouteSarlotaConnecting ? "Chybí" : "Chybí"],
+    ["Prompt Šarloty načten", voiceRuntime.promptVerified === true, voiceError ? "Chyba" : "Chybí"],
+    ["První zpráva nastavena", voiceRuntime.firstMessageVerified === true, voiceError ? "Chyba" : "Chybí"],
+    ["Znalosti Šarloty načteny", voiceRuntime.knowledgeBaseVerified === true, voiceError ? "Chyba" : "Chybí"],
+    ["Tools Šarloty načteny", voiceRuntime.toolsVerified === true, voiceError ? "Chyba" : "Chybí"],
+    ["Šarlota připojena", collectionRoutesPilotState.myDailyRouteSarlotaEnabled === true, voiceError ? "Chyba" : "Chybí"],
     ["Navigace připravena", Boolean(currentStop?.addressText), "Chybí"],
     ["TEST zápisy aktivní", detail?.run?.scope === "test" && collectionRoutesPilotState.adminTabletTestSession?.active === true, "Chyba"]
   ];
@@ -24231,6 +24248,8 @@ function collectionRoutesAdminTabletTestDiagnostics(detail, currentStop) {
     scope: detail?.run?.scope || "",
     routeStatus: detail?.run?.status || "",
     voiceContext: context.apiStatus || "čeká",
+    voiceRuntime,
+    voiceError,
     memory: context.memory?.apiStatus || "čeká",
     productionWrites: false,
     vistosWrites: false,
@@ -24246,6 +24265,7 @@ function collectionRoutesAdminTabletTestDiagnostics(detail, currentStop) {
           return `<article class="is-${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(state)}</strong></article>`;
         }).join("")}
       </div>
+      ${voiceError ? `<p class="module-feedback__error" role="alert">Šarlota se nepřipojila: ${escapeHtml(voiceError.message)}</p>` : ""}
       ${context.memory?.apiStatus === "unavailable_test_scope" ? `<p class="collection-routes-tablet-test-status__notice">Pracovní paměť: Tato funkce zatím není v testovacím režimu dostupná.</p>` : ""}
       <details><summary>Technické podrobnosti</summary><pre>${escapeHtml(JSON.stringify(technical, null, 2))}</pre></details>
     </section>
@@ -40413,6 +40433,7 @@ async function startCollectionRoutesAdminTabletTest() {
   const runId = String(collectionRoutesPilotState.adminTabletTestSelectedRunId || "").trim();
   if (!runId || collectionRoutesPilotState.adminTabletTestLoading) return;
   void elevenLabsAssistant.unlockVoiceAudio?.();
+  void elevenLabsAssistant.prepareVoiceInput?.();
   collectionRoutesPilotState.adminTabletTestLoading = true;
   collectionRoutesPilotState.adminTabletTestError = "";
   render();
@@ -40427,10 +40448,13 @@ async function startCollectionRoutesAdminTabletTest() {
     collectionRoutesPilotState.testGpsConfirmations = [];
     collectionRoutesPilotState.testIncidents = [];
     collectionRoutesPilotState.myDailyRouteSarlotaContext = null;
+    collectionRoutesPilotState.myDailyRouteSarlotaRuntime = null;
+    collectionRoutesPilotState.myDailyRouteSarlotaLastError = null;
     collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded = false;
     collectionRoutesPilotState.myDailyRouteSarlotaMemory = null;
     applyMyCollectionDailyRoute(result.route || null, "TEST relace je aktivní. Všechny zápisy míří jen do TEST scope.");
   } catch (error) {
+    elevenLabsAssistant.discardVoiceInput?.();
     collectionRoutesPilotState.adminTabletTestError = error.payload?.error || error.message || "TEST relaci se nepodařilo spustit.";
   } finally {
     collectionRoutesPilotState.adminTabletTestLoading = false;
@@ -40450,6 +40474,7 @@ async function resetCollectionRoutesAdminTabletTest() {
   render();
   collectionRoutesSarlotaVoiceRequestId += 1;
   elevenLabsAssistant.stopVoiceAudio?.();
+  elevenLabsAssistant.discardVoiceInput?.();
   if (collectionRoutesPilotState.myDailyRouteNavigationActive) {
     stopCollectionDailyDriverNavigation({ renderAfter: false });
   }
@@ -40465,6 +40490,8 @@ async function resetCollectionRoutesAdminTabletTest() {
     collectionRoutesPilotState.myDailyRoute = null;
     collectionRoutesPilotState.myDailyRouteLoaded = false;
     collectionRoutesPilotState.myDailyRouteSarlotaContext = null;
+    collectionRoutesPilotState.myDailyRouteSarlotaRuntime = null;
+    collectionRoutesPilotState.myDailyRouteSarlotaLastError = null;
     collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded = false;
     collectionRoutesPilotState.myDailyRouteSarlotaMemory = null;
     collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
@@ -41739,8 +41766,11 @@ async function confirmAndStartMyCollectionDailyRoute(form) {
 async function startCollectionDailyDriverSarlota(options = {}) {
   const automaticSession = options.invocation === "automatic";
   const automaticRetryCount = Math.max(0, Number(options.automaticRetryCount || 0));
+  if (!automaticSession) void elevenLabsAssistant.prepareVoiceInput?.();
   collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
   collectionRoutesPilotState.myDailyRouteSarlotaConnecting = true;
+  collectionRoutesPilotState.myDailyRouteSarlotaRuntime = null;
+  collectionRoutesPilotState.myDailyRouteSarlotaLastError = null;
   collectionRoutesPilotState.myDailyRouteSarlotaAutoSession = automaticSession;
   const memory = collectionRoutesPilotState.myDailyRouteSarlotaMemory;
   collectionRoutesPilotState.myDailyRouteSarlotaMessage = automaticSession
@@ -41752,9 +41782,10 @@ async function startCollectionDailyDriverSarlota(options = {}) {
   }
   render();
   void startElevenLabsVoiceRecognition({
-    onConnected: () => {
+    onConnected: (session) => {
       collectionRoutesPilotState.myDailyRouteSarlotaEnabled = true;
       collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
+      collectionRoutesPilotState.myDailyRouteSarlotaRuntime = session?.voiceRuntime || null;
       collectionRoutesPilotState.myDailyRouteSarlotaMessage = memory?.consent
         ? "Šarlota zná aktuální trasu a tvoje pracovní témata. Můžeš s ní rovnou mluvit; zápis vždy čeká na klepnutí."
         : "Šarlota zná aktuální trasu. Můžeš s ní rovnou mluvit; paměť je vypnutá a zápis vždy čeká na klepnutí.";
@@ -41778,6 +41809,11 @@ async function startCollectionDailyDriverSarlota(options = {}) {
       }
       collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
       collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
+      collectionRoutesPilotState.myDailyRouteSarlotaRuntime = error?.payload?.voiceRuntime || null;
+      collectionRoutesPilotState.myDailyRouteSarlotaLastError = {
+        code: String(error?.code || error?.payload?.code || "voice_error"),
+        message: error?.payload?.error || error?.message || "Šarlota se nepřipojila."
+      };
       const microphonePermissionFailure = [
         "voice_microphone_denied",
         "voice_microphone_timeout",
@@ -41799,10 +41835,15 @@ async function startCollectionDailyDriverSarlota(options = {}) {
 async function enableCollectionDailyDriverSarlota(options = {}) {
   if (collectionRoutesPilotState.myDailyRouteSarlotaEnabled || collectionRoutesPilotState.myDailyRouteSarlotaConnecting) return;
   void elevenLabsAssistant.unlockVoiceAudio?.();
+  if (options.invocation !== "automatic") void elevenLabsAssistant.prepareVoiceInput?.();
   const context = await loadCollectionRoutesSarlotaContext();
-  if (!context) return;
+  if (!context) {
+    elevenLabsAssistant.discardVoiceInput?.();
+    return;
+  }
   const promptForMemory = options.promptForMemory !== false;
   if (promptForMemory && context.memory?.available && context.memory?.consent !== true) {
+    elevenLabsAssistant.discardVoiceInput?.();
     collectionRoutesPilotState.myDailyRoutePanel = "sarlota-memory";
     render();
     return;
@@ -42244,7 +42285,10 @@ async function loadMyCollectionDailyRoute(options = {}) {
 async function transitionMyCollectionDailyRoute(action) {
   const runId = collectionRoutesPilotState.myDailyRoute?.run?.id;
   if (!runId || !action) return;
-  if (action === "start") void elevenLabsAssistant.unlockVoiceAudio?.();
+  if (action === "start") {
+    void elevenLabsAssistant.unlockVoiceAudio?.();
+    void elevenLabsAssistant.prepareVoiceInput?.();
+  }
   let startSarlotaAfterTransition = false;
   collectionRoutesPilotState.myDailyRoutePending = action;
   collectionRoutesPilotState.myDailyRouteError = "";
@@ -42267,6 +42311,7 @@ async function transitionMyCollectionDailyRoute(action) {
     );
     startSarlotaAfterTransition = action === "start";
   } catch (error) {
+    if (action === "start") elevenLabsAssistant.discardVoiceInput?.();
     collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Stav trasy se nepodařilo uložit.";
   } finally {
     collectionRoutesPilotState.myDailyRoutePending = "";
@@ -48895,7 +48940,7 @@ function applyUiSystemV2() {
   }
 }
 
-const COLLECTION_DRIVER_BLACKVIEW_SIMULATOR_DEVICE = "blackview";
+const COLLECTION_DRIVER_BLACKVIEW_SIMULATOR_DEVICE = COLLECTION_ROUTES_DRIVER_TABLET_DEVICE.simulatorDevice;
 
 function collectionDriverBlackviewSimulatorRequested() {
   if (normalizePath(window.location.pathname) !== COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE) {
@@ -48914,21 +48959,22 @@ function collectionDriverBlackviewSimulatorFrameUrl() {
 function collectionDriverBlackviewSimulatorPage() {
   const frameUrl = collectionDriverBlackviewSimulatorFrameUrl();
   const simulatedGps = new URLSearchParams(window.location.search).get("gps") === COLLECTION_ROUTES_DRIVER_SIMULATED_GPS_VALUE;
+  const device = COLLECTION_ROUTES_DRIVER_TABLET_DEVICE;
   return `
     <main class="collection-driver-blackview-simulator-shell" data-collection-driver-blackview-simulator>
       <header>
         <div>
-          <strong>Blackview Active 7 LTE · 11″</strong>
-          <span>Interaktivní řidičský displej · 960 × 600 CSS px · ${simulatedGps ? "simulovaná TEST poloha" : "skutečná poloha prohlížeče"}</span>
+          <strong>${escapeHtml(collectionRoutesDriverTabletLabel())}</strong>
+          <span>Interaktivní řidičský displej · ${escapeHtml(collectionRoutesDriverTabletCssSizeLabel())} · ${simulatedGps ? "simulovaná TEST poloha" : "skutečná poloha prohlížeče"}</span>
         </div>
         <a href="${escapeHtml(frameUrl)}">Otevřít bez rámu tabletu</a>
       </header>
       <div class="collection-driver-blackview-simulator-frame">
         <iframe
           src="${escapeHtml(frameUrl)}"
-          title="Řidičský displej Blackview Active 7 LTE"
-          width="960"
-          height="600"
+          title="Řidičský displej ${escapeHtml(`${device.vendor} ${device.model}`)}"
+          width="${escapeHtml(device.cssWidth)}"
+          height="${escapeHtml(device.cssHeight)}"
           loading="eager"
           allow="camera; microphone; geolocation; autoplay; fullscreen"
           allowfullscreen
@@ -48964,13 +49010,14 @@ function syncCollectionDailyDriverViewportDiagnostics() {
   const devicePixelRatio = Math.max(1, Number(window.devicePixelRatio) || 1);
   const screenWidth = Math.max(0, Math.round(window.screen?.width || 0));
   const screenHeight = Math.max(0, Math.round(window.screen?.height || 0));
-  const isBlackviewActive7Viewport = innerWidth >= 900
-    && innerWidth <= 1024
-    && innerHeight >= 500
-    && innerHeight <= 640
+  const viewport = COLLECTION_ROUTES_DRIVER_TABLET_DEVICE.viewportBounds;
+  const isBlackviewActive7Viewport = innerWidth >= viewport.minWidth
+    && innerWidth <= viewport.maxWidth
+    && innerHeight >= viewport.minHeight
+    && innerHeight <= viewport.maxHeight
     && innerWidth > innerHeight;
   kiosk.dataset.collectionDriverViewportProfile = isBlackviewActive7Viewport
-    ? "blackview-active-7-landscape"
+    ? COLLECTION_ROUTES_DRIVER_TABLET_DEVICE.viewportProfile
     : "responsive";
   kiosk.dataset.collectionDriverInnerWidth = String(innerWidth);
   kiosk.dataset.collectionDriverInnerHeight = String(innerHeight);

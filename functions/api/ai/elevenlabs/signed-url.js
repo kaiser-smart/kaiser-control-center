@@ -18,11 +18,44 @@ import {
   assistantPublicMetadata,
   maskElevenLabsAgentId
 } from "../../../../src/elevenLabsAssistants.js";
+import { validateSarlotaModuleVoiceVariables } from "../../../../src/sarlota/sarlotaModuleVoiceContracts.js";
+import { readElevenLabsAgentConfig } from "./sarlota-status.js";
 
 const DRIVER_REPORT_NO_VEHICLE_DIAGNOSTIC_MODE = "identity_no_driver_vehicles";
 
 function cleanString(value) {
   return String(value ?? "").trim();
+}
+
+export function tabletTestVoiceRuntimeVerification({ agentConfig = {}, dynamicVariables = {}, requestedRoute = "" } = {}) {
+  const moduleContext = validateSarlotaModuleVoiceVariables(requestedRoute, dynamicVariables);
+  const agentVerified = agentConfig.verified === true && agentConfig.agentNameMatches === true;
+  const promptVerified = agentConfig.verified === true && agentConfig.promptAvailable === true;
+  const firstMessageVerified = agentConfig.verified === true && agentConfig.firstMessageMatches === true;
+  const knowledgeBaseVerified = agentConfig.verified === true
+    && Array.isArray(agentConfig.knowledgeEntries)
+    && agentConfig.knowledgeEntries.length > 0;
+  const toolsVerified = agentConfig.verified === true && agentConfig.toolsMatch === true;
+  const moduleContextVerified = moduleContext.registered === true && moduleContext.ready === true;
+  const ready = agentVerified
+    && promptVerified
+    && firstMessageVerified
+    && knowledgeBaseVerified
+    && toolsVerified
+    && moduleContextVerified;
+
+  return {
+    status: ready ? "ready" : "error",
+    agentVerified,
+    promptVerified,
+    firstMessageVerified,
+    knowledgeBaseVerified,
+    toolsVerified,
+    moduleContextVerified,
+    module: cleanString(dynamicVariables.current_module),
+    moduleRoute: cleanString(dynamicVariables.current_module_route),
+    introSource: moduleContext.introSource || ""
+  };
 }
 
 function fallbackConversationId() {
@@ -382,6 +415,10 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
       contextWarnings
     )
     : {};
+  const moduleVoiceContext = validateSarlotaModuleVoiceVariables(requestedRoute, collectionRoutesVariables);
+  const moduleIntroAnnouncement = moduleVoiceContext.registered
+    ? cleanString(collectionRoutesVariables.intro_announcement)
+    : cleanString(introAnnouncement.variables.intro_announcement);
   const dynamicVariables = {
     ...userDynamicVariables,
     ...introAnnouncement.variables,
@@ -389,6 +426,7 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
     ...driverReportVehicleVariables,
     ...dataBoxVariables,
     ...collectionRoutesVariables,
+    intro_announcement: moduleIntroAnnouncement,
     assistant_key: assistant.assistantKey,
     assistant_display_name: assistant.displayName,
     assistant_is_test: assistant.isTest ? "true" : "false"
@@ -412,6 +450,41 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
       configured: false,
       apiStatus: "waiting"
     }, 503);
+  }
+
+  const verifiedModuleContext = validateSarlotaModuleVoiceVariables(requestedRoute, dynamicVariables);
+  if (verifiedModuleContext.registered && !verifiedModuleContext.ready) {
+    return json({
+      error: "Šarlota nemá bezpečně načtený kontext tohoto modulu. Hlasová relace nebyla spuštěná.",
+      code: "SARLOTA_MODULE_VOICE_CONTEXT_NOT_READY",
+      ...assistantPublicMetadata(assistant),
+      configured: true,
+      apiStatus: "waiting"
+    }, 503);
+  }
+
+  let voiceRuntime = null;
+  if (tabletTest) {
+    const agentConfig = await readElevenLabsAgentConfig({
+      apiKey,
+      agentId,
+      assistantConfig: assistant
+    });
+    voiceRuntime = tabletTestVoiceRuntimeVerification({
+      agentConfig,
+      dynamicVariables,
+      requestedRoute
+    });
+    if (voiceRuntime.status !== "ready") {
+      return json({
+        error: "Hlasová Šarlota není pro TEST bezpečně připravená. Ověř Prompt, první zprávu, znalosti, tools a kontext Svozových tras.",
+        code: "SARLOTA_TEST_VOICE_RUNTIME_NOT_READY",
+        ...assistantPublicMetadata(assistant),
+        configured: true,
+        apiStatus: "waiting",
+        voiceRuntime
+      }, 503);
+    }
   }
 
   const signedUrl = new URL("https://api.elevenlabs.io/v1/convai/conversation/get-signed-url");
@@ -497,6 +570,7 @@ async function signedUrlPayload({ request, env, user, assistant, debug }) {
         diagnosticMode: omitDriverReportVehicleContext ? DRIVER_REPORT_NO_VEHICLE_DIAGNOSTIC_MODE : "",
         driverReportVehicleContextOmitted: omitDriverReportVehicleContext
       },
+      voiceRuntime,
       configured: true,
       apiStatus: "ready"
     });

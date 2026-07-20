@@ -12,7 +12,7 @@ const transitionEnd = appSource.indexOf("async function optimizeMyCollectionDail
 assert.ok(transitionStart >= 0 && transitionEnd > transitionStart);
 const transitionSource = appSource.slice(transitionStart, transitionEnd);
 
-assert.match(transitionSource, /if \(action === "start"\) void elevenLabsAssistant\.unlockVoiceAudio\?\.\(\);/);
+assert.match(transitionSource, /if \(action === "start"\) \{[\s\S]*unlockVoiceAudio[\s\S]*prepareVoiceInput/);
 assert.match(transitionSource, /startSarlotaAfterTransition = action === "start";/);
 assert.match(transitionSource, /await enableCollectionDailyDriverSarlota\(\{ promptForMemory: false, invocation: "automatic" \}\);/);
 assert.match(transitionSource, /Trasa je zahájená\. Připravuji úvodní přivítání Šarloty/);
