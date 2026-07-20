@@ -1751,6 +1751,11 @@ const elevenLabsAssistant = ElevenLabsAssistantProvider({
     toast: (payload) => showAiToast(payload),
     highlight: (payload) => showAiHighlight(payload),
     requestJson: (path, options) => apiJson(path, options),
+    getCollectionRoutesContextRequest: () => ({
+      tabletTestSession: collectionRoutesPilotState.adminTabletTestSession?.active
+        ? collectionRoutesPilotState.adminTabletTestSession.id
+        : ""
+    }),
     prepareCollectionRouteGpsCapture: (parameters) => prepareCollectionRoutesTestGpsFromSarlota(parameters),
     prepareCollectionRouteTestIncident: (parameters) => prepareCollectionRoutesTestIncidentFromSarlota(parameters),
     prepareCollectionRouteDriverAction: (parameters) => prepareCollectionDailyRouteDriverActionFromSarlota(parameters)

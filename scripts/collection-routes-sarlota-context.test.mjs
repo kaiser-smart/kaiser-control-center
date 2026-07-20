@@ -371,6 +371,23 @@ assert.equal(toolContext.ok, true);
 assert.match(requestedPath, /^\/api\/ai\/collection-routes\/context\?/);
 assert.equal(toolContext.news.status, "ready");
 
+let tabletTestRequestedPath = "";
+const tabletTestTools = createElevenLabsClientTools({
+  getCollectionRoutesContextRequest: () => ({
+    tabletTestSession: "tablet-test-session-safe"
+  }),
+  requestJson: async (path) => {
+    tabletTestRequestedPath = path;
+    return { context: { ...context, scope: "test" } };
+  }
+});
+const tabletTestToolContext = await tabletTestTools.get_collection_routes_context({ date: "2026-07-18" });
+const tabletTestRequestUrl = new URL(tabletTestRequestedPath, "https://smart-odpady.ai");
+assert.equal(tabletTestToolContext.ok, true);
+assert.equal(tabletTestToolContext.scope, "test");
+assert.equal(tabletTestRequestUrl.searchParams.get("scope"), "test");
+assert.equal(tabletTestRequestUrl.searchParams.get("tabletTestSession"), "tablet-test-session-safe");
+
 memory = await setSarlotaMemoryConsent(env, miroslav, false);
 assert.equal(memory.consent, false);
 assert.equal(memory.conversationCount, 0);

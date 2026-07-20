@@ -150,6 +150,7 @@ const backupDate = buildDate();
 runVisible("node", ["scripts/check-syntax.mjs"]);
 runVisible("node", ["scripts/version-module-imports.test.mjs"]);
 runVisible("node", ["scripts/sarlota-mandatory-reading.test.mjs"]);
+runVisible("node", ["scripts/kso-test-mode-contract.test.mjs"]);
 runVisible("node", ["scripts/collection-route-source-parser.test.mjs"]);
 runVisible("node", ["scripts/collection-daily-routes.test.mjs"]);
 runVisible("node", ["scripts/collection-routes-admin-tablet-test.test.mjs"]);

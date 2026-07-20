@@ -10,6 +10,18 @@ Pokud je zadání v rozporu s tímto souborem, zastav práci a upozorni na rozpo
 
 ## Povinný pracovní postup Codexu / vývojáře
 
+### Obecný kontrakt TEST režimu pro celé KSO
+
+- TEST musí dovolit skutečně projít funkci; zakázané mají být jen produkční účinky.
+- TEST používá stejnou aplikační, backendovou, validační, oprávněnostní a integrační logiku jako produkce, ale pracuje výhradně s izolovanými TEST daty a TEST identitou podle schváleného kontraktu modulu.
+- Produkční účinek se v TESTU nesmí pouze vypnout tak, že funkci nelze dokončit. Musí být nahrazený bezpečným TEST adaptérem: odděleným TEST úložištěm, TEST auditem, simulovaným providerem, chráněným TEST příjemcem nebo jiným prokazatelně izolovaným výstupem.
+- Produkční data, ostré trasy, Vistos, skutečné GPS body, skutečné absence a servisní záznamy, produkční vozidla, zákaznické kontakty, ostré e-maily, SMS, RCS, notifikace, platby a jiné vnější provozní účinky zůstávají bez výslovného schválení zakázané.
+- Zakázaný produkční účinek nesmí zablokovat otestování formuláře, validace, oprávnění, výpočtu, hlasu, Promptu, Knowledge Base, Tools, navigační přípravy, potvrzení, zápisu do TEST auditu, chybové větve ani resetu.
+- Text `Tato funkce zatím není v testovacím režimu dostupná.`, neaktivní tlačítko bez TEST adaptéru, hardcoded úspěch, mock vydávaný za skutečnou integraci nebo návrat `forbidden` jen proto, že jde o TEST, znamená otevřený nedodělek. Nesmí být vykázaný jako úspěšný test ani splněná akceptace.
+- Každý TEST musí ověřit pozitivní funkční průchod i negativní bezpečnostní hranici: funkce v TESTU skutečně proběhne a současně se prokáže, že nevznikl produkční účinek.
+- Závěrečný report každého TESTU musí samostatně uvést: co je funkční, kam se ukládají TEST výsledky, které produkční účinky jsou nahrazené, které funkce ještě nemají TEST adaptér a jaké akceptační kroky proto zůstávají nehotové.
+- Kvůli průchodu TESTU je zakázané dočasně povolit produkční zápis, produkčního příjemce, ostrý secret nebo obejít backendové oprávnění.
+
 ### 1. Před zahájením práce
 
 Před jakoukoli prací musí Codex/vývojář otevřít a přečíst:

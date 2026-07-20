@@ -369,6 +369,7 @@ export function createElevenLabsClientTools({
   toast = () => {},
   highlight = () => {},
   requestJson = null,
+  getCollectionRoutesContextRequest = () => ({}),
   prepareCollectionRouteGpsCapture = null,
   prepareCollectionRouteTestIncident = null,
   prepareCollectionRouteDriverAction = null
@@ -1869,7 +1870,11 @@ export function createElevenLabsClientTools({
       const currentRoute = typeof window !== "undefined"
         ? normalizeAiRoute(window.location?.pathname || "")
         : COLLECTION_ROUTE_GPS_ROUTE;
-      const scope = currentRoute === COLLECTION_ROUTE_DRIVER_TEST_ROUTE ? "test" : "production";
+      const runtimeRequest = getCollectionRoutesContextRequest?.() || {};
+      const tabletTestSession = cleanString(runtimeRequest.tabletTestSession);
+      const scope = tabletTestSession || currentRoute === COLLECTION_ROUTE_DRIVER_TEST_ROUTE
+        ? "test"
+        : "production";
       if (![COLLECTION_ROUTE_GPS_ROUTE, COLLECTION_ROUTE_DRIVER_TEST_ROUTE].includes(currentRoute)) {
         return {
           ok: false,
@@ -1880,7 +1885,8 @@ export function createElevenLabsClientTools({
       try {
         const result = await readJson("/api/ai/collection-routes/context", {
           scope,
-          date: parameters.date
+          date: parameters.date,
+          tabletTestSession
         });
         return {
           ok: true,

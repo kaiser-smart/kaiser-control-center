@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.635"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.636"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "TEST: Šarlota načte správný kontext Toolu",
+    text: "Kontextový Tool v administrátorském TESTU nyní předává ID aktivní bezpečné relace a používá TEST scope. Šarlota proto načte simulovaného řidiče, vybranou trasu a testovací vozidlo místo opakování pevné chyby určené pro chybějící kontext. PŘÍRUČKA současně nově vyžaduje skutečný funkční průchod každého TESTU a blokuje jen produkční účinky."
+  },
   {
     title: "Šarlota: obnovený TEST znovu spustí hlas",
     text: "Když správce znovu otevře už aktivní TEST tabletu, aplikace po načtení trasy a bezpečného kontextu znovu připojí živou ElevenLabs Šarlotu a spustí modulové úvodní hlášení. Stav už nezůstane bez pokusu na Chybí; případná skutečná chyba se zobrazí přímo v diagnostice."
