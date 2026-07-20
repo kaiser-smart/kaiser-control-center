@@ -16,6 +16,27 @@ assert.ok(unsafeResult.errors.some((item) => item.includes("ověřeného kontext
 const incompleteKb = "Krátká znalost bez bezpečnostních pravidel.";
 assert.equal(__test.validateManagedContent("knowledge_base", incompleteKb).valid, false);
 
+const liveLanguageKbWording = `
+Tento dokument není zdrojem provozních faktů, identity ani oprávnění.
+Hlasové ano není fyzické potvrzení v KSO.
+Neověřený údaj se nesmí doplnit bez ověření; test je neověřený údaj bez domýšlení.
+Soukromý kontakt nesděluj, pokud jej hlavní prompt nebo oprávnění nepovolují.
+`;
+assert.deepEqual(
+  __test.validateManagedContent("knowledge_base", liveLanguageKbWording),
+  { valid: true, errors: [] }
+);
+
+const kbWithoutUnverifiedDataRule = liveLanguageKbWording.replace(
+  "Neověřený údaj se nesmí doplnit bez ověření; test je neověřený údaj bez domýšlení.",
+  "Jazyk má být stručný."
+);
+assert.equal(__test.validateManagedContent("knowledge_base", kbWithoutUnverifiedDataRule).valid, false);
+assert.ok(
+  __test.validateManagedContent("knowledge_base", kbWithoutUnverifiedDataRule).errors
+    .some((item) => item.includes("zákaz domýšlení neověřených údajů"))
+);
+
 assert.deepEqual(
   __test.nestedPatch(["conversation_config", "agent", "prompt", "prompt"], "NOVÝ PROMPT"),
   { conversation_config: { agent: { prompt: { prompt: "NOVÝ PROMPT" } } } }
