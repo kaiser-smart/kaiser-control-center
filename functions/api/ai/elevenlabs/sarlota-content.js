@@ -198,10 +198,22 @@ const PROMPT_REQUIREMENTS = [
 ];
 
 const KB_REQUIREMENTS = [
-  ["neni zdrojem provoznich faktu", "oddělení KB od provozních faktů"],
-  ["fyzicke potvrzeni", "fyzické potvrzení v KSO"],
-  ["neoverene vozidlo", "bezpečný postup pro neověřené vozidlo"],
-  ["soukrome", "ochrana soukromých údajů"]
+  {
+    markers: ["neni zdrojem provoznich faktu"],
+    label: "oddělení KB od provozních faktů"
+  },
+  {
+    markers: ["fyzicke potvrzeni", "potvrd ho prosim na displeji", "akci jeste potvrd na displeji"],
+    label: "fyzické potvrzení v KSO"
+  },
+  {
+    markers: ["neoverene vozidlo", "neovereny udaj bez domysleni", "neoverenou informaci si nevymyslej"],
+    label: "zákaz domýšlení neověřených údajů"
+  },
+  {
+    markers: ["soukrom", "osobni udaj", "citlive udaje"],
+    label: "ochrana soukromých údajů"
+  }
 ];
 
 export function validateManagedContent(kind, content) {
@@ -219,8 +231,8 @@ export function validateManagedContent(kind, content) {
       if (!text.includes(normalize(marker))) errors.push(`Chybí: ${label}.`);
     });
   } else if (kind === "knowledge_base") {
-    KB_REQUIREMENTS.forEach(([marker, label]) => {
-      if (!text.includes(normalize(marker))) errors.push(`Chybí: ${label}.`);
+    KB_REQUIREMENTS.forEach(({ markers, label }) => {
+      if (!markers.some((marker) => text.includes(normalize(marker)))) errors.push(`Chybí: ${label}.`);
     });
   } else {
     errors.push("Neznámý typ obsahu.");
