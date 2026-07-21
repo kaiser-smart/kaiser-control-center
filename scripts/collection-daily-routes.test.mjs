@@ -1108,14 +1108,10 @@ const reportWithoutPhotoResponse = await driverReportApi({
   env: isolatedEnv,
   params: { runId: seededRunId, stopId: seededStopId }
 });
-assert.equal(reportWithoutPhotoResponse.status, 201, "Řidič smí uložit hlášení bez fotografie.");
+assert.equal(reportWithoutPhotoResponse.status, 400, "Řidič nesmí uložit hlášení bez fotografie.");
 const reportWithoutPhoto = await reportWithoutPhotoResponse.json();
-assert.equal(reportWithoutPhoto.report.payload.photoCount, 0);
-assert.deepEqual(reportWithoutPhoto.report.payload.photos, []);
-assert.equal(reportWithoutPhoto.report.payload.photoUrl, "");
+assert.equal(reportWithoutPhoto.code, "collection_daily_route_report_photo_required");
 assert.equal(isolatedEnv.SMART_ODPADY_DOCUMENTS.objects.size, 0);
-isolatedTestSqlite.prepare("DELETE FROM collection_daily_route_events WHERE id = ?").run(reportWithoutPhoto.report.id);
-isolatedTestSqlite.prepare("UPDATE collection_daily_route_stops SET status = 'planned', problem_reason = '', problem_note = '' WHERE id = ?").run(seededStopId);
 const reportResponse = await driverReportApi({
   request: await isolatedAuthenticatedRequest(
     `https://smart-odpady.ai/api/collection-routes/daily-routes/${seededRunId}/stops/${seededStopId}/report`,
