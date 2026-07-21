@@ -42456,10 +42456,7 @@ async function startCollectionDailyDriverSarlota(options = {}) {
       collectionRoutesPilotState.myDailyRouteSarlotaLastError = {
         code: String(error?.code || error?.payload?.code || "voice_error"),
         message: error?.payload?.error || error?.message || "Šarlota se nepřipojila.",
-        validationViolations: Array.isArray(error?.violations) ? error.violations : [],
-        generatedIntroText: collectionRoutesAdminTabletTestActive()
-          ? String(error?.payload?.text || "").trim()
-          : ""
+        validationViolations: Array.isArray(error?.violations) ? error.violations : []
       };
       const microphonePermissionFailure = [
         "voice_microphone_denied",
