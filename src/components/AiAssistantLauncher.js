@@ -41,7 +41,7 @@ function hologramStatus(state, listening, phase = "") {
   }
 
   if (phase === "automaticIntro" && ["connecting", "processing", "ready"].includes(state)) {
-    return { label: "Připravuji úvod", aria: "připravuje automatický úvod bez mikrofonu" };
+    return { label: "Připravuji úvod", aria: "připravuje automatický přerušitelný úvod s aktivním mikrofonem" };
   }
 
   if (state === "connecting" || state === "ready") {

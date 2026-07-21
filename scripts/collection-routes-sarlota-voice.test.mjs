@@ -24,10 +24,11 @@ assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /aktivního sys
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /připojené Knowledge Base/);
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Neopakuj stejný údaj/);
 assert.doesNotMatch(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Ahoj Mirku|Můžeme vyrazit/);
-assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /bez mikrofonu/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /přerušitelné/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /mikrofon zůstává aktivní/);
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /potřebuje něco upřesnit/);
-assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /pětisekundový poslech/);
-assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /pokračuj běžnou konverzací/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /pět sekund/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /pokračuje běžnou konverzací/);
 assert.doesNotMatch(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /fyzické tlačítko mikrofonu/);
 assert.equal(COLLECTION_ROUTES_SARLOTA_INTRO_GONG_URL, "/audio/sarlota-gong-intro.mp3");
 assert.equal(COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL, "/audio/sarlota-gong-outro.mp3");
@@ -233,8 +234,9 @@ const automaticVoiceStart = appSource.slice(
   appSource.indexOf("async function startCollectionDailyDriverSarlota"),
   appSource.indexOf("async function enableCollectionDailyDriverSarlota")
 );
-assert.match(automaticVoiceStart, /if \(!automaticSession\) void elevenLabsAssistant\.prepareVoiceInput/);
-assert.doesNotMatch(automaticVoiceStart, /if \(automaticSession\) void elevenLabsAssistant\.prepareVoiceInput/);
+assert.match(automaticVoiceStart, /void elevenLabsAssistant\.prepareVoiceInput\?\.\(\);/);
+assert.match(automaticVoiceStart, /onInterruption/);
+assert.match(automaticVoiceStart, /updateCollectionRoutesVoiceIntro\("cancel", introPlaybackToken\)/);
 
 const providerSource = readFileSync(new URL("../src/ElevenLabsAssistantProvider.js", import.meta.url), "utf8");
 assert.match(
