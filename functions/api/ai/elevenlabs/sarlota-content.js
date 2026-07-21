@@ -17,7 +17,10 @@ import {
   driverReportPromptForbiddenPhrases,
   driverReportPromptSafetyAnalysis
 } from "../../../../src/sarlota/sarlotaPromptSafety.js";
-import { SARLOTA_LANGUAGE_KB_NAME } from "../../../../src/sarlota/sarlotaLanguagePackage.js";
+import {
+  SARLOTA_LANGUAGE_KB_NAME,
+  sarlotaLanguagePackageIntegrity
+} from "../../../../src/sarlota/sarlotaLanguagePackage.js";
 
 const API_BASE = "https://api.elevenlabs.io/v1";
 const REQUEST_TIMEOUT_MS = 15000;
@@ -206,53 +209,6 @@ const PROMPT_REQUIREMENTS = [
   ["vistos", "zákaz zápisu do Vistosu"]
 ];
 
-const KB_REQUIREMENTS = [
-  {
-    markers: ["KSO_INTRO_GENERATION_PENDING"],
-    label: "technický marker úvodu Svozových tras"
-  },
-  {
-    markers: ["slysitelne uvodni hlaseni vytvari aktivni agent"],
-    label: "generování slyšitelného úvodu aktivní Šarlotou"
-  },
-  {
-    markers: ["automaticky uvod probiha bez mikrofonu"],
-    label: "automatický úvod bez mikrofonu"
-  },
-  {
-    markers: ["potrebujes neco upresnit", "fyzicke tlacitko mikrofonu", "outro gong"],
-    label: "závěrečná otázka a fyzická reakce řidiče"
-  },
-  {
-    markers: ["stupnu celsia"],
-    label: "výslovnost stupňů Celsia"
-  },
-  {
-    markers: ["mirku, s cim mohu pomoct"],
-    label: "pozdrav po ručním zapnutí mikrofonem"
-  },
-  {
-    markers: ["neni zdrojem provoznich faktu"],
-    label: "oddělení KB od provozních faktů"
-  },
-  {
-    markers: ["fyzicke potvrzeni", "potvrd ho prosim na displeji", "akci jeste potvrd na displeji"],
-    label: "fyzické potvrzení v KSO"
-  },
-  {
-    markers: ["interni test e-mail nebo sms dispecerce"],
-    label: "bezpečný interní TEST kontakt dispečinku"
-  },
-  {
-    markers: ["neoverene vozidlo", "neovereny udaj bez domysleni", "neoverenou informaci si nevymyslej"],
-    label: "zákaz domýšlení neověřených údajů"
-  },
-  {
-    markers: ["soukrom", "osobni udaj", "citlive udaje"],
-    label: "ochrana soukromých údajů"
-  }
-];
-
 export function validateManagedContent(kind, content) {
   const value = String(content ?? "");
   const text = normalize(value);
@@ -268,9 +224,11 @@ export function validateManagedContent(kind, content) {
       if (!text.includes(normalize(marker))) errors.push(`Chybí: ${label}.`);
     });
   } else if (kind === "knowledge_base") {
-    KB_REQUIREMENTS.forEach(({ markers, label }) => {
-      if (!markers.some((marker) => text.includes(normalize(marker)))) errors.push(`Chybí: ${label}.`);
-    });
+    const integrity = sarlotaLanguagePackageIntegrity(value);
+    if (integrity.length < integrity.minimumLength) {
+      errors.push(`Jazyková KB je neúplná: má ${integrity.length} znaků, minimum je ${integrity.minimumLength}.`);
+    }
+    integrity.missingMarkers.forEach((marker) => errors.push(`Chybí povinná část jazykové KB: ${marker}.`));
   } else {
     errors.push("Neznámý typ obsahu.");
   }

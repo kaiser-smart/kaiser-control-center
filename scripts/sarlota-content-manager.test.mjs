@@ -14,31 +14,23 @@ assert.equal(unsafeResult.valid, false);
 assert.ok(unsafeResult.errors.some((item) => item.includes("ověřeného kontextu vozidel")));
 
 const incompleteKb = "Krátká znalost bez bezpečnostních pravidel.";
-assert.equal(__test.validateManagedContent("knowledge_base", incompleteKb).valid, false);
+const incompleteKbResult = __test.validateManagedContent("knowledge_base", incompleteKb);
+assert.equal(incompleteKbResult.valid, false);
+assert.ok(incompleteKbResult.errors.some((item) => item.includes("Jazyková KB je neúplná")));
 
-const liveLanguageKbWording = `
-Tento dokument není zdrojem provozních faktů, identity ani oprávnění.
-Slyšitelné úvodní hlášení vytváří aktivní agent. Technický marker KSO_INTRO_GENERATION_PENDING se nevyslovuje.
-Automatický úvod probíhá bez mikrofonu a končí otázkou: Potřebuješ něco upřesnit? KSO potom ukáže fyzické tlačítko mikrofonu a bez klepnutí přehraje outro gong. Při ručním zapnutí se zeptej: Mirku, s čím mohu pomoct?
-Teplotu vyslov celými slovy, například patnáct stupňů Celsia.
-Hlasové ano není fyzické potvrzení v KSO.
-Interní TEST e-mail nebo SMS dispečerce smí projít jen přes chráněný backend a bezpečný TEST cíl.
-Neověřený údaj se nesmí doplnit bez ověření; test je neověřený údaj bez domýšlení.
-Soukromý kontakt nesděluj, pokud jej hlavní prompt nebo oprávnění nepovolují.
-`;
-assert.deepEqual(
-  __test.validateManagedContent("knowledge_base", liveLanguageKbWording),
-  { valid: true, errors: [] }
-);
+const truncatedKb = SARLOTA_LANGUAGE_KB_CONTENT.slice(0, 7000);
+const truncatedKbResult = __test.validateManagedContent("knowledge_base", truncatedKb);
+assert.equal(truncatedKbResult.valid, false);
+assert.ok(truncatedKbResult.errors.some((item) => item.includes("minimum je 12500")));
 
-const kbWithoutUnverifiedDataRule = liveLanguageKbWording.replace(
-  "Neověřený údaj se nesmí doplnit bez ověření; test je neověřený údaj bez domýšlení.",
-  "Jazyk má být stručný."
+const kbWithoutUnverifiedDataRule = SARLOTA_LANGUAGE_KB_CONTENT.replace(
+  "## PRAVDIVOST A STAV AKCE",
+  "## ODSTRANĚNÁ POVINNÁ ČÁST"
 );
-assert.equal(__test.validateManagedContent("knowledge_base", kbWithoutUnverifiedDataRule).valid, false);
+const kbWithoutUnverifiedDataResult = __test.validateManagedContent("knowledge_base", kbWithoutUnverifiedDataRule);
+assert.equal(kbWithoutUnverifiedDataResult.valid, false);
 assert.ok(
-  __test.validateManagedContent("knowledge_base", kbWithoutUnverifiedDataRule).errors
-    .some((item) => item.includes("zákaz domýšlení neověřených údajů"))
+  kbWithoutUnverifiedDataResult.errors.some((item) => item.includes("## PRAVDIVOST A STAV AKCE"))
 );
 
 assert.deepEqual(

@@ -11,7 +11,8 @@ import {
   SARLOTA_LANGUAGE_PACKAGE_VERSION,
   SARLOTA_PRONUNCIATION_DICTIONARY_NAME,
   SARLOTA_PRONUNCIATION_LISTENING_TESTS,
-  SARLOTA_PRONUNCIATION_RULES
+  SARLOTA_PRONUNCIATION_RULES,
+  sarlotaLanguagePackageIntegrity
 } from "../../../../src/sarlota/sarlotaLanguagePackage.js";
 
 const FIRST_MESSAGE_TEMPLATE = "{{intro_announcement}}";
@@ -403,6 +404,7 @@ function buildPlan(context) {
   const dictionary = context.matchingDictionaries[0] || null;
   const currentRules = canonicalRules(pronunciationRulesFromPayload(context.dictionaryDetail));
   const targetRules = canonicalRules(SARLOTA_PRONUNCIATION_RULES);
+  const targetIntegrity = sarlotaLanguagePackageIntegrity();
   const targetKnowledgeFingerprint = fingerprint(SARLOTA_LANGUAGE_KB_CONTENT);
   const currentKnowledgeFingerprint = fingerprint(context.knowledgeContent);
   const targetRulesFingerprint = fingerprint(canonicalJson(targetRules));
@@ -414,9 +416,11 @@ function buildPlan(context) {
     ? pronunciationLocatorsFromAgent(context.agentConfig).some((locator) => locatorDictionaryId(locator) === resourceId(dictionary))
     : false;
   const duplicateResources = exactKnowledgeCount > 1 || (dictionaryAccessible && exactDictionaryCount > 1);
-  const knowledgeCurrent = exactKnowledgeCount === 1 && currentKnowledgeFingerprint === targetKnowledgeFingerprint;
+  const knowledgeCurrent = targetIntegrity.valid
+    && exactKnowledgeCount === 1
+    && currentKnowledgeFingerprint === targetKnowledgeFingerprint;
   const dictionaryCurrent = dictionaryAccessible && exactDictionaryCount === 1 && currentRulesFingerprint === targetRulesFingerprint;
-  const alreadyApplied = knowledgeCurrent && dictionaryCurrent && attachedKnowledge && attachedDictionary;
+  const alreadyApplied = targetIntegrity.valid && knowledgeCurrent && dictionaryCurrent && attachedKnowledge && attachedDictionary;
   const knowledgeNeedsChange = !knowledgeCurrent || !attachedKnowledge;
   const dictionaryNeedsChange = dictionaryAccessible && (!dictionaryCurrent || !attachedDictionary);
   const currentFingerprint = fingerprint(canonicalJson({
@@ -434,6 +438,7 @@ function buildPlan(context) {
     mode: "dry_run",
     ready: agentNameMatches
       && invariants.firstMessageMatches
+      && targetIntegrity.valid
       && !duplicateResources
       && (knowledgeNeedsChange || dictionaryNeedsChange),
     alreadyApplied,
@@ -461,6 +466,7 @@ function buildPlan(context) {
       targetLength: SARLOTA_LANGUAGE_KB_CONTENT.length,
       currentFingerprint: currentKnowledgeFingerprint,
       targetFingerprint: targetKnowledgeFingerprint,
+      targetIntegrity,
       action: exactKnowledgeCount === 0 ? "create" : knowledgeCurrent ? (attachedKnowledge ? "none" : "attach") : "update"
     },
     pronunciationDictionary: {
@@ -488,6 +494,7 @@ function buildPlan(context) {
     },
     safety: {
       duplicateResources,
+      targetKnowledgeBaseIntegrity: targetIntegrity,
       returnsKnowledgeContent: false,
       returnsApiKey: false,
       requiresPostApplyTrue: true,
