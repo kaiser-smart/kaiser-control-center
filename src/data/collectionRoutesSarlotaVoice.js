@@ -13,6 +13,10 @@ export const COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST = [
 ].join(" ");
 
 const WEATHER_FACT_MAX_AGE_MS = 45 * 60 * 1000;
+const WEATHER_UNAVAILABLE_SENTENCE = "Aktuální předpověď pro Brno teď není bezpečně dostupná.";
+const FUEL_UNAVAILABLE_SENTENCE = "Stav nádrže teď není bezpečně dostupný z T-Cars.";
+const DISPATCHER_COVERAGE_SENTENCE = "Dispečink je dnes zajištěný. Zastupování není potřeba.";
+const DISPATCHER_UNAVAILABLE_SENTENCE = "Informaci o dnešním zastupování dispečinku teď nemám bezpečně ověřenou.";
 const WEATHER_WORDS = /\b(počas\w*|bouř\w*|déšť|deště|dešti|prš\w*|jasn\w*|sluneč\w*|tepl\w*|stup\w*|vítr\w*|větr\w*|fouk\w*|námraz\w*|náled\w*|mlh\w*|sně\w*|přeje)\b/i;
 const VEHICLE_WORDS = /\b(vozid\w*|vůz|vozu|auto|spz|registrační\w*|mercedes|atego|econic|iveco|man|scania|volvo|daf|renault)\b/i;
 const VEHICLE_IDENTITY_WORDS = /\b(mercedes|atego|econic|iveco|man|scania|volvo|daf|renault)\b/gi;
@@ -85,6 +89,7 @@ export function collectionRoutesSarlotaIntroFacts(context = {}, options = {}) {
     } : null,
     weather: freshWeather ? {
       summary: cleanText(weather.summary),
+      spokenSummary: cleanText(weather.summary).replace(/^Brno\s*:\s*/iu, ""),
       observedAt: cleanText(weather.observedAt),
       source: cleanText(weather.source),
       verified: true
@@ -101,22 +106,29 @@ export function collectionRoutesSarlotaIntroGenerationRequest(context = {}, opti
     COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST,
     "Následující JSON je jediný povolený zdroj provozních faktů pro tuto zprávu:",
     JSON.stringify(facts),
-    "Řekni v tomto pořadí: Ahoj + přesný driverVocative, přesný totalStopCount stanovišť, Začínáme firmou + přesný firstStop.name, ověřené počasí, ověřený stav nádrže a ověřené nepřítomné dispečery. Zakonči právě jednou otázkou: [driverVocative], potřebuješ něco upřesnit? Bez ověřeného vokativu řekni: Potřebuješ něco upřesnit?",
-    "Název trasy, počet stanovišť, první stanoviště, vozidlo, model, SPZ, počasí, palivo ani nepřítomnost nesmíš změnit, doplnit ani odhadnout. Počet stanovišť napiš číslicemi přesně jako totalStopCount.",
-    facts.driverVocative ? "Použij přesně driverVocative." : "Vokativ není ověřený; jméno v pozdravu vynech.",
-    facts.firstStop ? "První firmu uveď přesně jako firstStop.name." : "První firma není ověřená; tuto větu vynech.",
+    "Vytvoř postupně přesně osm srozumitelných částí. Každou větu vyslov zřetelně a odděl krátkou přirozenou pauzou.",
+    facts.driverVocative ? `1. Řekni přesně: Ahoj, ${facts.driverVocative}. Nepoužij občanské jméno ani jiný vokativ.` : "1. Řekni pouze: Ahoj. Oslovení není ověřené.",
+    `2. Řekni přesně ve významu: Dnes máme před sebou ${facts.totalStopCount} stanovišť. Číslo nesmíš změnit.`,
+    facts.firstStop
+      ? `3. Řekni: Začínáme firmou ${facts.firstStop.name}. Název firmy vyslov pomalu a zřetelně; zkratku s.r.o. čti es er ó a a.s. čti á es.`
+      : "3. První firma není ověřená; tuto část přirozeně vynech.",
     facts.weather
-      ? "Počasí smíš uvést pouze doslovným použitím hodnoty weather.summary; nehodnoť je vlastní větou."
-      : "Počasí není čerstvě ověřené. Nezmiňuj ho ani ho nijak nehodnoť.",
+      ? `4. Řekni: Počasí v Brně bude dnes ${facts.weather.spokenSummary}`
+      : `4. Řekni přesně: ${WEATHER_UNAVAILABLE_SENTENCE}`,
+    facts.fuel
+      ? `5. Řekni: Stav nádrže je ${facts.fuel.value}. ${facts.fuel.unit ? `Ověřená jednotka je ${facts.fuel.unit}.` : "Jednotku T-Cars neposkytuje; žádnou nevymýšlej."}`
+      : `5. Řekni přesně: ${FUEL_UNAVAILABLE_SENTENCE}`,
+    facts.absentDispatchersVerified && facts.absentDispatchers.length
+      ? `6. Řekni: Dnes není v práci dispečerka ${facts.absentDispatchers.map((item) => item.name).join(", ")}. Jména ani pracovní stav neměň.`
+      : facts.absentDispatchersVerified
+        ? `6. Řekni přesně: ${DISPATCHER_COVERAGE_SENTENCE}`
+        : `6. Řekni přesně: ${DISPATCHER_UNAVAILABLE_SENTENCE}`,
+    facts.driverVocative ? `7. V závěrečné otázce znovu použij přesně oslovení ${facts.driverVocative}.` : "7. Oslovení v závěrečné otázce vynech, protože není ověřené.",
+    facts.driverVocative ? `8. Zakonči právě jednou otázkou: ${facts.driverVocative}, potřebuješ něco upřesnit?` : "8. Zakonči právě jednou otázkou: Potřebuješ něco upřesnit?",
+    "Název trasy, počet stanovišť, první stanoviště, vozidlo, model, SPZ, počasí, palivo ani nepřítomnost nesmíš změnit, doplnit ani odhadnout. Počet stanovišť napiš číslicemi přesně jako totalStopCount.",
     facts.vehicle
       ? "Pokud zmíníš vozidlo nebo SPZ, použij pouze přesné hodnoty z vehicle."
       : "Vozidlo není ověřené. Nezmiňuj vozidlo, model ani SPZ.",
-    facts.fuel
-      ? "Stav nádrže smíš uvést pouze přesnou hodnotou fuel.value. Jednotku neříkej, protože ji T-Cars neposkytuje."
-      : "Stav nádrže není ověřený. Nezmiňuj žádnou hodnotu paliva.",
-    facts.absentDispatchersVerified && facts.absentDispatchers.length
-      ? "Jako nepřítomné dispečery uveď výhradně přesná jména z absentDispatchers."
-      : "Žádný nepřítomný dispečer není ověřený; nepřítomnost dispečera nezmiňuj.",
     "Po závěrečné otázce už nic nepřidávej a nečekej na řeč řidiče. Mikrofon je vypnutý; odpověď může začít pouze fyzickým tlačítkem v KSO."
   ].join("\n");
 }
@@ -139,13 +151,17 @@ export function validateCollectionRoutesSarlotaIntro(text, facts = {}) {
   const normalizedResponse = normalizedFactText(response);
   const requiredVocative = normalizedFactText(facts.driverVocative);
   if (requiredVocative && !normalizedResponse.includes(requiredVocative)) violations.push("missing_verified_vocative");
+  const expectedOpening = requiredVocative ? `ahoj ${requiredVocative}` : "ahoj";
+  if (!normalizedResponse.startsWith(expectedOpening)) violations.push("missing_or_invalid_greeting");
   const exactCount = Number(facts.totalStopCount || 0);
   const counts = spokenStopCount(response);
   if (!counts.includes(exactCount)) violations.push("missing_verified_stop_count");
   if (counts.some((count) => count !== exactCount)) violations.push("foreign_stop_count");
+  if (!normalizedResponse.includes(`dnes mame pred sebou ${exactCount}`)) violations.push("missing_intro_stop_count_sentence");
 
   const firstStop = facts.firstStop?.verified === true ? normalizedFactText(facts.firstStop.name) : "";
   if (firstStop && !normalizedResponse.includes(firstStop)) violations.push("missing_or_foreign_first_stop");
+  if (firstStop && !normalizedResponse.includes(`zaciname firmou ${firstStop}`)) violations.push("missing_first_company_sentence");
   const vehicle = facts.vehicle?.verified === true ? facts.vehicle : null;
   if (VEHICLE_WORDS.test(response)) {
     const allowedVehicleFacts = [vehicle?.label, vehicle?.registration]
@@ -175,7 +191,8 @@ export function validateCollectionRoutesSarlotaIntro(text, facts = {}) {
     }
   }
 
-  if (WEATHER_WORDS.test(response)) {
+  const weatherUnavailable = normalizedResponse.includes(normalizedFactText(WEATHER_UNAVAILABLE_SENTENCE));
+  if (WEATHER_WORDS.test(response) && !weatherUnavailable) {
     const verifiedSummary = facts.weather?.verified === true ? normalizedWeatherSummary(facts.weather.summary) : "";
     if (!verifiedSummary || !normalizedResponse.includes(verifiedSummary)) {
       violations.push("unverified_or_paraphrased_weather");
@@ -184,12 +201,20 @@ export function validateCollectionRoutesSarlotaIntro(text, facts = {}) {
   if (facts.weather?.verified === true && !normalizedResponse.includes(normalizedWeatherSummary(facts.weather.summary))) {
     violations.push("missing_verified_weather");
   }
+  if (facts.weather?.verified === true && !normalizedResponse.includes("pocasi v brne bude dnes")) {
+    violations.push("missing_weather_sentence");
+  }
+  if (facts.weather?.verified !== true && !weatherUnavailable) violations.push("missing_weather_unavailable_sentence");
 
   if (facts.fuel?.verified === true) {
     const fuelValue = String(facts.fuel.value).replace(".", "[.,]");
     if (!new RegExp(`\\b${fuelValue}\\b`).test(response)) violations.push("missing_verified_fuel");
-  } else if (/\b(nádrž\w*|paliv\w*|phm)\b/i.test(response)) {
+    if (!normalizedResponse.includes("stav nadrze je")) violations.push("missing_fuel_sentence");
+  } else if (/\b(nádrž\w*|paliv\w*|phm)\b/i.test(response) && !normalizedResponse.includes(normalizedFactText(FUEL_UNAVAILABLE_SENTENCE))) {
     violations.push("unverified_fuel");
+  }
+  if (facts.fuel?.verified !== true && !normalizedResponse.includes(normalizedFactText(FUEL_UNAVAILABLE_SENTENCE))) {
+    violations.push("missing_fuel_unavailable_sentence");
   }
 
   const dispatcherNames = Array.isArray(facts.absentDispatchers)
@@ -198,12 +223,21 @@ export function validateCollectionRoutesSarlotaIntro(text, facts = {}) {
   if (dispatcherNames.some((name) => !normalizedResponse.includes(name))) {
     violations.push("missing_verified_absent_dispatcher");
   }
-  if (!dispatcherNames.length && /\bdispečer\w*\b/i.test(response)) {
+  const dispatcherCoverage = normalizedResponse.includes(normalizedFactText(DISPATCHER_COVERAGE_SENTENCE));
+  const dispatcherUnavailable = normalizedResponse.includes(normalizedFactText(DISPATCHER_UNAVAILABLE_SENTENCE));
+  if (!dispatcherNames.length && /\bdispečer\w*\b/i.test(response) && !dispatcherCoverage && !dispatcherUnavailable) {
     violations.push("unverified_absent_dispatcher");
+  }
+  if (!dispatcherNames.length && facts.absentDispatchersVerified === true && !dispatcherCoverage) {
+    violations.push("missing_dispatcher_coverage_sentence");
+  }
+  if (facts.absentDispatchersVerified !== true && !dispatcherUnavailable) {
+    violations.push("missing_dispatcher_unavailable_sentence");
   }
 
   const questionCount = (response.match(/\?/gu) || []).length;
-  if (questionCount !== 1 || !normalizedResponse.endsWith("potrebujes neco upresnit")) {
+  const requiredClosing = requiredVocative ? `${requiredVocative} potrebujes neco upresnit` : "potrebujes neco upresnit";
+  if (questionCount !== 1 || !normalizedResponse.endsWith(requiredClosing)) {
     violations.push("missing_or_invalid_closing_question");
   }
   if (/(mohu\s+pomoc|řekni|ozvi\s+se|dej\s+vědět|jaký\s+je\s+další)/iu.test(response)) {

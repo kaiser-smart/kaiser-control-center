@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Šarlota: osm povinných a srozumitelných částí úvodu",
+    text: "TEST tabletu používá ověřené oslovení Mirku a před přehráním vyžaduje pozdrav, počet stanovišť, první firmu, počasí nebo pravdivou nedostupnost, stav nádrže bez vymyšlené jednotky, bezpečný stav dispečinku a závěrečnou otázku s oslovením. Pokud intro gong skutečně nezazní, hlas se bez něj nespustí."
+  },
+  {
     title: "Šarlota: obnovená úplná KB výslovnosti",
     text: "Jazyková Knowledge Base je znovu sestavená z úplné schválené příručky včetně skloňování, čísel, dat, jednotek, stupňů Celsia, identifikátorů, zkratek a oprav. Synchronizace i editor nově odmítnou zkrácenou verzi nebo verzi bez povinné části, takže se příručka nemůže znovu tiše ořezat."
   },

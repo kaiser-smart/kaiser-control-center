@@ -408,6 +408,7 @@ export const DEFAULT_USERS = [
   {
     id: "pneumatiky-miroslav-vasek",
     name: "Miroslav Vašek",
+    preferredVocative: "Mirku",
     email: "miroslav.vasek@kaiser.local",
     phone: "",
     role: "ridic",

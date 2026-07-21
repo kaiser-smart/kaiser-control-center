@@ -431,6 +431,7 @@ export const CONTACT_USERS = [
   {
     id: "pneumatiky-miroslav-vasek",
     name: "Miroslav Vašek",
+    preferredVocative: "Mirku",
     email: "miroslav.vasek@kaiser.local",
     phone: "735 795 517",
     role: "ridic",
