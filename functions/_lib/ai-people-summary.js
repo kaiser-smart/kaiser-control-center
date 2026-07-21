@@ -256,6 +256,18 @@ function userAddressingForAi(value) {
   };
 }
 
+function verifiedUserAddressingForAi(user) {
+  const generated = userAddressingForAi(user?.name);
+  const preferredVocative = cleanAiString(user?.preferredVocative);
+  if (!preferredVocative) return generated;
+  return {
+    ...generated,
+    standardVocative: preferredVocative,
+    friendlyVocative: preferredVocative,
+    style: "verified_preferred"
+  };
+}
+
 function pragueHourForAi(date = new Date()) {
   try {
     const hourPart = new Intl.DateTimeFormat("cs-CZ", {
@@ -304,7 +316,7 @@ function userGreetingForAi(user, date = new Date()) {
     return "";
   }
 
-  const userAddressing = userAddressingForAi(user?.name);
+  const userAddressing = verifiedUserAddressingForAi(user);
   const timeOfDayGreeting = timeOfDayGreetingForAi(date);
 
   return timeOfDayGreeting
@@ -333,7 +345,7 @@ export function userDynamicVariablesForAi(user) {
     .filter(Boolean)
     .join("; ");
   const userFirstName = firstNameForAi(user?.name);
-  const userAddressing = userAddressingForAi(user?.name);
+  const userAddressing = verifiedUserAddressingForAi(user);
   const timeOfDayGreeting = timeOfDayGreetingForAi();
   const userGreeting = userGreetingForAi(user) || "Jsem připravená.";
 

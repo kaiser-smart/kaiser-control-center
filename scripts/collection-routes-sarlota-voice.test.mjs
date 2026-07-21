@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { userDynamicVariablesForAi } from "../functions/_lib/ai-people-summary.js";
 
 import {
   COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST,
@@ -28,6 +29,13 @@ assert.equal(COLLECTION_ROUTES_SARLOTA_INTRO_GONG_URL, "/audio/sarlota-gong-intr
 assert.equal(COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL, "/audio/sarlota-gong-outro.mp3");
 assert.match(COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST, /Mirku, s čím mohu pomoct\?/);
 assert.match(COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST, /Po otázce zůstaň připravená poslouchat/);
+assert.equal(userDynamicVariablesForAi({
+  id: "pneumatiky-miroslav-vasek",
+  name: "Miroslav Vašek",
+  preferredVocative: "Mirku",
+  role: "ridic",
+  status: "active"
+}).user_first_name_friendly_vocative, "Mirku");
 
 const introContext = {
   actor: { name: "Miroslav Vašek", vocative: "Mirku" },
@@ -58,11 +66,11 @@ assert.match(introRequest, /Během směny hrozí bouřka/);
 assert.match(introRequest, /Test 1 s\.r\.o\./);
 assert.match(introRequest, /63\.5/);
 assert.equal(validateCollectionRoutesSarlotaIntro(
-  "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová. Mirku, potřebuješ něco upřesnit?",
+  "Ahoj, Mirku. Dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Počasí v Brně bude dnes 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Jednotku T-Cars neposkytuje. Dnes není v práci dispečerka Jana Dispečerová. Mirku, potřebuješ něco upřesnit?",
   introFacts
 ).valid, true);
 assert.equal(validateCollectionRoutesSarlotaIntro(
-  "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 stupňů Celsia, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová. Mirku, potřebuješ něco upřesnit?",
+  "Ahoj, Mirku. Dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Počasí v Brně bude dnes 22 stupňů Celsia, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Jednotku T-Cars neposkytuje. Dnes není v práci dispečerka Jana Dispečerová. Mirku, potřebuješ něco upřesnit?",
   introFacts
 ).valid, true, "Bezpečnostní kontrola musí přijmout správnou hlasovou výslovnost jednotky °C.");
 assert.equal(validateCollectionRoutesSarlotaIntro(
@@ -94,7 +102,8 @@ const interactiveAutomaticIntro = validateCollectionRoutesSarlotaIntro(
   "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová. Potřebuješ něco upřesnit?",
   introFacts
 );
-assert.equal(interactiveAutomaticIntro.valid, true);
+assert.equal(interactiveAutomaticIntro.valid, false);
+assert.ok(interactiveAutomaticIntro.violations.includes("missing_or_invalid_closing_question"));
 
 const introWithoutClosingQuestion = validateCollectionRoutesSarlotaIntro(
   "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová.",
@@ -112,6 +121,22 @@ const staleWeatherFacts = collectionRoutesSarlotaIntroFacts(introContext, {
 });
 assert.equal(staleWeatherFacts.weather, null);
 assert.equal(validateCollectionRoutesSarlotaIntro("Venku je jasno.", staleWeatherFacts).valid, false);
+assert.equal(validateCollectionRoutesSarlotaIntro(
+  "Ahoj, Mirku. Dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Aktuální předpověď pro Brno teď není bezpečně dostupná. Stav nádrže je 63,5. Jednotku T-Cars neposkytuje. Dnes není v práci dispečerka Jana Dispečerová. Mirku, potřebuješ něco upřesnit?",
+  staleWeatherFacts
+).valid, true);
+
+const unavailableFacts = collectionRoutesSarlotaIntroFacts({
+  ...introContext,
+  weather: { verified: false, summary: "" },
+  fuel: { verified: false, value: null },
+  absentDispatchersVerified: true,
+  absentDispatchers: []
+});
+assert.equal(validateCollectionRoutesSarlotaIntro(
+  "Ahoj, Mirku. Dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Aktuální předpověď pro Brno teď není bezpečně dostupná. Stav nádrže teď není bezpečně dostupný z T-Cars. Dispečink je dnes zajištěný. Zastupování není potřeba. Mirku, potřebuješ něco upřesnit?",
+  unavailableFacts
+).valid, true, "Chybějící provozní údaj se musí přiznat nebo nahradit bezpečnou informací, ne tiše přeskočit.");
 
 const exactInstruction = "Tomáši, až zastavíš přímo u nádob, klepni na Potvrdit GPS stanoviště.";
 const voiceRequest = collectionRoutesSarlotaVoiceRequest(exactInstruction);
@@ -154,8 +179,8 @@ assert.match(voiceFunctionSource, /instructionOnly: true/);
 assert.doesNotMatch(voiceFunctionSource, /speechSynthesis|SpeechSynthesisUtterance/);
 assert.match(appSource, /data-collection-routes-test-voice-provider/);
 assert.match(appSource, /Hlas: ElevenLabs Šarlota · systémové čtení vypnuto/);
-assert.match(appSource, /Šarlota pokračuje skutečným hlasem ElevenLabs; gong je označený jako chyba/);
-assert.doesNotMatch(appSource, /error\.code = "voice_intro_gong_failed"/);
+assert.match(appSource, /Automatický hlas se bez gongu nespustí/);
+assert.match(appSource, /error\.code = "voice_intro_gong_failed"/);
 assert.match(appSource, /endAfterGeneratedIntro: automaticSession/);
 assert.match(appSource, /continueAfterGeneratedIntro: false/);
 assert.match(appSource, /Mikrofon nebyl zapnutý/);

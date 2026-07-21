@@ -1,4 +1,4 @@
-export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-21-v9-complete-pronunciation-restored";
+export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-21-v10-intro-acceptance";
 export const SARLOTA_LANGUAGE_KB_NAME = "Šarlota – jazyková reference KSO";
 export const SARLOTA_PRONUNCIATION_DICTIONARY_NAME = "Šarlota – čeština KSO";
 
@@ -476,7 +476,9 @@ export const SARLOTA_PRONUNCIATION_RULES = [
   aliasRule("DIČ", "dé í čé"),
   aliasRule("DPH", "dé pé há"),
   aliasRule("PDF", "pé dé ef"),
-  aliasRule("CSV", "cé es vé")
+  aliasRule("CSV", "cé es vé"),
+  aliasRule("s.r.o.", "es er ó"),
+  aliasRule("a.s.", "á es")
 ];
 
 export const SARLOTA_PRONUNCIATION_LISTENING_TESTS = [

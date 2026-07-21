@@ -350,7 +350,7 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
       ),
     options.availabilityOverride !== undefined
       ? options.availabilityOverride
-      : safeLoad(() => listEmployeeAvailabilityForSarlota(env, { date, userIds }), []),
+      : safeLoad(() => listEmployeeAvailabilityForSarlota(env, { date, userIds }), null),
     options.memoryOverride !== undefined
       ? options.memoryOverride
       : getSarlotaUserMemory(env, operationalUser),
@@ -365,9 +365,11 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
         items: []
       })
   ]);
+  const availabilityRows = Array.isArray(availability) ? availability : [];
+  const availabilityVerified = Array.isArray(availability);
   const route = safeRoute(detail, operationalUser);
   const vehicles = safeVehicles(vehicleResult);
-  const directory = sanitizeKaiserDirectoryForSarlota(users, availability);
+  const directory = sanitizeKaiserDirectoryForSarlota(users, availabilityRows);
   const crew = safeCrew(detail, directory);
   const vehicle = options.trustTestRouteVehicle === true && scope === "test" && route.vehicleLabel
     ? {
@@ -403,7 +405,7 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
   const voiceRoute = voiceSafeRoute(route, vehicle);
   const voiceVehicle = voiceSafeVehicleAssignment(vehicle);
   const actorVariables = userDynamicVariablesForAi(operationalUser);
-  const absentDispatchers = safeAbsentDispatchers(users, availability);
+  const absentDispatchers = safeAbsentDispatchers(users, availabilityRows);
   const voiceIntro = collectionDailyRouteVoiceIntroState(detail?.run || {}, {
     sessionId: options.tabletTestSessionId
   });
@@ -435,7 +437,7 @@ export async function buildCollectionRoutesSarlotaContext(env, user, options = {
       source: "T-Cars"
     },
     absentDispatchers,
-    absentDispatchersVerified: true,
+    absentDispatchersVerified: availabilityVerified,
     voiceIntro,
     readiness,
     vehicles,
