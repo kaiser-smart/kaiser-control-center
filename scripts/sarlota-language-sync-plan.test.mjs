@@ -3,10 +3,13 @@ import { __test } from "../functions/api/ai/elevenlabs/sarlota-language-sync.js"
 import { __test as statusTest } from "../functions/api/ai/elevenlabs/sarlota-status.js";
 import {
   SARLOTA_LANGUAGE_KB_CONTENT,
+  SARLOTA_LANGUAGE_KB_MIN_LENGTH,
   SARLOTA_LANGUAGE_KB_NAME,
+  SARLOTA_LANGUAGE_KB_REQUIRED_MARKERS,
   SARLOTA_PRONUNCIATION_LISTENING_TESTS,
   SARLOTA_PRONUNCIATION_DICTIONARY_NAME,
-  SARLOTA_PRONUNCIATION_RULES
+  SARLOTA_PRONUNCIATION_RULES,
+  sarlotaLanguagePackageIntegrity
 } from "../src/sarlota/sarlotaLanguagePackage.js";
 
 const assistantConfig = {
@@ -140,7 +143,11 @@ assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.some((item) => item.includes("Ra
 assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.some((item) => item.includes("AI, API, KSO, GPS, SMS, RCS, IČO, DIČ, DPH, PDF a CSV.")));
 assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.some((item) => item.includes("SPZ jsem nerozpoznala jistě")));
 assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.some((item) => item.includes("patnáct stupňů Celsia")));
-assert.match(SARLOTA_LANGUAGE_KB_CONTENT, /15 °C je patnáct stupňů Celsia/);
-assert.match(SARLOTA_LANGUAGE_KB_CONTENT, /fyzické tlačítko mikrofonu/);
+assert.ok(SARLOTA_LANGUAGE_KB_CONTENT.length >= SARLOTA_LANGUAGE_KB_MIN_LENGTH);
+assert.equal(sarlotaLanguagePackageIntegrity().valid, true);
+assert.ok(SARLOTA_LANGUAGE_KB_REQUIRED_MARKERS.every((marker) => SARLOTA_LANGUAGE_KB_CONTENT.includes(marker)));
+assert.match(SARLOTA_LANGUAGE_KB_CONTENT, /15 °C → patnáct stupňů Celsia/);
+assert.match(SARLOTA_LANGUAGE_KB_CONTENT, /Kaiser → kajzr/);
+assert.equal(sarlotaLanguagePackageIntegrity(SARLOTA_LANGUAGE_KB_CONTENT.slice(0, 7000)).valid, false);
 
 console.log("sarlota language sync plan: ok");
