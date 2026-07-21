@@ -15,6 +15,8 @@ const VOICE_OUTPUT_GAIN = 5;
 const VOICE_OUTPUT_LIMIT = 0.995;
 const VOICE_INPUT_LEVEL_INTERVAL_MS = 250;
 const VOICE_INPUT_SPEAKING_LEVEL = 0.035;
+const INTRO_SPEECH_ACTIVITY_FRAMES = 2;
+const INTRO_SERVER_VAD_SPEAKING_LEVEL = 0.55;
 const DRIVER_REPORT_NO_VEHICLE_DIAGNOSTIC_MODE = "identity_no_driver_vehicles";
 
 function cleanApiBaseUrl(value) {
@@ -186,6 +188,23 @@ function audioInputLevel(inputBuffer) {
   }
 
   return Math.sqrt(total / inputBuffer.length);
+}
+
+export function createIntroSpeechActivityDetector(options = {}) {
+  const threshold = Math.max(0, Number(options.threshold ?? VOICE_INPUT_SPEAKING_LEVEL));
+  const requiredFrames = Math.max(1, Math.round(Number(options.requiredFrames ?? INTRO_SPEECH_ACTIVITY_FRAMES)));
+  let activeFrames = 0;
+
+  return Object.freeze({
+    observe(inputLevel) {
+      const level = Number(inputLevel || 0);
+      activeFrames = Number.isFinite(level) && level >= threshold ? activeFrames + 1 : 0;
+      return activeFrames >= requiredFrames;
+    },
+    reset() {
+      activeFrames = 0;
+    }
+  });
 }
 
 function stopMediaStreamTracks(mediaStream) {
@@ -987,6 +1006,26 @@ export function useElevenLabsAssistant({
       let introSilenceTimer = 0;
       let lastInputLevelAt = 0;
       let microphoneRequest = null;
+      const introSpeechActivityDetector = createIntroSpeechActivityDetector({
+        requiredFrames: callbacks.introSpeechActivityFrames
+      });
+      const introServerVadSpeakingLevel = Math.max(
+        0,
+        Number(callbacks.introServerVadSpeakingLevel ?? INTRO_SERVER_VAD_SPEAKING_LEVEL)
+      );
+
+      function markIntroUserEngaged(source, text = "") {
+        if (!introAwaitingUser || introUserEngaged) return false;
+        introUserEngaged = true;
+        introAwaitingUser = false;
+        window.clearTimeout(introSilenceTimer);
+        callbacks.onIntroEngaged?.({
+          text: String(text || "").trim(),
+          conversationId,
+          source
+        });
+        return true;
+      }
 
       function clearTimers() {
         window.clearTimeout(connectionTimer);
@@ -1253,6 +1292,7 @@ export function useElevenLabsAssistant({
             await startAudioInput();
             if (settled || !audioInputStarted) return;
             introAwaitingUser = true;
+            introSpeechActivityDetector.reset();
             audioInputPaused = false;
             callbacks.onIntroListening?.({
               ...resultPayload(),
@@ -1366,10 +1406,10 @@ export function useElevenLabsAssistant({
               outputBuffer.fill(0);
             }
 
+            const inputLevel = audioInputLevel(inputBuffer);
             const now = Date.now();
             if (now - lastInputLevelAt >= VOICE_INPUT_LEVEL_INTERVAL_MS) {
               lastInputLevelAt = now;
-              const inputLevel = audioInputLevel(inputBuffer);
               callbacks.onInputLevel?.({
                 inputLevel,
                 speaking: inputLevel >= VOICE_INPUT_SPEAKING_LEVEL,
@@ -1379,6 +1419,10 @@ export function useElevenLabsAssistant({
 
             if (audioInputPaused) {
               return;
+            }
+
+            if (introAwaitingUser && !introUserEngaged && introSpeechActivityDetector.observe(inputLevel)) {
+              markIntroUserEngaged("local_voice_activity");
             }
 
             const audioChunk = float32ToPcm16Base64(inputBuffer, inputSampleRate, outputSampleRate);
@@ -1496,12 +1540,7 @@ export function useElevenLabsAssistant({
             return;
           }
           if (userTranscript) {
-            if (introAwaitingUser && !introUserEngaged) {
-              introUserEngaged = true;
-              introAwaitingUser = false;
-              window.clearTimeout(introSilenceTimer);
-              callbacks.onIntroEngaged?.({ text: userTranscript, conversationId });
-            }
+            markIntroUserEngaged("user_transcript", userTranscript);
             audioInputPaused = true;
             streamedAgentText = "";
             finalAgentText = "";
@@ -1633,9 +1672,12 @@ export function useElevenLabsAssistant({
 
         if (payload.type === "vad_score") {
           const score = Number(payload.vad_score_event?.vad_score || 0);
+          if (score >= introServerVadSpeakingLevel) {
+            markIntroUserEngaged("vad_score");
+          }
           callbacks.onInputLevel?.({
             inputLevel: score,
-            speaking: score >= 0.55,
+            speaking: score >= introServerVadSpeakingLevel,
             conversationId,
             source: "vad_score"
           });

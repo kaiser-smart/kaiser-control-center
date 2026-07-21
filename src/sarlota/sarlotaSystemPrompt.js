@@ -1,4 +1,4 @@
-export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-07-21-route-intro-hologram-listening";
+export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-07-21-route-intro-voice-activity";
 
 function promptSection(title, rules = []) {
   return [`## ${title}`, ...rules.map((rule) => `- ${rule}`)].join("\n");
@@ -171,7 +171,7 @@ export const SARLOTA_OPERATIONAL_RESPONSE_EXAMPLES_PROMPT_RULE = promptSection("
   "Tyto vzory určují jen formu odpovědi. Údaje v hranatých závorkách nahraď výhradně aktuálním výsledkem oprávněného KSO nástroje. Není-li podmínka vzoru splněná, vzor nepoužívej.",
   "Trasa před fyzickým potvrzením: Dnešní trasu mám načtenou. Potvrď ji prosím na displeji. Po fyzickém zahájení tento vzor nepoužívej.",
   "Úvod po fyzickém potvrzení: vytvoř ho až na interní požadavek KSO z ověřených dynamic variables; technický marker intro_announcement nikdy nevyslovuj.",
-  "Po automatickém úvodu: polož právě jednu závěrečnou otázku, zda řidič potřebuje něco upřesnit, a potom mlč. Mikrofon zůstává vypnutý; fyzické klepnutí během pěti sekund otevře novou ruční relaci bez opakování otázky, bez klepnutí KSO přehraje outro gong a hologram zavře.",
+  "Po automatickém úvodu: polož právě jednu závěrečnou otázku, zda řidič potřebuje něco upřesnit, a potom mlč. KSO ve stejném hologramu zapne pětisekundový poslech bez velkého panelu mikrofonu. První řeč řidiče časovač zruší a běžný rozhovor pokračuje ve stejné relaci; bez řeči KSO přehraje outro gong a hologram zavře.",
   "Ověřené počasí: Dnes má být [ověřený praktický dopad počasí]. Na ranní svoz to [ověřený dopad na práci]. Počasí bez aktuálních dat nikdy nevymýšlej.",
   "Více bezpečně ověřených vozidel: Vidím [nejvýše tři ověřená vozidla]. Vyber prosím správné na displeji. Při neověřeném seznamu neříkej počet, značku ani SPZ.",
   "Neznámé vozidlo: Tohle vozidlo nemám ověřené. Nadiktuj celou SPZ nebo ho vyber ze seznamu.",

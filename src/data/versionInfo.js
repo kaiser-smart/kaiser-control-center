@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.662"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.663"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: začátek řeči okamžitě ruší timeout",
+    text: "Po automatické závěrečné otázce stačí během pěti sekund začít mluvit. Hologram zruší časovač už podle potvrzené hlasové aktivity, nečeká na opožděný přepis, a běžná konverzace pokračuje ve stejné relaci bez velkého panelu mikrofonu."
+  },
   {
     title: "Vozidla: náklady s bezpečným fallbackem a read-only audit párování",
     text: "Pokud T-Cars odmítne individuální čtení nákladů, backend použije oficiální hromadnou metodu a výsledek přesně omezí na stejné T-Cars ID nebo SPZ. Administrace současně ukazuje kandidáty Vistos–T-Cars podle přesné SPZ a dostupné části VIN, ale žádnou vazbu nevytváří ani neukládá."
