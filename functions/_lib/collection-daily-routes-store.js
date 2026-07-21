@@ -32,9 +32,11 @@ const DRIVER_OPERATION_PHASES = new Set(["started", "ended"]);
 const DRIVER_REPORT_TYPES = new Map([
   ["overfilled_container", "Přeplněná nádoba"],
   ["damaged_container", "Poškozená nádoba"],
-  ["site_inaccessible", "Nádoba nebo firma není přístupná"],
-  ["container_missing", "Nádoba není na místě"],
-  ["contaminated_waste", "Nevhodný nebo kontaminovaný odpad"],
+  ["site_inaccessible", "Nádoba není přístupná"],
+  ["container_missing", "Nádoba chybí"],
+  ["waste_outside_container", "Odpad mimo nádobu"],
+  ["contaminated_waste", "Nesprávný druh odpadu"],
+  ["customer_refused", "Zákazník odmítl svoz"],
   ["site_closed", "Provozovna je zavřená"],
   ["other", "Jiný problém"]
 ]);

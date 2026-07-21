@@ -73,7 +73,7 @@ import {
   collectionRoutesDriverTabletCssSizeLabel,
   collectionRoutesDriverTabletLabel
 } from "./data/collectionRoutesOperationalContract.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.46";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.47";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -358,6 +358,7 @@ const COLLECTION_ROUTES_PHASE_NOTICE = "Read-only přehled tras svozu.";
 const COLLECTION_ROUTES_TABS = [
   { id: "svozove-trasy", label: "Svozové trasy", targetId: "collection-routes-source-routes" },
   { id: "sites", label: "Stanoviště", targetId: "collection-routes-sites" },
+  { id: "incidents", label: "Hlášení", targetId: "collection-routes-incidents" },
   { id: "rules", label: "Pravidla", targetId: "module-rules-title" },
   { id: "settings", label: "Nastavení", targetId: "collection-routes-settings" },
   { id: "internal", label: "Interní správa", targetId: "collection-routes-internal", adminOnly: true }
@@ -1287,9 +1288,11 @@ const COLLECTION_ROUTES_TEST_INCIDENT_TYPES = Object.freeze({
 const COLLECTION_DAILY_DRIVER_REPORT_TYPES = Object.freeze({
   overfilled_container: "Přeplněná nádoba",
   damaged_container: "Poškozená nádoba",
-  site_inaccessible: "Stanoviště není přístupné",
-  container_missing: "Nádoba není na místě",
-  contaminated_waste: "Kontaminovaný odpad",
+  site_inaccessible: "Nádoba není přístupná",
+  container_missing: "Nádoba chybí",
+  waste_outside_container: "Odpad mimo nádobu",
+  contaminated_waste: "Nesprávný druh odpadu",
+  customer_refused: "Zákazník odmítl svoz",
   site_closed: "Firma je zavřená",
   other: "Jiný problém"
 });
@@ -1486,6 +1489,18 @@ const collectionRoutesPilotState = {
   myDailyRouteSarlotaMemory: null,
   selectedSiteId: "",
   selectedSiteDetail: null,
+  incidents: [],
+  incidentsLoaded: false,
+  incidentsLoading: false,
+  incidentScope: "production",
+  incidentCounts: { new: 0, claimed: 0, inProgress: 0, resolved: 0, unresolved: 0 },
+  productionIncidentCount: 0,
+  incidentStatusFilter: "open",
+  selectedIncidentId: "",
+  incidentDialog: "",
+  incidentPending: "",
+  incidentMessage: "",
+  incidentError: "",
   activeTab: "dashboard",
   message: "",
   error: ""
@@ -17893,6 +17908,12 @@ function collectionRoutesVisibleTabs(user) {
   return COLLECTION_ROUTES_TABS.filter((tab) => !tab.adminOnly || collectionRoutesCanViewInternalTab(user));
 }
 
+function collectionRoutesTabLabel(tab) {
+  if (tab?.id !== "incidents") return tab?.label || "";
+  const count = Math.max(0, Number(collectionRoutesPilotState.productionIncidentCount) || 0);
+  return count ? `Hlášení ${count}` : "Hlášení";
+}
+
 function isCollectionRoutesTabId(tabId) {
   return COLLECTION_ROUTES_TABS.some((tab) => tab.id === tabId);
 }
@@ -17934,6 +17955,9 @@ function setCollectionRoutesActiveTab(tabId) {
   }
 
   render();
+  if (tabId === "incidents" && !collectionRoutesPilotState.incidentsLoaded) {
+    void loadCollectionRouteIncidents({ force: true });
+  }
 }
 
 function collectionRoutesApiStatusLabel(status) {
@@ -26565,6 +26589,261 @@ function collectionRoutesSiteDetailSection() {
   `;
 }
 
+const COLLECTION_ROUTE_INCIDENT_STATUS_META = Object.freeze({
+  new: { label: "NOVÉ", tone: "new" },
+  claimed: { label: "PŘEVZATO", tone: "claimed" },
+  in_progress: { label: "ŘEŠÍ SE", tone: "progress" },
+  resolved: { label: "VYŘEŠENO", tone: "resolved" }
+});
+
+const COLLECTION_ROUTE_INCIDENT_RESOLUTIONS = Object.freeze({
+  resolved_on_site: "Vyřešeno na místě",
+  customer_contacted: "Zákazník kontaktován",
+  replacement_pickup_agreed: "Domluven náhradní svoz",
+  site_fixed: "Stanoviště opraveno",
+  container_replaced: "Nádoba vyměněna",
+  unjustified: "Hlášení neoprávněné",
+  duplicate: "Duplicita",
+  other: "Jiný výsledek"
+});
+
+function collectionRouteIncidentStatusMeta(status) {
+  return COLLECTION_ROUTE_INCIDENT_STATUS_META[status] || COLLECTION_ROUTE_INCIDENT_STATUS_META.new;
+}
+
+function collectionRouteIncidentCommunicationLabel(status) {
+  return ({
+    not_sent: "Neodesláno",
+    pending: "Čeká",
+    accepted: "Přijato providerem",
+    delivered: "Doručeno",
+    undelivered: "Nedoručeno",
+    failed: "Selhalo",
+    recorded: "Zaznamenáno"
+  })[status] || "Neodesláno";
+}
+
+function collectionRouteIncidentRelativeTime(value) {
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return formatDateTime(value) || "-";
+  const differenceMinutes = Math.round((Date.now() - time) / 60000);
+  if (differenceMinutes >= 0 && differenceMinutes < 1) return "Právě teď";
+  if (differenceMinutes >= 1 && differenceMinutes < 60) return `Před ${differenceMinutes} min`;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date());
+  const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date(time));
+  const clock = new Intl.DateTimeFormat("cs-CZ", { timeZone: "Europe/Prague", hour: "2-digit", minute: "2-digit" }).format(new Date(time));
+  return date === today ? `Dnes ${clock}` : formatDateTime(value) || "-";
+}
+
+function collectionRouteIncidentFilteredItems() {
+  const filter = collectionRoutesPilotState.incidentStatusFilter;
+  return collectionRoutesPilotState.incidents.filter((item) => {
+    if (filter === "open") return item.status !== "resolved";
+    if (filter === "all") return true;
+    return item.status === filter;
+  });
+}
+
+function collectionRouteIncidentSelected() {
+  return collectionRoutesPilotState.incidents.find((item) => item.id === collectionRoutesPilotState.selectedIncidentId) || null;
+}
+
+function collectionRouteIncidentPhoto(incident, compact = false) {
+  const photo = incident?.photos?.[0];
+  if (!photo?.url) {
+    return `<div class="collection-route-incident-photo collection-route-incident-photo--empty ${compact ? "collection-route-incident-photo--compact" : ""}" aria-label="Bez fotografie">Bez foto</div>`;
+  }
+  return `<img class="collection-route-incident-photo ${compact ? "collection-route-incident-photo--compact" : ""}" src="${escapeHtml(photo.url)}" alt="Fotografie hlášení ${escapeHtml(incident.typeLabel || "")}" loading="lazy">`;
+}
+
+function collectionRouteIncidentRow(incident) {
+  const status = collectionRouteIncidentStatusMeta(incident.status);
+  const lastActivity = incident.audit?.at(-1)?.createdAt || incident.workflow?.updatedAt || incident.reportedAt;
+  return `
+    <article class="collection-route-incident-row ${incident.id === collectionRoutesPilotState.selectedIncidentId ? "collection-route-incident-row--active" : ""}">
+      ${collectionRouteIncidentPhoto(incident, true)}
+      <div class="collection-route-incident-row__main">
+        <strong>${escapeHtml(incident.typeLabel || "Jiný problém")}</strong>
+        <span>${escapeHtml(incident.companyName || "Firma neuvedena")} · ${escapeHtml(incident.stationName || incident.address || "Stanoviště neuvedeno")}</span>
+        <small>${escapeHtml(collectionRouteIncidentRelativeTime(incident.reportedAt))} · ${escapeHtml(incident.driverName || "Řidič neuveden")} · ${escapeHtml(incident.routeTitle || "Trasa neuvedena")}</small>
+        <small>E-mail: ${escapeHtml(collectionRouteIncidentCommunicationLabel(incident.email?.status))} · SMS: ${escapeHtml(collectionRouteIncidentCommunicationLabel(incident.sms?.status))}</small>
+      </div>
+      <div class="collection-route-incident-row__aside">
+        <span class="collection-route-incident-status collection-route-incident-status--${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span>
+        <small>${escapeHtml(incident.workflow?.assignedName || "Bez přiřazení")}</small>
+        <small>${escapeHtml(collectionRouteIncidentRelativeTime(lastActivity))}</small>
+        <button class="secondary-link" type="button" data-collection-route-incident-open="${escapeHtml(incident.id)}">Otevřít</button>
+      </div>
+    </article>
+  `;
+}
+
+function collectionRouteIncidentTimeline(incident) {
+  const events = Array.isArray(incident.audit) ? incident.audit : [];
+  if (!events.length) return `<p class="collection-route-incident-empty">Historie zatím není dostupná.</p>`;
+  return `
+    <ol class="collection-route-incident-timeline">
+      ${events.map((event) => `
+        <li>
+          <time datetime="${escapeHtml(event.createdAt || "")}">${escapeHtml(collectionRouteIncidentRelativeTime(event.createdAt))}</time>
+          <span><strong>${escapeHtml(event.actorName || "Systém")}</strong> ${escapeHtml(event.summary || "provedl akci")}</span>
+        </li>
+      `).join("")}
+    </ol>
+  `;
+}
+
+function collectionRouteIncidentMap(incident) {
+  if (!incident.map) return `<div class="collection-route-incident-map collection-route-incident-map--empty">Mapa není dostupná, protože zdrojový záznam nemá ověřené souřadnice.</div>`;
+  const url = collectionRoutesTestTabletMapImageUrl({
+    addressLatitude: incident.map.latitude,
+    addressLongitude: incident.map.longitude,
+    measuredLatitude: null,
+    measuredLongitude: null
+  });
+  return `<div class="collection-route-incident-map"><img src="${escapeHtml(url)}" alt="HERE mapa místa hlášení" loading="lazy"></div>`;
+}
+
+function collectionRouteIncidentContactDialog(incident) {
+  if (collectionRoutesPilotState.incidentDialog !== "contact") return "";
+  const isTest = collectionRoutesPilotState.incidentScope === "test";
+  return `
+    <div class="collection-route-incident-dialog" role="presentation">
+      <button type="button" class="collection-route-incident-dialog__backdrop" data-collection-route-incident-dialog-close aria-label="Zrušit kontaktování"></button>
+      <form class="collection-route-incident-dialog__card" data-collection-route-incident-contact-form data-incident-id="${escapeHtml(incident.id)}" role="dialog" aria-modal="true" aria-labelledby="collection-route-contact-title">
+        <header><h2 id="collection-route-contact-title">Kontaktovat zákazníka</h2><p>${escapeHtml(incident.companyName)} · ${escapeHtml(incident.stationName || incident.address)}</p></header>
+        ${isTest ? `<p class="collection-route-incident-test-warning"><strong>TESTOVACÍ DATA</strong><span>Skutečný zákazník nebude kontaktován. E-mail a SMS uloží bezpečný simulovaný provider pouze do TEST auditu.</span></p>` : `<p class="collection-route-incident-production-warning"><strong>Ostré odesílání není aktivní.</strong><span>PROVOZ je nyní read-only pro komunikaci. Neexistuje ověřený provider/webhook průchod.</span></p>`}
+        <fieldset ${isTest ? "" : "disabled"}>
+          <legend>Kanál</legend>
+          <label><input type="radio" name="channel" value="email" checked> E-mail</label>
+          <label><input type="radio" name="channel" value="sms"> SMS</label>
+          <label><input type="radio" name="channel" value="email_sms"> E-mail + SMS</label>
+          <label><input type="radio" name="channel" value="phone"> Telefon</label>
+        </fieldset>
+        <label><span>Příjemce</span><input type="text" value="${isTest ? "Bezpečný interní TEST příjemce" : "Čeká na ověřený zdroj kontaktu"}" readonly></label>
+        <label><span>Zpráva / výsledek hovoru</span><textarea name="message" maxlength="4000" rows="5" ${isTest ? "" : "disabled"}>Dobrý den, při dnešním svozu jsme zaznamenali problém: ${escapeHtml(incident.typeLabel)}. Prosíme o zpřístupnění stanoviště nebo krátké potvrzení dalšího postupu.</textarea></label>
+        <div class="collection-route-incident-phone-fields" data-collection-route-incident-phone-fields hidden>
+          <label><span>Výsledek telefonu</span><select name="phoneOutcome"><option value="reached">Dovoláno</option><option value="not_reached">Nedovoláno</option></select></label>
+          <label><span>Domluvený další krok</span><input name="nextStep" maxlength="1000" value="Ověřit stav s dispečinkem"></label>
+          <label><span>Termín</span><input name="followUpAt" type="datetime-local"></label>
+        </div>
+        <footer><button type="button" class="secondary-link" data-collection-route-incident-dialog-close>Zrušit</button><button class="primary-action" type="submit" ${isTest ? "" : "disabled"}>Potvrdit a odeslat v TESTU</button></footer>
+      </form>
+    </div>
+  `;
+}
+
+function collectionRouteIncidentResolveDialog(incident) {
+  if (collectionRoutesPilotState.incidentDialog !== "resolve") return "";
+  return `
+    <div class="collection-route-incident-dialog" role="presentation">
+      <button type="button" class="collection-route-incident-dialog__backdrop" data-collection-route-incident-dialog-close aria-label="Zrušit uzavření"></button>
+      <form class="collection-route-incident-dialog__card" data-collection-route-incident-resolve-form data-incident-id="${escapeHtml(incident.id)}" role="dialog" aria-modal="true" aria-labelledby="collection-route-resolve-title">
+        <header><h2 id="collection-route-resolve-title">Jak bylo hlášení vyřešeno?</h2><p>Bez výsledku řešení nelze hlášení uzavřít.</p></header>
+        <label><span>Výsledek řešení</span><select name="resolutionCode" required><option value="">Vybrat výsledek</option>${Object.entries(COLLECTION_ROUTE_INCIDENT_RESOLUTIONS).map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}</select></label>
+        <fieldset><legend>Byl zákazník informován?</legend><label><input type="radio" name="customerInformed" value="yes" required> Ano</label><label><input type="radio" name="customerInformed" value="no"> Ne</label><label><input type="radio" name="customerInformed" value="not_needed"> Nebylo potřeba</label></fieldset>
+        <label><span>Poznámka <small>volitelná</small></span><textarea name="note" maxlength="1000" rows="4"></textarea></label>
+        <footer><button type="button" class="secondary-link" data-collection-route-incident-dialog-close>Zrušit</button><button class="primary-action" type="submit">Uzavřít hlášení</button></footer>
+      </form>
+    </div>
+  `;
+}
+
+function collectionRouteIncidentFollowUpDialog(incident) {
+  if (collectionRoutesPilotState.incidentDialog !== "follow-up") return "";
+  return `
+    <div class="collection-route-incident-dialog" role="presentation">
+      <button type="button" class="collection-route-incident-dialog__backdrop" data-collection-route-incident-dialog-close aria-label="Zrušit další krok"></button>
+      <form class="collection-route-incident-dialog__card" data-collection-route-incident-follow-up-form data-incident-id="${escapeHtml(incident.id)}" role="dialog" aria-modal="true" aria-labelledby="collection-route-follow-up-title">
+        <header><h2 id="collection-route-follow-up-title">Hlášení zůstává ve stavu Řeší se</h2><p>Ulož důvod, další krok, odpovědnou osobu a termín kontroly.</p></header>
+        <label><span>Důvod nevyřešení</span><input name="unresolvedReason" maxlength="1000" required value="${escapeHtml(incident.workflow?.unresolvedReason || "")}"></label>
+        <label><span>Další krok</span><input name="nextStep" maxlength="1000" required value="${escapeHtml(incident.workflow?.nextStep || "")}"></label>
+        <label><span>Odpovídá</span><input name="responsibleName" maxlength="200" required value="${escapeHtml(incident.workflow?.responsibleName || incident.workflow?.assignedName || currentUser()?.name || "")}"></label>
+        <label><span>Termín další kontroly</span><input name="followUpAt" type="datetime-local" required></label>
+        <footer><button type="button" class="secondary-link" data-collection-route-incident-dialog-close>Zrušit</button><button class="primary-action" type="submit">Uložit další krok</button></footer>
+      </form>
+    </div>
+  `;
+}
+
+function collectionRouteIncidentReopenDialog(incident) {
+  if (collectionRoutesPilotState.incidentDialog !== "reopen") return "";
+  return `
+    <div class="collection-route-incident-dialog" role="presentation">
+      <button type="button" class="collection-route-incident-dialog__backdrop" data-collection-route-incident-dialog-close aria-label="Zrušit znovuotevření"></button>
+      <form class="collection-route-incident-dialog__card" data-collection-route-incident-reopen-form data-incident-id="${escapeHtml(incident.id)}" role="dialog" aria-modal="true" aria-labelledby="collection-route-reopen-title">
+        <header><h2 id="collection-route-reopen-title">Znovu otevřít hlášení</h2><p>Důvod je povinný a zapíše se do auditu.</p></header>
+        <label><span>Důvod</span><textarea name="reason" maxlength="1000" rows="4" required></textarea></label>
+        <footer><button type="button" class="secondary-link" data-collection-route-incident-dialog-close>Zrušit</button><button class="primary-action" type="submit">Znovu otevřít</button></footer>
+      </form>
+    </div>
+  `;
+}
+
+function collectionRouteIncidentDetail(incident) {
+  if (!incident) return "";
+  const status = collectionRouteIncidentStatusMeta(incident.status);
+  const assignedToActor = incident.workflow?.assignedUserId && incident.workflow.assignedUserId === currentUser()?.id;
+  const canClaim = incident.canManage && incident.status === "new";
+  const canWork = incident.canManage && assignedToActor && ["claimed", "in_progress"].includes(incident.status);
+  const canReopen = incident.status === "resolved" && Boolean(incident.technicalDetails);
+  return `
+    <div class="collection-route-incident-drawer-shell">
+      <button class="collection-route-incident-drawer-backdrop" type="button" data-collection-route-incident-close aria-label="Zavřít detail hlášení"></button>
+      <aside class="collection-route-incident-drawer" aria-labelledby="collection-route-incident-detail-title">
+        <header class="collection-route-incident-drawer__head">
+          <div><span class="collection-route-incident-status collection-route-incident-status--${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span><h2 id="collection-route-incident-detail-title">${escapeHtml(incident.typeLabel)}</h2><strong>${escapeHtml(incident.companyName)}</strong><p>${escapeHtml(incident.address || incident.stationName)}</p><small>${escapeHtml(incident.routeTitle)} · ${escapeHtml(incident.driverName)} · ${escapeHtml(collectionRouteIncidentRelativeTime(incident.reportedAt))}</small></div>
+          <button type="button" data-collection-route-incident-close aria-label="Zavřít detail">×</button>
+        </header>
+        <div class="collection-route-incident-drawer__body">
+          <div class="collection-route-incident-media">${collectionRouteIncidentPhoto(incident)}${collectionRouteIncidentMap(incident)}</div>
+          <section><h3>Poznámka řidiče</h3><p>${escapeHtml(incident.note || "Bez poznámky.")}</p></section>
+          ${incident.status === "in_progress" && incident.workflow?.nextStep ? `<section class="collection-route-incident-follow-up"><h3>Další kontrola</h3><dl><div><dt>Důvod</dt><dd>${escapeHtml(incident.workflow.unresolvedReason)}</dd></div><div><dt>Další krok</dt><dd>${escapeHtml(incident.workflow.nextStep)}</dd></div><div><dt>Odpovídá</dt><dd>${escapeHtml(incident.workflow.responsibleName)}</dd></div><div><dt>Termín</dt><dd>${escapeHtml(formatDateTime(incident.workflow.followUpAt) || incident.workflow.followUpAt)}</dd></div></dl></section>` : ""}
+          <div class="collection-route-incident-actions" aria-label="Hlavní akce hlášení">
+            <button class="primary-action" type="button" data-collection-route-incident-action="claim" data-incident-id="${escapeHtml(incident.id)}" ${canClaim ? "" : "disabled"}>Převzít</button>
+            <button class="primary-action" type="button" data-collection-route-incident-dialog="contact" ${canWork ? "" : "disabled"}>Kontaktovat zákazníka</button>
+            <button class="primary-action" type="button" data-collection-route-incident-dialog="resolve" ${canWork ? "" : "disabled"}>Vyřešit</button>
+            <details class="collection-route-incident-more"><summary aria-label="Vedlejší akce">•••</summary><div>${canWork ? `<button type="button" data-collection-route-incident-dialog="follow-up">Naplánovat další krok</button>` : ""}${canReopen ? `<button type="button" data-collection-route-incident-dialog="reopen">Znovu otevřít</button>` : ""}<button type="button" data-collection-route-incident-close>Zavřít detail</button></div></details>
+          </div>
+          <section><h3>Komunikace</h3><div class="collection-route-incident-communication"><span>E-mail <strong>${escapeHtml(collectionRouteIncidentCommunicationLabel(incident.email?.status))}</strong></span><span>SMS <strong>${escapeHtml(collectionRouteIncidentCommunicationLabel(incident.sms?.status))}</strong></span></div></section>
+          <section><h3>Časová osa</h3>${collectionRouteIncidentTimeline(incident)}</section>
+          ${incident.technicalDetails ? `<details class="collection-route-incident-technical"><summary>Technické podrobnosti</summary><dl><div><dt>Incident ID</dt><dd>${escapeHtml(incident.technicalDetails.incidentId)}</dd></div><div><dt>Trasa ID</dt><dd>${escapeHtml(incident.technicalDetails.runId)}</dd></div><div><dt>Stanoviště ID</dt><dd>${escapeHtml(incident.technicalDetails.stopId)}</dd></div><div><dt>Zdroj</dt><dd>${escapeHtml(incident.technicalDetails.source)}</dd></div></dl></details>` : ""}
+        </div>
+      </aside>
+      ${collectionRouteIncidentContactDialog(incident)}
+      ${collectionRouteIncidentResolveDialog(incident)}
+      ${collectionRouteIncidentFollowUpDialog(incident)}
+      ${collectionRouteIncidentReopenDialog(incident)}
+    </div>
+  `;
+}
+
+function collectionRoutesIncidentsSection() {
+  const items = collectionRouteIncidentFilteredItems();
+  const counts = collectionRoutesPilotState.incidentCounts;
+  const isTest = collectionRoutesPilotState.incidentScope === "test";
+  const selected = collectionRouteIncidentSelected();
+  return `
+    <section class="collection-route-incidents" id="collection-routes-incidents" aria-labelledby="collection-route-incidents-title">
+      <header class="collection-route-incidents__head">
+        <div><p class="module-feedback__eyebrow">Pracovní fronta dispečera</p><h2 id="collection-route-incidents-title">Hlášení ze svozových tras</h2><p>PROVOZ je výchozí. Seznam neukazuje technická ID ani dlouhé texty.</p></div>
+        <button class="secondary-link" type="button" data-collection-route-incidents-refresh ${collectionRoutesPilotState.incidentsLoading ? "disabled" : ""}>${collectionRoutesPilotState.incidentsLoading ? "Načítám…" : "Obnovit"}</button>
+      </header>
+      <div class="collection-route-incident-scope" role="group" aria-label="Datové prostředí">
+        <button class="${isTest ? "" : "collection-route-incident-scope--active"}" type="button" data-collection-route-incident-scope="production">PROVOZ</button>
+        <button class="${isTest ? "collection-route-incident-scope--test-active" : ""}" type="button" data-collection-route-incident-scope="test">TEST</button>
+      </div>
+      ${isTest ? `<div class="collection-route-incident-test-strip" role="status"><strong>TESTOVACÍ DATA – NEODESÍLÁ OSTRÉ ZPRÁVY</strong><span>Kontaktování proběhne přes simulovaný provider a oddělený TEST audit. Skutečný zákazník ani produkční trasa se nezmění.</span></div>` : `<div class="collection-route-incident-production-strip"><strong>PROVOZ</strong><span>Stavový workflow je interní. E-mail a SMS jsou do ověření providerů a webhooků vypnuté.</span></div>`}
+      <div class="collection-route-incident-counts" aria-label="Počty podle stavu"><span>Nové <strong>${Number(counts.new) || 0}</strong></span><span>Převzato <strong>${Number(counts.claimed) || 0}</strong></span><span>Řeší se <strong>${Number(counts.inProgress) || 0}</strong></span><span>Vyřešeno <strong>${Number(counts.resolved) || 0}</strong></span></div>
+      <div class="collection-route-incident-filters" role="group" aria-label="Filtr stavu">${[["open", "Nevyřízené"], ["new", "Nové"], ["claimed", "Převzato"], ["in_progress", "Řeší se"], ["resolved", "Vyřešeno"], ["all", "Vše"]].map(([value, label]) => `<button type="button" class="${collectionRoutesPilotState.incidentStatusFilter === value ? "active" : ""}" data-collection-route-incident-filter="${value}">${label}</button>`).join("")}</div>
+      ${collectionRoutesPilotState.incidentMessage ? `<p class="module-feedback__success">${escapeHtml(collectionRoutesPilotState.incidentMessage)}</p>` : ""}
+      ${collectionRoutesPilotState.incidentError ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.incidentError)}</p>` : ""}
+      ${collectionRoutesPilotState.incidentsLoading && !items.length ? `<p class="collection-route-incident-empty">Načítám hlášení…</p>` : items.length ? `<div class="collection-route-incident-list">${items.map(collectionRouteIncidentRow).join("")}</div>` : `<div class="collection-route-incident-empty"><strong>V tomto pohledu nejsou žádná hlášení.</strong><span>Fronta zobrazuje pouze skutečné záznamy z cloudového API.</span></div>`}
+      ${collectionRouteIncidentDetail(selected)}
+    </section>
+  `;
+}
+
 function collectionRoutesRulesSection(user) {
   ensureModuleRulesData(COLLECTION_ROUTES_MODULE_KEY);
   return moduleRulesAutomationPanel({
@@ -26659,6 +26938,9 @@ function collectionRoutesActiveSection(user) {
   }
   if (activeTab === "sites") {
     return `${collectionRoutesSitesSection(user)}${collectionRoutesPilotState.selectedSiteId ? collectionRoutesSiteDetailSection() : ""}`;
+  }
+  if (activeTab === "incidents") {
+    return collectionRoutesIncidentsSection(user);
   }
   if (activeTab === "rules") {
     return collectionRoutesRulesSection(user);
@@ -26793,7 +27075,7 @@ function collectionRoutesModulePage(moduleItem, user, isDashboard = false) {
             aria-selected="${tab.id === activeTab ? "true" : "false"}"
             data-collection-routes-tab="${escapeHtml(tab.id)}"
           >
-            ${escapeHtml(tab.label)}
+            ${escapeHtml(collectionRoutesTabLabel(tab))}
           </button>
         `).join("")}
       </nav>`}
@@ -40589,6 +40871,83 @@ async function loadCollectionRoutesSourceRoutes(options = {}) {
   }
 }
 
+function collectionRouteIncidentScopeQuery(scope = collectionRoutesPilotState.incidentScope) {
+  return `scope=${encodeURIComponent(scope === "test" ? "test" : "production")}`;
+}
+
+async function loadCollectionRouteIncidents(options = {}) {
+  if (!authState.user || !collectionRoutesCanViewPilot(currentUser()) || collectionRoutesPilotState.incidentsLoading) return;
+  const scope = options.scope === "test" ? "test" : options.scope === "production" ? "production" : collectionRoutesPilotState.incidentScope;
+  if (collectionRoutesPilotState.incidentsLoaded && collectionRoutesPilotState.incidentScope === scope && options.force !== true) return;
+  collectionRoutesPilotState.incidentScope = scope;
+  collectionRoutesPilotState.incidentsLoading = true;
+  collectionRoutesPilotState.incidentError = "";
+  if (options.renderAfter !== false) render();
+  try {
+    const result = await apiJson(`/api/collection-routes/incidents?${collectionRouteIncidentScopeQuery(scope)}&limit=100`);
+    collectionRoutesPilotState.incidents = Array.isArray(result.incidents) ? result.incidents : [];
+    collectionRoutesPilotState.incidentCounts = result.counts || { new: 0, claimed: 0, inProgress: 0, resolved: 0, unresolved: 0 };
+    if (scope === "production") {
+      collectionRoutesPilotState.productionIncidentCount = Number(result.counts?.unresolved) || 0;
+    }
+    if (!collectionRoutesPilotState.incidents.some((item) => item.id === collectionRoutesPilotState.selectedIncidentId)) {
+      collectionRoutesPilotState.selectedIncidentId = "";
+    }
+    collectionRoutesPilotState.incidentsLoaded = true;
+  } catch (error) {
+    collectionRoutesPilotState.incidents = [];
+    collectionRoutesPilotState.incidentCounts = { new: 0, claimed: 0, inProgress: 0, resolved: 0, unresolved: 0 };
+    collectionRoutesPilotState.incidentsLoaded = false;
+    collectionRoutesPilotState.incidentError = error.payload?.error || error.message || "Pracovní frontu hlášení se nepodařilo načíst.";
+  } finally {
+    collectionRoutesPilotState.incidentsLoading = false;
+  }
+  if (options.renderAfter !== false) render();
+}
+
+async function runCollectionRouteIncidentAction(incidentId, action, payload = {}) {
+  const id = String(incidentId || "").trim();
+  if (!id || collectionRoutesPilotState.incidentPending) return;
+  collectionRoutesPilotState.incidentPending = `${action}:${id}`;
+  collectionRoutesPilotState.incidentMessage = "";
+  collectionRoutesPilotState.incidentError = "";
+  render();
+  try {
+    const result = await apiJson(`/api/collection-routes/incidents/${encodeURIComponent(id)}/actions`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...payload,
+        action,
+        scope: collectionRoutesPilotState.incidentScope,
+        idempotencyKey: collectionDailyRouteIdempotencyKey(`incident-${action}`)
+      })
+    });
+    const incident = result.incident || null;
+    if (incident) {
+      collectionRoutesPilotState.incidents = collectionRoutesPilotState.incidents.map((item) => item.id === incident.id ? incident : item);
+      collectionRoutesPilotState.selectedIncidentId = incident.id;
+    }
+    collectionRoutesPilotState.incidentDialog = "";
+    collectionRoutesPilotState.incidentMessage = action === "claim"
+      ? "Hlášení bylo převzato."
+      : action === "resolve"
+        ? "Hlášení bylo uzavřeno s výsledkem řešení."
+        : action === "reopen"
+          ? "Hlášení bylo znovu otevřeno a akce je v auditu."
+          : action === "schedule_next"
+            ? "Další krok a termín byly uloženy."
+            : collectionRoutesPilotState.incidentScope === "test"
+              ? "TEST komunikace byla uložena simulovaným providerem. Skutečný zákazník nebyl kontaktován."
+              : "Akce byla uložena.";
+    await loadCollectionRouteIncidents({ force: true, renderAfter: false });
+  } catch (error) {
+    collectionRoutesPilotState.incidentError = error.payload?.error || error.message || "Akci hlášení se nepodařilo uložit.";
+  } finally {
+    collectionRoutesPilotState.incidentPending = "";
+  }
+  render();
+}
+
 async function loadCollectionRoutesPilot(options = {}) {
   if (!authState.user || collectionRoutesPilotState.loading || !collectionRoutesCanViewPilot(currentUser())) {
     return;
@@ -40644,6 +41003,7 @@ async function loadCollectionRoutesPilot(options = {}) {
 
     collectionRoutesNormalizeKommunalPreviewState();
     collectionRoutesPilotState.loaded = true;
+    await loadCollectionRouteIncidents({ scope: "production", force: options.force === true, renderAfter: false });
   } catch (error) {
     collectionRoutesPilotState.batches = [];
     collectionRoutesPilotState.sites = [];
@@ -52191,6 +52551,70 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const collectionRouteIncidentContactForm = event.target.closest("[data-collection-route-incident-contact-form]");
+  if (collectionRouteIncidentContactForm) {
+    event.preventDefault();
+    const formData = new FormData(collectionRouteIncidentContactForm);
+    await runCollectionRouteIncidentAction(
+      collectionRouteIncidentContactForm.dataset.incidentId || "",
+      "contact",
+      {
+        channel: String(formData.get("channel") || "email"),
+        message: String(formData.get("message") || "").trim(),
+        callResult: String(formData.get("message") || "").trim(),
+        phoneOutcome: String(formData.get("phoneOutcome") || ""),
+        nextStep: String(formData.get("nextStep") || "").trim(),
+        followUpAt: String(formData.get("followUpAt") || "").trim()
+      }
+    );
+    return;
+  }
+
+  const collectionRouteIncidentResolveForm = event.target.closest("[data-collection-route-incident-resolve-form]");
+  if (collectionRouteIncidentResolveForm) {
+    event.preventDefault();
+    const formData = new FormData(collectionRouteIncidentResolveForm);
+    await runCollectionRouteIncidentAction(
+      collectionRouteIncidentResolveForm.dataset.incidentId || "",
+      "resolve",
+      {
+        resolutionCode: String(formData.get("resolutionCode") || ""),
+        customerInformed: String(formData.get("customerInformed") || ""),
+        note: String(formData.get("note") || "").trim()
+      }
+    );
+    return;
+  }
+
+  const collectionRouteIncidentFollowUpForm = event.target.closest("[data-collection-route-incident-follow-up-form]");
+  if (collectionRouteIncidentFollowUpForm) {
+    event.preventDefault();
+    const formData = new FormData(collectionRouteIncidentFollowUpForm);
+    await runCollectionRouteIncidentAction(
+      collectionRouteIncidentFollowUpForm.dataset.incidentId || "",
+      "schedule_next",
+      {
+        unresolvedReason: String(formData.get("unresolvedReason") || "").trim(),
+        nextStep: String(formData.get("nextStep") || "").trim(),
+        responsibleName: String(formData.get("responsibleName") || "").trim(),
+        followUpAt: String(formData.get("followUpAt") || "").trim()
+      }
+    );
+    return;
+  }
+
+  const collectionRouteIncidentReopenForm = event.target.closest("[data-collection-route-incident-reopen-form]");
+  if (collectionRouteIncidentReopenForm) {
+    event.preventDefault();
+    const formData = new FormData(collectionRouteIncidentReopenForm);
+    await runCollectionRouteIncidentAction(
+      collectionRouteIncidentReopenForm.dataset.incidentId || "",
+      "reopen",
+      { reason: String(formData.get("reason") || "").trim() }
+    );
+    return;
+  }
+
   const aiForm = event.target.closest("[data-ai-form]");
   if (aiForm) {
     event.preventDefault();
@@ -52813,6 +53237,14 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  const collectionRouteIncidentChannel = event.target.closest("[data-collection-route-incident-contact-form] input[name='channel']");
+  if (collectionRouteIncidentChannel) {
+    const form = collectionRouteIncidentChannel.closest("[data-collection-route-incident-contact-form]");
+    const phoneFields = form?.querySelector("[data-collection-route-incident-phone-fields]");
+    if (phoneFields) phoneFields.hidden = collectionRouteIncidentChannel.value !== "phone";
+    return;
+  }
+
   const adminTabletTestRoute = event.target.closest("[data-collection-routes-admin-tablet-test-route]");
   if (adminTabletTestRoute) {
     collectionRoutesPilotState.adminTabletTestSelectedRunId = adminTabletTestRoute.value || "";
@@ -54398,6 +54830,82 @@ document.addEventListener("click", async (event) => {
   if (collectionRoutesTab) {
     event.preventDefault();
     setCollectionRoutesActiveTab(collectionRoutesTab.dataset.collectionRoutesTab || "svozove-trasy");
+    return;
+  }
+
+  const collectionRouteIncidentsRefresh = event.target.closest("[data-collection-route-incidents-refresh]");
+  if (collectionRouteIncidentsRefresh) {
+    event.preventDefault();
+    await loadCollectionRouteIncidents({ force: true });
+    return;
+  }
+
+  const collectionRouteIncidentScope = event.target.closest("[data-collection-route-incident-scope]");
+  if (collectionRouteIncidentScope) {
+    event.preventDefault();
+    const scope = collectionRouteIncidentScope.dataset.collectionRouteIncidentScope === "test" ? "test" : "production";
+    collectionRoutesPilotState.selectedIncidentId = "";
+    collectionRoutesPilotState.incidentDialog = "";
+    collectionRoutesPilotState.incidentStatusFilter = "open";
+    await loadCollectionRouteIncidents({ scope, force: true });
+    return;
+  }
+
+  const collectionRouteIncidentFilter = event.target.closest("[data-collection-route-incident-filter]");
+  if (collectionRouteIncidentFilter) {
+    event.preventDefault();
+    collectionRoutesPilotState.incidentStatusFilter = collectionRouteIncidentFilter.dataset.collectionRouteIncidentFilter || "open";
+    render();
+    return;
+  }
+
+  const collectionRouteIncidentOpen = event.target.closest("[data-collection-route-incident-open]");
+  if (collectionRouteIncidentOpen) {
+    event.preventDefault();
+    collectionRoutesPilotState.selectedIncidentId = collectionRouteIncidentOpen.dataset.collectionRouteIncidentOpen || "";
+    collectionRoutesPilotState.incidentDialog = "";
+    collectionRoutesPilotState.incidentError = "";
+    render();
+    return;
+  }
+
+  const collectionRouteIncidentClose = event.target.closest("[data-collection-route-incident-close]");
+  if (collectionRouteIncidentClose) {
+    event.preventDefault();
+    collectionRoutesPilotState.selectedIncidentId = "";
+    collectionRoutesPilotState.incidentDialog = "";
+    render();
+    return;
+  }
+
+  const collectionRouteIncidentDialogClose = event.target.closest("[data-collection-route-incident-dialog-close]");
+  if (collectionRouteIncidentDialogClose) {
+    event.preventDefault();
+    collectionRoutesPilotState.incidentDialog = "";
+    render();
+    return;
+  }
+
+  const collectionRouteIncidentDialogOpen = event.target.closest("[data-collection-route-incident-dialog]");
+  if (collectionRouteIncidentDialogOpen) {
+    event.preventDefault();
+    if (!collectionRouteIncidentDialogOpen.disabled) {
+      collectionRoutesPilotState.incidentDialog = collectionRouteIncidentDialogOpen.dataset.collectionRouteIncidentDialog || "";
+      collectionRoutesPilotState.incidentError = "";
+      render();
+    }
+    return;
+  }
+
+  const collectionRouteIncidentAction = event.target.closest("[data-collection-route-incident-action]");
+  if (collectionRouteIncidentAction) {
+    event.preventDefault();
+    if (!collectionRouteIncidentAction.disabled) {
+      await runCollectionRouteIncidentAction(
+        collectionRouteIncidentAction.dataset.incidentId || "",
+        collectionRouteIncidentAction.dataset.collectionRouteIncidentAction || ""
+      );
+    }
     return;
   }
 
