@@ -903,7 +903,10 @@ export function useElevenLabsAssistant({
     const introGenerationRequest = String(callbacks.introGenerationRequest || "").trim();
     const endAfterGeneratedIntro = Boolean(introGenerationRequest && callbacks.endAfterGeneratedIntro === true);
     const continueAfterGeneratedIntro = Boolean(introGenerationRequest && callbacks.continueAfterGeneratedIntro === true);
-    const deferMicrophoneUntilAfterGeneratedIntro = Boolean(continueAfterGeneratedIntro);
+    // Barge-in must work while the generated route intro is playing. Keep the
+    // capture stream running from the beginning; ElevenLabs decides whether a
+    // detected utterance is an actual interruption.
+    const deferMicrophoneUntilAfterGeneratedIntro = false;
     const listenAfterTechnicalFirstMessage = Boolean(introGenerationRequest && callbacks.listenAfterTechnicalFirstMessage === true);
     const validateGeneratedIntro = typeof callbacks.validateGeneratedIntro === "function";
     const bufferGeneratedIntro = Boolean(introGenerationRequest && validateGeneratedIntro);
@@ -992,7 +995,7 @@ export function useElevenLabsAssistant({
       let introValidation = null;
       let audioInputStarted = false;
       let audioInputStopped = false;
-      let audioInputPaused = Boolean(introGenerationRequest);
+      let audioInputPaused = false;
       let introGenerationPhase = introGenerationRequest ? "suppressing-technical-first-message" : "complete";
       let technicalFirstMessageComplete = false;
       let sourceNode = null;
@@ -1181,7 +1184,7 @@ export function useElevenLabsAssistant({
         }
 
         introGenerationPhase = "waiting-for-generated-intro";
-        audioInputPaused = true;
+        audioInputPaused = false;
         resetAgentTurn();
         if (!sendJson({ type: "user_message", text: introGenerationRequest })) {
           settle(reject, new Error("Šarlota nedokázala převzít požadavek na úvodní hlášení."), "intro-generation-send-failed");
@@ -1453,7 +1456,7 @@ export function useElevenLabsAssistant({
         }
 
         finalAgentText = cleanedText;
-        audioInputPaused = true;
+        audioInputPaused = false;
         callbacks.onAgentResponse?.({
           text: cleanedText,
           conversationId
@@ -1532,16 +1535,63 @@ export function useElevenLabsAssistant({
           return;
         }
 
+        if (payload.type === "interruption") {
+          window.clearTimeout(responseTimer);
+          window.clearTimeout(finishTimer);
+          window.clearTimeout(introSilenceTimer);
+          voiceAudioPlayer.stop();
+          bufferedIntroAudio = [];
+          introFinalizing = false;
+          introAwaitingUser = false;
+          introUserEngaged = true;
+          if (introGenerationPhase !== "complete") {
+            introGenerationPhase = "complete";
+            introPlaybackFinished = true;
+          }
+          streamedAgentText = "";
+          finalAgentText = "";
+          audioChunkCount = 0;
+          audioInputPaused = false;
+          callbacks.onInterruption?.({ conversationId });
+          return;
+        }
+
+        if (payload.type === "agent_response_correction") {
+          const correction = payload.agent_response_correction_event || {};
+          const correctedText = String(
+            correction.corrected_agent_response ||
+            correction.agent_response ||
+            correction.text ||
+            ""
+          ).trim();
+          streamedAgentText = correctedText;
+          finalAgentText = correctedText;
+          callbacks.onAgentResponseCorrection?.({
+            text: correctedText,
+            conversationId
+          });
+          return;
+        }
+
         if (payload.type === "user_transcript") {
           userTranscript = String(payload.user_transcription_event?.user_transcript || userTranscript).trim();
           if (introGenerationPhase === "waiting-for-generated-intro" && userTranscript === introGenerationRequest) {
             userTranscript = "";
-            audioInputPaused = true;
+            // Keep sending microphone frames while Šarlota speaks so the
+            // service can detect a real barge-in and emit `interruption`.
+            audioInputPaused = false;
             return;
           }
           if (userTranscript) {
             markIntroUserEngaged("user_transcript", userTranscript);
-            audioInputPaused = true;
+            if (introGenerationPhase === "waiting-for-generated-intro") {
+              introGenerationPhase = "complete";
+              introPlaybackFinished = true;
+              bufferedIntroAudio = [];
+            }
+            // Do not mute capture while audio is playing: the upstream Turn
+            // V3 detector needs these frames to produce an interruption.
+            audioInputPaused = false;
             streamedAgentText = "";
             finalAgentText = "";
             audioChunkCount = 0;
@@ -1559,7 +1609,7 @@ export function useElevenLabsAssistant({
         if (payload.type === "audio") {
           const audioBase64 = payload.audio_event?.audio_base_64;
           if (introGenerationPhase === "suppressing-technical-first-message") {
-            audioInputPaused = true;
+            audioInputPaused = false;
             scheduleGeneratedIntroRequest();
             return;
           }
@@ -1567,7 +1617,9 @@ export function useElevenLabsAssistant({
             if (introAwaitingUser && !introUserEngaged) {
               return;
             }
-            audioInputPaused = true;
+            // The microphone stays live through playback so ElevenLabs can
+            // send `interruption` as soon as the driver starts speaking.
+            audioInputPaused = false;
             audioChunkCount += 1;
             window.clearTimeout(finishTimer);
             if (bufferGeneratedIntro && !introPlaybackFinished) {
@@ -1634,7 +1686,7 @@ export function useElevenLabsAssistant({
 
           if (partType === "start") {
             streamedAgentText = "";
-            audioInputPaused = true;
+            audioInputPaused = false;
           }
 
           if (part.text && partType !== "start") {
