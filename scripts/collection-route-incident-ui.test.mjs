@@ -19,6 +19,9 @@ for (const marker of [
   "data-collection-route-incident-resolve-form",
   "data-collection-route-incident-follow-up-form",
   "data-collection-route-incident-reopen-form",
+  "Fotografie je volitelná",
+  "POKRAČOVAT BEZ FOTOGRAFIE",
+  "Hlášení bylo uloženo.",
   "Technické podrobnosti",
   "/api/collection-routes/incidents"
 ]) {
