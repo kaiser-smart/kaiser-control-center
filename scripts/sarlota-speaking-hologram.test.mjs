@@ -48,6 +48,32 @@ const automaticProcessingHtml = AiAssistantLauncher({
 assert.match(automaticProcessingHtml, /Šarlota · Přemýšlím/);
 assert.doesNotMatch(automaticProcessingHtml, /Mikrofon|ai-assistant-voice-dock/);
 
+const waitingForTapHtml = AiAssistantLauncher({
+  visible: true,
+  voiceActive: true,
+  voiceUiState: "ready",
+  speakingHologram: true,
+  hologramPhase: "awaitingResponse",
+  hologramPath: sarlota.hologramPath,
+  assistantName: sarlota.name
+});
+
+assert.match(waitingForTapHtml, /Šarlota · Čekám na klepnutí/);
+assert.doesNotMatch(waitingForTapHtml, /ai-assistant-voice-dock|Poslouchám/);
+
+const outroHologramHtml = AiAssistantLauncher({
+  visible: true,
+  voiceActive: true,
+  voiceUiState: "assistantSpeaking",
+  speakingHologram: true,
+  hologramPhase: "outro",
+  hologramPath: sarlota.hologramPath,
+  assistantName: sarlota.name
+});
+
+assert.match(outroHologramHtml, /Šarlota · Ukončuji úvod/);
+assert.doesNotMatch(outroHologramHtml, /ai-assistant-voice-dock|Poslouchám/);
+
 const listeningHtml = AiAssistantLauncher({
   visible: true,
   voiceActive: true,
@@ -79,11 +105,13 @@ assert.match(appSource, /aiAssistantState\.voiceUiState === "assistantSpeaking"/
 const hologramStateStart = appSource.indexOf("const collectionRoutesSpeakingHologram");
 const hologramStateEnd = appSource.indexOf("const content =", hologramStateStart);
 assert.ok(hologramStateStart >= 0 && hologramStateEnd > hologramStateStart);
-assert.doesNotMatch(
+assert.match(
   appSource.slice(hologramStateStart, hologramStateEnd),
   /myDailyRouteSarlotaAutoSession/,
-  "Hologram nesmí tvrdit, že Šarlota mluví, dokud nezačalo ověřené audio."
+  "Automatický tok musí zobrazovat hologram místo mikrofonního panelu."
 );
+assert.match(appSource.slice(hologramStateStart, hologramStateEnd), /myDailyRouteSarlotaAwaitingResponse/);
+assert.match(appSource.slice(hologramStateStart, hologramStateEnd), /myDailyRouteSarlotaOutroPlaying/);
 assert.match(appSource, /open: aiAssistantState\.chatOpen && !collectionRoutesSpeakingHologram/);
 assert.match(styleSource, /body:has\(\.collection-daily-driver-map\.is-fullscreen\) \.ai-sarlota-speaking-hologram/);
 assert.match(styleSource, /\.collection-driver-kiosk-active \.ai-sarlota-speaking-hologram/);

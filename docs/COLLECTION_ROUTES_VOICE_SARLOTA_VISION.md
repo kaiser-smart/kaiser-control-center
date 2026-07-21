@@ -76,3 +76,5 @@ Hlas nesmí sám dokončit zápis, odeslat zprávu, změnit trasu ani označit s
 ## Implementační hranice
 
 Tento dokument ukládá schválenou produktovou vizi a stav read-only základu. Neznamená automatické povolení nových integrací nebo ostrých hlasových zápisů. Každý další zdroj a každá zapisující akce musí dostat samostatný kontrakt, oprávnění, audit, testy a výslovné schválení.
+
+Automatické úvodní hlášení je po celou dobu holografický tok: příprava, intro gong, mluvení Šarloty, pětisekundové čekání na fyzické klepnutí a případný outro gong. Mikrofonní panel se během něj nezobrazuje a mikrofon se nepožaduje ani nepřipravuje. Přehrávač obou gongů musí být explicitně dostupný přes hlasový provider; automatická řeč bez potvrzeného intro gongu nesmí začít.

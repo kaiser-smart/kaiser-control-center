@@ -47,6 +47,16 @@ export const COLLECTION_ROUTES_OPERATIONAL_CONTRACT = Object.freeze({
     ordinaryReplyRequiresIntroGong: false,
     introSilenceTimeoutMs: 5000,
     automaticIntroMicrophoneEnabled: false,
+    automaticIntroUi: "hologram_only",
+    automaticIntroShowsMicrophoneUi: false,
+    voiceCueProviderRequired: true,
+    hologramLifecycle: Object.freeze([
+      "preparing",
+      "intro_gong",
+      "agent_speaking",
+      "response_window",
+      "outro_gong"
+    ]),
     automaticIntroClosingQuestion: true,
     automaticIntroResponseMode: "physical_microphone_button",
     automaticIntroKeepsHologramVisibleDuringResponseWindow: true,

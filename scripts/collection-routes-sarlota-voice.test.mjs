@@ -188,6 +188,21 @@ assert.match(appSource, /finishCollectionRoutesSarlotaIntroResponseWindow/);
 assert.match(appSource, /COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL/);
 assert.match(appSource, /introSilenceTimeoutMs/);
 assert.match(appSource, /myDailyRouteSarlotaAwaitingResponse/);
+assert.match(appSource, /SPUSTIT HOLOGRAFICKOU ŠARLOTU/);
+
+const automaticVoiceStart = appSource.slice(
+  appSource.indexOf("async function startCollectionDailyDriverSarlota"),
+  appSource.indexOf("async function enableCollectionDailyDriverSarlota")
+);
+assert.match(automaticVoiceStart, /if \(!automaticSession\) void elevenLabsAssistant\.prepareVoiceInput/);
+assert.doesNotMatch(automaticVoiceStart, /if \(automaticSession\) void elevenLabsAssistant\.prepareVoiceInput/);
+
+const providerSource = readFileSync(new URL("../src/ElevenLabsAssistantProvider.js", import.meta.url), "utf8");
+assert.match(
+  providerSource,
+  /playVoiceCue: assistant\.playVoiceCue/,
+  "Provider musí skutečně zpřístupnit gong aplikaci; jinak optional chaining vrátí undefined a gong se nikdy nepřehraje."
+);
 
 const closeFunctionStart = appSource.indexOf("function closeCollectionRoutesTestTablet");
 const closeFunctionEnd = appSource.indexOf("async function loadLatestCollectionRoutesTestNotificationJob", closeFunctionStart);

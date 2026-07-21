@@ -31,7 +31,19 @@ function voiceDockTitle(state, listening) {
   return "Šarlota je aktivní";
 }
 
-function hologramStatus(state, listening) {
+function hologramStatus(state, listening, phase = "") {
+  if (phase === "awaitingResponse") {
+    return { label: "Čekám na klepnutí", aria: "čeká na fyzické zapnutí mikrofonu" };
+  }
+
+  if (phase === "outro") {
+    return { label: "Ukončuji úvod", aria: "přehrává závěrečný gong" };
+  }
+
+  if (phase === "automaticIntro" && ["connecting", "processing", "ready"].includes(state)) {
+    return { label: "Připravuji úvod", aria: "připravuje automatický úvod bez mikrofonu" };
+  }
+
   if (state === "connecting" || state === "ready") {
     return { label: "Připojuji se", aria: "se připojuje" };
   }
@@ -58,6 +70,7 @@ export function AiAssistantLauncher({
   voiceStatus = "",
   isListening = false,
   speakingHologram = false,
+  hologramPhase = "",
   hologramPath = "",
   assistantName = "Šarlota"
 } = {}) {
@@ -66,7 +79,7 @@ export function AiAssistantLauncher({
   }
 
   if (speakingHologram && hologramPath) {
-    const hologram = hologramStatus(voiceUiState, isListening);
+    const hologram = hologramStatus(voiceUiState, isListening, hologramPhase);
     return `
       <aside class="ai-sarlota-speaking-hologram ai-sarlota-speaking-hologram--state-${escapeHtml(voiceUiState || "active")}" role="status" aria-live="polite" aria-label="${escapeHtml(assistantName)} ${escapeHtml(hologram.aria)}">
         <div class="ai-sarlota-speaking-hologram__figure" aria-hidden="true">

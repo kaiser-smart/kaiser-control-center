@@ -21,6 +21,7 @@ export function ElevenLabsAssistantProvider({
     clientTools,
     closeVoiceSession: assistant.closeVoiceSession,
     closeTextSession: assistant.closeTextSession,
+    playVoiceCue: assistant.playVoiceCue,
     prepareSignedUrl: assistant.prepareSignedUrl,
     sendTextMessage: assistant.sendTextMessage,
     startVoiceConversation: assistant.startVoiceConversation,
