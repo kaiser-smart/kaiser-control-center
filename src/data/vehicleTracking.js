@@ -274,6 +274,7 @@ export const VEHICLE_TRACKING_API_ENDPOINTS = [
   "GET /api/vehicle-tracking/wim-alerts",
   "POST /api/vehicle-tracking/tcars/sync",
   "GET /api/vehicle-tracking/tcars/vehicles",
+  "GET /api/vehicle-tracking/tcars/pairing-audit",
   "PATCH /api/vehicles/:id/tcars-link",
   "DELETE /api/vehicles/:id/tcars-link",
   "GET /api/vehicle-tracking/vehicles/:vehicleId",

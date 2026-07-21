@@ -4,6 +4,7 @@ import {
   loadTcarsVehicleDetailPayload,
   parseTcarsAreaEventsXml,
   parseTcarsCostsXml,
+  parseTcarsVehicleCostsXml,
   parseTcarsIdentificationsXml,
   parseTcarsPositionsXml,
   parseTcarsRoadTaxXml,
@@ -45,6 +46,17 @@ const costXml = `<naklad xsi:type="tns:tNaklady"><nakladId>81</nakladId><nakladD
 <nakladDatum>2026-07-19T10:00:00+02:00</nakladDatum><nakladCena>1000</nakladCena><nakladCenaBezDPH>1000</nakladCenaBezDPH><nakladCenaSDPH>1210</nakladCenaSDPH>
 <nakladDPHProcento>21</nakladDPHProcento><nakladMnozstvi>1</nakladMnozstvi><nakladPopis>Filtr</nakladPopis><nakladFakturaOd>Dodavatel</nakladFakturaOd><nakladFakturaCislo>FV81</nakladFakturaCislo><nakladFakturaDo>Kaiser</nakladFakturaDo><nakladFakturaInterni>INT81</nakladFakturaInterni><nakladPoznamka>Kontrola</nakladPoznamka><nakladImportovan>true</nakladImportovan><nakladImportovanSAP>false</nakladImportovanSAP><nakladTypKarty>Servisní</nakladTypKarty></naklad>`;
 
+const aggregateCostsXml = `
+<vozidloNaklady href="#group42"/><vozidloNaklady href="#group99"/>
+<multiRef id="group42" xsi:type="tns:tVozidloNaklady"><vozidlo href="#vehicle42"/><naklady href="#costs42"/></multiRef>
+<multiRef id="group99" xsi:type="tns:tVozidloNaklady"><vozidlo href="#vehicle99"/><naklady href="#costs99"/></multiRef>
+<multiRef id="vehicle42" xsi:type="tns:tVozidlo"><vozidloId>42</vozidloId><vozidloRz>3BN 3558</vozidloRz><vozidloEvidCis>Svoz 42</vozidloEvidCis></multiRef>
+<multiRef id="vehicle99" xsi:type="tns:tVozidlo"><vozidloId>99</vozidloId><vozidloRz>9ZZ 9999</vozidloRz></multiRef>
+<multiRef id="costs42" xsi:type="SOAP-ENC:Array"><item href="#cost81"/></multiRef>
+<multiRef id="costs99" xsi:type="SOAP-ENC:Array"><item href="#cost99"/></multiRef>
+<multiRef id="cost81" xsi:type="tns:tNaklady"><nakladId>81</nakladId><nakladDatum>2026-07-19T10:00:00+02:00</nakladDatum><nakladCenaSDPH>1210</nakladCenaSDPH><nakladPopis>Filtr</nakladPopis></multiRef>
+<multiRef id="cost99" xsi:type="tns:tNaklady"><nakladId>99</nakladId><nakladDatum>2026-07-18T10:00:00+02:00</nakladDatum><nakladCenaSDPH>9999</nakladCenaSDPH></multiRef>`;
+
 const areaXml = `<vozidloOblasti xsi:type="tns:tVozidlaOblasti"><datum>2026-07-21T07:15:00+02:00</datum><vozidloId>42</vozidloId><vozidloModel>MAN TGS</vozidloModel><vozidloRz>3BN 3558</vozidloRz><vozidloEvidCis>Svoz 42</vozidloEvidCis><oblast>Areál</oblast><adresa>Trnkova 137</adresa><mesto>Brno</mesto><psc>62800</psc><akce>Vjezd</akce><misto>Trnkova</misto><longitude>16.67</longitude><latitude>49.19</latitude><rychlost>8</rychlost></vozidloOblasti>`;
 const identificationXml = `<identifikace xsi:type="tns:tIdentifikace"><datum>2026-07-21T06:55:00+02:00</datum><vozidloId>42</vozidloId><vozidloRz>3BN 3558</vozidloRz><ridicId>7</ridicId><ridicJmeno>Jan Řidič</ridicJmeno><ridicOsCis>007</ridicOsCis><misto>Trnkova</misto><cipCislo>CHIP7</cipCislo><kartaCislo>CARD7</kartaCislo></identifikace>`;
 const roadTaxXml = `<result xsi:type="tns:tPodkladProSilnicniDan"><vozidloId>42</vozidloId><vozidloRz>3BN 3558</vozidloRz><vozidloDatumRegistrace>2022-05-10</vozidloDatumRegistrace><cm3>12419</cm3><vozidloPocetNaprav>3</vozidloPocetNaprav><rocniSazba>12000</rocniSazba><OSV>1</OSV><M1>1000</M1><Q1>3000</Q1><celkem>12000</celkem></result>`;
@@ -83,6 +95,10 @@ assert.equal(cost.priceWithVat, 1210);
 assert.equal(cost.invoiceFrom, "Dodavatel");
 assert.equal(cost.internalInvoiceNumber, "INT81");
 assert.equal(cost.cardType, "Servisní");
+const aggregateCosts = parseTcarsVehicleCostsXml(aggregateCostsXml);
+assert.equal(aggregateCosts.length, 2);
+assert.equal(aggregateCosts[0].vehicle.tcarsVehicleId, "42");
+assert.equal(aggregateCosts[0].costs[0].priceWithVat, 1210);
 const area = parseTcarsAreaEventsXml(areaXml)[0];
 assert.equal(area.action, "Vjezd");
 assert.equal(area.internalNumber, "Svoz 42");
@@ -134,6 +150,7 @@ try {
   assert.equal(detail.fuelState.value, 63.5);
   assert.equal(detail.trips.length, 1);
   assert.equal(detail.costs.length, 1);
+  assert.equal(detail.methodStatus.costs.method, "vozidloNaklady");
   assert.equal(detail.areaEvents.length, 1);
   assert.equal(detail.identifications.length, 1);
   assert.equal(detail.roadTax.length, 1);
@@ -148,6 +165,84 @@ try {
     "vozidlaIdentifikace",
     "reportPodkladProSilnicniDan"
   ]));
+} finally {
+  globalThis.fetch = originalFetch;
+}
+
+const fallbackMethods = [];
+globalThis.fetch = async (_url, options = {}) => {
+  const action = String(options.headers?.SOAPAction || "").split("/").pop();
+  fallbackMethods.push(action);
+  if (action === "vozidloNaklady") {
+    return new Response("<Envelope><Fault><faultstring>Method not allowed</faultstring></Fault></Envelope>", { status: 200 });
+  }
+  const payloads = {
+    vozidlaSeznam: vehicleXml,
+    vozidlaPozice: positionXml,
+    knihaJizdVozidlo: tripXml,
+    vozidlaNaklady: aggregateCostsXml,
+    vozidlaOblasti: areaXml,
+    vozidlaIdentifikace: identificationXml,
+    reportPodkladProSilnicniDan: roadTaxXml
+  };
+  return new Response(`<Envelope>${payloads[action] || ""}</Envelope>`, { status: 200 });
+};
+
+try {
+  const detail = await loadTcarsVehicleDetailPayload({
+    TCARS_API_MODE: "soap",
+    TCARS_CUSTOMER_NUMBER: "customer",
+    TCARS_USERNAME: "user",
+    TCARS_PASSWORD: "secret"
+  }, { tcarsVehicleId: "42", tcarsLicensePlate: "3BN 3558" }, {
+    days: 30,
+    now: "2026-07-21T09:00:00+02:00"
+  });
+
+  assert.equal(detail.dataStatus, "ready");
+  assert.equal(detail.costs.length, 1);
+  assert.equal(detail.costs[0].id, "81");
+  assert.equal(detail.methodStatus.costs.apiStatus, "ready");
+  assert.equal(detail.methodStatus.costs.method, "vozidlaNaklady");
+  assert.equal(detail.methodStatus.costs.fallbackFrom, "vozidloNaklady");
+  assert.equal(fallbackMethods.filter((method) => method === "vozidloNaklady").length, 1);
+  assert.equal(fallbackMethods.filter((method) => method === "vozidlaNaklady").length, 1);
+} finally {
+  globalThis.fetch = originalFetch;
+}
+
+globalThis.fetch = async (_url, options = {}) => {
+  const action = String(options.headers?.SOAPAction || "").split("/").pop();
+  if (["vozidloNaklady", "vozidlaNaklady"].includes(action)) {
+    return new Response("<Envelope><Fault><faultstring>Costs unavailable</faultstring></Fault></Envelope>", { status: 200 });
+  }
+  const payloads = {
+    vozidlaSeznam: vehicleXml,
+    vozidlaPozice: positionXml,
+    knihaJizdVozidlo: tripXml,
+    vozidlaOblasti: areaXml,
+    vozidlaIdentifikace: identificationXml,
+    reportPodkladProSilnicniDan: roadTaxXml
+  };
+  return new Response(`<Envelope>${payloads[action] || ""}</Envelope>`, { status: 200 });
+};
+
+try {
+  const detail = await loadTcarsVehicleDetailPayload({
+    TCARS_API_MODE: "soap",
+    TCARS_CUSTOMER_NUMBER: "customer",
+    TCARS_USERNAME: "user",
+    TCARS_PASSWORD: "secret"
+  }, { tcarsVehicleId: "42", tcarsLicensePlate: "3BN 3558" }, {
+    days: 30,
+    now: "2026-07-21T09:00:00+02:00"
+  });
+
+  assert.equal(detail.apiStatus, "ready");
+  assert.equal(detail.dataStatus, "partial");
+  assert.equal(detail.costs.length, 0);
+  assert.equal(detail.methodStatus.costs.apiStatus, "waiting");
+  assert.equal(detail.methodStatus.costs.method, "vozidloNaklady / vozidlaNaklady");
 } finally {
   globalThis.fetch = originalFetch;
 }

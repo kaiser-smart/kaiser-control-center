@@ -52,6 +52,7 @@ import {
   loadTcarsVehiclesPayload,
   syncTcarsLocations,
 } from "../functions/_lib/tcars-client.js";
+import { buildTcarsPairingAuditPayload } from "../functions/_lib/tcars-pairing-audit.js";
 import {
   driverPartRequestMissingQuestion,
   driverPartRequestInitialStatus,
@@ -7016,6 +7017,40 @@ async function handleApi(request, response) {
     }
 
     sendJson(response, 200, await loadTcarsStatusPayload(process.env));
+    return true;
+  }
+
+  if (url.pathname === "/api/vehicle-tracking/tcars/pairing-audit" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "vehicle-tracking", "view") || !hasPermission(user, "fleet", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const fleet = await loadDevFleetPayload();
+    const fleetVehicles = (fleet.vehicles || []).map((vehicle) => ({
+      vistosVehicleId: vehicle.vistosVehicleId || vehicle.vehicleId || vehicle.id,
+      name: vehicle.name || vehicle.model || vehicle.internalNumber,
+      registrationPlate: vehicle.registrationPlate || vehicle.licensePlate || vehicle.tcarsLicensePlate,
+      vinMasked: vehicle.vinMasked || vehicle.vin || "",
+      category: vehicle.category?.name || vehicle.vehicleType || ""
+    }));
+    const tcars = await loadTcarsVehiclesPayload(process.env);
+    const tcarsVehicles = Array.isArray(tcars.vehicles) && tcars.vehicles.length
+      ? tcars.vehicles
+      : (fleet.vehicles || []).map((vehicle, index) => ({
+        tcarsVehicleId: vehicle.tcarsVehicleId || vehicle.externalVehicleId || `dev-${index + 1}`,
+        licensePlate: vehicle.licensePlate || vehicle.tcarsLicensePlate,
+        internalNumber: vehicle.internalNumber,
+        model: vehicle.model || vehicle.name,
+        vin: vehicle.vin || "",
+        active: true
+      }));
+    sendJson(response, 200, buildTcarsPairingAuditPayload(fleetVehicles, tcarsVehicles));
     return true;
   }
 

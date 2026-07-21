@@ -255,8 +255,6 @@ import {
   VEHICLE_TRACKING_TABLET_ROLE,
   VEHICLE_TRACKING_TCAR_API_DOCUMENTATION_MISSING,
   VEHICLE_TRACKING_TCAR_LAST_KNOWN,
-  VEHICLE_TRACKING_TCAR_LINK_FIELDS,
-  VEHICLE_TRACKING_TCAR_PAIRING_COLUMNS,
   VEHICLE_TRACKING_TCAR_SYNC_LOG_FIELDS,
   VEHICLE_TRACKING_TCAR_UNAVAILABLE,
   VEHICLE_TRACKING_TCAR_WAITING,
@@ -1914,6 +1912,10 @@ const vehicleTrackingLiveState = {
   loading: false,
   error: "",
   status: null,
+  pairingAuditLoaded: false,
+  pairingAuditLoading: false,
+  pairingAuditError: "",
+  pairingAudit: null,
   wimLoaded: false,
   wimLoading: false,
   wimError: "",
@@ -16334,40 +16336,68 @@ function vehicleTrackingTcarsStatusSection(options = {}) {
 }
 
 function vehicleTrackingTcarsPairingSection() {
+  const loading = vehicleTrackingLiveState.pairingAuditLoading && !vehicleTrackingLiveState.pairingAuditLoaded;
+  const error = vehicleTrackingLiveState.pairingAuditError;
+  const audit = vehicleTrackingLiveState.pairingAudit || {};
+  const summary = audit.summary || {};
+  const rows = (Array.isArray(audit.rows) ? audit.rows : []).filter((row) => Number(row.candidateCount || 0) > 0);
+  const statusLabel = (status) => ({
+    ready_to_verify: "Připraveno ke kontrole",
+    ambiguous: "Více kandidátů",
+    conflict: "Konflikt VIN",
+    unmatched: "Bez kandidáta"
+  }[status] || "Čeká na kontrolu");
+  const tableRows = rows.map((row) => {
+    const candidates = Array.isArray(row.candidates) ? row.candidates : [];
+    const candidateText = candidates.map((candidate) => [
+      candidate.model,
+      candidate.internalNumber,
+      candidate.tcarsVehicleId ? `ID ${candidate.tcarsVehicleId}` : ""
+    ].filter(Boolean).join(" · ")).join(" / ");
+    const vinText = candidates.map((candidate) => candidate.vinEvidence?.label || "VIN nelze porovnat").join(" / ");
+    return `
+      <tr>
+        <td><strong>${escapeHtml(row.licensePlate || "Bez SPZ")}</strong><small>${escapeHtml(row.fleetName || row.fleetCategory || "Vozidlo Vistos")}</small></td>
+        <td>${escapeHtml(candidateText || "Kandidát T-Cars")}</td>
+        <td>${escapeHtml(vinText)}</td>
+        <td><span class="tracking-pairing-status tracking-pairing-status--${escapeHtml(row.status)}">${escapeHtml(statusLabel(row.status))}</span></td>
+        <td><span>${escapeHtml(row.reason || "Ruční kontrola je povinná.")}</span></td>
+      </tr>`;
+  }).join("");
+
   return `
     <section class="tracking-section tracking-tcars-section" id="tracking-tcars-pairing" aria-labelledby="tracking-tcars-pairing-title">
       ${vehicleTrackingSectionHeader(
         "tracking-tcars-pairing-title",
-        "Párování T-Cars",
-        "Párování bude ukládané pouze přes cloud API. Teď je připravený kontrakt bez lokálního ukládání.",
-        { badgeText: "Čeká na API" }
+        "Kontrola kandidátů T-Cars",
+        "Read-only audit porovnává přesnou SPZ a dostupnou část VIN. Vazby nevytváří ani neukládá.",
+        { badgeText: "Read-only audit" }
       )}
+      <div class="tracking-pairing-safety" role="status">
+        <strong>Vozový park zůstává master evidence.</strong>
+        <span>${escapeHtml(error || audit.message || (loading ? "Načítám kandidáty z Vistos a T-Cars…" : "Audit čeká na načtení."))}</span>
+        <small>Bez zápisu do D1, Vistos i T-Cars. Každá budoucí vazba bude vyžadovat samostatné ruční potvrzení.</small>
+      </div>
+      <div class="tracking-pairing-summary" aria-label="Souhrn auditu párování">
+        <article><span>Vozidla Vistos</span><strong>${loading ? "…" : Number(summary.total || 0)}</strong></article>
+        <article><span>Kandidáti podle SPZ</span><strong>${loading ? "…" : Number(summary.candidateRows || 0)}</strong></article>
+        <article><span>Připraveno ke kontrole</span><strong>${loading ? "…" : Number(summary.readyToVerify || 0)}</strong></article>
+        <article><span>Více kandidátů / konflikt</span><strong>${loading ? "…" : Number(summary.ambiguous || 0) + Number(summary.conflict || 0)}</strong></article>
+        <article><span>Bez kandidáta</span><strong>${loading ? "…" : Number(summary.unmatched || 0)}</strong></article>
+      </div>
       <div class="tracking-table-shell">
         <table class="tracking-table">
           <thead>
             <tr>
-              ${VEHICLE_TRACKING_TCAR_PAIRING_COLUMNS.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}
+              ${["Vozidlo Vistos", "Kandidát T-Cars", "VIN důkaz", "Stav", "Další krok"].map((column) => `<th>${escapeHtml(column)}</th>`).join("")}
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td colspan="${VEHICLE_TRACKING_TCAR_PAIRING_COLUMNS.length}">
-                Párovací tabulka čeká na cloud API pro uložení vazeb vozidel. T-Cars data se načítají pouze read-only.
-              </td>
-            </tr>
+            ${tableRows || `<tr><td colspan="5">${escapeHtml(error || (loading ? "Načítám read-only audit…" : "Nejsou dostupní žádní kandidáti ke kontrole."))}</td></tr>`}
           </tbody>
         </table>
       </div>
-      <div class="tracking-integration-grid">
-        <article>
-          <h3>Pole párování</h3>
-          ${vehicleTrackingFieldChips(VEHICLE_TRACKING_TCAR_LINK_FIELDS)}
-        </article>
-        <article>
-          <h3>Akce</h3>
-          ${vehicleTrackingFieldChips(["Spárovat", "Změnit párování", "Odpojit"])}
-        </article>
-      </div>
+      <p class="tracking-pairing-footnote">Tabulka zobrazuje jen řádky s kandidátem. ${Number(summary.unmatched || 0)} vozidel bez kandidáta zůstává bezpečně beze změny.</p>
     </section>
   `;
 }
@@ -45044,6 +45074,10 @@ function resetVehicleTrackingLiveState() {
   vehicleTrackingLiveState.loading = false;
   vehicleTrackingLiveState.error = "";
   vehicleTrackingLiveState.status = null;
+  vehicleTrackingLiveState.pairingAuditLoaded = false;
+  vehicleTrackingLiveState.pairingAuditLoading = false;
+  vehicleTrackingLiveState.pairingAuditError = "";
+  vehicleTrackingLiveState.pairingAudit = null;
   vehicleTrackingLiveState.wimLoaded = false;
   vehicleTrackingLiveState.wimLoading = false;
   vehicleTrackingLiveState.wimError = "";
@@ -45811,6 +45845,27 @@ async function loadVehicleTrackingStatus(options = {}) {
       queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
     }
   }
+}
+
+async function loadVehicleTrackingPairingAudit(options = {}) {
+  const { force = false, renderAfter = true } = options;
+  if (vehicleTrackingLiveState.pairingAuditLoading || (vehicleTrackingLiveState.pairingAuditLoaded && !force)) return;
+  const user = currentUser();
+  if (!hasPermission(user, "vehicle-tracking", "view") || !hasPermission(user, "fleet", "view")) return;
+
+  vehicleTrackingLiveState.pairingAuditLoading = true;
+  vehicleTrackingLiveState.pairingAuditError = "";
+  try {
+    vehicleTrackingLiveState.pairingAudit = await apiJson("/api/vehicle-tracking/tcars/pairing-audit");
+    vehicleTrackingLiveState.pairingAuditLoaded = true;
+  } catch (error) {
+    vehicleTrackingLiveState.pairingAudit = error?.payload || null;
+    vehicleTrackingLiveState.pairingAuditError = error?.payload?.error || error?.payload?.message || error?.message || "Read-only audit se nepodařilo načíst.";
+    vehicleTrackingLiveState.pairingAuditLoaded = true;
+  } finally {
+    vehicleTrackingLiveState.pairingAuditLoading = false;
+  }
+  if (renderAfter) render();
 }
 
 async function loadVehicleTrackingPreferences(options = {}) {
@@ -49432,6 +49487,7 @@ function renderAuthenticatedApp(user) {
       loadVehicleTrackingMapConfig();
       loadVehicleTrackingPreferences();
       loadVehicleTrackingStatus();
+      void loadVehicleTrackingPairingAudit();
       void loadVehicleTrackingAnalytics({ period: "30d" });
       loadVehicleTrackingWimSites();
       ensureModuleRulesData("vehicle-tracking");
