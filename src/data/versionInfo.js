@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.641"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.653"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vozidla: úplný read-only detail T-Cars",
+    text: "Detail vozidla načítá technický profil, aktuální telemetrii, knihu jízd, stav PHM bez domyšlené jednotky, motohodiny, náklady, oblastní události, identifikace řidičů a podklad silniční daně. Otáčky motoru se pravdivě nezobrazují jako hodnota, protože je T-Cars SOAP API neposkytuje."
+  },
   {
     title: "Šarlota: neověřený úvod se už nepřehraje",
     text: "KSO nejdřív přijme celé audio do dočasné paměti a porovná text s ověřenou trasou, vozidlem, SPZ, počtem stanovišť a čerstvým počasím. Cizí údaj zablokuje celý zvuk i hologram. Počasí se smí použít jen jako přesné aktuální backendové shrnutí; šablony typu počasí přeje byly odstraněné."

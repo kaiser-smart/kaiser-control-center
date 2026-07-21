@@ -671,6 +671,140 @@ function mockFleetSummary(vehicles) {
   };
 }
 
+function mockFleetTcarsDetail(vehicle, days = 30) {
+  const now = new Date();
+  const endedAt = new Date(now.getTime() - 12 * 60 * 1000).toISOString();
+  const startedAt = new Date(now.getTime() - 82 * 60 * 1000).toISOString();
+  const occurredAt = new Date(now.getTime() - 45 * 60 * 1000).toISOString();
+  const methodStatus = Object.fromEntries([
+    "vehicles",
+    "positions",
+    "trips",
+    "costs",
+    "areaEvents",
+    "identifications",
+    "roadTax"
+  ].map((name) => [name, { apiStatus: "ready", errorCode: "" }]));
+  const tcarsVehicle = {
+    ...vehicle,
+    tcarsVehicleId: String(vehicle.tcarsVehicleId || vehicle.externalVehicleId || "889"),
+    tcarsUnitId: String(vehicle.tcarsUnitId || "local-dev-unit"),
+    licensePlate: vehicle.licensePlate || vehicle.tcarsLicensePlate || "4B2 1234",
+    active: true,
+    retired: false,
+    availableForReservation: true,
+    allowedForPrivateUse: false,
+    group: { id: "3", name: "Svoz", code: "SV" },
+    responsiblePerson: { id: "7", name: "Jan Řidič", number: "007", role: "Řidič" },
+    responsibleSince: "2026-01-01",
+    center: { id: "2", name: "Brno", code: "BR" },
+    type: { id: "4", name: "Nákladní", code: "NA" },
+    category: { id: "5", name: "Svozové", code: "SV" },
+    emissionStandard: { id: "6", name: "EURO 6", code: "E6" },
+    primaryFuel: { id: "1", name: "Nafta", code: "D" },
+    secondaryFuel: { id: "8", name: "AdBlue", code: "ADB" },
+    primaryConsumption: { city: 31.2, outsideCity: 26.4, combined: 28.8, co2: 710 },
+    secondaryConsumption: null,
+    purchasePrice: 4200000,
+    registrationDate: "2022-05-10",
+    lastChangedAt: now.toISOString()
+  };
+
+  return {
+    provider: "tcars",
+    source: "Lokální mock T-Cars read-only SOAP API",
+    apiStatus: "ready",
+    dataStatus: "ready",
+    readOnly: true,
+    writesData: false,
+    startsAutomation: false,
+    sendsNotifications: false,
+    period: {
+      days,
+      from: new Date(now.getTime() - days * 86400000).toISOString(),
+      to: now.toISOString()
+    },
+    capabilities: {
+      engineRpm: { available: false, reason: "not_exposed_by_tcars_wsdl" },
+      fuelState: { available: true, source: "knihaJizdVozidlo.jizdaStavPhm", unitProvided: false },
+      liveTelemetry: { available: true, source: "vozidlaPozice.gpsData" }
+    },
+    vehicle: tcarsVehicle,
+    currentPosition: {
+      id: "tcars-position-900",
+      tcarsVehicleId: tcarsVehicle.tcarsVehicleId,
+      licensePlate: tcarsVehicle.licensePlate,
+      lastGpsAt: now.toISOString(),
+      longitude: 16.67013,
+      latitude: 49.19121,
+      gpsValid: true,
+      address: "Trnkova 137, Brno",
+      odometerKm: 123456.7,
+      speedKmh: 48,
+      altitude: 245,
+      heading: 182,
+      ignition: true,
+      emergency: false,
+      switchActive: true,
+      eventCode: "12",
+      eventText: "Jízda",
+      voltage: 27.6
+    },
+    fuelState: {
+      verified: true,
+      status: "verified",
+      value: 63.5,
+      unit: "",
+      source: "T-Cars",
+      measuredAt: endedAt,
+      tripId: "71"
+    },
+    trips: [{
+      id: "71",
+      startedAt,
+      endedAt,
+      origin: "Trnkova",
+      destination: "Líšeň",
+      country: "CZ",
+      odometerStartKm: 123430,
+      odometerEndKm: 123456.7,
+      distanceKm: 26.7,
+      engineHoursStart: 4021.1,
+      engineHoursEnd: 4022.4,
+      cityOutsideRatio: 0.8,
+      fuelState: 63.5,
+      fuelStateSecondary: 41,
+      privateTrip: false,
+      purpose: "Svoz",
+      center: tcarsVehicle.center,
+      driver: tcarsVehicle.responsiblePerson,
+      responsiblePerson: tcarsVehicle.responsiblePerson,
+      note: "Bez závady"
+    }],
+    costs: [{
+      id: "81",
+      kind: { id: "1", name: "Servis" },
+      type: { id: "2", name: "Oprava" },
+      occurredAt,
+      price: 1000,
+      priceWithoutVat: 1000,
+      priceWithVat: 1210,
+      vatPercent: 21,
+      quantity: 1,
+      description: "Výměna filtru",
+      invoiceNumber: "FV81",
+      imported: true,
+      importedToSap: false
+    }],
+    areaEvents: [{ occurredAt, area: "Areál", action: "Vjezd", place: "Trnkova", speedKmh: 8 }],
+    identifications: [{ occurredAt, driverName: "Jan Řidič", driverNumber: "007", place: "Trnkova", chipNumber: "CHIP7", cardNumber: "CARD7" }],
+    roadTax: [{ registrationDate: "2022-05-10", displacementCm3: 12419, axleCount: 3, annualRate: 12000, osv: 1, months: { M1: 1000 }, quarters: { Q1: 3000 }, total: 12000 }],
+    methodStatus,
+    fetchedAt: now.toISOString(),
+    message: "Lokální T-Cars detail byl načten read-only bez zápisu do provozních dat."
+  };
+}
+
 async function loadDevFleetPayload() {
   const payload = await loadFleetVehiclesPayload(process.env);
   const baseVehicles = Array.isArray(payload.vehicles) && payload.vehicles.length
@@ -6730,6 +6864,33 @@ async function handleApi(request, response) {
       });
       return true;
     }
+  }
+
+  const fleetVehicleTcarsMatch = url.pathname.match(/^\/api\/vehicles\/([^/]+)\/tcars$/);
+  if (fleetVehicleTcarsMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "fleet", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+
+    const payload = await loadDevFleetPayload();
+    const vehicleId = decodeURIComponent(fleetVehicleTcarsMatch[1] || "");
+    const vehicle = payload.vehicles.find((item) => mockFleetVehicleMatches(item, vehicleId));
+    if (!vehicle) {
+      sendJson(response, 404, { error: "Vozidlo nebylo nalezeno.", apiStatus: "ready" });
+      return true;
+    }
+
+    const days = [1, 7, 30].includes(Number(url.searchParams.get("days")))
+      ? Number(url.searchParams.get("days"))
+      : 30;
+    sendJson(response, 200, mockFleetTcarsDetail(vehicle, days));
+    return true;
   }
 
   const fleetVehicleDetailMatch = url.pathname.match(/^\/api\/vehicles\/([^/]+)$/);

@@ -1855,6 +1855,15 @@ const fleetVehiclesState = {
   lastFetchedAt: ""
 };
 
+const fleetTcarsDetailState = {
+  loading: false,
+  loadedKey: "",
+  vehicleKey: "",
+  days: 30,
+  detail: null,
+  error: ""
+};
+
 const fleetUiState = {
   message: "",
   error: "",
@@ -12108,6 +12117,350 @@ function fleetTrackingDetail(vehicle = {}) {
   `;
 }
 
+function fleetTcarsValue(value, suffix = "") {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return `${value.toLocaleString("cs-CZ", { maximumFractionDigits: 2 })}${suffix}`;
+  }
+  return `${String(value)}${suffix}`;
+}
+
+function fleetTcarsBoolean(value) {
+  if (value === true) return "Ano";
+  if (value === false) return "Ne";
+  return "—";
+}
+
+function fleetTcarsDateTime(value) {
+  return formatDateTime(value) || fleetFormatDate(value) || fleetTcarsValue(value);
+}
+
+function fleetTcarsDictionary(value) {
+  if (!value || typeof value !== "object") return "—";
+  return [value.name, value.code, value.id !== null && value.id !== undefined ? `ID ${value.id}` : ""]
+    .filter(Boolean)
+    .join(" · ") || "—";
+}
+
+function fleetTcarsGroup(value) {
+  if (!value || typeof value !== "object") return "—";
+  const groupBits = (group) => group && typeof group === "object" ? [
+    group.name,
+    group.number ? `č. ${group.number}` : "",
+    group.id !== null && group.id !== undefined ? `ID ${group.id}` : "",
+    group.center ? `středisko ${fleetTcarsDictionary(group.center)}` : "",
+    group.retired === true ? "vyřazena" : group.retired === false ? "aktivní" : "",
+    group.lastChangedAt ? `změna ${fleetTcarsDateTime(group.lastChangedAt)}` : ""
+  ].filter(Boolean).join(" · ") : "";
+  const leader = value.leader;
+  const leaderBits = leader && typeof leader === "object" ? [
+    leader.name,
+    leader.id !== null && leader.id !== undefined ? `ID ${leader.id}` : "",
+    leader.number ? `os. č. ${leader.number}` : "",
+    leader.phone,
+    leader.mobile,
+    leader.email,
+    leader.rfid ? `RFID ${leader.rfid}` : "",
+    leader.driverCard ? `karta ${leader.driverCard}` : "",
+    leader.login ? `login ${leader.login}` : "",
+    leader.role,
+    leader.center ? `středisko ${fleetTcarsDictionary(leader.center)}` : "",
+    leader.position ? `pozice ${fleetTcarsDictionary(leader.position)}` : "",
+    leader.retired === true ? "vyřazen" : leader.retired === false ? "aktivní" : "",
+    leader.refrigerationQualificationFrom ? `ref. zkouška od ${fleetFormatDate(leader.refrigerationQualificationFrom)}` : "",
+    leader.refrigerationQualificationTo ? `ref. zkouška do ${fleetFormatDate(leader.refrigerationQualificationTo)}` : "",
+    leader.lastChangedAt ? `změna ${fleetTcarsDateTime(leader.lastChangedAt)}` : ""
+  ].filter(Boolean).join(" · ") : "";
+  return [
+    groupBits(value),
+    value.superior ? `nadřízená: ${groupBits(value.superior)}` : "",
+    leaderBits ? `vedoucí: ${leaderBits}` : ""
+  ].filter(Boolean).join(" · ") || "—";
+}
+
+function fleetTcarsPersonFields(prefix, person) {
+  if (!person || typeof person !== "object") return [[prefix, "—"]];
+  return [
+    [prefix, person.name],
+    [`${prefix} – T-Cars ID`, person.id],
+    [`${prefix} – osobní číslo`, person.number],
+    [`${prefix} – telefon`, person.phone],
+    [`${prefix} – mobil`, person.mobile],
+    [`${prefix} – e-mail`, person.email],
+    [`${prefix} – RFID`, person.rfid],
+    [`${prefix} – karta řidiče`, person.driverCard],
+    [`${prefix} – login`, person.login],
+    [`${prefix} – skupina`, fleetTcarsGroup(person.group)],
+    [`${prefix} – role`, person.role],
+    [`${prefix} – středisko`, fleetTcarsDictionary(person.center)],
+    [`${prefix} – pozice`, fleetTcarsDictionary(person.position)],
+    [`${prefix} – vyřazen`, fleetTcarsBoolean(person.retired)],
+    [`${prefix} – ref. zkouška od`, fleetFormatDate(person.refrigerationQualificationFrom)],
+    [`${prefix} – ref. zkouška do`, fleetFormatDate(person.refrigerationQualificationTo)],
+    [`${prefix} – poslední změna`, fleetTcarsDateTime(person.lastChangedAt)]
+  ];
+}
+
+function fleetTcarsFieldGrid(rows = [], className = "") {
+  return `
+    <dl class="fleet-tcars-fields ${escapeHtml(className)}">
+      ${rows.map(([label, value]) => `
+        <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(fleetTcarsValue(value))}</dd></div>
+      `).join("")}
+    </dl>
+  `;
+}
+
+function fleetTcarsMethodLabel(status = {}) {
+  return status.apiStatus === "ready" ? "Načteno" : "Nedostupné";
+}
+
+function fleetTcarsPeriodControls(vehicle = {}) {
+  return `
+    <div class="fleet-tcars-periods" role="group" aria-label="Období detailu T-Cars">
+      ${[1, 7, 30].map((days) => `
+        <button
+          type="button"
+          data-fleet-tcars-days="${days}"
+          data-fleet-vehicle-id="${escapeHtml(vehicle.id || vehicle.vehicleId || "")}"
+          class="${fleetTcarsDetailState.days === days ? "is-active" : ""}"
+          aria-pressed="${fleetTcarsDetailState.days === days ? "true" : "false"}"
+          ${fleetTcarsDetailState.loading ? "disabled" : ""}
+        >${days === 1 ? "Dnes" : `${days} dní`}</button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function fleetTcarsTripList(trips = []) {
+  if (!trips.length) return `<p class="fleet-tcars-empty">T-Cars v tomto období nevrátil žádnou jízdu.</p>`;
+  return `
+    <div class="fleet-tcars-records">
+      ${trips.map((trip) => `
+        <article>
+          <header><strong>${escapeHtml(`${fleetTcarsDateTime(trip.startedAt)} – ${fleetTcarsDateTime(trip.endedAt)}`)}</strong><span>${escapeHtml(fleetTcarsValue(trip.distanceKm, " km"))}</span></header>
+          ${fleetTcarsFieldGrid([
+            ["ID jízdy", trip.id],
+            ["Odkud", trip.origin],
+            ["Kam", trip.destination],
+            ["Stát", trip.country],
+            ["Tachometr začátek", fleetTcarsValue(trip.odometerStartKm, " km")],
+            ["Tachometr konec", fleetTcarsValue(trip.odometerEndKm, " km")],
+            ["Motohodiny začátek", trip.engineHoursStart],
+            ["Motohodiny konec", trip.engineHoursEnd],
+            ["Poměr město/mimo město", trip.cityOutsideRatio],
+            ["Stav PHM 1", trip.fuelState],
+            ["Stav PHM 2", trip.fuelStateSecondary],
+            ["Soukromá jízda", fleetTcarsBoolean(trip.privateTrip)],
+            ["Účel", trip.purpose],
+            ["Středisko", fleetTcarsDictionary(trip.center)],
+            ...fleetTcarsPersonFields("Řidič", trip.driver),
+            ...fleetTcarsPersonFields("Odpovědný", trip.responsiblePerson),
+            ["Poznámka", trip.note]
+          ])}
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function fleetTcarsCostList(costs = []) {
+  if (!costs.length) return `<p class="fleet-tcars-empty">T-Cars v tomto období nevrátil žádný náklad.</p>`;
+  return `
+    <div class="fleet-tcars-records">
+      ${costs.map((cost) => `
+        <article>
+          <header><strong>${escapeHtml(cost.description || fleetTcarsDictionary(cost.kind))}</strong><span>${escapeHtml(fleetTcarsValue(cost.priceWithVat ?? cost.price, " Kč"))}</span></header>
+          ${fleetTcarsFieldGrid([
+            ["ID nákladu", cost.id],
+            ["Datum", fleetTcarsDateTime(cost.occurredAt)],
+            ["Druh", fleetTcarsDictionary(cost.kind)],
+            ["Typ", fleetTcarsDictionary(cost.type)],
+            ["Cena", fleetTcarsValue(cost.price, " Kč")],
+            ["Cena bez DPH", fleetTcarsValue(cost.priceWithoutVat, " Kč")],
+            ["Cena s DPH", fleetTcarsValue(cost.priceWithVat, " Kč")],
+            ["DPH", fleetTcarsValue(cost.vatPercent, " %")],
+            ["Množství", cost.quantity],
+            ["Popis", cost.description],
+            ["Faktura od", cost.invoiceFrom],
+            ["Číslo faktury", cost.invoiceNumber],
+            ["Faktura do", cost.invoiceTo],
+            ["Interní faktura", cost.internalInvoiceNumber],
+            ["Importováno", fleetTcarsBoolean(cost.imported)],
+            ["Importováno do SAP", fleetTcarsBoolean(cost.importedToSap)],
+            ["Typ karty", cost.cardType],
+            ["Poznámka", cost.note]
+          ])}
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function fleetTcarsVehicleProfile(detail = {}) {
+  const vehicle = detail.vehicle || {};
+  const consumption = (label, value) => [
+    [`${label} město`, value?.city],
+    [`${label} mimo město`, value?.outsideCity],
+    [`${label} kombinovaná`, value?.combined],
+    [`${label} CO₂`, value?.co2]
+  ];
+  return fleetTcarsFieldGrid([
+    ["T-Cars ID", vehicle.tcarsVehicleId],
+    ["Palubní jednotka", vehicle.tcarsUnitId],
+    ["Evidenční číslo", vehicle.internalNumber],
+    ["SPZ", vehicle.licensePlate],
+    ["Model", vehicle.model],
+    ["VIN", vehicle.vin],
+    ["Vyřazeno", fleetTcarsBoolean(vehicle.retired)],
+    ["Pro rezervace", fleetTcarsBoolean(vehicle.availableForReservation)],
+    ["Pro soukromé účely", fleetTcarsBoolean(vehicle.allowedForPrivateUse)],
+    ["Skupina", fleetTcarsGroup(vehicle.group)],
+    ...fleetTcarsPersonFields("Odpovědná osoba", vehicle.responsiblePerson),
+    ["Odpovědná od", fleetFormatDate(vehicle.responsibleSince)],
+    ["Středisko", fleetTcarsDictionary(vehicle.center)],
+    ["Druh", fleetTcarsDictionary(vehicle.type)],
+    ["Kategorie", fleetTcarsDictionary(vehicle.category)],
+    ["Emisní norma", fleetTcarsDictionary(vehicle.emissionStandard)],
+    ["Palivo 1", fleetTcarsDictionary(vehicle.primaryFuel)],
+    ["Palivo 2", fleetTcarsDictionary(vehicle.secondaryFuel)],
+    ...consumption("Spotřeba 1", vehicle.primaryConsumption),
+    ...consumption("Spotřeba 2", vehicle.secondaryConsumption),
+    ["Pořizovací cena", fleetTcarsValue(vehicle.purchasePrice, " Kč")],
+    ["Datum registrace", fleetFormatDate(vehicle.registrationDate)],
+    ["Poslední změna T-Cars", fleetTcarsDateTime(vehicle.lastChangedAt)]
+  ]);
+}
+
+function fleetTcarsTelemetry(detail = {}) {
+  const position = detail.currentPosition || {};
+  return fleetTcarsFieldGrid([
+    ["ID GPS záznamu", String(position.id || "").replace(/^tcars-position-/, "")],
+    ["Čas záznamu", fleetTcarsDateTime(position.lastGpsAt)],
+    ["GPS platná", fleetTcarsBoolean(position.gpsValid)],
+    ["Místo", position.address],
+    ["Latitude", position.latitude],
+    ["Longitude", position.longitude],
+    ["Tachometr", fleetTcarsValue(position.odometerKm, " km")],
+    ["Rychlost", fleetTcarsValue(position.speedKmh, " km/h")],
+    ["Nadmořská výška", fleetTcarsValue(position.altitude, " m")],
+    ["Azimut", fleetTcarsValue(position.heading, "°")],
+    ["Zapalování", fleetTcarsBoolean(position.ignition)],
+    ["Nouze", fleetTcarsBoolean(position.emergency)],
+    ["Přepínač", fleetTcarsBoolean(position.switchActive)],
+    ["Kód události", position.eventCode],
+    ["Text události", position.eventText],
+    ["Napětí", fleetTcarsValue(position.voltage, " V")]
+  ]);
+}
+
+function fleetTcarsAuxiliary(detail = {}) {
+  const areas = Array.isArray(detail.areaEvents) ? detail.areaEvents : [];
+  const identifications = Array.isArray(detail.identifications) ? detail.identifications : [];
+  const roadTax = Array.isArray(detail.roadTax) ? detail.roadTax : [];
+  return `
+    <details class="fleet-tcars-expandable">
+      <summary>Vjezdy a výjezdy z oblastí <span>${areas.length}</span></summary>
+      ${areas.length ? fleetTcarsFieldGrid(areas.flatMap((item, index) => [
+        [`${index + 1}. Čas`, fleetTcarsDateTime(item.occurredAt)],
+        [`${index + 1}. T-Cars ID vozidla`, item.vehicleId],
+        [`${index + 1}. Model`, item.vehicleModel],
+        [`${index + 1}. SPZ`, item.licensePlate],
+        [`${index + 1}. Evidenční číslo`, item.internalNumber],
+        [`${index + 1}. Oblast / akce`, [item.area, item.action].filter(Boolean).join(" · ")],
+        [`${index + 1}. Adresa`, item.address],
+        [`${index + 1}. Město`, item.city],
+        [`${index + 1}. PSČ`, item.postalCode],
+        [`${index + 1}. Místo`, item.place],
+        [`${index + 1}. Latitude`, item.latitude],
+        [`${index + 1}. Longitude`, item.longitude],
+        [`${index + 1}. Rychlost`, fleetTcarsValue(item.speedKmh, " km/h")]
+      ])) : `<p class="fleet-tcars-empty">Bez událostí v období.</p>`}
+    </details>
+    <details class="fleet-tcars-expandable">
+      <summary>Identifikace řidičů <span>${identifications.length}</span></summary>
+      ${identifications.length ? fleetTcarsFieldGrid(identifications.flatMap((item, index) => [
+        [`${index + 1}. Čas`, fleetTcarsDateTime(item.occurredAt)],
+        [`${index + 1}. T-Cars ID vozidla`, item.vehicleId],
+        [`${index + 1}. Model`, item.vehicleModel],
+        [`${index + 1}. SPZ`, item.licensePlate],
+        [`${index + 1}. Evidenční číslo`, item.internalNumber],
+        [`${index + 1}. T-Cars ID řidiče`, item.driverId],
+        [`${index + 1}. Řidič`, item.driverName],
+        [`${index + 1}. Osobní číslo`, item.driverNumber],
+        [`${index + 1}. Místo`, item.place],
+        [`${index + 1}. Čip`, item.chipNumber],
+        [`${index + 1}. Karta`, item.cardNumber]
+      ])) : `<p class="fleet-tcars-empty">Bez identifikace v období.</p>`}
+    </details>
+    <details class="fleet-tcars-expandable">
+      <summary>Podklad pro silniční daň <span>${roadTax.length}</span></summary>
+      ${roadTax.length ? roadTax.map((item) => fleetTcarsFieldGrid([
+        ["Datum registrace", fleetFormatDate(item.registrationDate)],
+        ["Objem motoru", fleetTcarsValue(item.displacementCm3, " cm³")],
+        ["Počet náprav", item.axleCount],
+        ["Roční sazba", fleetTcarsValue(item.annualRate, " Kč")],
+        ["OSV", item.osv],
+        ...Object.entries(item.months || {}).map(([key, value]) => [`Měsíc ${key.slice(1)}`, value]),
+        ...Object.entries(item.quarters || {}).map(([key, value]) => [`Čtvrtletí ${key.slice(1)}`, value]),
+        ["Celkem", fleetTcarsValue(item.total, " Kč")]
+      ])).join("") : `<p class="fleet-tcars-empty">T-Cars podklad pro vozidlo nevrátil.</p>`}
+    </details>
+  `;
+}
+
+function fleetTcarsDetailCard(vehicle = {}) {
+  const stateMatches = fleetTcarsDetailState.vehicleKey && fleetVehicleMatchesId(vehicle, fleetTcarsDetailState.vehicleKey);
+  if (fleetTcarsDetailState.loading && stateMatches) {
+    return `<article class="fleet-detail-card fleet-detail-card--wide fleet-tcars-card"><div class="fleet-card-head"><div><h3>T-Cars data</h3><p>Načítám úplný read-only detail vozidla.</p></div><span>Načítám</span></div></article>`;
+  }
+  if (fleetTcarsDetailState.error && stateMatches) {
+    return `<article class="fleet-detail-card fleet-detail-card--wide fleet-tcars-card fleet-tcars-card--error"><div class="fleet-card-head"><div><h3>T-Cars data</h3><p>${escapeHtml(fleetTcarsDetailState.error)}</p></div><span>Chyba</span></div></article>`;
+  }
+  const detail = stateMatches ? fleetTcarsDetailState.detail : null;
+  if (!detail) {
+    return `<article class="fleet-detail-card fleet-detail-card--wide fleet-tcars-card"><div class="fleet-card-head"><div><h3>T-Cars data</h3><p>Detail se načte pouze read-only po bezpečném spárování vozidla.</p></div><span>Čeká</span></div></article>`;
+  }
+  if (!detail.vehicle) {
+    return `<article class="fleet-detail-card fleet-detail-card--wide fleet-tcars-card"><div class="fleet-card-head"><div><h3>T-Cars data</h3><p>${escapeHtml(detail.message || "Vozidlo není propojené s T-Cars.")}</p></div><span>Nespárováno</span></div></article>`;
+  }
+
+  const position = detail.currentPosition || {};
+  const latestTrip = Array.isArray(detail.trips) ? detail.trips[0] : null;
+  const fuel = detail.fuelState || {};
+  const kpis = [
+    ["Stav PHM", fuel.verified ? fleetTcarsValue(fuel.value) : "Nedostupný", fuel.verified ? `bez jednotky · ${fleetTcarsDateTime(fuel.measuredAt)}` : "jen z poslední čerstvé jízdy"],
+    ["Otáčky motoru", "API neposkytuje", "RPM není ve WSDL T-Cars"],
+    ["Tachometr", fleetTcarsValue(position.odometerKm, " km"), fleetTcarsDateTime(position.lastGpsAt)],
+    ["Rychlost", fleetTcarsValue(position.speedKmh, " km/h"), position.ignition === true ? "zapalování zapnuto" : position.ignition === false ? "zapalování vypnuto" : "stav zapalování neuveden"],
+    ["Napětí", fleetTcarsValue(position.voltage, " V"), "hodnota palubní jednotky"],
+    ["Motohodiny", fleetTcarsValue(latestTrip?.engineHoursEnd), latestTrip ? `poslední jízda ${fleetTcarsDateTime(latestTrip.endedAt)}` : "bez jízdy v období"]
+  ];
+
+  return `
+    <article class="fleet-detail-card fleet-detail-card--wide fleet-tcars-card" id="fleet-tcars-detail">
+      <div class="fleet-card-head fleet-tcars-card__head">
+        <div><h3>Úplná data T-Cars</h3><p>${escapeHtml(detail.message)} Nic se neukládá ani neposílá mimo systém.</p></div>
+        <span>${escapeHtml(detail.dataStatus === "partial" ? "Částečně" : "Read-only")}</span>
+      </div>
+      ${fleetTcarsPeriodControls(vehicle)}
+      <div class="fleet-tcars-kpis">
+        ${kpis.map(([label, value, note]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(note)}</small></article>`).join("")}
+      </div>
+      <div class="fleet-tcars-warning"><strong>Pravdivost dat</strong><span>Stav PHM nemá ve WSDL uvedenou jednotku. Otáčky motoru/RPM T-Cars SOAP API neposkytuje, proto se neodhadují.</span></div>
+      <details class="fleet-tcars-expandable" open><summary>Aktuální telemetrie <span>${detail.currentPosition ? "načtena" : "bez polohy"}</span></summary>${fleetTcarsTelemetry(detail)}</details>
+      <details class="fleet-tcars-expandable"><summary>Technický profil vozidla <span>vozidlaSeznam</span></summary>${fleetTcarsVehicleProfile(detail)}</details>
+      <details class="fleet-tcars-expandable"><summary>Kniha jízd <span>${detail.trips.length}</span></summary>${fleetTcarsTripList(detail.trips)}</details>
+      <details class="fleet-tcars-expandable"><summary>Náklady T-Cars <span>${detail.costs.length}</span></summary>${fleetTcarsCostList(detail.costs)}</details>
+      ${fleetTcarsAuxiliary(detail)}
+      <details class="fleet-tcars-expandable fleet-tcars-diagnostics">
+        <summary>Diagnostika zdrojů <span>${escapeHtml(detail.fetchedAt ? fleetTcarsDateTime(detail.fetchedAt) : "bez času")}</span></summary>
+        ${fleetTcarsFieldGrid(Object.entries(detail.methodStatus || {}).map(([name, status]) => [name, fleetTcarsMethodLabel(status)]))}
+      </details>
+    </article>
+  `;
+}
+
 function fleetPrimaryAction(vehicle = {}) {
   const reports = fleetDriverReportSummary(vehicle);
   const primaryReport = reports.waitingPartReports[0] || reports.openReports[0] || null;
@@ -13255,6 +13608,7 @@ function fleetDetailSection(vehicleId = "", activeId = "detail") {
 
           ${fleetDriverReportsDetail(vehicle)}
           ${fleetTrackingDetail(vehicle)}
+          ${fleetTcarsDetailCard(vehicle)}
           ${fleetTermsDetail(vehicle)}
           ${fleetServiceDetail(vehicle)}
           ${fleetDocumentsDetail(vehicle)}
@@ -45622,6 +45976,39 @@ async function loadFleetVehicles(options = {}) {
   }
 }
 
+async function loadFleetTcarsDetail(vehicleId, options = {}) {
+  const vehicleKey = String(vehicleId || "").trim();
+  const days = [1, 7, 30].includes(Number(options.days)) ? Number(options.days) : fleetTcarsDetailState.days;
+  const loadKey = `${vehicleKey}:${days}`;
+  const force = Boolean(options.force);
+  const renderAfter = options.renderAfter !== false;
+  if (!vehicleKey || !hasPermission(currentUser(), "fleet", "view")) return;
+  if (fleetTcarsDetailState.loading) return;
+  if (!force && fleetTcarsDetailState.loadedKey === loadKey && fleetTcarsDetailState.detail) return;
+
+  fleetTcarsDetailState.loading = true;
+  fleetTcarsDetailState.vehicleKey = vehicleKey;
+  fleetTcarsDetailState.days = days;
+  fleetTcarsDetailState.error = "";
+  if (fleetTcarsDetailState.loadedKey !== loadKey) fleetTcarsDetailState.detail = null;
+  if (renderAfter) render();
+
+  try {
+    fleetTcarsDetailState.detail = await apiJson(
+      `/api/vehicles/${encodeURIComponent(vehicleKey)}/tcars?days=${encodeURIComponent(days)}`
+    );
+    fleetTcarsDetailState.loadedKey = loadKey;
+  } catch (error) {
+    fleetTcarsDetailState.detail = null;
+    fleetTcarsDetailState.loadedKey = "";
+    fleetTcarsDetailState.error = error?.payload?.error || error?.message || "T-Cars detail se teď nepodařilo načíst.";
+  } finally {
+    fleetTcarsDetailState.loading = false;
+  }
+
+  if (renderAfter) render();
+}
+
 async function loadFleetFuelAnalytics(options = {}) {
   const period = orwiiFuelPeriod(options.period || fleetFuelState.period).id;
   const force = Boolean(options.force);
@@ -48929,6 +49316,7 @@ function renderAuthenticatedApp(user) {
     app.innerHTML = fleetModulePage(moduleItem, user, { vehicleId: fleetVehicleId });
     document.title = `Detail vozidla | ${APP_NAME}`;
     loadFleetVehicles();
+    void loadFleetTcarsDetail(fleetVehicleId);
     void loadFleetFuelAnalytics();
     return;
   }
@@ -52674,6 +53062,15 @@ document.addEventListener("click", async (event) => {
     const fuelLoading = loadFleetFuelAnalytics({ period: fuelPeriodButton.dataset.fuelPeriod || "30d" });
     render();
     await fuelLoading;
+    return;
+  }
+
+  const fleetTcarsPeriodButton = event.target.closest("[data-fleet-tcars-days]");
+  if (fleetTcarsPeriodButton) {
+    event.preventDefault();
+    const days = Number(fleetTcarsPeriodButton.dataset.fleetTcarsDays || 30);
+    const vehicleId = fleetTcarsPeriodButton.dataset.fleetVehicleId || fleetTcarsDetailState.vehicleKey;
+    await loadFleetTcarsDetail(vehicleId, { days, force: true });
     return;
   }
 
