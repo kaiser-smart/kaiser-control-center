@@ -5,7 +5,7 @@ export const SARLOTA_PRONUNCIATION_DICTIONARY_NAME = "Šarlota – čeština KSO
 export const SARLOTA_LANGUAGE_KB_CONTENT = [
   "# ŠARLOTA – SLOUČENÁ JAZYKOVÁ A VÝSLOVNOSTNÍ REFERENCE PRO KNOWLEDGE BASE",
   "",
-  "Verze: sarlota-kb-language-pronunciation-2026-07-19-audited",
+  "Verze: sarlota-language-2026-07-21-v11-hologram-listening",
   "",
   "## ÚČEL A POŘADÍ PRAVIDEL",
   "",
