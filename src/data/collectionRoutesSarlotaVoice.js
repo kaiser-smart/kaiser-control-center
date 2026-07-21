@@ -41,6 +41,10 @@ function normalizedFactText(value) {
     .trim();
 }
 
+function normalizedWeatherSummary(value) {
+  return normalizedFactText(value).replace(/^(?:brno|brne)\s+/, "");
+}
+
 function weatherIsFresh(weather = {}, now = Date.now()) {
   if (weather?.verified !== true || !cleanText(weather.summary)) return false;
   const observedAt = Date.parse(cleanText(weather.observedAt));
@@ -172,12 +176,12 @@ export function validateCollectionRoutesSarlotaIntro(text, facts = {}) {
   }
 
   if (WEATHER_WORDS.test(response)) {
-    const verifiedSummary = facts.weather?.verified === true ? normalizedFactText(facts.weather.summary) : "";
+    const verifiedSummary = facts.weather?.verified === true ? normalizedWeatherSummary(facts.weather.summary) : "";
     if (!verifiedSummary || !normalizedResponse.includes(verifiedSummary)) {
       violations.push("unverified_or_paraphrased_weather");
     }
   }
-  if (facts.weather?.verified === true && !normalizedResponse.includes(normalizedFactText(facts.weather.summary))) {
+  if (facts.weather?.verified === true && !normalizedResponse.includes(normalizedWeatherSummary(facts.weather.summary))) {
     violations.push("missing_verified_weather");
   }
 
@@ -210,7 +214,7 @@ export function validateCollectionRoutesSarlotaIntro(text, facts = {}) {
     requiredVocative,
     exactCount > 0 ? String(exactCount) : "",
     firstStop,
-    facts.weather?.verified === true ? normalizedFactText(facts.weather.summary) : "",
+    facts.weather?.verified === true ? normalizedWeatherSummary(facts.weather.summary) : "",
     facts.fuel?.verified === true ? normalizedFactText(facts.fuel.value) : "",
     ...dispatcherNames
   ].filter(Boolean);
