@@ -280,11 +280,73 @@ function parseBoolean(value) {
   return null;
 }
 
-function parseTcarsVehicle(block) {
+function parseTcarsDictionary(block) {
+  if (!cleanString(block)) return null;
+  return {
+    id: parseInteger(tagValue(block, "id")),
+    name: tagValue(block, "nazev"),
+    code: tagValue(block, "kod")
+  };
+}
+
+function parseTcarsConsumption(block) {
+  if (!cleanString(block)) return null;
+  return {
+    city: parseNumber(tagValue(block, "spotrebaMesto")),
+    outsideCity: parseNumber(tagValue(block, "spotrebaMimoMesto")),
+    combined: parseNumber(tagValue(block, "spotrebaKombinovana")),
+    co2: parseNumber(tagValue(block, "spotrebaEmiseCO2"))
+  };
+}
+
+function parseTcarsGroupBasic(block, refs = new Map(), depth = 0) {
+  if (!cleanString(block)) return null;
+  const group = {
+    id: parseInteger(tagValue(block, "skupinaId")),
+    name: tagValue(block, "skupinaNazev"),
+    number: tagValue(block, "skupinaCislo"),
+    superior: null,
+    leader: null,
+    center: parseTcarsDictionary(resolveChildBlock(block, "skupinaStredisko", refs)),
+    retired: parseBoolean(tagValue(block, "skupinaVyrazeno")),
+    lastChangedAt: tagValue(block, "skupinaPosledniZmena")
+  };
+  if (depth < 2) {
+    group.superior = parseTcarsGroupBasic(resolveChildBlock(block, "skupinaNadrizena", refs), refs, depth + 1);
+    group.leader = parseTcarsPerson(resolveChildBlock(block, "skupinaVedouci", refs), refs, depth + 1);
+  }
+  return group;
+}
+
+function parseTcarsPerson(block, refs = new Map(), depth = 0) {
+  if (!cleanString(block)) return null;
+  return {
+    id: parseInteger(tagValue(block, "osobaId")),
+    name: tagValue(block, "osobaJmeno"),
+    number: tagValue(block, "osobaCislo"),
+    phone: tagValue(block, "osobaTelefon"),
+    mobile: tagValue(block, "osobaMobil"),
+    email: tagValue(block, "osobaEmail"),
+    rfid: tagValue(block, "osobaRFID"),
+    driverCard: tagValue(block, "osobaKartaRidice"),
+    login: tagValue(block, "osobaLogin"),
+    group: depth < 2 ? parseTcarsGroupBasic(resolveChildBlock(block, "osobaSkupina", refs), refs, depth + 1) : null,
+    role: tagValue(block, "osobaRole"),
+    center: parseTcarsDictionary(resolveChildBlock(block, "osobaStredisko", refs)),
+    position: parseTcarsDictionary(resolveChildBlock(block, "osobaPozice", refs)),
+    retired: parseBoolean(tagValue(block, "osobaVyrazeno")),
+    refrigerationQualificationFrom: tagValue(block, "osobaRefZkOd"),
+    refrigerationQualificationTo: tagValue(block, "osobaRefZkDo"),
+    lastChangedAt: tagValue(block, "osobaPosledniZmena")
+  };
+}
+
+function parseTcarsVehicle(block, refs = new Map()) {
   const vehicleId = tagValue(block, "vozidloId");
   const licensePlate = tagValue(block, "vozidloRz");
   const internalNumber = tagValue(block, "vozidloEvidCis") || licensePlate || vehicleId;
   const unitId = tagValue(block, "vozidloCisloPalubniJednotky");
+  const retired = parseBoolean(tagValue(block, "vozidloVyrazeno"));
 
   return {
     id: vehicleId ? `tcars-${vehicleId}` : `tcars-${licensePlate || internalNumber}`,
@@ -300,7 +362,23 @@ function parseTcarsVehicle(block) {
     internalNumber,
     model: tagValue(block, "vozidloModel"),
     vin: tagValue(block, "vozidloVin"),
-    active: parseBoolean(tagValue(block, "vozidloVyrazeno")) === false,
+    retired,
+    active: retired !== true,
+    availableForReservation: parseBoolean(tagValue(block, "vozidloProRezervace")),
+    allowedForPrivateUse: parseBoolean(tagValue(block, "vozidloProSoukromeUcely")),
+    group: parseTcarsGroupBasic(resolveChildBlock(block, "vozidloSkupina", refs), refs),
+    responsiblePerson: parseTcarsPerson(resolveChildBlock(block, "vozidloOdpovedny", refs), refs),
+    responsibleSince: tagValue(block, "vozidloOdpovednyOd"),
+    center: parseTcarsDictionary(resolveChildBlock(block, "vozidloStredisko", refs)),
+    type: parseTcarsDictionary(resolveChildBlock(block, "vozidloDruh", refs)),
+    category: parseTcarsDictionary(resolveChildBlock(block, "vozidloKategorie", refs)),
+    emissionStandard: parseTcarsDictionary(resolveChildBlock(block, "vozidloEmisniNorma", refs)),
+    primaryFuel: parseTcarsDictionary(resolveChildBlock(block, "vozidloPalivo1", refs)),
+    secondaryFuel: parseTcarsDictionary(resolveChildBlock(block, "vozidloPalivo2", refs)),
+    primaryConsumption: parseTcarsConsumption(resolveChildBlock(block, "vozidloSpotreba1", refs)),
+    secondaryConsumption: parseTcarsConsumption(resolveChildBlock(block, "vozidloSpotreba2", refs)),
+    purchasePrice: parseNumber(tagValue(block, "vozidloPorizovaciCena")),
+    registrationDate: tagValue(block, "vozidloDatumRegistrace"),
     lastChangedAt: tagValue(block, "vozidloPosledniZmena"),
     source: "T-Cars jednotka"
   };
@@ -320,6 +398,7 @@ function parseTcarsGpsData(block) {
     heading: parseInteger(tagValue(block, "azimut")),
     ignition: parseBoolean(tagValue(block, "zapalovani")),
     emergency: parseBoolean(tagValue(block, "nouze")),
+    switchActive: parseBoolean(tagValue(block, "prepinac")),
     eventCode: parseInteger(tagValue(block, "udalost")),
     eventText: tagValue(block, "udalostText"),
     voltage: parseNumber(tagValue(block, "napeti"))
@@ -335,7 +414,7 @@ function vehicleStatusFromGps(gps) {
 }
 
 function parseTcarsPosition(block, refs) {
-  const vehicle = parseTcarsVehicle(resolveChildBlock(block, "vozidlo", refs));
+  const vehicle = parseTcarsVehicle(resolveChildBlock(block, "vozidlo", refs), refs);
   const gps = parseTcarsGpsData(resolveChildBlock(block, "gpsData", refs));
 
   return {
@@ -365,6 +444,7 @@ function parseTcarsPosition(block, refs) {
     altitude: gps.altitude,
     ignition: gps.ignition,
     emergency: gps.emergency,
+    switchActive: gps.switchActive,
     eventCode: gps.eventCode,
     eventText: gps.eventText,
     voltage: gps.voltage,
@@ -372,18 +452,142 @@ function parseTcarsPosition(block, refs) {
   };
 }
 
-function parseTcarsTrip(block) {
+function parseTcarsTrip(block, refs = new Map()) {
   return {
     id: tagValue(block, "jizdaId"),
     startedAt: tagValue(block, "jizdaOd"),
     endedAt: tagValue(block, "jizdaDo"),
+    origin: tagValue(block, "jizdaOdkud"),
+    destination: tagValue(block, "jizdaKam"),
+    country: tagValue(block, "jizdaStat"),
+    odometerStartKm: parseNumber(tagValue(block, "jizdaStavKmPocatek")),
+    odometerEndKm: parseNumber(tagValue(block, "jizdaStavKmKonec")),
+    distanceKm: parseNumber(tagValue(block, "jizdaDelkaKm")),
+    engineHoursStart: parseNumber(tagValue(block, "jizdaStavMthPocatek")),
+    engineHoursEnd: parseNumber(tagValue(block, "jizdaStavMthKonec")),
+    cityOutsideRatio: parseNumber(tagValue(block, "jizdaPomerMestoMimomesto")),
     fuelState: parseNumber(tagValue(block, "jizdaStavPhm")),
-    fuelStateSecondary: parseNumber(tagValue(block, "jizdaStavPhm2"))
+    fuelStateSecondary: parseNumber(tagValue(block, "jizdaStavPhm2")),
+    privateTrip: parseBoolean(tagValue(block, "jizdaSoukroma")),
+    purpose: tagValue(block, "jizdaUcel"),
+    center: parseTcarsDictionary(resolveChildBlock(block, "jizdaStredisko", refs)),
+    driver: parseTcarsPerson(resolveChildBlock(block, "jizdaRidic", refs), refs),
+    responsiblePerson: parseTcarsPerson(resolveChildBlock(block, "jizdaOdpovedny", refs), refs),
+    note: tagValue(block, "jizdaPoznamka")
   };
 }
 
 export function parseTcarsTripsXml(xml) {
-  return typedBlocks(xml, "jizda", "tJizda").map(parseTcarsTrip);
+  const refs = multiRefMap(xml);
+  return typedBlocks(xml, "jizda", "tJizda").map((block) => parseTcarsTrip(block, refs));
+}
+
+function parseTcarsCost(block, refs = new Map()) {
+  return {
+    id: tagValue(block, "nakladId"),
+    kind: parseTcarsDictionary(resolveChildBlock(block, "nakladDruh", refs)),
+    type: parseTcarsDictionary(resolveChildBlock(block, "nakladTyp", refs)),
+    occurredAt: tagValue(block, "nakladDatum"),
+    price: parseNumber(tagValue(block, "nakladCena")),
+    priceWithoutVat: parseNumber(tagValue(block, "nakladCenaBezDPH")),
+    priceWithVat: parseNumber(tagValue(block, "nakladCenaSDPH")),
+    vatPercent: parseInteger(tagValue(block, "nakladDPHProcento")),
+    quantity: parseNumber(tagValue(block, "nakladMnozstvi")),
+    description: tagValue(block, "nakladPopis"),
+    invoiceFrom: tagValue(block, "nakladFakturaOd"),
+    invoiceNumber: tagValue(block, "nakladFakturaCislo"),
+    invoiceTo: tagValue(block, "nakladFakturaDo"),
+    internalInvoiceNumber: tagValue(block, "nakladFakturaInterni"),
+    note: tagValue(block, "nakladPoznamka"),
+    imported: parseBoolean(tagValue(block, "nakladImportovan")),
+    importedToSap: parseBoolean(tagValue(block, "nakladImportovanSAP")),
+    cardType: tagValue(block, "nakladTypKarty")
+  };
+}
+
+export function parseTcarsCostsXml(xml) {
+  const refs = multiRefMap(xml);
+  return typedBlocks(xml, "naklad", "tNaklady").map((block) => parseTcarsCost(block, refs));
+}
+
+function parseTcarsAreaEvent(block) {
+  return {
+    occurredAt: tagValue(block, "datum"),
+    vehicleId: tagValue(block, "vozidloId"),
+    vehicleModel: tagValue(block, "vozidloModel"),
+    licensePlate: tagValue(block, "vozidloRz"),
+    internalNumber: tagValue(block, "vozidloEvidCis"),
+    area: tagValue(block, "oblast"),
+    address: tagValue(block, "adresa"),
+    city: tagValue(block, "mesto"),
+    postalCode: tagValue(block, "psc"),
+    action: tagValue(block, "akce"),
+    place: tagValue(block, "misto"),
+    longitude: parseNumber(tagValue(block, "longitude")),
+    latitude: parseNumber(tagValue(block, "latitude")),
+    speedKmh: parseInteger(tagValue(block, "rychlost"))
+  };
+}
+
+export function parseTcarsAreaEventsXml(xml) {
+  return typedBlocks(xml, "vozidloOblasti", "tVozidlaOblasti").map(parseTcarsAreaEvent);
+}
+
+function parseTcarsIdentification(block) {
+  return {
+    occurredAt: tagValue(block, "datum"),
+    vehicleId: tagValue(block, "vozidloId"),
+    vehicleModel: tagValue(block, "vozidloModel"),
+    licensePlate: tagValue(block, "vozidloRz"),
+    internalNumber: tagValue(block, "vozidloEvidCis"),
+    driverId: tagValue(block, "ridicId"),
+    driverName: tagValue(block, "ridicJmeno"),
+    driverNumber: tagValue(block, "ridicOsCis"),
+    place: tagValue(block, "misto"),
+    chipNumber: tagValue(block, "cipCislo"),
+    cardNumber: tagValue(block, "kartaCislo")
+  };
+}
+
+export function parseTcarsIdentificationsXml(xml) {
+  return typedBlocks(xml, "identifikace", "tIdentifikace").map(parseTcarsIdentification);
+}
+
+function parseTcarsRoadTax(block) {
+  const months = {};
+  for (let month = 1; month <= 12; month += 1) {
+    months[`M${month}`] = parseNumber(tagValue(block, `M${month}`));
+  }
+  const quarters = {};
+  for (let quarter = 1; quarter <= 4; quarter += 1) {
+    quarters[`Q${quarter}`] = parseNumber(tagValue(block, `Q${quarter}`));
+  }
+  return {
+    vehicleId: tagValue(block, "vozidloId"),
+    licensePlate: tagValue(block, "vozidloRz"),
+    registrationDate: tagValue(block, "vozidloDatumRegistrace"),
+    displacementCm3: parseNumber(tagValue(block, "cm3")),
+    axleCount: parseInteger(tagValue(block, "vozidloPocetNaprav")),
+    annualRate: parseNumber(tagValue(block, "rocniSazba")),
+    osv: parseInteger(tagValue(block, "OSV")),
+    months,
+    quarters,
+    total: parseNumber(tagValue(block, "celkem"))
+  };
+}
+
+export function parseTcarsRoadTaxXml(xml) {
+  return typedBlocks(xml, "result", "tPodkladProSilnicniDan").map(parseTcarsRoadTax);
+}
+
+export function parseTcarsVehiclesXml(xml) {
+  const refs = multiRefMap(xml);
+  return typedBlocks(xml, "vozidlo", "tVozidlo").map((block) => parseTcarsVehicle(block, refs));
+}
+
+export function parseTcarsPositionsXml(xml) {
+  const refs = multiRefMap(xml);
+  return typedBlocks(xml, "pozice", "tPozice").map((block) => parseTcarsPosition(block, refs));
 }
 
 function normalizeRegistration(value) {
@@ -506,27 +710,27 @@ async function tcarsSoapRequest(env, method, paramsXml) {
   return text;
 }
 
-export async function fetchTcarsVehicles(env = {}) {
+export async function fetchTcarsVehicles(env = {}, options = {}) {
   const config = tcarsConfig(env);
+  const activeOnly = options.activeOnly !== false;
   const xml = await tcarsSoapRequest(env, "vozidlaSeznam", `
     ${loginDataXml(config)}
-    <pouzeAktivni xsi:type="xsd:boolean">true</pouzeAktivni>
+    <pouzeAktivni xsi:type="xsd:boolean">${activeOnly ? "true" : "false"}</pouzeAktivni>
     <zmenyOd xsi:type="xsd:dateTime">2000-01-01T00:00:00</zmenyOd>
     <zaznamyLimit xsi:type="xsd:int">500</zaznamyLimit>
   `);
 
-  return typedBlocks(xml, "vozidlo", "tVozidlo").map(parseTcarsVehicle);
+  return parseTcarsVehiclesXml(xml);
 }
 
-export async function fetchTcarsPositions(env = {}) {
+export async function fetchTcarsPositions(env = {}, options = {}) {
   const config = tcarsConfig(env);
+  const activeOnly = options.activeOnly !== false;
   const xml = await tcarsSoapRequest(env, "vozidlaPozice", `
     ${loginDataXml(config)}
-    <pouzeAktivni xsi:type="xsd:boolean">true</pouzeAktivni>
+    <pouzeAktivni xsi:type="xsd:boolean">${activeOnly ? "true" : "false"}</pouzeAktivni>
   `);
-  const refs = multiRefMap(xml);
-
-  return typedBlocks(xml, "pozice", "tPozice").map((block) => parseTcarsPosition(block, refs));
+  return parseTcarsPositionsXml(xml);
 }
 
 export async function fetchTcarsVehicleTrips(env = {}, vehicle = {}, options = {}) {
@@ -546,6 +750,70 @@ export async function fetchTcarsVehicleTrips(env = {}, vehicle = {}, options = {
     <datumDo xsi:type="xsd:date">${xmlEscape(now.toISOString().slice(0, 10))}</datumDo>
   `);
   return parseTcarsTripsXml(xml);
+}
+
+function tcarsDateRange(options = {}) {
+  const now = dateTimeValue(options.now) || new Date();
+  const daysValue = Number.parseInt(String(options.days || "30"), 10);
+  const days = [1, 7, 30].includes(daysValue) ? daysValue : 30;
+  const from = dateTimeValue(options.from) || new Date(now.getTime() - (days * 24 * 60 * 60 * 1000));
+  return {
+    days,
+    from,
+    now,
+    fromDate: from.toISOString().slice(0, 10),
+    toDate: now.toISOString().slice(0, 10)
+  };
+}
+
+export async function fetchTcarsVehicleCosts(env = {}, vehicle = {}, options = {}) {
+  const config = tcarsConfig(env);
+  const range = tcarsDateRange(options);
+  const vehicleId = cleanString(vehicle.tcarsVehicleId || vehicle.externalVehicleId || vehicle.vehicleId);
+  const licensePlate = cleanString(vehicle.tcarsLicensePlate || vehicle.licensePlate || vehicle.registration);
+  const xml = await tcarsSoapRequest(env, "vozidloNaklady", `
+    ${loginDataXml(config)}
+    <vozidloId xsi:type="xsd:int">${xmlEscape(vehicleId || 0)}</vozidloId>
+    <vozidloRz xsi:type="xsd:string">${xmlEscape(licensePlate)}</vozidloRz>
+    <datumOd xsi:type="xsd:date">${xmlEscape(range.fromDate)}</datumOd>
+    <datumDo xsi:type="xsd:date">${xmlEscape(range.toDate)}</datumDo>
+  `);
+  return parseTcarsCostsXml(xml);
+}
+
+export async function fetchTcarsAreaEvents(env = {}, options = {}) {
+  const config = tcarsConfig(env);
+  const range = tcarsDateRange(options);
+  const xml = await tcarsSoapRequest(env, "vozidlaOblasti", `
+    ${loginDataXml(config)}
+    <datumOd xsi:type="xsd:date">${xmlEscape(range.fromDate)}</datumOd>
+    <datumDo xsi:type="xsd:date">${xmlEscape(range.toDate)}</datumDo>
+  `);
+  return parseTcarsAreaEventsXml(xml);
+}
+
+export async function fetchTcarsIdentifications(env = {}, options = {}) {
+  const config = tcarsConfig(env);
+  const range = tcarsDateRange(options);
+  const xml = await tcarsSoapRequest(env, "vozidlaIdentifikace", `
+    ${loginDataXml(config)}
+    <datumOd xsi:type="xsd:date">${xmlEscape(range.fromDate)}</datumOd>
+    <datumDo xsi:type="xsd:date">${xmlEscape(range.toDate)}</datumDo>
+  `);
+  return parseTcarsIdentificationsXml(xml);
+}
+
+export async function fetchTcarsRoadTax(env = {}, vehicle = {}, options = {}) {
+  const config = tcarsConfig(env);
+  const now = dateTimeValue(options.now) || new Date();
+  const year = Number.parseInt(String(options.year || now.getUTCFullYear()), 10) || now.getUTCFullYear();
+  const vehicleId = cleanString(vehicle.tcarsVehicleId || vehicle.externalVehicleId || vehicle.vehicleId);
+  const xml = await tcarsSoapRequest(env, "reportPodkladProSilnicniDan", `
+    ${loginDataXml(config)}
+    <rok xsi:type="xsd:integer">${xmlEscape(year)}</rok>
+    <vozidloId xsi:type="xsd:integer">${xmlEscape(vehicleId || 0)}</vozidloId>
+  `);
+  return parseTcarsRoadTaxXml(xml);
 }
 
 export function verifiedTcarsFuelState(trips = [], vehicle = {}, options = {}) {
@@ -604,6 +872,153 @@ export async function loadVerifiedTcarsFuelState(env = {}, vehicle = {}, options
       value: null,
       unit: "",
       source: "T-Cars"
+    };
+  }
+}
+
+function tcarsVehicleIdentity(vehicle = {}) {
+  return {
+    id: cleanString(vehicle.tcarsVehicleId || vehicle.externalVehicleId || vehicle.vehicleId)
+      .replace(/^tcars-/i, ""),
+    registration: normalizeRegistration(
+      vehicle.tcarsLicensePlate || vehicle.licensePlate || vehicle.registration
+    )
+  };
+}
+
+function tcarsVehicleMatches(candidate = {}, vehicle = {}) {
+  const wanted = tcarsVehicleIdentity(vehicle);
+  const actual = tcarsVehicleIdentity(candidate);
+  if (wanted.id && actual.id) return wanted.id === actual.id;
+  return Boolean(wanted.registration && actual.registration && wanted.registration === actual.registration);
+}
+
+function tcarsFilterVehicleItems(items = [], vehicle = {}) {
+  return (Array.isArray(items) ? items : []).filter((item) => tcarsVehicleMatches(item, vehicle));
+}
+
+function tcarsSettledResult(result, fallback = []) {
+  return result?.status === "fulfilled" ? result.value : fallback;
+}
+
+function tcarsSettledStatus(result) {
+  if (result?.status === "fulfilled") return { apiStatus: "ready", errorCode: "" };
+  return {
+    apiStatus: "waiting",
+    errorCode: cleanString(result?.reason?.code || "tcars_read_failed")
+  };
+}
+
+export async function loadTcarsVehicleDetailPayload(env = {}, fleetVehicle = {}, options = {}) {
+  const config = tcarsConfig(env);
+  const range = tcarsDateRange(options);
+  const base = {
+    provider: "tcars",
+    source: "T-Cars read-only SOAP API",
+    apiStatus: "waiting",
+    dataStatus: "waiting",
+    readOnly: true,
+    writesData: false,
+    startsAutomation: false,
+    sendsNotifications: false,
+    period: { days: range.days, from: range.fromDate, to: range.toDate },
+    capabilities: {
+      engineRpm: { available: false, reason: "not_exposed_by_tcars_wsdl" },
+      fuelState: { available: true, source: "knihaJizdVozidlo.jizdaStavPhm", unitProvided: false },
+      liveTelemetry: { available: true, source: "vozidlaPozice.gpsData" }
+    },
+    vehicle: null,
+    currentPosition: null,
+    fuelState: { verified: false, status: "waiting", value: null, unit: "", source: "T-Cars" },
+    trips: [],
+    costs: [],
+    areaEvents: [],
+    identifications: [],
+    roadTax: [],
+    methodStatus: {},
+    fetchedAt: "",
+    message: config.configured
+      ? "T-Cars detail čeká na načtení."
+      : "T-Cars napojení čeká na konfiguraci."
+  };
+
+  if (!config.configured) return base;
+
+  try {
+    const [vehicles, positions] = await Promise.all([
+      fetchTcarsVehicles(env, { activeOnly: false }),
+      fetchTcarsPositions(env, { activeOnly: false })
+    ]);
+    const exactVehicles = tcarsFilterVehicleItems(vehicles, fleetVehicle);
+    if (exactVehicles.length !== 1) {
+      return {
+        ...base,
+        dataStatus: exactVehicles.length > 1 ? "ambiguous_vehicle" : "vehicle_not_linked",
+        message: exactVehicles.length > 1
+          ? "T-Cars vozidlo nelze bezpečně určit jednoznačně."
+          : "Vozidlo není jednoznačně propojené s T-Cars."
+      };
+    }
+
+    const vehicle = exactVehicles[0];
+    const currentPosition = tcarsFilterVehicleItems(positions, vehicle)
+      .sort((left, right) => String(right.lastGpsAt || "").localeCompare(String(left.lastGpsAt || "")))[0] || null;
+    const detailOptions = { ...options, days: range.days, from: range.from, now: range.now };
+    const [tripsResult, costsResult, areasResult, identificationsResult, roadTaxResult] = await Promise.allSettled([
+      fetchTcarsVehicleTrips(env, vehicle, detailOptions),
+      fetchTcarsVehicleCosts(env, vehicle, detailOptions),
+      fetchTcarsAreaEvents(env, detailOptions),
+      fetchTcarsIdentifications(env, detailOptions),
+      fetchTcarsRoadTax(env, vehicle, detailOptions)
+    ]);
+    const trips = tcarsSettledResult(tripsResult, [])
+      .sort((left, right) => String(right.endedAt || right.startedAt || "").localeCompare(String(left.endedAt || left.startedAt || "")));
+    const costs = tcarsSettledResult(costsResult, [])
+      .sort((left, right) => String(right.occurredAt || "").localeCompare(String(left.occurredAt || "")));
+    const areaEvents = tcarsFilterVehicleItems(tcarsSettledResult(areasResult, []), vehicle)
+      .sort((left, right) => String(right.occurredAt || "").localeCompare(String(left.occurredAt || "")));
+    const identifications = tcarsFilterVehicleItems(tcarsSettledResult(identificationsResult, []), vehicle)
+      .sort((left, right) => String(right.occurredAt || "").localeCompare(String(left.occurredAt || "")));
+    const roadTax = tcarsFilterVehicleItems(tcarsSettledResult(roadTaxResult, []), vehicle);
+    const methodStatus = {
+      vehicles: { apiStatus: "ready", errorCode: "" },
+      positions: { apiStatus: "ready", errorCode: "" },
+      trips: tcarsSettledStatus(tripsResult),
+      costs: tcarsSettledStatus(costsResult),
+      areaEvents: tcarsSettledStatus(areasResult),
+      identifications: tcarsSettledStatus(identificationsResult),
+      roadTax: tcarsSettledStatus(roadTaxResult)
+    };
+    const partial = Object.values(methodStatus).some((status) => status.apiStatus !== "ready");
+    const fetchedAt = new Date().toISOString();
+
+    return {
+      ...base,
+      apiStatus: "ready",
+      dataStatus: partial ? "partial" : "ready",
+      vehicle,
+      currentPosition,
+      fuelState: verifiedTcarsFuelState(trips, vehicle, { now: range.now }),
+      trips,
+      costs,
+      areaEvents,
+      identifications,
+      roadTax,
+      methodStatus,
+      fetchedAt,
+      message: partial
+        ? "T-Cars detail byl načten částečně; nedostupné části jsou označené."
+        : "T-Cars detail byl načten read-only bez zápisu do provozních dat."
+    };
+  } catch (error) {
+    console.error("tcars.read_vehicle_detail_failed", {
+      code: error?.code || "unknown",
+      message: error?.message || "unknown"
+    });
+    return {
+      ...base,
+      errorCode: error?.code || "tcars_vehicle_detail_failed",
+      message: "T-Cars detail vozidla se nepodařilo načíst."
     };
   }
 }
@@ -770,17 +1185,17 @@ function fleetVehicleFromTcars(vehicle) {
     id: vehicle.tcarsVehicleId ? `tcars-${vehicle.tcarsVehicleId}` : `tcars-${internalNumber}`,
     internalNumber,
     licensePlate: vehicle.licensePlate || "",
-    vehicleType: "",
+    vehicleType: vehicle.type?.name || vehicle.category?.name || "",
     brand: "",
     model: vehicle.model || "",
     vin: vehicle.vin || "",
     year: "",
-    fuelType: "",
-    euroNorm: "",
+    fuelType: [vehicle.primaryFuel?.name, vehicle.secondaryFuel?.name].filter(Boolean).join(" + "),
+    euroNorm: vehicle.emissionStandard?.name || "",
     bodyType: "",
-    department: "",
+    department: vehicle.center?.name || vehicle.group?.name || "",
     assignedDriverId: "",
-    assignedDriverName: "",
+    assignedDriverName: vehicle.responsiblePerson?.name || "",
     status,
     mileageKm: null,
     stkValidTo: "",
@@ -799,6 +1214,8 @@ function fleetVehicleFromTcars(vehicle) {
     tcarsLicensePlate: vehicle.tcarsLicensePlate || vehicle.licensePlate || "",
     gpsProvider: "tcars",
     gpsUnitId: vehicle.tcarsUnitId || "",
+    telemetrySource: "T-Cars read-only",
+    tcarsProfile: vehicle,
     source: "T-Cars read-only",
     readOnly: true,
     createdAt: "",

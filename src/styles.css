@@ -4206,6 +4206,205 @@ button:not(:disabled):active,
   min-width: 0;
 }
 
+.fleet-tcars-card {
+  border-color: #cfe0c6;
+  background: #fbfdf9;
+}
+
+.fleet-tcars-card--error {
+  border-color: #efb9b0;
+  background: #fff7f5;
+}
+
+.fleet-tcars-card__head p {
+  max-width: 760px;
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.fleet-tcars-periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fleet-tcars-periods button {
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid #d6e1d0;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--steel);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.fleet-tcars-periods button.is-active {
+  border-color: #6f9f49;
+  background: #eaf5e2;
+  color: #315b18;
+}
+
+.fleet-tcars-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.fleet-tcars-kpis article {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid #dfe8d9;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.fleet-tcars-kpis span,
+.fleet-tcars-kpis small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.fleet-tcars-kpis span {
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.fleet-tcars-kpis strong {
+  color: var(--ink);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.fleet-tcars-warning {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #efd59f;
+  border-radius: 8px;
+  background: #fffaf0;
+  color: #79540f;
+}
+
+.fleet-tcars-warning span {
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.fleet-tcars-expandable {
+  min-width: 0;
+  border: 1px solid #dfe8d9;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.fleet-tcars-expandable > summary {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.fleet-tcars-expandable > summary span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+  text-align: right;
+  white-space: normal;
+}
+
+.fleet-tcars-expandable[open] > summary {
+  border-bottom: 1px solid #e4eadf;
+  background: #f7faf5;
+}
+
+.fleet-tcars-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 6px 14px 14px;
+}
+
+.fleet-tcars-fields div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(102, 124, 105, 0.13);
+}
+
+.fleet-tcars-fields dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.fleet-tcars-fields dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-weight: 750;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.fleet-tcars-records {
+  display: grid;
+  gap: 10px;
+  max-height: 720px;
+  padding: 12px;
+  overflow: auto;
+}
+
+.fleet-tcars-records article {
+  min-width: 0;
+  border: 1px solid #e2e9de;
+  border-radius: 8px;
+  background: #fbfdf9;
+}
+
+.fleet-tcars-records header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 6px;
+}
+
+.fleet-tcars-records header strong {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.fleet-tcars-records header span {
+  color: var(--steel);
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.fleet-tcars-empty {
+  margin: 0;
+  padding: 16px;
+  color: var(--muted);
+  font-weight: 750;
+}
+
 .fleet-term-list,
 .fleet-document-type-grid article div,
 .fleet-detail-secondary-actions,
@@ -22322,6 +22521,8 @@ body:has(.data-box-page) {
   .fleet-vehicle-facts,
   .fleet-settings-grid,
   .fleet-tracking-detail__list,
+  .fleet-tcars-kpis,
+  .fleet-tcars-fields,
   .fleet-filters {
     grid-template-columns: 1fr;
   }
@@ -22463,10 +22664,34 @@ body:has(.data-box-page) {
 
   .fleet-work-block__head,
   .fleet-card-head,
+  .fleet-tcars-records header,
   .fleet-priority-card__top,
   .fleet-work-block--compact,
   .fleet-system-recommendation {
     display: grid;
+  }
+
+  .fleet-tcars-periods {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .fleet-tcars-periods button {
+    width: 100%;
+    padding-inline: 8px;
+  }
+
+  .fleet-tcars-expandable > summary {
+    align-items: flex-start;
+  }
+
+  .fleet-tcars-records {
+    max-height: 620px;
+    padding: 8px;
+  }
+
+  .fleet-tcars-records header span {
+    white-space: normal;
   }
 
   .fleet-quick-filters {
