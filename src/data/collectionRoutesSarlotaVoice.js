@@ -36,6 +36,7 @@ function normalizedFactText(value) {
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    .replace(/°\s*c\b/g, " stupnu celsia ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }

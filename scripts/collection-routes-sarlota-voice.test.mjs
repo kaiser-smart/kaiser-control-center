@@ -61,6 +61,10 @@ assert.equal(validateCollectionRoutesSarlotaIntro(
   "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová. Mirku, potřebuješ něco upřesnit?",
   introFacts
 ).valid, true);
+assert.equal(validateCollectionRoutesSarlotaIntro(
+  "Ahoj Mirku, dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Brno: 22 stupňů Celsia, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Dnes není v práci dispečerka Jana Dispečerová. Mirku, potřebuješ něco upřesnit?",
+  introFacts
+).valid, true, "Bezpečnostní kontrola musí přijmout správnou hlasovou výslovnost jednotky °C.");
 
 const hallucinatedIntro = validateCollectionRoutesSarlotaIntro(
   "Dobré dopoledne, posádko. Dnes jedete trasu Severní průmyslová zóna s osmi stanovišti. Pro jízdu je přiřazené vozidlo Mercedes Atego, SPZ 5A4 1234.",
