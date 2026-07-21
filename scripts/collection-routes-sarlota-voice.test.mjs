@@ -24,8 +24,8 @@ assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /aktivního sys
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /připojené Knowledge Base/);
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Neopakuj stejný údaj/);
 assert.doesNotMatch(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Ahoj Mirku|Můžeme vyrazit/);
-assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /přerušitelné/);
-assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /mikrofon zůstává aktivní/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /bez mikrofonu/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /vyhrazen výhradně pro ruční vyvolání hovoru/);
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /potřebuje něco upřesnit/);
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /pět sekund/);
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /pokračuje běžnou konverzací/);
@@ -234,7 +234,7 @@ const automaticVoiceStart = appSource.slice(
   appSource.indexOf("async function startCollectionDailyDriverSarlota"),
   appSource.indexOf("async function enableCollectionDailyDriverSarlota")
 );
-assert.match(automaticVoiceStart, /void elevenLabsAssistant\.prepareVoiceInput\?\.\(\);/);
+assert.match(automaticVoiceStart, /if \(!automaticSession\) void elevenLabsAssistant\.prepareVoiceInput/);
 assert.match(automaticVoiceStart, /onInterruption/);
 assert.match(automaticVoiceStart, /updateCollectionRoutesVoiceIntro\("cancel", introPlaybackToken\)/);
 

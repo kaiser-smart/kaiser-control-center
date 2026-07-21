@@ -903,10 +903,9 @@ export function useElevenLabsAssistant({
     const introGenerationRequest = String(callbacks.introGenerationRequest || "").trim();
     const endAfterGeneratedIntro = Boolean(introGenerationRequest && callbacks.endAfterGeneratedIntro === true);
     const continueAfterGeneratedIntro = Boolean(introGenerationRequest && callbacks.continueAfterGeneratedIntro === true);
-    // Barge-in must work while the generated route intro is playing. Keep the
-    // capture stream running from the beginning; ElevenLabs decides whether a
-    // detected utterance is an actual interruption.
-    const deferMicrophoneUntilAfterGeneratedIntro = false;
+    // Automatický holografický úvod je bez mikrofonu. Zachycení řeči začíná
+    // až po jeho úplném dohrání, kdy KSO otevře pětisekundové okno poslechu.
+    const deferMicrophoneUntilAfterGeneratedIntro = Boolean(continueAfterGeneratedIntro);
     const listenAfterTechnicalFirstMessage = Boolean(introGenerationRequest && callbacks.listenAfterTechnicalFirstMessage === true);
     const validateGeneratedIntro = typeof callbacks.validateGeneratedIntro === "function";
     const bufferGeneratedIntro = Boolean(introGenerationRequest && validateGeneratedIntro);
@@ -995,7 +994,7 @@ export function useElevenLabsAssistant({
       let introValidation = null;
       let audioInputStarted = false;
       let audioInputStopped = false;
-      let audioInputPaused = false;
+      let audioInputPaused = Boolean(introGenerationRequest);
       let introGenerationPhase = introGenerationRequest ? "suppressing-technical-first-message" : "complete";
       let technicalFirstMessageComplete = false;
       let sourceNode = null;
@@ -1184,7 +1183,7 @@ export function useElevenLabsAssistant({
         }
 
         introGenerationPhase = "waiting-for-generated-intro";
-        audioInputPaused = false;
+        audioInputPaused = true;
         resetAgentTurn();
         if (!sendJson({ type: "user_message", text: introGenerationRequest })) {
           settle(reject, new Error("Šarlota nedokázala převzít požadavek na úvodní hlášení."), "intro-generation-send-failed");
@@ -1456,7 +1455,7 @@ export function useElevenLabsAssistant({
         }
 
         finalAgentText = cleanedText;
-        audioInputPaused = false;
+        audioInputPaused = true;
         callbacks.onAgentResponse?.({
           text: cleanedText,
           conversationId
@@ -1577,9 +1576,7 @@ export function useElevenLabsAssistant({
           userTranscript = String(payload.user_transcription_event?.user_transcript || userTranscript).trim();
           if (introGenerationPhase === "waiting-for-generated-intro" && userTranscript === introGenerationRequest) {
             userTranscript = "";
-            // Keep sending microphone frames while Šarlota speaks so the
-            // service can detect a real barge-in and emit `interruption`.
-            audioInputPaused = false;
+            audioInputPaused = true;
             return;
           }
           if (userTranscript) {
@@ -1589,9 +1586,7 @@ export function useElevenLabsAssistant({
               introPlaybackFinished = true;
               bufferedIntroAudio = [];
             }
-            // Do not mute capture while audio is playing: the upstream Turn
-            // V3 detector needs these frames to produce an interruption.
-            audioInputPaused = false;
+            audioInputPaused = true;
             streamedAgentText = "";
             finalAgentText = "";
             audioChunkCount = 0;
@@ -1609,7 +1604,7 @@ export function useElevenLabsAssistant({
         if (payload.type === "audio") {
           const audioBase64 = payload.audio_event?.audio_base_64;
           if (introGenerationPhase === "suppressing-technical-first-message") {
-            audioInputPaused = false;
+            audioInputPaused = true;
             scheduleGeneratedIntroRequest();
             return;
           }
@@ -1617,9 +1612,7 @@ export function useElevenLabsAssistant({
             if (introAwaitingUser && !introUserEngaged) {
               return;
             }
-            // The microphone stays live through playback so ElevenLabs can
-            // send `interruption` as soon as the driver starts speaking.
-            audioInputPaused = false;
+            audioInputPaused = true;
             audioChunkCount += 1;
             window.clearTimeout(finishTimer);
             if (bufferGeneratedIntro && !introPlaybackFinished) {
@@ -1686,7 +1679,7 @@ export function useElevenLabsAssistant({
 
           if (partType === "start") {
             streamedAgentText = "";
-            audioInputPaused = false;
+            audioInputPaused = true;
           }
 
           if (part.text && partType !== "start") {

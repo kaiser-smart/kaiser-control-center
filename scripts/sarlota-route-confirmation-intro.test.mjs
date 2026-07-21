@@ -39,7 +39,7 @@ assert.match(appSource, /myDailyRouteSarlotaAutoAttemptedRunId === run\.id/);
 assert.match(loadRouteSource, /const sarlotaAutoStartRunId = collectionDailyDriverSarlotaAutoStartRunId\(\);/);
 assert.match(loadRouteSource, /myDailyRouteSarlotaAutoAttemptedRunId = sarlotaAutoStartRunId;/);
 assert.match(loadRouteSource, /await enableCollectionDailyDriverSarlota\(\{ promptForMemory: false, invocation: "automatic" \}\);/);
-assert.match(appSource, /Mikrofon se nepodařilo připojit/);
+assert.match(appSource, /Úvod proběhl bez mikrofonu, ale po závěrečné otázce se nepodařilo zapnout poslech/);
 
 const enableStart = appSource.indexOf("async function enableCollectionDailyDriverSarlota(options = {})");
 const enableEnd = appSource.indexOf("async function grantCollectionRoutesSarlotaMemoryAndStart", enableStart);
@@ -102,8 +102,8 @@ assert.match(styleSource, /\.collection-daily-driver-route-confirmation > \.prim
 assert.match(styleSource, /\.collection-daily-driver-modal > section \{\s*max-height: calc\(100dvh - 8px\);/);
 assert.match(mantraSource, /v jednom okně a jedním finálním klepnutím/);
 assert.match(mantraSource, /paměť výslovně nezaškrtne, nezapne se ani se nic neuloží/);
-assert.match(mantraSource, /aktivním mikrofonem/);
-assert.match(mantraSource, /Přerušení okamžitě zruší zbytek zvuku i časovač/);
+assert.match(mantraSource, /agentem vytvořený úvod bez mikrofonu/);
+assert.match(mantraSource, /Velký mikrofon je vyhrazen jen pro pozdější ruční vyvolání hovoru/);
 assert.match(mantraSource, /libovolně dlouho/);
 assert.match(mantraSource, /Mirku, s čím mohu pomoct/);
 assert.match(mantraSource, /signed URL, WebSocket, validace nebo audio selže/);
@@ -134,8 +134,9 @@ const normalAudioEvent = voiceClientSource.slice(
   normalAudioStart,
   voiceClientSource.indexOf('if (payload.type === "agent_response")', normalAudioStart)
 );
-assert.match(normalAudioEvent, /audioInputPaused = false/);
-assert.doesNotMatch(normalAudioEvent, /audioInputPaused = true/);
+assert.match(normalAudioEvent, /audioInputPaused = true/);
+assert.doesNotMatch(normalAudioEvent, /audioInputPaused = false/);
+assert.match(voiceClientSource, /deferMicrophoneUntilAfterGeneratedIntro = Boolean\(continueAfterGeneratedIntro\)/);
 assert.match(sourcePrompt, /BEZPEČNÝ PROVOZNÍ VÝTAH JE AKTIVNÍ/);
 
 console.log("Šarlota route confirmation intro tests passed.");

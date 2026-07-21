@@ -3463,7 +3463,12 @@ async function startElevenLabsVoiceRecognition(options = {}) {
   aiAssistantState.voiceTranscript = "";
   aiAssistantState.voiceAnswer = "";
   aiAssistantState.isListening = false;
-  setAiVoiceUiState("connecting", AI_VOICE_CONNECTING_LABEL, ["Připojuji", "Mikrofon aktivní", "ElevenLabs"]);
+  const microphoneFreeIntro = Boolean(options.introGenerationRequest) && (
+    options.endAfterGeneratedIntro === true || options.continueAfterGeneratedIntro === true
+  );
+  setAiVoiceUiState("connecting", AI_VOICE_CONNECTING_LABEL, microphoneFreeIntro
+    ? ["Připojuji", "Bez mikrofonu", "ElevenLabs"]
+    : ["Připojuji", "Mikrofon", "ElevenLabs"]);
   renderAiAssistantLayerOnly();
 
   try {
@@ -3500,7 +3505,9 @@ async function startElevenLabsVoiceRecognition(options = {}) {
         aiAssistantState.elevenLabsConfigured = true;
         aiAssistantState.elevenLabsConfiguredByAssistant[assistant.id] = true;
         aiAssistantState.elevenLabsStatus = `ElevenLabs agent ${session.assistantName || assistant.name} je připojený.`;
-        setAiVoiceUiState("ready", AI_VOICE_READY_LABEL, ["Připojeno", "Mikrofon aktivní", "ElevenLabs"]);
+        setAiVoiceUiState("ready", AI_VOICE_READY_LABEL, microphoneFreeIntro
+          ? ["Připojeno", "Bez mikrofonu", "ElevenLabs"]
+          : ["Připojeno", "Mikrofon", "ElevenLabs"]);
         options.onConnected?.(session);
         triggerAiVoiceSessionHaptic("connected");
         renderAiAssistantLayerOnly();
@@ -42713,7 +42720,7 @@ async function startCollectionDailyDriverSarlota(options = {}) {
   const automaticSession = options.invocation === "automatic";
   const automaticRetryCount = Math.max(0, Number(options.automaticRetryCount || 0));
   clearCollectionRoutesSarlotaIntroResponseWindow();
-  void elevenLabsAssistant.prepareVoiceInput?.();
+  if (!automaticSession) void elevenLabsAssistant.prepareVoiceInput?.();
   let introPlaybackToken = "";
   collectionRoutesPilotState.myDailyRouteSarlotaEnabled = false;
   collectionRoutesPilotState.myDailyRouteSarlotaConnecting = true;
@@ -42726,7 +42733,7 @@ async function startCollectionDailyDriverSarlota(options = {}) {
   collectionRoutesPilotState.myDailyRouteSarlotaIntroCompleted = false;
   const memory = collectionRoutesPilotState.myDailyRouteSarlotaMemory;
   collectionRoutesPilotState.myDailyRouteSarlotaMessage = automaticSession
-    ? "Připravuji jednorázový ověřený úvod Šarloty. Mikrofon je aktivní a Šarlotu můžeš ihned přerušit."
+    ? "Připravuji jednorázový ověřený úvod Šarloty bez mikrofonu. Po otázce se ve stejném hologramu na pět sekund zapne poslech."
     : "Připojuji Šarlotu přes ElevenLabs…";
   openAiAssistant("voice", { assistantId: "sarlota", renderAfter: false });
   if (automaticSession) setAiVoiceUiState("processing", AI_VOICE_PROCESSING_LABEL, ["Připravuji úvod", "Ověřuji KSO fakta", "Zvuk zatím neběží"]);
@@ -42769,7 +42776,7 @@ async function startCollectionDailyDriverSarlota(options = {}) {
       collectionRoutesPilotState.myDailyRouteSarlotaConnecting = false;
       collectionRoutesPilotState.myDailyRouteSarlotaRuntime = session?.voiceRuntime || null;
       collectionRoutesPilotState.myDailyRouteSarlotaMessage = automaticSession
-        ? "Šarlota připravuje úvod přes aktivní Prompt a KB; mikrofon zůstává aktivní. KSO kontroluje oslovení, počet a první stanoviště, počasí, T-Cars a dostupnost dispečerů."
+        ? "Šarlota připravuje úvod bez mikrofonu přes aktivní Prompt a KB. KSO kontroluje oslovení, počet a první stanoviště, počasí, T-Cars a dostupnost dispečerů."
         : memory?.consent
           ? "Šarlota zná aktuální trasu a tvoje pracovní témata. Můžeš s ní rovnou mluvit; zápis vždy čeká na klepnutí."
           : "Šarlota zná aktuální trasu. Můžeš s ní rovnou mluvit; paměť je vypnutá a zápis vždy čeká na klepnutí.";
@@ -42854,7 +42861,7 @@ async function startCollectionDailyDriverSarlota(options = {}) {
       collectionRoutesPilotState.myDailyRouteSarlotaMessage = error?.code === "voice_stopped"
         ? "Šarlota je vypnutá. Klepnutím ji můžeš znovu připojit."
         : automaticSession && microphonePermissionFailure
-          ? "Mikrofon se nepodařilo připojit. Zkontroluj oprávnění mikrofonu a spusť Šarlotu znovu."
+          ? "Úvod proběhl bez mikrofonu, ale po závěrečné otázce se nepodařilo zapnout poslech. Zkontroluj oprávnění mikrofonu a spusť Šarlotu znovu."
         : automaticSession && error?.code === "voice_intro_already_played"
           ? "Automatický úvod už v této relaci proběhl. Šarlotu můžeš zapnout ručně mikrofonem."
         : automaticSession && error?.code === "voice_intro_validation_failed"

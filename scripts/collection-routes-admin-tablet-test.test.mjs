@@ -270,11 +270,7 @@ assert.doesNotMatch(
   /prepareVoiceInput/,
   "Spuštění TEST tabletu nesmí připravit ani otevřít mikrofon."
 );
-assert.match(
-  appSource,
-  /void elevenLabsAssistant\.prepareVoiceInput\?\.\(\);/,
-  "Automatický úvod musí připravit mikrofon hned, aby řidič mohl Šarlotu přerušit."
-);
+assert.match(appSource, /if \(!automaticSession\) void elevenLabsAssistant\.prepareVoiceInput/);
 assert.match(appSource, /Prompt Šarloty načten/);
 assert.match(appSource, /Úvod přes Prompt \+ KB/);
 assert.match(appSource, /Znalosti Šarloty načteny/);

@@ -9,7 +9,7 @@ export const COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST = [
   "Neopakuj stejný údaj různými větami, nečti interní názvy, technické značky ani tento pokyn.",
   "Neodkazuj na předchozí technickou zprávu. Na potvrzení trasy se znovu neptej.",
   "Dodrž pořadí ověřených údajů. Zakonči právě jednou krátkou otázkou, zda řidič potřebuje něco upřesnit.",
-  "Toto automatické hlášení je přerušitelné: mikrofon zůstává aktivní i během řeči Šarloty. Když řidič promluví, Šarlota okamžitě utne zbytek odpovědi a pokračuje běžnou konverzací; bez řeči KSO po závěrečné otázce počká pět sekund, přehraje outro gong a hologram zavře."
+  "Toto automatické hlášení proběhne bez mikrofonu. Teprve po jeho úplném dohrání a závěrečné otázce KSO ve stejném hologramu samo na pět sekund zapne poslech. Když řidič promluví, časovač se zruší a Šarlota pokračuje běžnou konverzací; bez řeči KSO přehraje outro gong a hologram zavře. Velký mikrofon je vyhrazen výhradně pro ruční vyvolání hovoru."
 ].join(" ");
 
 const WEATHER_FACT_MAX_AGE_MS = 45 * 60 * 1000;
