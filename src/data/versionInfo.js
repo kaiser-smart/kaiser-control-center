@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Řidičský displej: velké pracovní volby pro terén",
+    text: "Kabinová obrazovka teď řadí beze změny funkcí akce podle práce řidiče: dominantní HOTOVO, hlášení, provozní volby a samostatná pomoc Šarloty. Aktuální firma i adresa se nezkracují, aby zůstaly čitelné ve stresu, dešti, mrazu a při práci v rukavicích; API, zápisy, navigace i fyzická potvrzení zůstávají stejné."
+  },
+  {
     title: "Svozové trasy: samostatná pracovní fronta Hlášení",
     text: "Horní navigace obsahuje samostatnou záložku Hlášení s výchozím PROVOZEM, výrazně odděleným TESTEM, nízkými řádky a širokým pravým detailem. Převzetí, řešení, povinný výsledek, další kontrola a znovuotevření zapisují audit přes cloudové API; ostrý e-mail a SMS zůstávají vypnuté, zatímco TEST projde bezpečným simulovaným providerem bez kontaktu zákazníka."
   },

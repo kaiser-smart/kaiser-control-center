@@ -43640,11 +43640,9 @@ body.collection-driver-kiosk-active #app {
 }
 
 .collection-daily-driver-current h1 {
-  overflow: hidden;
   font-size: clamp(1.35rem, 3vw, 2.15rem);
   line-height: 1.05;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .collection-daily-driver-stop-meta {
@@ -43655,12 +43653,10 @@ body.collection-driver-kiosk-active #app {
 }
 
 .collection-daily-driver-address {
-  overflow: hidden;
   color: var(--ink, #263228);
   font-size: clamp(1rem, 2vw, 1.3rem);
   font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .collection-daily-driver-waste {
@@ -44234,9 +44230,35 @@ body.collection-driver-kiosk-active #app {
 
 .collection-daily-driver-actions {
   display: grid;
-  grid-auto-rows: minmax(52px, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  min-height: 0;
+}
+
+.collection-daily-driver-actions__primary,
+.collection-daily-driver-actions__context,
+.collection-daily-driver-actions__assistant {
+  display: grid;
+  min-width: 0;
+}
+
+.collection-daily-driver-actions__primary {
+  gap: 7px;
+}
+
+.collection-daily-driver-actions__context {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(58px, 1fr);
   gap: 7px;
   min-height: 0;
+}
+
+.collection-daily-driver-actions__assistant {
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid rgba(120, 104, 221, 0.24);
+  border-radius: 14px;
+  background: #faf8ff;
 }
 
 .collection-daily-driver-action,
@@ -44263,16 +44285,22 @@ body.collection-driver-kiosk-active #app {
   user-select: none;
 }
 
-.collection-daily-driver-action--done {
+.collection-daily-driver-actions__primary .collection-daily-driver-action--done {
+  min-height: 76px;
   border-color: #5fae18;
   background: linear-gradient(180deg, #7bc827, #62ad18);
   color: #fff;
   box-shadow: 0 10px 24px rgba(92, 158, 28, 0.22);
 }
 
-.collection-daily-driver-action--report {
+.collection-daily-driver-actions__primary .collection-daily-driver-action--report {
+  min-height: 62px;
   border-color: #e2aa3b;
   background: #fff8e8;
+}
+
+.collection-daily-driver-action--wide {
+  grid-column: 1 / -1;
 }
 
 .collection-daily-driver-action.is-active {
@@ -44282,6 +44310,7 @@ body.collection-driver-kiosk-active #app {
 }
 
 .collection-daily-driver-action--sarlota {
+  min-height: 52px;
   border-color: #7868dd;
   background: #f2efff;
   color: #49389f;
@@ -44295,9 +44324,11 @@ body.collection-driver-kiosk-active #app {
 
 .collection-daily-driver-sarlota-status {
   margin: 0;
+  padding: 0 4px;
   color: #49389f;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 800;
+  line-height: 1.28;
   text-align: center;
 }
 
@@ -45103,9 +45134,25 @@ body.collection-driver-blackview-simulator-active #app {
   }
 
   .collection-daily-driver-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-auto-rows: initial;
+    gap: 5px;
+  }
+
+  .collection-daily-driver-actions__primary {
+    gap: 5px;
+  }
+
+  .collection-daily-driver-actions__context {
     grid-auto-rows: minmax(56px, 1fr);
     gap: 5px;
+  }
+
+  .collection-daily-driver-actions__assistant {
+    gap: 3px;
+    padding: 3px;
+    border-radius: 10px;
   }
 
   .collection-daily-driver-action {
@@ -45114,15 +45161,12 @@ body.collection-driver-blackview-simulator-active #app {
     font-size: clamp(0.78rem, 1.45vw, 0.96rem);
   }
 
-  .collection-daily-driver-action--done,
-  .collection-daily-driver-action--report,
-  .collection-daily-driver-sarlota-status,
-  .collection-daily-driver-sarlota-memory-button {
-    grid-column: 1 / -1;
+  .collection-daily-driver-actions__primary .collection-daily-driver-action--done {
+    min-height: 68px;
   }
 
-  .collection-daily-driver-page.is-isolated-test .collection-daily-driver-action--sarlota {
-    grid-column: 1 / -1;
+  .collection-daily-driver-actions__primary .collection-daily-driver-action--report {
+    min-height: 56px;
   }
 
   .collection-daily-driver-modal__close,
@@ -45331,9 +45375,36 @@ body.collection-driver-blackview-simulator-active #app {
   }
 
   .collection-daily-driver-actions {
-    grid-auto-rows: minmax(76px, auto);
+    grid-template-rows: auto auto auto;
+    grid-auto-rows: initial;
     width: 100%;
     min-width: 0;
+  }
+
+  .collection-daily-driver-actions__primary {
+    gap: 10px;
+  }
+
+  .collection-daily-driver-actions__primary .collection-daily-driver-action--done {
+    min-height: 92px;
+  }
+
+  .collection-daily-driver-actions__primary .collection-daily-driver-action--report {
+    min-height: 76px;
+  }
+
+  .collection-daily-driver-actions__context {
+    grid-auto-rows: minmax(76px, auto);
+    gap: 10px;
+  }
+
+  .collection-daily-driver-actions__assistant {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .collection-daily-driver-actions__assistant .collection-daily-driver-action--sarlota {
+    min-height: 76px;
   }
 
   .collection-daily-driver-problem {

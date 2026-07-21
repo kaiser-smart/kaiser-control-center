@@ -95,6 +95,16 @@ for (const marker of [
   assert.ok(driverPageSource.includes(marker), `Řidičský displej postrádá prvek: ${marker}`);
 }
 
+for (const marker of [
+  "collection-daily-driver-actions__primary",
+  "collection-daily-driver-actions__context",
+  "collection-daily-driver-actions__assistant",
+  "collection-daily-driver-action--wide",
+  "aria-label=\"Pomoc Šarloty\""
+]) {
+  assert.ok(driverPageSource.includes(marker), `Řidičský displej postrádá bezpečnou skupinu akcí: ${marker}`);
+}
+
 assert.ok(
   appSource.includes("function collectionDailyRouteDriverMapPanel")
     && appSource.includes("function syncCollectionDailyDriverInteractiveMap")
@@ -158,6 +168,17 @@ for (const marker of [
   ".collection-daily-driver-photo-button"
 ]) {
   assert.ok(styleSource.includes(marker), `Tabletový kiosk postrádá styl: ${marker}`);
+}
+
+for (const marker of [
+  ".collection-daily-driver-actions__primary",
+  ".collection-daily-driver-actions__context",
+  ".collection-daily-driver-actions__assistant",
+  "min-height: 76px",
+  "min-height: 62px",
+  "overflow-wrap: anywhere"
+]) {
+  assert.ok(styleSource.includes(marker), `Tabletový kiosk postrádá terénní ergonomii: ${marker}`);
 }
 
 for (const marker of [

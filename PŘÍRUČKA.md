@@ -1733,6 +1733,16 @@ Správně:
 
 Tlačítko musí říkat, co se stane po kliknutí.
 
+#### 18.2.6.1 Řidičský tablet a terénní obsluha
+
+Řidičský tablet je pracovní zařízení pro řidiče ve stresu, zimě, dešti a mrazu. Obsluha proto musí být jednoduchá, rychlá a bezpečně použitelná i v pracovních rukavicích.
+
+- Hlavní pracovní akce musí mít velkou, snadno zasažitelnou dotykovou plochu; nesmí vyžadovat přesné míření na malý prvek.
+- Kritická nebo častá akce, například potvrzení obsloužení, hlášení problému, výsyp, přestávka nebo fyzické potvrzení, musí být vizuálně jednoznačná a mít přednost před pomocnými volbami.
+- Na jedné pracovní obrazovce musí řidič během několika sekund poznat aktuální stav, další krok a jednu hlavní akci; technické informace, dlouhé vysvětlování a administrátorské prvky do tohoto toku nepatří.
+- Tlačítka musí mít dostatečné rozestupy pro ovládání mokrou rukou nebo v rukavicích a nesmí se lámat, překrývat ani mizet mimo obrazovku.
+- Riziková akce zůstává dvoukroková a s fyzickým potvrzením, ale každá její obrazovka smí požadovat jen jeden krátký, srozumitelný krok.
+
 #### 18.2.7 Nápověda u akcí
 
 U nejasných nebo rizikových akcí musí být krátká lidská nápověda.
