@@ -73,7 +73,7 @@ import {
   collectionRoutesDriverTabletCssSizeLabel,
   collectionRoutesDriverTabletLabel
 } from "./data/collectionRoutesOperationalContract.js";
-import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.44";
+import { COLLECTION_ROUTES_MANTRA } from "./data/collectionRoutesMantra.js?v=1.45";
 import { calculateCollectionRoutesReadonlyPlan } from "./data/collectionRoutesReadonlyCalculator.js";
 import {
   collectionRoutesFieldTestOwnedByUser,
@@ -42370,6 +42370,8 @@ async function startCollectionDailyDriverSarlota(options = {}) {
     endAfterGeneratedIntro: false,
     continueAfterGeneratedIntro: automaticSession,
     introSilenceTimeoutMs: COLLECTION_ROUTES_OPERATIONAL_CONTRACT.voice.introSilenceTimeoutMs,
+    introSpeechActivityFrames: COLLECTION_ROUTES_OPERATIONAL_CONTRACT.voice.introSpeechActivityFrames,
+    introServerVadSpeakingLevel: COLLECTION_ROUTES_OPERATIONAL_CONTRACT.voice.introServerVadSpeakingLevel,
     listenAfterTechnicalFirstMessage: !automaticSession && options.manualContinuation === true,
     validateGeneratedIntro: automaticSession
       ? (text) => validateCollectionRoutesSarlotaIntro(text, introFacts)

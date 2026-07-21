@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { userDynamicVariablesForAi } from "../functions/_lib/ai-people-summary.js";
+import { createIntroSpeechActivityDetector } from "../src/useElevenLabsAssistant.js";
 
 import {
   COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST,
@@ -44,6 +45,15 @@ assert.equal(collectionRoutesStopCountPhrase(1), "jedno stanoviště");
 assert.equal(collectionRoutesStopCountPhrase(2), "dvě stanoviště");
 assert.equal(collectionRoutesStopCountPhrase(4), "čtyři stanoviště");
 assert.equal(collectionRoutesStopCountPhrase(5), "5 stanovišť");
+
+const introSpeechDetector = createIntroSpeechActivityDetector();
+assert.equal(introSpeechDetector.observe(0.01), false, "Tiché pozadí nesmí zrušit pětisekundový timeout.");
+assert.equal(introSpeechDetector.observe(0.05), false, "Jediný hlukový impuls nesmí otevřít konverzaci.");
+assert.equal(introSpeechDetector.observe(0.01), false, "Pokles pod práh musí potvrzování řeči vynulovat.");
+assert.equal(introSpeechDetector.observe(0.05), false);
+assert.equal(introSpeechDetector.observe(0.05), true, "Souvislý začátek řeči musí zrušit timeout ještě před přepisem.");
+introSpeechDetector.reset();
+assert.equal(introSpeechDetector.observe(0.05), false, "Nové pětisekundové okno musí začít s čistým detektorem.");
 
 const oneStopFacts = collectionRoutesSarlotaIntroFacts({
   actor: { vocative: "Mirku" },
@@ -265,11 +275,13 @@ assert.match(elevenLabsSource, /deferMicrophoneUntilAfterGeneratedIntro/);
 assert.match(elevenLabsSource, /if \(deferMicrophoneUntilAfterGeneratedIntro && !introPlaybackFinished\)/);
 assert.match(elevenLabsSource, /introPlaybackFinished = true;[\s\S]*await startAudioInput\(\)/);
 assert.match(elevenLabsSource, /introUserEngaged = true;[\s\S]*window\.clearTimeout\(introSilenceTimer\)/);
+assert.match(elevenLabsSource, /markIntroUserEngaged\("local_voice_activity"\)/);
+assert.match(elevenLabsSource, /markIntroUserEngaged\("vad_score"\)/);
+const introEngagedHelperStart = elevenLabsSource.indexOf("function markIntroUserEngaged");
+const introEngagedHelperEnd = elevenLabsSource.indexOf("function clearTimers", introEngagedHelperStart);
+assert.ok(introEngagedHelperStart >= 0 && introEngagedHelperEnd > introEngagedHelperStart);
 assert.doesNotMatch(
-  elevenLabsSource.slice(
-    elevenLabsSource.indexOf("if (introAwaitingUser && !introUserEngaged)"),
-    elevenLabsSource.indexOf("callbacks.onUserTranscript", elevenLabsSource.indexOf("if (introAwaitingUser && !introUserEngaged)"))
-  ),
+  elevenLabsSource.slice(introEngagedHelperStart, introEngagedHelperEnd),
   /settle\(/,
   "První řeč řidiče smí zrušit jen pětisekundový timeout; živou konverzaci nesmí ukončit."
 );

@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.44",
-  updatedAt: "21. 7. 2026 15:15",
-  updatedAtIso: "2026-07-21T15:15:00+02:00",
-  lastChange: "Hologram po otázce poslouchá",
+  version: "1.45",
+  updatedAt: "21. 7. 2026 18:30",
+  updatedAtIso: "2026-07-21T18:30:00+02:00",
+  lastChange: "Začátek řeči ruší pětisekundový timeout",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
@@ -223,7 +223,7 @@ Automatický úvod se před přehráním celý uloží jen do dočasné paměti 
 
 Celý automaticky zahájený tok ukazuje Řidičský displej výhradně jako kompaktní holografickou Šarlotu. Technický obraz mikrofonu ani běžný hlasový panel se nesmí objevit během úvodu, pětisekundového prvního poslechu ani navazujícího rozhovoru. Do dohrání závěrečné otázky tok vůbec nepožaduje ani nepřipravuje mikrofon. Teprve potom jej ve stejné relaci zapne a pět sekund čeká na první řeč. Řidičova řeč časovač zruší a rozhovor pokračuje až do běžného ukončení; bez řeči zazní outro gong a hologram se zavře. Hologram nezakrývá navigaci. Pozdější běžné ruční spuštění začne otázkou ve významu „Mirku, s čím mohu pomoct?“. Technický intro_announcement není slyšitelným textem. TEST se nesmí připojit, pokud skutečný ElevenLabs agent nemá ověřený Prompt, First Message, Knowledge Base, Tools nebo odpovídající modulový kontext. Přehrávač intro/outro gongu musí být povinně předaný z hlasového provideru aplikaci; chybějící metoda nebo její tiché přeskočení je blokující chyba a musí ji zachytit regresní test.
 
-Řidič potvrzuje převzetí dnešní trasy a volbu pracovní paměti v jednom okně a jedním finálním klepnutím. Okno předem ukazuje backendem ověřeného řidiče, vozidlo, počet stanovišť, pravdivý stav osádky a počasí pro následující směnu. Těsně před zápisem backend znovu ověří vlastní přiřazení, datum a vozidlo; rozpor start zablokuje. Neznámý údaj zůstává viditelným varováním a nesmí se nahradit odhadem. Pokud paměť výslovně nezaškrtne, nezapne se ani se nic neuloží. Potom se v témže uživatelském gestu připraví pouze zvuk, načte read-only kontext a jednorázově zazní intro gong a agentem vytvořený úvod. Automatický úvod je bez mikrofonu a skončí jedinou otázkou. Hologram pět sekund čeká pouze na fyzické klepnutí; bez něj přehraje outro gong a zavře se. Výzva Jste stále zde ani jiná samovolná věta není dovolena. Pokud kontext, signed URL, WebSocket, validace nebo audio selže, tablet zobrazí pravdivou chybu a nesmí použít systémové TTS ani předstírat přehrání. Mikrofon se řeší až po fyzickém spuštění ruční hlasové relace.
+Řidič potvrzuje převzetí dnešní trasy a volbu pracovní paměti v jednom okně a jedním finálním klepnutím. Okno předem ukazuje backendem ověřeného řidiče, vozidlo, počet stanovišť, pravdivý stav osádky a počasí pro následující směnu. Těsně před zápisem backend znovu ověří vlastní přiřazení, datum a vozidlo; rozpor start zablokuje. Neznámý údaj zůstává viditelným varováním a nesmí se nahradit odhadem. Pokud paměť výslovně nezaškrtne, nezapne se ani se nic neuloží. Potom se v témže uživatelském gestu připraví pouze zvuk, načte read-only kontext a jednorázově zazní intro gong a agentem vytvořený úvod. Automatický úvod je bez mikrofonu a skončí jedinou otázkou. Teprve potom hologram zapne mikrofon a pět sekund čeká na první řeč; její potvrzený začátek časovač okamžitě zruší a rozhovor pokračuje ve stejné relaci bez velkého panelu mikrofonu. Bez řeči přehraje outro gong a zavře se. Výzva Jste stále zde ani jiná samovolná věta není dovolena. Pokud kontext, signed URL, WebSocket, validace nebo audio selže, tablet zobrazí pravdivou chybu a nesmí použít systémové TTS ani předstírat přehrání.
 
 Šarlota smí podle oprávnění načítat dnešní trasu, ověřený seznam a přiřazení vozidel, aktuální počasí, firemní adresář v rozsahu jméno, příjmení, funkce a schválený služební telefon a e-mail, dostupnost a dovolenou bez soukromého nebo zdravotního důvodu a ověřenou organizační vazbu nadřízeného. Stručný přehled zpráv načítá výhradně z oficiálního RSS iROZHLAS; smí říct nejvýše tři přesné titulky se zdrojem a časem načtení. Neoficiální scraping, přebírání popisů a předčítání celých článků je zakázané.
 
