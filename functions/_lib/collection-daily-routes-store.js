@@ -2466,7 +2466,7 @@ export async function recordCollectionDailyRouteReport(env, user, runId, stopId,
   const scope = collectionDailyRouteScope(input.scope);
   assertTestScopeReader(user, scope);
   const db = database(env, true, scope);
-  let bucket = null;
+  const bucket = documentBucket(env, true);
   const storageKeys = [];
   let eventCommitted = false;
   try {
@@ -2511,14 +2511,13 @@ export async function recordCollectionDailyRouteReport(env, user, runId, stopId,
     const typeLabel = DRIVER_REPORT_TYPES.get(type);
     const note = driverReportNote(input.note);
     const photos = (Array.isArray(photoValues) ? photoValues : [photoValues]).map(driverReportPhoto);
-    if (photos.length > 5) {
+    if (!photos.length || photos.length > 5) {
       throw new CollectionDailyRoutesError(
-        "Hlášení může obsahovat nejvýše 5 fotografií.",
+        "Hlášení musí obsahovat 1 až 5 fotografií.",
         400,
         "collection_daily_route_report_photo_count_invalid"
       );
     }
-    if (photos.length) bucket = documentBucket(env, true);
     const reportId = randomId("collection-daily-report");
     const storedPhotos = photos.map((photo, index) => {
       const extension = driverReportPhotoExtension(photo.contentType);
@@ -2533,16 +2532,16 @@ export async function recordCollectionDailyRouteReport(env, user, runId, stopId,
     const createdAt = nowIso();
     const actorId = cleanString(user?.id);
     const actorName = cleanString(user?.name || user?.email || user?.phone);
-    const firstPhoto = storedPhotos[0] || null;
+    const firstPhoto = storedPhotos[0];
     const payload = {
       workflow: "driver-dispatch-report",
       reportId,
       reportType: type,
       reportTypeLabel: typeLabel,
-      photoStorageKey: firstPhoto?.storageKey || "",
-      photoContentType: firstPhoto?.contentType || "",
-      photoSizeBytes: firstPhoto?.sizeBytes || 0,
-      photoUrl: firstPhoto?.url || "",
+      photoStorageKey: firstPhoto.storageKey,
+      photoContentType: firstPhoto.contentType,
+      photoSizeBytes: firstPhoto.sizeBytes,
+      photoUrl: firstPhoto.url,
       photoCount: storedPhotos.length,
       photos: storedPhotos.map((photo) => ({
         storageKey: photo.storageKey,
@@ -2622,7 +2621,7 @@ export async function recordCollectionDailyRouteReport(env, user, runId, stopId,
     };
   } catch (error) {
     if (storageKeys.length && !eventCommitted) {
-      for (const storageKey of storageKeys) await bucket?.delete(storageKey).catch(() => {});
+      for (const storageKey of storageKeys) await bucket.delete(storageKey).catch(() => {});
     }
     throw dbError(error);
   }
