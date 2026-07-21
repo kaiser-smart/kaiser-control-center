@@ -47,7 +47,7 @@ assert.equal(collectionRoutesStopCountPhrase(5), "5 stanovišť");
 
 const oneStopFacts = collectionRoutesSarlotaIntroFacts({
   actor: { vocative: "Mirku" },
-  route: { totalCount: 1, currentStop: { customerName: "Firma test" } },
+  route: { totalCount: 1, currentStop: { customerName: "Firma test 501" } },
   weather: { verified: false, summary: "" },
   fuel: { verified: false, value: null },
   absentDispatchersVerified: true,
@@ -55,11 +55,11 @@ const oneStopFacts = collectionRoutesSarlotaIntroFacts({
 });
 assert.equal(oneStopFacts.stopCountPhrase, "jedno stanoviště");
 assert.equal(validateCollectionRoutesSarlotaIntro(
-  "Ahoj, Mirku. Dnes máme před sebou jedno stanoviště. Začínáme firmou Firma test. Aktuální předpověď pro Brno teď není bezpečně dostupná. Stav nádrže teď není bezpečně dostupný z T-Cars. Dispečink je dnes zajištěný. Zastupování není potřeba. Mirku, potřebuješ něco upřesnit?",
+  "Ahoj, Mirku. Dnes máme před sebou jedno stanoviště. Začínáme firmou Firma test 501. Aktuální předpověď pro Brno teď není bezpečně dostupná. Stav nádrže teď není bezpečně dostupný z T-Cars. Dispečink je dnes zajištěný. Zastupování není potřeba. Mirku, potřebuješ něco upřesnit?",
   oneStopFacts
 ).valid, true, "Jedna zastávka musí zaznít jako jedno stanoviště, nikdy jedna stanovišť.");
 assert.equal(validateCollectionRoutesSarlotaIntro(
-  "Ahoj, Mirku. Dnes máme před sebou jedno stanoviště. Začínáme firmou Firma test. Aktuální předpověď pro Brno teď není bezpečně dostupná. Stav nádrže teď není bezpečně dostupný z tý kárs. Dispečink je dnes zajištěný. Zastupování není potřeba. Mirku, potřebuješ něco upřesnit?",
+  "Ahoj, Mirku. Dnes máme před sebou jedno stanoviště. Začínáme firmou Firma test 501. Aktuální předpověď pro Brno teď není bezpečně dostupná. Stav nádrže teď není bezpečně dostupný z tý kárs. Dispečink je dnes zajištěný. Zastupování není potřeba. Mirku, potřebuješ něco upřesnit?",
   oneStopFacts
 ).valid, true, "Výslovnost tý kárs musí být stejný ověřený fakt jako zápis T-Cars.");
 
