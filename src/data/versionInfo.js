@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.655"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.656"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: gongy patří hologramu, ne mikrofonu",
+    text: "Opravené propojení nyní skutečně zpřístupňuje přehrávač intro a outro gongu. Automatický úvod drží po celou dobu holografickou Šarlotu včetně pětisekundového čekání a závěrečného gongu; mikrofon se zobrazí a zapne až po samostatném fyzickém klepnutí řidiče."
+  },
   {
     title: "Vozidla: úplný read-only detail T-Cars",
     text: "Detail vozidla načítá technický profil, aktuální telemetrii, knihu jízd, stav PHM bez domyšlené jednotky, motohodiny, náklady, oblastní události, identifikace řidičů a podklad silniční daně. Otáčky motoru se pravdivě nezobrazují jako hodnota, protože je T-Cars SOAP API neposkytuje."

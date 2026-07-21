@@ -1,8 +1,8 @@
 export const COLLECTION_ROUTES_MANTRA = Object.freeze({
-  version: "1.42",
-  updatedAt: "20. 7. 2026 22:10",
-  updatedAtIso: "2026-07-20T22:10:00+02:00",
-  lastChange: "Fyzická reakce bez automatického mikrofonu",
+  version: "1.43",
+  updatedAt: "21. 7. 2026 13:30",
+  updatedAtIso: "2026-07-21T13:30:00+02:00",
+  lastChange: "Gongy patří výhradně hologramu",
   updatedBy: "Codex",
   status: "Ostrý interní pilot · zákazníci TEST",
   title: "Svozový autopilot – provozní mantra",
@@ -30,7 +30,7 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
     },
     {
       title: "Šarlota čte, člověk potvrzuje",
-      text: "Před startem backend znovu ověří přihlášeného řidiče, datum a vozidlo vlastní trasy. Po fyzickém potvrzení zazní intro gong a aktivní ElevenLabs agent vytvoří právě jeden ověřený úvod pro danou trasu nebo TEST relaci. Úvod skončí jedinou otázkou, ale mikrofon zůstává vypnutý. Pětisekundové okno reaguje jen na fyzické tlačítko řidiče; bez klepnutí zazní outro gong a hologram se zavře. Každý provozní zápis dál vyžaduje fyzické potvrzení."
+      text: "Před startem backend znovu ověří přihlášeného řidiče, datum a vozidlo vlastní trasy. Po fyzickém potvrzení běží příprava, intro gong, agentův úvod, pětisekundové okno i outro gong výhradně v hologramu. Mikrofonní panel se v automatickém toku nesmí zobrazit a mikrofon zůstává vypnutý. Pětisekundové okno reaguje jen na fyzické tlačítko řidiče; bez klepnutí zazní outro gong a hologram se zavře. Každý provozní zápis dál vyžaduje fyzické potvrzení."
     }
   ],
   sources: [
@@ -221,7 +221,7 @@ Hlasová Šarlota je samostatná přátelská konverzační asistentka. Po fyzic
 
 Automatický úvod se před přehráním celý uloží jen do dočasné paměti prohlížeče a KSO jej tvrdě porovná s backendem ověřenými fakty relace. Cizí trasa, počet nebo první stanoviště, vozidlo, model, SPZ, počasí, palivo či osoba zablokují celý zvuk. Bezprostředně před přehráním backend atomicky zapíše jednorázové zahájení pro ID produkční jízdy nebo TEST relace; návrat na obrazovku, remount ani nové spojení jej nesmí spustit znovu. Každé automatické promluvení Šarloty začíná dodaným intro gongem, běžná odpověď uživateli nikoli. Hologram smí ukázat Mluvím až po validaci a skutečném naplánování audia v běžícím AudioContextu. Počasí musí být ověřené, mít čas pozorování, být nejvýše 45 minut staré a smí se použít pouze jako přesné backendové shrnutí; obecná věta počasí přeje je zakázaná.
 
-Když automaticky spuštěná Šarlota přehrává úvod, Řidičský displej místo technického obrazu mikrofonu ukáže kompaktní holografickou Šarlotu. Tento automatický tok vůbec nepožaduje ani nepřipravuje mikrofon a nečeká na řeč řidiče. Po závěrečné otázce zůstane hologram pět sekund viditelný s fyzickým ZAPNOUT ŠARLOTU MIKROFONEM. Klepnutí otevře novou ruční relaci bez opakování otázky a teprve potom začne poslouchat; bez klepnutí zazní outro gong a hologram se zavře. Hologram nezakrývá navigaci. Pozdější běžné ruční spuštění začne otázkou ve významu „Mirku, s čím mohu pomoct?“. Technický intro_announcement není slyšitelným textem. TEST se nesmí připojit, pokud skutečný ElevenLabs agent nemá ověřený Prompt, First Message, Knowledge Base, Tools nebo odpovídající modulový kontext.
+Celý automatický tok od přípravy přes intro gong, agentovo mluvení, pětisekundové čekání až po outro gong ukazuje Řidičský displej výhradně jako kompaktní holografickou Šarlotu. Technický obraz mikrofonu ani běžný hlasový panel se v žádné této fázi nesmí objevit. Tento automatický tok vůbec nepožaduje ani nepřipravuje mikrofon a nečeká na řeč řidiče. Po závěrečné otázce zůstane hologram pět sekund viditelný s fyzickým ZAPNOUT ŠARLOTU MIKROFONEM. Klepnutí otevře novou ruční relaci bez opakování otázky a teprve potom začne poslouchat; bez klepnutí zazní outro gong a hologram se zavře. Hologram nezakrývá navigaci. Pozdější běžné ruční spuštění začne otázkou ve významu „Mirku, s čím mohu pomoct?“. Technický intro_announcement není slyšitelným textem. TEST se nesmí připojit, pokud skutečný ElevenLabs agent nemá ověřený Prompt, First Message, Knowledge Base, Tools nebo odpovídající modulový kontext. Přehrávač intro/outro gongu musí být povinně předaný z hlasového provideru aplikaci; chybějící metoda nebo její tiché přeskočení je blokující chyba a musí ji zachytit regresní test.
 
 Řidič potvrzuje převzetí dnešní trasy a volbu pracovní paměti v jednom okně a jedním finálním klepnutím. Okno předem ukazuje backendem ověřeného řidiče, vozidlo, počet stanovišť, pravdivý stav osádky a počasí pro následující směnu. Těsně před zápisem backend znovu ověří vlastní přiřazení, datum a vozidlo; rozpor start zablokuje. Neznámý údaj zůstává viditelným varováním a nesmí se nahradit odhadem. Pokud paměť výslovně nezaškrtne, nezapne se ani se nic neuloží. Potom se v témže uživatelském gestu připraví pouze zvuk, načte read-only kontext a jednorázově zazní intro gong a agentem vytvořený úvod. Automatický úvod je bez mikrofonu a skončí jedinou otázkou. Hologram pět sekund čeká pouze na fyzické klepnutí; bez něj přehraje outro gong a zavře se. Výzva Jste stále zde ani jiná samovolná věta není dovolena. Pokud kontext, signed URL, WebSocket, validace nebo audio selže, tablet zobrazí pravdivou chybu a nesmí použít systémové TTS ani předstírat přehrání. Mikrofon se řeší až po fyzickém spuštění ruční hlasové relace.
 

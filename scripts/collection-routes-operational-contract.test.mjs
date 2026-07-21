@@ -24,6 +24,16 @@ assert.equal(contract.voice.technicalFirstMessageMarker, "KSO_INTRO_GENERATION_P
 assert.equal(contract.voice.suppressTechnicalFirstMessage, true);
 assert.equal(contract.voice.generateAudibleIntroWithActiveAgent, true);
 assert.equal(contract.voice.automaticIntroMicrophoneEnabled, false);
+assert.equal(contract.voice.automaticIntroUi, "hologram_only");
+assert.equal(contract.voice.automaticIntroShowsMicrophoneUi, false);
+assert.equal(contract.voice.voiceCueProviderRequired, true);
+assert.deepEqual(contract.voice.hologramLifecycle, [
+  "preparing",
+  "intro_gong",
+  "agent_speaking",
+  "response_window",
+  "outro_gong"
+]);
 assert.equal(contract.voice.automaticIntroClosingQuestion, true);
 assert.equal(contract.voice.automaticIntroResponseMode, "physical_microphone_button");
 assert.equal(contract.voice.introSilenceTimeoutMs, 5000);

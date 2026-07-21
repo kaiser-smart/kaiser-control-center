@@ -62,8 +62,8 @@ assert.match(appSource, /options\.validateGeneratedIntro[\s\S]*Ověřuji úvod[\
 assert.match(appSource, /COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST/);
 assert.match(appSource, /Potřebuješ něco upřesnit\? Do pěti sekund klepni na ZAPNOUT ŠARLOTU MIKROFONEM/);
 assert.match(appSource, /Úvodní hlášení skončilo outro gongem\. Mikrofon nebyl zapnutý/);
-assert.match(appSource, /ŠARLOTA PŘIPRAVUJE OVĚŘENÝ ÚVOD/);
-assert.match(appSource, /SPUSTIT ZVUK A PŘEHRÁT ÚVOD/);
+assert.match(appSource, /HOLOGRAFICKÁ ŠARLOTA PŘIPRAVUJE ÚVOD/);
+assert.match(appSource, /SPUSTIT HOLOGRAFICKOU ŠARLOTU/);
 assert.match(appSource, /ZAPNOUT ŠARLOTU MIKROFONEM/);
 assert.match(appSource, /Můžeš s ní rovnou mluvit/);
 assert.match(appSource, /automaticSession && error\?\.code === "voice_disconnected" && automaticRetryCount < 1/);

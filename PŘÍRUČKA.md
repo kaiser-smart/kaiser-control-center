@@ -1449,11 +1449,13 @@ Nesmí se z nich odvozovat role, oprávnění ani právo provést citlivou akci.
 - Úvod aktivního agenta musí být krátký, přirozený, bez opakování stejného údaje a nesmí znovu žádat potvrzení již fyzicky potvrzené trasy.
 - Automatický úvod se před přehráním celý přijme do dočasné paměti a KSO jej porovná s backendem ověřenými fakty aktuální relace. Cizí osoba, název trasy, počet nebo první stanoviště, vozidlo, model, SPZ, počasí, palivo nebo pracovní dostupnost zablokují celý zvuk; chybná věta se nesmí ani částečně přehrát.
 - Hologram smí ukázat stav `Mluvím` až po úspěšné kontrole faktů a skutečném naplánování zvuku v běžícím `AudioContextu`. Stav `suspended`, zakázané automatické přehrávání, čekání na audio ani pouhé přijetí textu nejsou přehrávání.
-- Po obnovení stránky bez uživatelského gesta musí tablet nabídnout konkrétní tlačítko `SPUSTIT ZVUK A PŘEHRÁT ÚVOD` a nesmí předstírat hlas.
+- Po obnovení stránky bez uživatelského gesta musí tablet nabídnout konkrétní tlačítko `SPUSTIT HOLOGRAFICKOU ŠARLOTU` a nesmí předstírat hlas.
 - Počasí v automatickém úvodu musí být backendem ověřené, obsahovat čas pozorování a při přehrání nesmí být starší než 45 minut. Šarlota smí použít pouze přesné ověřené shrnutí; nesmí vytvářet obecné hodnocení typu `počasí přeje`. Chybějící nebo zastaralé počasí v úvodu úplně vynechá. Příklady v Promptu nebo Knowledge Base nikdy nejsou aktuální počasí.
 - Stav nádrže smí pocházet pouze z read-only T-Cars `knihaJizdVozidlo.jizdaStavPhm`, z poslední čerstvé jízdy přesně shodného vozidla. Protože WSDL neurčuje jednotku, KSO ani Šarlota ji nesmějí domyslet. Zastaralá, chybějící nebo neshodná hodnota se vynechá.
 - Automaticky spuštěná Šarlota smí po potvrzení trasy říct právě jeden úvod za ID produkční jízdy nebo aktivní TEST relace. Jednorázovost je serverový auditovaný stav, nikoli jen proměnná frontendu; návrat na obrazovku, remount, refresh, reconnect ani souběžná karta nesmějí úvod spustit znovu.
 - Každé automatické promluvení Holografické Šarloty začíná schváleným intro gongem. Běžná odpověď na uživatelovu řeč gong nemá. Gong se přehrává ve stejném odemčeném `AudioContextu` jako ElevenLabs audio, aby fungoval v Safari, Chrome i na Blackview.
+- Celý automatický tok — příprava, intro gong, agentovo mluvení, pětisekundové okno a outro gong — patří výhradně Holografické Šarlotě. Běžný hlasový nebo mikrofonní panel se v žádné z těchto fází nesmí zobrazit.
+- Hlasový provider musí aplikaci povinně předat funkční přehrávač intro/outro gongu. Chybějící metoda, `undefined` nebo tiché přeskočení přes optional chaining jsou blokující chyba; bez potvrzeného dohrání intro gongu nesmí automatická řeč začít.
 - Úvod musí v pořadí použít dostupné ověřené údaje: vokativ řidiče, počet stanovišť, první firmu, čerstvé počasí, stav nádrže T-Cars a nepřítomné dispečery jen jménem a bezpečným pracovním stavem. Chybějící údaj se přirozeně vynechá; soukromý nebo zdravotní důvod se nikdy nevysloví.
 - Automatický úvod musí skončit právě jednou otázkou ve významu `[ověřený vokativ], potřebuješ něco upřesnit?`, ale KSO při něm vůbec nesmí požádat o mikrofon, volat `getUserMedia`, připravovat hlasový vstup ani zobrazit stav poslouchání. Odpověď se nezjišťuje z okolního zvuku.
 - Po dohrání otázky zůstane hologram pět sekund viditelný a tablet nabídne fyzické tlačítko `ZAPNOUT ŠARLOTU MIKROFONEM`. Klepnutí otevře novou ruční hlasovou relaci bez zopakování závěrečné otázky; bez klepnutí KSO přehraje krátký outro gong a hologram i automatický úvod ukončí.
@@ -1582,6 +1584,8 @@ Při každé změně Šarloty ověřit:
 - u modulů s hotovým textem `intro_announcement` zazní jen jednou; ve Svozových trasách technický marker nezazní vůbec a slyšitelný agentem vytvořený úvod zazní jen jednou,
 - jednorázovost úvodu je potvrzená serverovým stavem při obnovení stránky, remountu, reconnectu i souběžném pokusu,
 - před automatickým úvodem zazní intro gong; před běžnou odpovědí uživateli nezazní,
+- příprava, intro gong, agentovo mluvení, pětisekundové čekání i outro gong zobrazují pouze hologram; běžný mikrofonní panel se neobjeví,
+- provider skutečně předává přehrávač gongu aplikaci a test selže při chybějící nebo `undefined` metodě,
 - úvod používá jen ověřený vokativ, počet a první stanoviště, čerstvé počasí, čerstvou hodnotu T-Cars bez domyšlené jednotky a bezpečný stav nepřítomných dispečerů,
 - automatický úvod skončí jedinou otázkou, ale mikrofon zůstane vypnutý; hologram po pěti sekundách bez fyzického klepnutí přehraje outro gong a zavře se,
 - běžný hlasový rozhovor se otevře až fyzickým tlačítkem `ZAPNOUT ŠARLOTU MIKROFONEM`; klepnutí v pětisekundovém okně otázku neopakuje,
