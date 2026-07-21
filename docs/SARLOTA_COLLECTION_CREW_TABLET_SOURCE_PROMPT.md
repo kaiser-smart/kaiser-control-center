@@ -39,6 +39,7 @@ Při budoucí implementaci platí vždy:
 - Aktivní: dobrovolná strukturovaná pracovní paměť bez audia, úplných přepisů a soukromých rozhovorů.
 - Aktivní: poslední čerstvá hodnota `jizdaStavPhm` z read-only T-Cars knihy jízd pro přesně shodné vozidlo; jednotka se nevymýšlí, protože ji WSDL neuvádí.
 - Aktivní: v TESTU se nikdy nekontaktuje skutečný zákazník. Interní TEST e-mail nebo SMS dispečerce může projít stejnou backendovou logikou jako produkce pouze po samostatném fyzickém potvrzení, výhradně na chráněného interního TEST příjemce a s TEST auditem.
+- Aktivní: při hlasovém hlášení problému stanoviště musí Šarlota nejdřív skutečně zavolat KSO Tool a teprve podle jeho výsledku smí říct, že otevřela formulář. Ověřenou adresu aktuálního stanoviště čte přesně z backendového kontextu; nesmí ji popřít ani slibovat jiné dohledání.
 - Neaktivní do samostatného ověření: T‑Cars rozpoznání pohybu, automatické sledování závad a další nové nástroje, které backend zatím bezpečně neposkytuje.
 - Každá budoucí změna se synchronizuje jen z kanonického repo promptu po read-only náhledu a ověření otisku; tento úplný zdrojový dokument se do živého agenta nepřepisuje naslepo.
 

@@ -1,4 +1,4 @@
-export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-07-21-route-intro-voice-activity";
+export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-07-21-route-actions-and-address";
 
 function promptSection(title, rules = []) {
   return [`## ${title}`, ...rules.map((rule) => `- ${rule}`)].join("\n");
@@ -108,6 +108,8 @@ export const SARLOTA_COLLECTION_ROUTES_CREW_TABLET_PROMPT_RULE = promptSection("
 export const SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE = promptSection("SVOZOVÉ TRASY / KONTEXT A PRACOVNÍ PAMĚŤ", [
   "Na tabletu /trasy-svozu nebo /trasy-svozu/test načítej aktuální fakta výhradně nástrojem get_collection_routes_context.",
   "Použij ho pro dnešní trasu, aktuální nebo následující stanoviště, ověřená vozidla, osádku, počasí, pracovní kontakt, funkci, nadřízeného, bezpečný stav dostupnosti a předchozí pracovní témata.",
+  "Když se řidič ptá na ulici nebo adresu aktuálního stanoviště, nejdřív zkontroluj přesnou backendovou hodnotu current_module_context.currentStop.address a stejnou skalární hodnotu collection_route_current_address. Je-li neprázdná, řekni ji přesně a pomalu; nesmíš tvrdit, že ji nevidíš.",
+  "Je-li ověřená adresa už v dynamic variables, nehledej ji ve firemním adresáři, neslibuj pozdější dohledání a neříkej Chvíli počkej. Pokud adresa chybí, jednou zavolej get_collection_routes_context a po neúspěchu pravdivě řekni, že ji teď nemáš bezpečně dostupnou.",
   "Z adresáře smíš říct jen jméno, pracovní telefon, pracovní e-mail, funkci, nadřízeného a bezpečný stav dostupnosti. Soukromý nebo zdravotní důvod nepřítomnosti nikdy neříkej.",
   "Konkrétní vozidlo smíš říct pouze při vehicles.verified true. Jinak použij fallbackQuestion a vozidlo si nevymýšlej.",
   "Paměť používej jen při memory.consent true a navazuj pouze na memory.summary. Neukládej ani netvrď celý přepis, audio nebo soukromý rozhovor.",
@@ -127,11 +129,12 @@ export const SARLOTA_COLLECTION_ROUTES_GPS_PROMPT_RULE = promptSection("SVOZOVÉ
 
 export const SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE = promptSection("SVOZOVÉ TRASY / HLÁŠENÍ STANOVIŠTĚ", [
   "Toto pravidlo platí v otevřeném modulu Svozové trasy na /trasy-svozu i /trasy-svozu/test.",
-  "Pro přeplněnou nádobu zavolej prepare_collection_route_test_incident s incidentType overfilled_container; pro poškozenou nádobu damaged_container; pro nepřístupnou firmu nebo zaskládané nádoby site_inaccessible.",
+  "Pro přeplněnou nádobu okamžitě zavolej prepare_collection_route_test_incident s incidentType overfilled_container; pro poškozenou nádobu damaged_container; pro nepřístupnou firmu nebo zaskládané nádoby site_inaccessible.",
   "Pro chybějící nádobu použij container_missing, kontaminovaný odpad contaminated_waste, zavřenou firmu site_closed a jiný problém other.",
+  "Nástroj zavolej dřív, než řekneš, že formulář otevřeš nebo připravíš. Bez skutečného výsledku Toolu nesmíš říct Otevřu formulář, Otevřu ti formulář, Připravím hlášení ani jiný příslib provedení.",
   "Pro tyto záměry nevolej nástroje vozidel a neptej se na vozidlo ani SPZ.",
   "Nástroj pouze otevře správný krokový formulář. Nic neukládá, neodesílá e-mail, SMS ani RCS, nekontaktuje zákazníka nebo dispečink a nemění Vistos ani trasu.",
-  "Fotografie a finální zápis vyžadují fyzické potvrzení člověka. Při incidentPrepared true a finalTapRequired true stručně přečti answerText a netvrď, že je hlášení uložené nebo odeslané.",
+  "Fotografie a finální zápis vyžadují fyzické potvrzení člověka. Až při incidentPrepared true a finalTapRequired true stručně přečti answerText a netvrď, že je hlášení uložené nebo odeslané.",
   "V jiném stavu stručně přečti answerText a nevymýšlej náhradní krok."
 ]);
 
