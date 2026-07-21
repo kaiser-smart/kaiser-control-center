@@ -884,6 +884,7 @@ export function useElevenLabsAssistant({
     const introGenerationRequest = String(callbacks.introGenerationRequest || "").trim();
     const endAfterGeneratedIntro = Boolean(introGenerationRequest && callbacks.endAfterGeneratedIntro === true);
     const continueAfterGeneratedIntro = Boolean(introGenerationRequest && callbacks.continueAfterGeneratedIntro === true);
+    const deferMicrophoneUntilAfterGeneratedIntro = Boolean(continueAfterGeneratedIntro);
     const listenAfterTechnicalFirstMessage = Boolean(introGenerationRequest && callbacks.listenAfterTechnicalFirstMessage === true);
     const validateGeneratedIntro = typeof callbacks.validateGeneratedIntro === "function";
     const bufferGeneratedIntro = Boolean(introGenerationRequest && validateGeneratedIntro);
@@ -919,7 +920,7 @@ export function useElevenLabsAssistant({
     }
 
     let mediaStream = null;
-    if (!endAfterGeneratedIntro) {
+    if (!endAfterGeneratedIntro && !deferMicrophoneUntilAfterGeneratedIntro) {
       try {
         mediaStream = await takePreparedVoiceInput();
         if (!mediaStream) {
@@ -985,7 +986,7 @@ export function useElevenLabsAssistant({
       let introGenerationTimer = 0;
       let introSilenceTimer = 0;
       let lastInputLevelAt = 0;
-      const audioTrack = mediaStream?.getAudioTracks?.()[0] || null;
+      let microphoneRequest = null;
 
       function clearTimers() {
         window.clearTimeout(connectionTimer);
@@ -1058,7 +1059,10 @@ export function useElevenLabsAssistant({
         done(value);
       }
 
-      if (audioTrack) {
+      function watchMicrophoneTrack(stream) {
+        const audioTrack = stream?.getAudioTracks?.()[0] || null;
+        if (!audioTrack || audioTrack.__ksoVoiceTrackWatched) return;
+        audioTrack.__ksoVoiceTrackWatched = true;
         audioTrack.addEventListener("ended", () => {
           if (!settled) {
             settle(reject, createVoiceDisconnectedError(
@@ -1067,6 +1071,31 @@ export function useElevenLabsAssistant({
             ), "voice-track-ended");
           }
         }, { once: true });
+      }
+
+      watchMicrophoneTrack(mediaStream);
+
+      async function ensureMediaStream() {
+        if (mediaStream) return mediaStream;
+        if (microphoneRequest) return microphoneRequest;
+        microphoneRequest = (async () => {
+          try {
+            const preparedStream = await takePreparedVoiceInput();
+            const stream = preparedStream || await withTimeout(
+              navigator.mediaDevices.getUserMedia(voiceMicrophoneConstraints()),
+              VOICE_MICROPHONE_TIMEOUT_MS,
+              createMicrophoneTimeoutError,
+              stopMediaStreamTracks
+            );
+            mediaStream = stream;
+            watchMicrophoneTrack(stream);
+            return stream;
+          } catch (error) {
+            if (String(error?.code || "").startsWith("voice_microphone_")) throw error;
+            throw createMicrophoneStartError(error);
+          }
+        })();
+        return microphoneRequest;
       }
 
       function sendJson(payload) {
@@ -1218,9 +1247,11 @@ export function useElevenLabsAssistant({
           introValidated: true
         });
         const playbackDelay = voiceInputResumeDelayMs(0, voiceAudioPlayer.remainingPlaybackMs());
-        finishTimer = window.setTimeout(() => {
+        finishTimer = window.setTimeout(async () => {
           introPlaybackFinished = true;
           if (continueAfterGeneratedIntro) {
+            await startAudioInput();
+            if (settled || !audioInputStarted) return;
             introAwaitingUser = true;
             audioInputPaused = false;
             callbacks.onIntroListening?.({
@@ -1290,7 +1321,7 @@ export function useElevenLabsAssistant({
         }, VOICE_RESPONSE_TIMEOUT_MS);
       }
 
-      function startAudioInput() {
+      async function startAudioInput() {
         if (audioInputStarted || audioInputStopped || settled) {
           return;
         }
@@ -1298,6 +1329,17 @@ export function useElevenLabsAssistant({
           audioInputPaused = true;
           return;
         }
+        if (deferMicrophoneUntilAfterGeneratedIntro && !introPlaybackFinished) {
+          return;
+        }
+
+        try {
+          await ensureMediaStream();
+        } catch (error) {
+          settle(reject, error, "audio-input-permission-failed");
+          return;
+        }
+        if (settled || !mediaStream) return;
 
         const audioContext = voiceAudioPlayer.getContext();
         if (!audioContext || audioContext.state === "closed") {
@@ -1407,7 +1449,9 @@ export function useElevenLabsAssistant({
         if (introGenerationPhase === "suppressing-technical-first-message") {
           startResponseTimer();
         }
-        metadataFallbackTimer = window.setTimeout(startAudioInput, TEXT_METADATA_FALLBACK_MS);
+        metadataFallbackTimer = window.setTimeout(() => {
+          void startAudioInput();
+        }, TEXT_METADATA_FALLBACK_MS);
       });
 
       socket.addEventListener("message", (event) => {
@@ -1424,7 +1468,7 @@ export function useElevenLabsAssistant({
           agentAudioFormat = String(metadata.agent_output_audio_format || agentAudioFormat);
           userAudioFormat = String(metadata.user_input_audio_format || userAudioFormat);
           window.clearTimeout(metadataFallbackTimer);
-          startAudioInput();
+          void startAudioInput();
           return;
         }
 

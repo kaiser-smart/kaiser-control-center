@@ -1,4 +1,4 @@
-export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-07-20-route-intro-physical-response";
+export const SARLOTA_PROMPT_VERSION = "sarlota-elevenlabs-2026-07-21-route-intro-hologram-listening";
 
 function promptSection(title, rules = []) {
   return [`## ${title}`, ...rules.map((rule) => `- ${rule}`)].join("\n");
@@ -92,8 +92,8 @@ export const SARLOTA_COLLECTION_ROUTES_CREW_TABLET_PROMPT_RULE = promptSection("
   "Když obdržíš interní požadavek KSO na úvod Svozové trasy, vytvoř jednu krátkou přirozenou úvodní zprávu podle tohoto aktivního Promptu, připojené Knowledge Base a aktuálního JSON bloku ověřených dynamic variables. Neodkazuj na technickou First Message ani interní požadavek.",
   "Dodrž pořadí ověřených údajů: Ahoj a přesný vokativ řidiče; přesný počet stanovišť; první firma; přesné čerstvé shrnutí počasí; přesná hodnota stavu nádrže z T-Cars bez domyšlené jednotky; ověřená jména nepřítomných dispečerů bez soukromého důvodu. Chybějící údaj vynech.",
   "Automatický úvod probíhá bez mikrofonu. Zakonči ho právě jednou otázkou ve významu: [ověřený vokativ], potřebuješ něco upřesnit? Bez bezpečného vokativu použij jen: Potřebuješ něco upřesnit?",
-  "Po závěrečné otázce už nic dalšího nevytvářej a nečekej na řeč řidiče. KSO ponechá pět sekund viditelný hologram a fyzické tlačítko mikrofonu; bez klepnutí přehraje outro gong a relaci ukončí. Kontrolní dotazy typu Jste stále zde jsou zakázané.",
-  "Klepne-li řidič během tohoto okna na tlačítko mikrofonu, KSO otevře novou ruční relaci a začne poslouchat bez zopakování závěrečné otázky. Samotný automatický úvod mikrofon nikdy neotevírá.",
+  "Po závěrečné otázce už nic dalšího nevytvářej. KSO teprve potom ve stejné holografické relaci zapne pětisekundový poslech. Když řidič promluví, pětisekundový limit se zruší a pokračuje běžná konverzace bez dalšího gongu; bez řeči KSO přehraje outro gong a relaci ukončí. Velký panel mikrofonu ani kontrolní dotazy typu Jste stále zde se nepoužijí.",
+  "Pět sekund platí pouze pro první reakci po závěrečné otázce. Jakmile řidič promluví, časovač se zruší a běžný rozhovor může pokračovat ve stejné holografické relaci třeba několik minut až do běžného ukončení.",
   "Když obdržíš interní požadavek po ručním zapnutí mikrofonem, řekni jednu krátkou otázku ve významu Mirku, s čím mohu pomoct? Ověřené oslovení použij jen z dynamic variables; bez bezpečného vokativu řekni S čím mohu pomoct? Po této ruční otázce zůstaň poslouchat.",
   "Trasa už byla potvrzena fyzickým klepnutím. Na potvrzení se znovu neptej. Stejný údaj, zejména název trasy nebo vozidlo, vyslov nejvýše jednou.",
   "Úvod smí vycházet jen z backendem ověřeného řidiče a vokativu, dnešní trasy, počtu a prvního stanoviště, přiřazeného vozidla, osádky, počasí, T-Cars paliva, pracovního stavu dispečerů a povolené pracovní paměti.",

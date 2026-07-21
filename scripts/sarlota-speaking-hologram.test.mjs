@@ -48,7 +48,7 @@ const automaticProcessingHtml = AiAssistantLauncher({
 assert.match(automaticProcessingHtml, /Šarlota · Přemýšlím/);
 assert.doesNotMatch(automaticProcessingHtml, /Mikrofon|ai-assistant-voice-dock/);
 
-const waitingForTapHtml = AiAssistantLauncher({
+const responseWindowHtml = AiAssistantLauncher({
   visible: true,
   voiceActive: true,
   voiceUiState: "ready",
@@ -58,8 +58,8 @@ const waitingForTapHtml = AiAssistantLauncher({
   assistantName: sarlota.name
 });
 
-assert.match(waitingForTapHtml, /Šarlota · Čekám na klepnutí/);
-assert.doesNotMatch(waitingForTapHtml, /ai-assistant-voice-dock|Poslouchám/);
+assert.match(responseWindowHtml, /Šarlota · Poslouchám/);
+assert.doesNotMatch(responseWindowHtml, /ai-assistant-voice-dock|Mikrofon/);
 
 const outroHologramHtml = AiAssistantLauncher({
   visible: true,
@@ -111,6 +111,7 @@ assert.match(
   "Automatický tok musí zobrazovat hologram místo mikrofonního panelu."
 );
 assert.match(appSource.slice(hologramStateStart, hologramStateEnd), /myDailyRouteSarlotaAwaitingResponse/);
+assert.match(appSource.slice(hologramStateStart, hologramStateEnd), /myDailyRouteSarlotaHologramConversation/);
 assert.match(appSource.slice(hologramStateStart, hologramStateEnd), /myDailyRouteSarlotaOutroPlaying/);
 assert.match(appSource, /open: aiAssistantState\.chatOpen && !collectionRoutesSpeakingHologram/);
 assert.match(styleSource, /body:has\(\.collection-daily-driver-map\.is-fullscreen\) \.ai-sarlota-speaking-hologram/);

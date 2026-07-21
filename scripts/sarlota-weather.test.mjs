@@ -47,6 +47,37 @@ assert.match(weather.summary, /Během směny se může objevit déšť/);
 assert.match(weather.summary, /Nárazy větru/);
 
 weatherTest.clearCache();
+const calmWeather = await currentSarlotaWeather({}, {
+  now: () => new Date("2026-07-18T04:30:00.000Z"),
+  fetchImpl: async () => new Response(JSON.stringify({
+    current: {
+      time: "2026-07-18T07:00",
+      temperature_2m: 22,
+      apparent_temperature: 22,
+      weather_code: 1,
+      wind_speed_10m: 5,
+      wind_gusts_10m: 8,
+      visibility: 20_000
+    },
+    hourly: {
+      time: times,
+      temperature_2m: Array(14).fill(22),
+      precipitation_probability: Array(14).fill(0),
+      precipitation: Array(14).fill(0),
+      rain: Array(14).fill(0),
+      showers: Array(14).fill(0),
+      snowfall: Array(14).fill(0),
+      weather_code: Array(14).fill(1),
+      wind_speed_10m: Array(14).fill(5),
+      wind_gusts_10m: Array(14).fill(8),
+      visibility: Array(14).fill(20_000)
+    }
+  }), { status: 200, headers: { "content-type": "application/json" } })
+});
+assert.match(calmWeather.summary, /Během směny se neočekává výrazná změna počasí\./);
+assert.doesNotMatch(calmWeather.summary, /bez výrazného počasí/);
+
+weatherTest.clearCache();
 const unavailable = await currentSarlotaWeather({}, {
   now: () => new Date("2026-07-18T04:31:00.000Z"),
   fetchImpl: async () => {

@@ -137,6 +137,11 @@ assert.equal(
   SARLOTA_PRONUNCIATION_RULES.find((rule) => rule.string_to_replace === "GPS")?.alias,
   "gé, pé, es"
 );
+assert.equal(
+  SARLOTA_PRONUNCIATION_RULES.find((rule) => rule.string_to_replace === "T-Cars")?.alias,
+  "tý kárs"
+);
+assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.some((item) => item.includes("T-Cars")));
 assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.length >= 18);
 assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.includes("Kaiser servis používá Kaiser Smart odpady."));
 assert.ok(SARLOTA_PRONUNCIATION_LISTENING_TESTS.some((item) => item.includes("Radime, Mirku, Petře, Patriku, Kamile a Tomáši.")));

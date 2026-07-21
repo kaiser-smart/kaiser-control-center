@@ -26,6 +26,7 @@ assert.match(pronunciationSource, /Kaiser servis \| kajzr servis/);
 assert.match(pronunciationSource, /Kaiser \| kajzr/);
 assert.match(pronunciationSource, /GPS \| gé, pé, es/);
 assert.match(pronunciationSource, /SPZ \| es pé zet/);
+assert.match(pronunciationSource, /T-Cars \| tý kárs/);
 assert.match(pronunciationSource, /Každý alias musí projít poslechovým testem/);
 
 assert.match(integrationRecord, /SARLOTA_LANGUAGE_REFERENCE_KB\.md/);
