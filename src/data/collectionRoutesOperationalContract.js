@@ -87,6 +87,16 @@ export const COLLECTION_ROUTES_OPERATIONAL_CONTRACT = Object.freeze({
       "unapproved-internal-sms",
       "rcs"
     ])
+  }),
+  incidentQueue: Object.freeze({
+    defaultScope: "production",
+    statuses: Object.freeze(["new", "claimed", "in_progress", "resolved"]),
+    productionExternalSendingEnabled: false,
+    testExternalSendingEnabled: false,
+    testCommunicationAdapter: "simulated-provider",
+    deliveryRequiresProviderWebhook: true,
+    technicalDetailsRoles: Object.freeze(["admin", "management"]),
+    physicalConfirmationRequired: true
   })
 });
 

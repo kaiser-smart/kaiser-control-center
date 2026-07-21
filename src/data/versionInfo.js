@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.664"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.665"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: samostatná pracovní fronta Hlášení",
+    text: "Horní navigace obsahuje samostatnou záložku Hlášení s výchozím PROVOZEM, výrazně odděleným TESTEM, nízkými řádky a širokým pravým detailem. Převzetí, řešení, povinný výsledek, další kontrola a znovuotevření zapisují audit přes cloudové API; ostrý e-mail a SMS zůstávají vypnuté, zatímco TEST projde bezpečným simulovaným providerem bez kontaktu zákazníka."
+  },
   {
     title: "Šarlota: formulář až po skutečném Toolu a přesná adresa",
     text: "Při hlášení poškozené nebo přeplněné nádoby Šarlota nejdřív skutečně otevře správný formulář přes KSO Tool a až potom výsledek potvrdí hlasem. Na dotaz k aktuálnímu stanovišti přečte přesnou backendem ověřenou adresu; nesmí ji popřít ani slibovat neexistující dohledání."

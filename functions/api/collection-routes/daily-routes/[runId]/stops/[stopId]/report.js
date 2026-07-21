@@ -40,10 +40,10 @@ export async function onRequestPost({ request, env, params }) {
   try {
     const formData = await request.formData();
     const files = formData.getAll("photo").filter(uploadedFile);
-    if (!files.length || files.some((file) => file.size <= 0)) {
+    if (files.some((file) => file.size <= 0)) {
       return json({
-        error: "Hlášení pro dispečink musí obsahovat fotografii.",
-        code: "collection_daily_route_report_photo_required",
+        error: "Přiložená fotografie je prázdná.",
+        code: "collection_daily_route_report_photo_empty",
         apiStatus: "waiting"
       }, 400);
     }

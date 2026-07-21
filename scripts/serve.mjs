@@ -123,6 +123,92 @@ let mockSelfRepairMonitorStatus = "active";
 let mockNotificationLogs = [];
 let mockAssistantDailyPromos = new Map();
 let mockCollectionRouteBatches = [];
+const mockCollectionRouteIncidentItems = [
+  {
+    id: "local-incident-production-new",
+    environment: "production",
+    type: "site_inaccessible",
+    typeLabel: "Nádoba není přístupná",
+    status: "new",
+    workflow: { status: "new", assignedUserId: "", assignedName: "", updatedAt: "2026-07-21T07:42:00+02:00" },
+    companyName: "PEPCO Czech Republic",
+    stationName: "nám. Svornosti",
+    address: "nám. Svornosti 2573/6, Brno",
+    routeTitle: "Trasa 3",
+    routeDate: "2026-07-21",
+    driverName: "Mirek",
+    vehicleLabel: "Vůz A · 3BN 3558",
+    reportedAt: "2026-07-21T07:42:00+02:00",
+    note: "Vjezd ke stanovišti blokuje zásobování.",
+    photos: [],
+    map: null,
+    email: { status: "not_sent", updatedAt: "" },
+    sms: { status: "not_sent", updatedAt: "" },
+    communications: [],
+    audit: [{ id: "local-audit-new", eventType: "reported", actorName: "Mirek", summary: "vytvořil hlášení", createdAt: "2026-07-21T07:42:00+02:00" }],
+    canManage: true,
+    externalSendingEnabled: false,
+    testAdapter: "none",
+    technicalDetails: { incidentId: "local-incident-production-new", runId: "local-route-3", stopId: "local-stop-pepco", source: "local-preview" }
+  },
+  {
+    id: "local-incident-production-claimed",
+    environment: "production",
+    type: "damaged",
+    typeLabel: "Nádoba je poškozená",
+    status: "claimed",
+    workflow: { status: "claimed", assignedUserId: "radim-oplustil", assignedName: "Radim Opluštil", assignedAt: "2026-07-21T08:02:00+02:00", updatedAt: "2026-07-21T08:02:00+02:00" },
+    companyName: "Kaiser servis",
+    stationName: "Trnkova 137",
+    address: "Trnkova 3052/137, Brno",
+    routeTitle: "Trasa 1",
+    routeDate: "2026-07-21",
+    driverName: "Miroslav",
+    vehicleLabel: "Vůz B · 1BP 8373",
+    reportedAt: "2026-07-21T07:58:00+02:00",
+    note: "Prasklé víko, nádobu lze zatím obsloužit.",
+    photos: [],
+    map: null,
+    email: { status: "not_sent", updatedAt: "" },
+    sms: { status: "not_sent", updatedAt: "" },
+    communications: [],
+    audit: [
+      { id: "local-audit-claimed-1", eventType: "reported", actorName: "Miroslav", summary: "vytvořil hlášení", createdAt: "2026-07-21T07:58:00+02:00" },
+      { id: "local-audit-claimed-2", eventType: "claim", actorName: "Radim Opluštil", summary: "hlášení převzal", createdAt: "2026-07-21T08:02:00+02:00" }
+    ],
+    canManage: true,
+    externalSendingEnabled: false,
+    testAdapter: "none",
+    technicalDetails: { incidentId: "local-incident-production-claimed", runId: "local-route-1", stopId: "local-stop-trnkova", source: "local-preview" }
+  },
+  {
+    id: "local-incident-test-claimed",
+    environment: "test",
+    type: "waste_outside_container",
+    typeLabel: "Odpad mimo nádobu",
+    status: "claimed",
+    workflow: { status: "claimed", assignedUserId: "radim-oplustil", assignedName: "Radim Opluštil", assignedAt: "2026-07-21T08:12:00+02:00", updatedAt: "2026-07-21T08:12:00+02:00" },
+    companyName: "Firma test 501",
+    stationName: "TEST Trnkova",
+    address: "Trnkova 3052/137, Brno",
+    routeTitle: "TEST trasa",
+    routeDate: "2026-07-21",
+    driverName: "Mirek",
+    vehicleLabel: "TEST vozidlo",
+    reportedAt: "2026-07-21T08:08:00+02:00",
+    note: "Bezpečný lokální náhled komunikace.",
+    photos: [],
+    map: null,
+    email: { status: "not_sent", updatedAt: "" },
+    sms: { status: "not_sent", updatedAt: "" },
+    communications: [],
+    audit: [{ id: "local-audit-test", eventType: "reported", actorName: "Mirek", summary: "vytvořil TEST hlášení", createdAt: "2026-07-21T08:08:00+02:00" }],
+    canManage: true,
+    externalSendingEnabled: false,
+    testAdapter: "simulated-provider",
+    technicalDetails: { incidentId: "local-incident-test-claimed", runId: "local-test-route", stopId: "local-test-stop", source: "local-preview" }
+  }
+];
 let mockCollectionRouteIssues = [];
 let mockCollectionRouteSites = [];
 let mockCollectionRouteImportRows = [];
@@ -4737,6 +4823,36 @@ async function handleApi(request, response) {
       return true;
     }
     sendJson(response, 200, { user: publicUser(user) });
+    return true;
+  }
+
+  if (url.pathname === "/api/collection-routes/incidents" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "collection-routes", "view")) {
+      sendJson(response, 403, { error: "K tomu nemáš oprávnění." });
+      return true;
+    }
+    const environment = url.searchParams.get("scope") === "test" ? "test" : "production";
+    const incidents = mockCollectionRouteIncidentItems.filter((item) => item.environment === environment);
+    const counts = {
+      new: incidents.filter((item) => item.status === "new").length,
+      claimed: incidents.filter((item) => item.status === "claimed").length,
+      inProgress: incidents.filter((item) => item.status === "in_progress").length,
+      resolved: incidents.filter((item) => item.status === "resolved").length,
+      unresolved: incidents.filter((item) => item.status !== "resolved").length
+    };
+    sendJson(response, 200, {
+      incidents,
+      counts,
+      environment,
+      externalSendingEnabled: false,
+      testAdapter: environment === "test" ? "simulated-provider" : "none",
+      apiStatus: "ready"
+    });
     return true;
   }
 

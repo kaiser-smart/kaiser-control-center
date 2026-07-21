@@ -40,6 +40,11 @@ assert.equal(contract.voice.automaticIntroClosingQuestion, true);
 assert.equal(contract.voice.automaticIntroResponseMode, "hologram_voice_window");
 assert.equal(contract.voice.responseWindowTimeoutEndsEngagedConversation, false);
 assert.equal(contract.voice.introSilenceTimeoutMs, 5000);
+assert.equal(contract.incidentQueue.defaultScope, "production");
+assert.deepEqual(contract.incidentQueue.statuses, ["new", "claimed", "in_progress", "resolved"]);
+assert.equal(contract.incidentQueue.productionExternalSendingEnabled, false);
+assert.equal(contract.incidentQueue.testCommunicationAdapter, "simulated-provider");
+assert.equal(contract.incidentQueue.deliveryRequiresProviderWebhook, true);
 
 for (const marker of [
   "Blackview Active 7 LTE",
