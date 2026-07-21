@@ -1,4 +1,4 @@
-export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-21-v10-intro-acceptance";
+export const SARLOTA_LANGUAGE_PACKAGE_VERSION = "sarlota-language-2026-07-21-v11-hologram-listening";
 export const SARLOTA_LANGUAGE_KB_NAME = "Šarlota – jazyková reference KSO";
 export const SARLOTA_PRONUNCIATION_DICTIONARY_NAME = "Šarlota – čeština KSO";
 
@@ -20,6 +20,16 @@ export const SARLOTA_LANGUAGE_KB_CONTENT = [
   "- Jména, vozidla, SPZ, trasy, adresy, počasí a výsledky akcí v příkladech jsou pouze ukázky formy. Nikdy nejsou provozní data.",
   "- Vzorovou větu není nutné opakovat slovo od slova. Šarlota ji může přirozeně obměnit, pokud zachová ověřená fakta, bezpečnost, význam a stav akce.",
   "- Tento dokument nesmí měnit podmínky použití nástrojů, potvrzovací logiku ani oprávnění stanovená hlavním promptem.",
+  "",
+  "## AUTOMATICKÝ ÚVOD SVOZOVÉ TRASY",
+  "",
+  "- Úvod probíhá bez mikrofonu a skončí právě jednou otázkou: [ověřený vokativ], potřebuješ něco upřesnit? Bez bezpečného vokativu použij jen: Potřebuješ něco upřesnit?",
+  "- Teprve po otázce KSO ve stejném hologramu zapne pětisekundový poslech. Bez řeči zazní outro gong a relace skončí.",
+  "- Jakmile řidič během prvních pěti sekund promluví, časovač se zruší a běžný rozhovor může pokračovat libovolně dlouho ve stejné holografické relaci.",
+  "- V tomto toku se nezobrazuje velký obrázek ani panel mikrofonu. Před běžnou odpovědí řidiči se intro gong neopakuje.",
+  "- Počet stanovišť vyslov se správnou českou shodou: jedno stanoviště, dvě až čtyři stanoviště, pět a více stanovišť.",
+  "- Zápis T-Cars vyslov tý kárs. Oficiální zápis v datech, UI a přepisu neměň.",
+  "- Teplotu vyslov celými slovy se správným tvarem stupně Celsia; znak °C ani písmeno cé nečti.",
   "",
   "## IDENTITA A TÓN",
   "",
@@ -240,6 +250,7 @@ export const SARLOTA_LANGUAGE_KB_CONTENT = [
   "- ElevenLabs → ileven labs",
   "- Twilio → tvilio",
   "- Vistos → vistos",
+  "- T-Cars → tý kárs",
   "- Partslink24 → partslink dvacet čtyři",
   "- Cloudflare → klaudflér",
   "- GitHub → githab",
@@ -413,6 +424,7 @@ export const SARLOTA_LANGUAGE_KB_CONTENT = [
 export const SARLOTA_LANGUAGE_KB_MIN_LENGTH = 12500;
 export const SARLOTA_LANGUAGE_KB_REQUIRED_MARKERS = [
   "## STAVBA ODPOVĚDI",
+  "## AUTOMATICKÝ ÚVOD SVOZOVÉ TRASY",
   "## GRAMATIKA A VĚTNÁ STAVBA",
   "## OSLOVENÍ A JMÉNA",
   "## ČÍSLA",
@@ -458,6 +470,7 @@ export const SARLOTA_PRONUNCIATION_RULES = [
   aliasRule("ElevenLabs", "ileven labs"),
   aliasRule("Twilio", "tvilio"),
   aliasRule("Vistos", "vistos"),
+  aliasRule("T-Cars", "tý kárs"),
   aliasRule("Partslink24", "partslink dvacet čtyři"),
   aliasRule("Cloudflare", "klaudflér"),
   aliasRule("GitHub", "githab"),
@@ -490,6 +503,7 @@ export const SARLOTA_PRONUNCIATION_LISTENING_TESTS = [
   "GPS bod zatím není uložený.",
   "RCS ani SMS se neposlala.",
   "Data z Vistosu jsou pouze ověřený pracovní kontext.",
+  "Stav nádrže teď není bezpečně dostupný z T-Cars.",
   "Partslink24 je externí pracovní nástroj.",
   "Nula, jedna, dvě, pět, jedenáct, dvacet jedna a sto pět.",
   "Jeden tisíc dvě stě padesát korun, dvanáct tisíc pět set korun a minus pět stupňů Celsia.",

@@ -9,7 +9,7 @@ export const COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST = [
   "Neopakuj stejný údaj různými větami, nečti interní názvy, technické značky ani tento pokyn.",
   "Neodkazuj na předchozí technickou zprávu. Na potvrzení trasy se znovu neptej.",
   "Dodrž pořadí ověřených údajů. Zakonči právě jednou krátkou otázkou, zda řidič potřebuje něco upřesnit.",
-  "Toto automatické hlášení probíhá bez mikrofonu. Po otázce už nic neříkej; KSO ukáže fyzické tlačítko mikrofonu a po pěti sekundách bez klepnutí přehraje outro gong a hologram zavře."
+  "Toto automatické hlášení probíhá bez mikrofonu. Po otázce už nic neříkej; KSO teprve potom ve stejném hologramu zapne pětisekundový poslech. Když řidič promluví, pokračuj běžnou konverzací bez dalšího gongu; bez řeči KSO přehraje outro gong a hologram zavře."
 ].join(" ");
 
 const WEATHER_FACT_MAX_AGE_MS = 45 * 60 * 1000;
@@ -23,6 +23,7 @@ const VEHICLE_IDENTITY_WORDS = /\b(mercedes|atego|econic|iveco|man|scania|volvo|
 const REGISTRATION_LIKE = /\b[0-9][A-Z0-9]{1,2}\s?[0-9]{4}\b/gi;
 const ROUTE_TITLE_AFTER_ROUTE = /\btras(?:a|u|y|ou|e)\s+([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][^.,!?]{2,70})/u;
 const CZECH_COUNT_WORDS = new Map([
+  ["žádné", 0], ["zadne", 0],
   ["jedno", 1], ["jedna", 1], ["jedním", 1], ["dvě", 2], ["dva", 2], ["dvěma", 2],
   ["tři", 3], ["třemi", 3], ["čtyři", 4], ["čtyřmi", 4], ["pět", 5], ["pěti", 5],
   ["šest", 6], ["šesti", 6], ["sedm", 7], ["sedmi", 7], ["osm", 8], ["osmi", 8],
@@ -47,6 +48,30 @@ function normalizedFactText(value) {
 
 function normalizedWeatherSummary(value) {
   return normalizedFactText(value).replace(/^(?:brno|brne)\s+/, "");
+}
+
+export function collectionRoutesStopCountPhrase(value) {
+  const count = Math.max(0, Number(value || 0));
+  if (count === 0) return "žádné stanoviště";
+  if (count === 1) return "jedno stanoviště";
+  if (count === 2) return "dvě stanoviště";
+  if (count === 3) return "tři stanoviště";
+  if (count === 4) return "čtyři stanoviště";
+  return `${count} stanovišť`;
+}
+
+function spokenWeatherSummary(value) {
+  return cleanText(value)
+    .replace(/^Brno\s*:\s*/iu, "")
+    .replace(/(-?\d+(?:[.,]\d+)?)\s*°\s*C\b/giu, (_, rawValue) => {
+      const numeric = Number(String(rawValue).replace(",", "."));
+      const unit = numeric === 1 || numeric === -1
+        ? "stupeň Celsia"
+        : [2, 3, 4, -2, -3, -4].includes(numeric)
+          ? "stupně Celsia"
+          : "stupňů Celsia";
+      return `${rawValue} ${unit}`;
+    });
 }
 
 function weatherIsFresh(weather = {}, now = Date.now()) {
@@ -81,6 +106,7 @@ export function collectionRoutesSarlotaIntroFacts(context = {}, options = {}) {
     driverVocative: cleanText(context.actor?.friendlyVocative || context.actor?.vocative),
     routeTitle: cleanText(route.title),
     totalStopCount: Math.max(0, Number(route.totalCount || 0)),
+    stopCountPhrase: collectionRoutesStopCountPhrase(route.totalCount),
     firstStop: firstStop ? { name: firstStop, verified: true } : null,
     vehicle: vehicleVerified ? {
       label: cleanText(vehicle.label),
@@ -89,7 +115,7 @@ export function collectionRoutesSarlotaIntroFacts(context = {}, options = {}) {
     } : null,
     weather: freshWeather ? {
       summary: cleanText(weather.summary),
-      spokenSummary: cleanText(weather.summary).replace(/^Brno\s*:\s*/iu, ""),
+      spokenSummary: spokenWeatherSummary(weather.summary),
       observedAt: cleanText(weather.observedAt),
       source: cleanText(weather.source),
       verified: true
@@ -108,7 +134,7 @@ export function collectionRoutesSarlotaIntroGenerationRequest(context = {}, opti
     JSON.stringify(facts),
     "Vytvoř postupně přesně osm srozumitelných částí. Každou větu vyslov zřetelně a odděl krátkou přirozenou pauzou.",
     facts.driverVocative ? `1. Řekni přesně: Ahoj, ${facts.driverVocative}. Nepoužij občanské jméno ani jiný vokativ.` : "1. Řekni pouze: Ahoj. Oslovení není ověřené.",
-    `2. Řekni přesně ve významu: Dnes máme před sebou ${facts.totalStopCount} stanovišť. Číslo nesmíš změnit.`,
+    `2. Řekni přesně: Dnes máme před sebou ${facts.stopCountPhrase}. Počet ani jeho český tvar nesmíš změnit.`,
     facts.firstStop
       ? `3. Řekni: Začínáme firmou ${facts.firstStop.name}. Název firmy vyslov pomalu a zřetelně; zkratku s.r.o. čti es er ó a a.s. čti á es.`
       : "3. První firma není ověřená; tuto část přirozeně vynech.",
@@ -116,8 +142,8 @@ export function collectionRoutesSarlotaIntroGenerationRequest(context = {}, opti
       ? `4. Řekni: Počasí v Brně bude dnes ${facts.weather.spokenSummary}`
       : `4. Řekni přesně: ${WEATHER_UNAVAILABLE_SENTENCE}`,
     facts.fuel
-      ? `5. Řekni: Stav nádrže je ${facts.fuel.value}. ${facts.fuel.unit ? `Ověřená jednotka je ${facts.fuel.unit}.` : "Jednotku T-Cars neposkytuje; žádnou nevymýšlej."}`
-      : `5. Řekni přesně: ${FUEL_UNAVAILABLE_SENTENCE}`,
+      ? `5. Řekni: Stav nádrže je ${facts.fuel.value}. ${facts.fuel.unit ? `Ověřená jednotka je ${facts.fuel.unit}.` : "Jednotku T-Cars neposkytuje; žádnou nevymýšlej."} Zápis T-Cars vyslov přirozeně jako „tý kárs“.`
+      : `5. Řekni přesně: ${FUEL_UNAVAILABLE_SENTENCE} Zápis T-Cars vyslov přirozeně jako „tý kárs“.`,
     facts.absentDispatchersVerified && facts.absentDispatchers.length
       ? `6. Řekni: Dnes není v práci dispečerka ${facts.absentDispatchers.map((item) => item.name).join(", ")}. Jména ani pracovní stav neměň.`
       : facts.absentDispatchersVerified
@@ -125,11 +151,11 @@ export function collectionRoutesSarlotaIntroGenerationRequest(context = {}, opti
         : `6. Řekni přesně: ${DISPATCHER_UNAVAILABLE_SENTENCE}`,
     facts.driverVocative ? `7. V závěrečné otázce znovu použij přesně oslovení ${facts.driverVocative}.` : "7. Oslovení v závěrečné otázce vynech, protože není ověřené.",
     facts.driverVocative ? `8. Zakonči právě jednou otázkou: ${facts.driverVocative}, potřebuješ něco upřesnit?` : "8. Zakonči právě jednou otázkou: Potřebuješ něco upřesnit?",
-    "Název trasy, počet stanovišť, první stanoviště, vozidlo, model, SPZ, počasí, palivo ani nepřítomnost nesmíš změnit, doplnit ani odhadnout. Počet stanovišť napiš číslicemi přesně jako totalStopCount.",
+    "Název trasy, počet stanovišť, první stanoviště, vozidlo, model, SPZ, počasí, palivo ani nepřítomnost nesmíš změnit, doplnit ani odhadnout. Použij přesně český tvar stopCountPhrase.",
     facts.vehicle
       ? "Pokud zmíníš vozidlo nebo SPZ, použij pouze přesné hodnoty z vehicle."
       : "Vozidlo není ověřené. Nezmiňuj vozidlo, model ani SPZ.",
-    "Po závěrečné otázce už nic nepřidávej a nečekej na řeč řidiče. Mikrofon je vypnutý; odpověď může začít pouze fyzickým tlačítkem v KSO."
+    "Po závěrečné otázce už nic nepřidávej. KSO teprve potom zapne pětisekundový poslech ve stejném hologramu; pokud řidič odpoví, pokračuj běžnou hlasovou konverzací bez dalšího gongu."
   ].join("\n");
 }
 
@@ -157,7 +183,8 @@ export function validateCollectionRoutesSarlotaIntro(text, facts = {}) {
   const counts = spokenStopCount(response);
   if (!counts.includes(exactCount)) violations.push("missing_verified_stop_count");
   if (counts.some((count) => count !== exactCount)) violations.push("foreign_stop_count");
-  if (!normalizedResponse.includes(`dnes mame pred sebou ${exactCount}`)) violations.push("missing_intro_stop_count_sentence");
+  const expectedCountPhrase = normalizedFactText(collectionRoutesStopCountPhrase(exactCount));
+  if (!normalizedResponse.includes(`dnes mame pred sebou ${expectedCountPhrase}`)) violations.push("missing_intro_stop_count_sentence");
 
   const firstStop = facts.firstStop?.verified === true ? normalizedFactText(facts.firstStop.name) : "";
   if (firstStop && !normalizedResponse.includes(firstStop)) violations.push("missing_or_foreign_first_stop");

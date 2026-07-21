@@ -185,7 +185,7 @@ function weatherSummary(location, current, forecast, hazards) {
     ? `${location.name}: ${Math.round(temperatureC)} °C, ${condition}`
     : `${location.name}: ${Math.round(temperatureC)} °C`;
   if (!hazards.length) {
-    return `${base}. Během směny bez výrazného počasí.`;
+    return `${base}. Během směny se neočekává výrazná změna počasí.`;
   }
   return `${base}. ${hazards.slice(0, 2).map((hazard) => hazard.label).join(" ")}`;
 }

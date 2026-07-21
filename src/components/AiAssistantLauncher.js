@@ -33,7 +33,7 @@ function voiceDockTitle(state, listening) {
 
 function hologramStatus(state, listening, phase = "") {
   if (phase === "awaitingResponse") {
-    return { label: "Čekám na klepnutí", aria: "čeká na fyzické zapnutí mikrofonu" };
+    return { label: "Poslouchám", aria: "po závěrečné otázce poslouchá řidiče" };
   }
 
   if (phase === "outro") {

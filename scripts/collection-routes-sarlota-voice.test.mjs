@@ -12,6 +12,7 @@ import {
   collectionRoutesSarlotaAudioWasPlayed,
   collectionRoutesSarlotaIntroFacts,
   collectionRoutesSarlotaIntroGenerationRequest,
+  collectionRoutesStopCountPhrase,
   validateCollectionRoutesSarlotaIntro,
   collectionRoutesSarlotaVoiceRequest
 } from "../src/data/collectionRoutesSarlotaVoice.js";
@@ -24,7 +25,9 @@ assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Neopakuj stejn
 assert.doesNotMatch(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /Ahoj Mirku|Můžeme vyrazit/);
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /bez mikrofonu/);
 assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /potřebuje něco upřesnit/);
-assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /fyzické tlačítko mikrofonu/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /pětisekundový poslech/);
+assert.match(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /pokračuj běžnou konverzací/);
+assert.doesNotMatch(COLLECTION_ROUTES_SARLOTA_INTRO_GENERATION_REQUEST, /fyzické tlačítko mikrofonu/);
 assert.equal(COLLECTION_ROUTES_SARLOTA_INTRO_GONG_URL, "/audio/sarlota-gong-intro.mp3");
 assert.equal(COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL, "/audio/sarlota-gong-outro.mp3");
 assert.match(COLLECTION_ROUTES_SARLOTA_MANUAL_GREETING_REQUEST, /Mirku, s čím mohu pomoct\?/);
@@ -36,6 +39,25 @@ assert.equal(userDynamicVariablesForAi({
   role: "ridic",
   status: "active"
 }).user_first_name_friendly_vocative, "Mirku");
+assert.equal(collectionRoutesStopCountPhrase(0), "žádné stanoviště");
+assert.equal(collectionRoutesStopCountPhrase(1), "jedno stanoviště");
+assert.equal(collectionRoutesStopCountPhrase(2), "dvě stanoviště");
+assert.equal(collectionRoutesStopCountPhrase(4), "čtyři stanoviště");
+assert.equal(collectionRoutesStopCountPhrase(5), "5 stanovišť");
+
+const oneStopFacts = collectionRoutesSarlotaIntroFacts({
+  actor: { vocative: "Mirku" },
+  route: { totalCount: 1, currentStop: { customerName: "Firma test" } },
+  weather: { verified: false, summary: "" },
+  fuel: { verified: false, value: null },
+  absentDispatchersVerified: true,
+  absentDispatchers: []
+});
+assert.equal(oneStopFacts.stopCountPhrase, "jedno stanoviště");
+assert.equal(validateCollectionRoutesSarlotaIntro(
+  "Ahoj, Mirku. Dnes máme před sebou jedno stanoviště. Začínáme firmou Firma test. Aktuální předpověď pro Brno teď není bezpečně dostupná. Stav nádrže teď není bezpečně dostupný z T-Cars. Dispečink je dnes zajištěný. Zastupování není potřeba. Mirku, potřebuješ něco upřesnit?",
+  oneStopFacts
+).valid, true, "Jedna zastávka musí zaznít jako jedno stanoviště, nikdy jedna stanovišť.");
 
 const introContext = {
   actor: { name: "Miroslav Vašek", vocative: "Mirku" },
@@ -65,6 +87,8 @@ assert.match(introRequest, /3BN 3558/);
 assert.match(introRequest, /Během směny hrozí bouřka/);
 assert.match(introRequest, /Test 1 s\.r\.o\./);
 assert.match(introRequest, /63\.5/);
+assert.match(introRequest, /22 stupňů Celsia/);
+assert.match(introRequest, /tý kárs/);
 assert.equal(validateCollectionRoutesSarlotaIntro(
   "Ahoj, Mirku. Dnes máme před sebou 198 stanovišť. Začínáme firmou Test 1 s.r.o. Počasí v Brně bude dnes 22 °C, zataženo. Během směny hrozí bouřka. Stav nádrže je 63,5. Jednotku T-Cars neposkytuje. Dnes není v práci dispečerka Jana Dispečerová. Mirku, potřebuješ něco upřesnit?",
   introFacts
@@ -181,9 +205,10 @@ assert.match(appSource, /data-collection-routes-test-voice-provider/);
 assert.match(appSource, /Hlas: ElevenLabs Šarlota · systémové čtení vypnuto/);
 assert.match(appSource, /Automatický hlas se bez gongu nespustí/);
 assert.match(appSource, /error\.code = "voice_intro_gong_failed"/);
-assert.match(appSource, /endAfterGeneratedIntro: automaticSession/);
-assert.match(appSource, /continueAfterGeneratedIntro: false/);
-assert.match(appSource, /Mikrofon nebyl zapnutý/);
+assert.match(appSource, /endAfterGeneratedIntro: false/);
+assert.match(appSource, /continueAfterGeneratedIntro: automaticSession/);
+assert.match(appSource, /onIntroEngaged/);
+assert.match(appSource, /myDailyRouteSarlotaHologramConversation/);
 assert.match(appSource, /finishCollectionRoutesSarlotaIntroResponseWindow/);
 assert.match(appSource, /COLLECTION_ROUTES_SARLOTA_OUTRO_GONG_URL/);
 assert.match(appSource, /introSilenceTimeoutMs/);
@@ -232,7 +257,18 @@ assert.match(elevenLabsSource, /listening-after-technical-first-message/);
 assert.match(elevenLabsSource, /introSilenceTimeoutMs/);
 assert.match(elevenLabsSource, /introAwaitingUser/);
 assert.match(elevenLabsSource, /state: "intro-silence-complete"/);
-assert.match(elevenLabsSource, /if \(!endAfterGeneratedIntro\) \{[\s\S]*takePreparedVoiceInput/);
+assert.match(elevenLabsSource, /deferMicrophoneUntilAfterGeneratedIntro/);
+assert.match(elevenLabsSource, /if \(deferMicrophoneUntilAfterGeneratedIntro && !introPlaybackFinished\)/);
+assert.match(elevenLabsSource, /introPlaybackFinished = true;[\s\S]*await startAudioInput\(\)/);
+assert.match(elevenLabsSource, /introUserEngaged = true;[\s\S]*window\.clearTimeout\(introSilenceTimer\)/);
+assert.doesNotMatch(
+  elevenLabsSource.slice(
+    elevenLabsSource.indexOf("if (introAwaitingUser && !introUserEngaged)"),
+    elevenLabsSource.indexOf("callbacks.onUserTranscript", elevenLabsSource.indexOf("if (introAwaitingUser && !introUserEngaged)"))
+  ),
+  /settle\(/,
+  "První řeč řidiče smí zrušit jen pětisekundový timeout; živou konverzaci nesmí ukončit."
+);
 assert.match(elevenLabsSource, /if \(!endAfterGeneratedIntro && \(typeof navigator/);
 assert.match(elevenLabsSource, /playCue/);
 assert.match(elevenLabsSource, /playCueWithMediaElement/);

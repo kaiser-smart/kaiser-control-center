@@ -21,6 +21,7 @@
 | ElevenLabs | ileven labs | Před ostrým použitím poslechnout v české větě |
 | Twilio | tvilio | Před ostrým použitím poslechnout |
 | Vistos | vistos | Beze změny pravopisu |
+| T-Cars | tý kárs | Oficiální zápis v datech neměnit |
 | Partslink24 | partslink dvacet čtyři | Číslo číst jako číslo |
 | Cloudflare | klaudflér | Pouze TTS alias |
 | GitHub | githab | Pouze TTS alias |
