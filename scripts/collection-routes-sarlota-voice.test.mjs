@@ -58,6 +58,10 @@ assert.equal(validateCollectionRoutesSarlotaIntro(
   "Ahoj, Mirku. Dnes máme před sebou jedno stanoviště. Začínáme firmou Firma test. Aktuální předpověď pro Brno teď není bezpečně dostupná. Stav nádrže teď není bezpečně dostupný z T-Cars. Dispečink je dnes zajištěný. Zastupování není potřeba. Mirku, potřebuješ něco upřesnit?",
   oneStopFacts
 ).valid, true, "Jedna zastávka musí zaznít jako jedno stanoviště, nikdy jedna stanovišť.");
+assert.equal(validateCollectionRoutesSarlotaIntro(
+  "Ahoj, Mirku. Dnes máme před sebou jedno stanoviště. Začínáme firmou Firma test. Aktuální předpověď pro Brno teď není bezpečně dostupná. Stav nádrže teď není bezpečně dostupný z tý kárs. Dispečink je dnes zajištěný. Zastupování není potřeba. Mirku, potřebuješ něco upřesnit?",
+  oneStopFacts
+).valid, true, "Výslovnost tý kárs musí být stejný ověřený fakt jako zápis T-Cars.");
 
 const introContext = {
   actor: { name: "Miroslav Vašek", vocative: "Mirku" },

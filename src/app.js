@@ -42374,6 +42374,11 @@ async function startCollectionDailyDriverSarlota(options = {}) {
     validateGeneratedIntro: automaticSession
       ? (text) => validateCollectionRoutesSarlotaIntro(text, introFacts)
       : null,
+    onIntroValidationFailed: automaticSession ? (error) => {
+      console.warn("collection_routes.sarlota_intro_validation_failed", {
+        violations: Array.isArray(error?.violations) ? error.violations : []
+      });
+    } : null,
     onBeforeIntroPlayback: automaticSession ? async () => {
       const started = await updateCollectionRoutesVoiceIntro("begin_playback");
       if (started.allowed !== true) return false;

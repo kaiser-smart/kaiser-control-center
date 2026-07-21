@@ -42,6 +42,8 @@ function normalizedFactText(value) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/°\s*c\b/g, " stupnu celsia ")
+    .replace(/\bty\s+kars\b/g, "t cars")
+    .replace(/\bstupne\s+celsia\b/g, "stupnu celsia")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
