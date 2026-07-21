@@ -510,6 +510,50 @@ export function parseTcarsCostsXml(xml) {
   return typedBlocks(xml, "naklad", "tNaklady").map((block) => parseTcarsCost(block, refs));
 }
 
+function referencedTypedBlocks(block, refs, expectedType, visited = new Set()) {
+  const blocks = [];
+  const tags = String(block || "").matchAll(/<(?:[\w.-]+:)?[\w.-]+\b([^>]*)\/?\s*>/gi);
+  for (const match of tags) {
+    const refId = hrefFromAttributes(match[1] || "");
+    if (!refId || visited.has(refId) || !refs.has(refId)) continue;
+    visited.add(refId);
+    const ref = refs.get(refId);
+    if (blockTypeMatches(ref.type, expectedType)) blocks.push(ref.body);
+    blocks.push(...referencedTypedBlocks(ref.body, refs, expectedType, visited));
+  }
+  return blocks;
+}
+
+function uniqueCosts(costs = []) {
+  const seen = new Set();
+  return costs.filter((cost) => {
+    const key = [cost.id, cost.occurredAt, cost.priceWithVat, cost.price, cost.description].join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function parseTcarsVehicleCostsXml(xml) {
+  const refs = multiRefMap(xml);
+  const seenGroups = new Set();
+  return typedBlocks(xml, "vozidloNaklady", "tVozidloNaklady")
+    .filter((block) => {
+      const key = String(block || "").trim();
+      if (!key || seenGroups.has(key)) return false;
+      seenGroups.add(key);
+      return true;
+    })
+    .map((block) => {
+      const vehicle = parseTcarsVehicle(resolveChildBlock(block, "vozidlo", refs), refs);
+      const directCosts = allTagBlocks(block, "naklad").map((costBlock) => parseTcarsCost(costBlock, refs));
+      const referencedCosts = referencedTypedBlocks(block, refs, "tNaklady")
+        .map((costBlock) => parseTcarsCost(costBlock, refs));
+      return { vehicle, costs: uniqueCosts([...directCosts, ...referencedCosts]) };
+    })
+    .filter((group) => group.vehicle.tcarsVehicleId || group.vehicle.licensePlate);
+}
+
 function parseTcarsAreaEvent(block) {
   return {
     occurredAt: tagValue(block, "datum"),
@@ -771,14 +815,33 @@ export async function fetchTcarsVehicleCosts(env = {}, vehicle = {}, options = {
   const range = tcarsDateRange(options);
   const vehicleId = cleanString(vehicle.tcarsVehicleId || vehicle.externalVehicleId || vehicle.vehicleId);
   const licensePlate = cleanString(vehicle.tcarsLicensePlate || vehicle.licensePlate || vehicle.registration);
-  const xml = await tcarsSoapRequest(env, "vozidloNaklady", `
-    ${loginDataXml(config)}
-    <vozidloId xsi:type="xsd:int">${xmlEscape(vehicleId || 0)}</vozidloId>
-    <vozidloRz xsi:type="xsd:string">${xmlEscape(licensePlate)}</vozidloRz>
-    <datumOd xsi:type="xsd:date">${xmlEscape(range.fromDate)}</datumOd>
-    <datumDo xsi:type="xsd:date">${xmlEscape(range.toDate)}</datumDo>
-  `);
-  return parseTcarsCostsXml(xml);
+  try {
+    const xml = await tcarsSoapRequest(env, "vozidloNaklady", `
+      ${loginDataXml(config)}
+      <vozidloId xsi:type="xsd:int">${xmlEscape(vehicleId || 0)}</vozidloId>
+      <vozidloRz xsi:type="xsd:string">${xmlEscape(licensePlate)}</vozidloRz>
+      <datumOd xsi:type="xsd:date">${xmlEscape(range.fromDate)}</datumOd>
+      <datumDo xsi:type="xsd:date">${xmlEscape(range.toDate)}</datumDo>
+    `);
+    const costs = parseTcarsCostsXml(xml);
+    Object.defineProperty(costs, "tcarsMethod", { value: "vozidloNaklady", enumerable: false });
+    return costs;
+  } catch (individualError) {
+    const xml = await tcarsSoapRequest(env, "vozidlaNaklady", `
+      ${loginDataXml(config)}
+      <datumOd xsi:type="xsd:date">${xmlEscape(range.fromDate)}</datumOd>
+      <datumDo xsi:type="xsd:date">${xmlEscape(range.toDate)}</datumDo>
+    `);
+    const costs = parseTcarsVehicleCostsXml(xml)
+      .filter((group) => tcarsVehicleMatches(group.vehicle, vehicle))
+      .flatMap((group) => group.costs);
+    Object.defineProperties(costs, {
+      tcarsMethod: { value: "vozidlaNaklady", enumerable: false },
+      fallbackFrom: { value: "vozidloNaklady", enumerable: false },
+      fallbackErrorCode: { value: cleanString(individualError?.code || "tcars_soap_failed"), enumerable: false }
+    });
+    return costs;
+  }
 }
 
 export async function fetchTcarsAreaEvents(env = {}, options = {}) {
@@ -901,11 +964,22 @@ function tcarsSettledResult(result, fallback = []) {
   return result?.status === "fulfilled" ? result.value : fallback;
 }
 
-function tcarsSettledStatus(result) {
-  if (result?.status === "fulfilled") return { apiStatus: "ready", errorCode: "" };
+function tcarsSettledStatus(result, method = "") {
+  if (result?.status === "fulfilled") {
+    return {
+      apiStatus: "ready",
+      errorCode: "",
+      ...(method ? { method } : {}),
+      ...(result.value?.fallbackFrom ? {
+        fallbackFrom: result.value.fallbackFrom,
+        fallbackErrorCode: result.value.fallbackErrorCode || ""
+      } : {})
+    };
+  }
   return {
     apiStatus: "waiting",
-    errorCode: cleanString(result?.reason?.code || "tcars_read_failed")
+    errorCode: cleanString(result?.reason?.code || "tcars_read_failed"),
+    ...(method ? { method } : {})
   };
 }
 
@@ -984,7 +1058,7 @@ export async function loadTcarsVehicleDetailPayload(env = {}, fleetVehicle = {},
       vehicles: { apiStatus: "ready", errorCode: "" },
       positions: { apiStatus: "ready", errorCode: "" },
       trips: tcarsSettledStatus(tripsResult),
-      costs: tcarsSettledStatus(costsResult),
+      costs: tcarsSettledStatus(costsResult, costsResult.status === "fulfilled" ? costsResult.value?.tcarsMethod || "vozidloNaklady" : "vozidloNaklady / vozidlaNaklady"),
       areaEvents: tcarsSettledStatus(areasResult),
       identifications: tcarsSettledStatus(identificationsResult),
       roadTax: tcarsSettledStatus(roadTaxResult)

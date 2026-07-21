@@ -11844,6 +11844,90 @@ button:not(:disabled):active,
   border-bottom: 0;
 }
 
+.tracking-tcars-section .tracking-table td:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.tracking-tcars-section .tracking-table td small {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.tracking-pairing-safety {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 1px solid #cfe0c8;
+  border-radius: 12px;
+  background: #f5faf2;
+  color: var(--steel);
+}
+
+.tracking-pairing-safety strong {
+  color: var(--ink);
+}
+
+.tracking-pairing-safety small,
+.tracking-pairing-footnote {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.tracking-pairing-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tracking-pairing-summary article {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #e0e7dc;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.tracking-pairing-summary span {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tracking-pairing-summary strong {
+  color: var(--ink);
+  font-size: 1.2rem;
+}
+
+.tracking-pairing-status {
+  display: inline-flex;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #eef3eb;
+  color: #41503d;
+  font-size: 0.68rem;
+  font-weight: 950;
+}
+
+.tracking-pairing-status--ready_to_verify {
+  background: #e7f5e4;
+  color: #2f6932;
+}
+
+.tracking-pairing-status--ambiguous,
+.tracking-pairing-status--conflict {
+  background: #fff0db;
+  color: #8a5515;
+}
+
+@media (max-width: 900px) {
+  .tracking-pairing-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .tracking-field-chips {
   display: flex;
   flex-wrap: wrap;
