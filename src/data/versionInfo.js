@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.663"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.664"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Šarlota: formulář až po skutečném Toolu a přesná adresa",
+    text: "Při hlášení poškozené nebo přeplněné nádoby Šarlota nejdřív skutečně otevře správný formulář přes KSO Tool a až potom výsledek potvrdí hlasem. Na dotaz k aktuálnímu stanovišti přečte přesnou backendem ověřenou adresu; nesmí ji popřít ani slibovat neexistující dohledání."
+  },
   {
     title: "Šarlota: začátek řeči okamžitě ruší timeout",
     text: "Po automatické závěrečné otázce stačí během pěti sekund začít mluvit. Hologram zruší časovač už podle potvrzené hlasové aktivity, nečeká na opožděný přepis, a běžná konverzace pokračuje ve stejné relaci bez velkého panelu mikrofonu."

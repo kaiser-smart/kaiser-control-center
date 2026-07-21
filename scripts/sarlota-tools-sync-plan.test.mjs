@@ -55,6 +55,8 @@ const agentConfig = {
   assert.match(collectionGpsTool.description, /Nikdy kvůli tomu neotvírej výběr vozidla/);
   assert.match(collectionGpsTool.description, /finální uložení vždy vyžaduje fyzické klepnutí/);
   assert.equal(collectionIncidentTool.type, "client");
+  assert.match(collectionIncidentTool.description, /POVINNĚ VOLEJ OKAMŽITĚ/);
+  assert.match(collectionIncidentTool.description, /Teprve skutečný výsledek tohoto Toolu/);
   assert.match(collectionIncidentTool.description, /nic neukládá ani neodesílá/);
   assert.match(collectionIncidentTool.description, /Fotografie a velké fyzické klepnutí/);
 }

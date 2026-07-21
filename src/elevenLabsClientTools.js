@@ -164,7 +164,7 @@ export const ELEVENLABS_CLIENT_TOOL_SCHEMAS = [
   },
   {
     name: COLLECTION_ROUTE_TEST_INCIDENT_TOOL_NAME,
-    description: "Ve Svozových trasách otevře bezpečný krokový formulář hlášení pro dispečink. Nástroj nic neukládá ani neodesílá. Fotografie a velké fyzické klepnutí člověka v KSO jsou vždy povinné.",
+    description: "POVINNĚ VOLEJ OKAMŽITĚ jako první krok, když řidič ve Svozových trasách nahlásí přeplněnou, poškozenou nebo chybějící nádobu, kontaminovaný odpad, nepřístupné stanoviště, zavřenou firmu či jiný problém stanoviště. Teprve skutečný výsledek tohoto Toolu dovoluje říct, že se formulář otevřel nebo připravil. Tool otevře bezpečný krokový formulář hlášení pro dispečink, ale nic neukládá ani neodesílá. Fotografie a velké fyzické klepnutí člověka v KSO jsou vždy povinné.",
     parameters: [
       { name: "incidentType", type: "string", required: true, description: "Použij overfilled_container, damaged_container, site_inaccessible, container_missing, contaminated_waste, site_closed nebo other." },
       { name: "transcriptIntent", type: "string", required: false },

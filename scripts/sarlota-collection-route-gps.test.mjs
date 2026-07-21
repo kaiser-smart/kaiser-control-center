@@ -4,6 +4,10 @@ import {
   ELEVENLABS_CLIENT_TOOL_SCHEMAS,
   createElevenLabsClientTools
 } from "../src/elevenLabsClientTools.js";
+import {
+  SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE,
+  SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE
+} from "../src/sarlota/sarlotaSystemPrompt.js";
 
 const originalWindow = globalThis.window;
 globalThis.window = { location: { pathname: "/trasy-svozu" } };
@@ -30,7 +34,7 @@ const tools = createElevenLabsClientTools({
   prepareCollectionRouteTestIncident: async (parameters) => {
     incidentCalls += 1;
     assert.equal(parameters.currentModuleRoute, "/trasy-svozu");
-    assert.equal(parameters.incidentType, "overfilled_container");
+    assert.ok(["overfilled_container", "damaged_container"].includes(parameters.incidentType));
     return {
       ok: true,
       status: "incident_ready_for_photo",
@@ -62,6 +66,13 @@ const tools = createElevenLabsClientTools({
   }
 });
 
+assert.match(SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE, /currentStop\.address/);
+assert.match(SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE, /collection_route_current_address/);
+assert.match(SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE, /nesmíš tvrdit, že ji nevidíš/);
+assert.match(SARLOTA_COLLECTION_ROUTES_CONTEXT_PROMPT_RULE, /neslibuj pozdější dohledání/);
+assert.match(SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE, /Nástroj zavolej dřív/);
+assert.match(SARLOTA_COLLECTION_ROUTES_INCIDENT_PROMPT_RULE, /Bez skutečného výsledku Toolu nesmíš říct/);
+
 {
   const schema = ELEVENLABS_CLIENT_TOOL_SCHEMAS.find((tool) => tool.name === "prepare_collection_route_gps_capture");
   assert.ok(schema);
@@ -72,6 +83,9 @@ const tools = createElevenLabsClientTools({
 {
   const schema = ELEVENLABS_CLIENT_TOOL_SCHEMAS.find((tool) => tool.name === "prepare_collection_route_test_incident");
   assert.ok(schema);
+  assert.match(schema.description, /POVINNĚ VOLEJ OKAMŽITĚ/);
+  assert.match(schema.description, /poškozenou/);
+  assert.match(schema.description, /Teprve skutečný výsledek tohoto Toolu/);
   assert.match(schema.description, /nic neukládá ani neodesílá/);
   assert.match(schema.description, /velké fyzické klepnutí člověka/);
 }
@@ -111,6 +125,22 @@ const tools = createElevenLabsClientTools({
   assert.equal(result.sendsNotifications, false);
   assert.equal(result.changesRoute, false);
   assert.equal(incidentCalls, 1);
+}
+
+{
+  const result = await tools.prepare_collection_route_test_incident({
+    incidentType: "damaged_container",
+    transcriptIntent: "Potřebuju nahlásit poškozenou nádobu"
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.status, "incident_ready_for_photo");
+  assert.equal(result.incidentPrepared, true);
+  assert.equal(result.saved, false);
+  assert.equal(result.finalTapRequired, true);
+  assert.equal(result.photoRequired, true);
+  assert.equal(result.sendsNotifications, false);
+  assert.equal(result.changesRoute, false);
+  assert.equal(incidentCalls, 2);
 }
 
 {
@@ -172,7 +202,7 @@ const tools = createElevenLabsClientTools({
   assert.equal(result.ok, false);
   assert.equal(result.status, "wrong_module");
   assert.equal(result.saved, false);
-  assert.equal(incidentCalls, 1);
+  assert.equal(incidentCalls, 2);
 }
 
 if (originalWindow === undefined) {
