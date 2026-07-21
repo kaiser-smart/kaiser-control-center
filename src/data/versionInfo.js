@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Hlášení tras: dispečerská fronta podle dalšího kroku",
+    text: "Pracovní fronta hlášení nyní zvýrazňuje nevyřízené případy, odpovědnou osobu a konkrétní další krok. PROVOZ a TEST zůstávají oddělené; stavový workflow, audit, API a pravidla odesílání se nemění."
+  },
+  {
     title: "Řidičský displej: velké pracovní volby pro terén",
     text: "Kabinová obrazovka teď řadí beze změny funkcí akce podle práce řidiče: dominantní HOTOVO, hlášení, provozní volby a samostatná pomoc Šarloty. Aktuální firma i adresa se nezkracují, aby zůstaly čitelné ve stresu, dešti, mrazu a při práci v rukavicích; API, zápisy, navigace i fyzická potvrzení zůstávají stejné."
   },

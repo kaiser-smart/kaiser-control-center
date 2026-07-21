@@ -45784,12 +45784,13 @@ body.collection-driver-blackview-simulator-active #app {
 }
 .collection-route-incidents {
   display: grid;
-  gap: 16px;
+  gap: 18px;
   margin: 0 24px 32px;
   padding: 24px;
   border: 1px solid var(--border-color, #dfe5df);
+  border-top: 4px solid var(--module-accent, #75bd25);
   border-radius: 24px;
-  background: var(--surface, #fff);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--module-accent, #75bd25) 7%, var(--surface, #fff)), var(--surface, #fff) 34%);
   color: var(--text, #263228);
 }
 
@@ -45803,6 +45804,7 @@ body.collection-driver-blackview-simulator-active #app {
 }
 
 .collection-route-incidents__head {
+  align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
 }
@@ -45812,6 +45814,14 @@ body.collection-driver-blackview-simulator-active #app {
 .collection-route-incident-drawer h3,
 .collection-route-incident-dialog__card h2 {
   margin: 0;
+}
+
+.collection-route-incidents__head h2 {
+  font-size: clamp(1.45rem, 2.4vw, 2rem);
+}
+
+.collection-route-incidents__head > div {
+  max-width: 760px;
 }
 
 .collection-route-incidents__head p,
@@ -45872,21 +45882,95 @@ body.collection-driver-blackview-simulator-active #app {
   background: var(--surface-muted, #f5f7f5);
 }
 
+.collection-route-incident-overview {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.3fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-color, #dfe5df);
+  border-radius: 18px;
+  background: rgb(255 255 255 / 72%);
+}
+
+.collection-route-incident-overview__lead {
+  display: grid;
+  align-content: center;
+  gap: 1px;
+  min-height: 102px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #273b2b;
+  color: #fff;
+}
+
+.collection-route-incident-overview__lead > span,
+.collection-route-incident-filter-bar > div > span,
+.collection-route-incident-actions__label {
+  color: var(--text-muted, #657168);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.collection-route-incident-overview__lead > span {
+  color: rgb(255 255 255 / 72%);
+}
+
+.collection-route-incident-overview__lead > strong {
+  font-size: clamp(2rem, 4vw, 3.1rem);
+  line-height: 1;
+}
+
+.collection-route-incident-overview__lead > small {
+  margin-top: 4px;
+  color: rgb(255 255 255 / 82%);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .collection-route-incident-counts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .collection-route-incident-counts span {
-  min-width: 126px;
-  padding: 10px 14px;
-  border-radius: 12px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  min-height: 102px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, #dfe5df);
+  border-radius: 14px;
   background: var(--surface-muted, #f5f7f5);
+  color: var(--text-muted, #657168);
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .collection-route-incident-counts strong {
-  margin-left: 4px;
+  color: var(--text, #263228);
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.collection-route-incident-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 2px 0;
+}
+
+.collection-route-incident-filter-bar > div:first-child {
+  display: grid;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.collection-route-incident-filter-bar > div > strong {
+  font-size: 0.95rem;
 }
 
 .collection-route-incident-filters {
@@ -45906,12 +45990,37 @@ body.collection-driver-blackview-simulator-active #app {
 }
 
 .collection-route-incident-row {
+  position: relative;
   min-height: 92px;
-  gap: 14px;
-  padding: 10px 12px;
+  gap: 16px;
+  padding: 12px 14px;
   border: 1px solid var(--border-color, #dfe5df);
   border-radius: 16px;
   background: var(--surface, #fff);
+  box-shadow: 0 7px 16px rgb(20 40 24 / 4%);
+}
+
+.collection-route-incident-row::before {
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: #b68118;
+  content: "";
+}
+
+.collection-route-incident-row--new::before {
+  background: #bd4d4d;
+}
+
+.collection-route-incident-row--claimed::before {
+  background: #416bb1;
+}
+
+.collection-route-incident-row--resolved::before {
+  background: var(--module-accent, #75bd25);
 }
 
 .collection-route-incident-row--active {
@@ -45946,12 +46055,35 @@ body.collection-driver-blackview-simulator-active #app {
   display: grid;
   min-width: 0;
   flex: 1;
-  gap: 2px;
+  gap: 5px;
 }
 
-.collection-route-incident-row__main span,
-.collection-route-incident-row__main small,
-.collection-route-incident-row__aside small {
+.collection-route-incident-row__main > strong {
+  font-size: 1rem;
+}
+
+.collection-route-incident-row__place {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.collection-route-incident-row__place span {
+  color: var(--text-muted, #657168);
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.collection-route-incident-row__context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 12px;
+  color: var(--text-muted, #657168);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.collection-route-incident-row__work small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -45959,16 +46091,40 @@ body.collection-driver-blackview-simulator-active #app {
 
 .collection-route-incident-row__aside {
   display: grid;
-  min-width: 430px;
-  grid-template-columns: 92px minmax(112px, 1fr) minmax(82px, auto) 86px;
+  min-width: 420px;
+  grid-template-columns: 96px minmax(190px, 1fr) 88px;
   align-items: center;
   justify-items: start;
-  gap: 10px;
+  gap: 12px;
   text-align: left;
 }
 
 .collection-route-incident-row__aside button {
-  width: 86px;
+  width: 88px;
+  min-height: 44px;
+}
+
+.collection-route-incident-row__work {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.collection-route-incident-row__work > span,
+.collection-route-incident-row__work small {
+  color: var(--text-muted, #657168);
+  font-size: 0.76rem;
+}
+
+.collection-route-incident-row__work > span strong {
+  color: var(--text, #263228);
+}
+
+.collection-route-incident-row__work > strong {
+  overflow: hidden;
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .collection-route-incident-status {
@@ -46098,6 +46254,9 @@ body.collection-driver-blackview-simulator-active #app {
 }
 
 .collection-route-incident-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: stretch;
   position: sticky;
   top: 0;
   z-index: 2;
@@ -46109,10 +46268,13 @@ body.collection-driver-blackview-simulator-active #app {
   backdrop-filter: blur(12px);
 }
 
+.collection-route-incident-actions__label {
+  grid-column: 1 / -1;
+}
+
 .collection-route-incident-actions > button {
-  flex: 1;
   min-height: 48px;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .collection-route-incident-more {
@@ -46296,8 +46458,8 @@ body.collection-driver-blackview-simulator-active #app {
 
 @media (max-width: 1180px) {
   .collection-route-incident-row__aside {
-    min-width: 220px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 330px;
+    grid-template-columns: 88px minmax(0, 1fr) 76px;
   }
 
   .collection-route-incident-row__aside button {
@@ -46319,8 +46481,20 @@ body.collection-driver-blackview-simulator-active #app {
 
   .collection-route-incidents__head,
   .collection-route-incident-row,
-  .collection-route-incident-actions {
+  .collection-route-incident-filter-bar {
     flex-direction: column;
+  }
+
+  .collection-route-incident-filter-bar {
+    align-items: stretch;
+  }
+
+  .collection-route-incident-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-route-incident-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .collection-route-incident-scope {
@@ -46334,12 +46508,14 @@ body.collection-driver-blackview-simulator-active #app {
 
   .collection-route-incident-row__aside {
     min-width: 0;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: max-content minmax(0, 1fr);
     justify-items: start;
     text-align: left;
   }
 
+  .collection-route-incident-row__work,
   .collection-route-incident-row__aside button {
+    grid-column: 1 / -1;
     width: 100%;
   }
 
@@ -46359,6 +46535,14 @@ body.collection-driver-blackview-simulator-active #app {
   .collection-route-incident-more,
   .collection-route-incident-more summary {
     width: 100%;
+  }
+
+  .collection-route-incident-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-route-incident-actions__label {
+    grid-column: auto;
   }
 
   .collection-route-incident-more div {

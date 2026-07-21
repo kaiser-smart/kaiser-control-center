@@ -26654,6 +26654,27 @@ function collectionRouteIncidentSelected() {
   return collectionRoutesPilotState.incidents.find((item) => item.id === collectionRoutesPilotState.selectedIncidentId) || null;
 }
 
+function collectionRouteIncidentNextStep(incident) {
+  const workflow = incident?.workflow || {};
+  if (incident?.status === "new") return "Převzít a určit odpovědnost";
+  if (incident?.status === "claimed") return "Zjistit stav a zvolit další krok";
+  if (incident?.status === "in_progress") return workflow.nextStep || "Doplnit další krok a termín kontroly";
+  if (incident?.status === "resolved") {
+    return COLLECTION_ROUTE_INCIDENT_RESOLUTIONS[workflow.resolutionCode] || "Výsledek řešení je uložen";
+  }
+  return "Zkontrolovat stav hlášení";
+}
+
+function collectionRouteIncidentQueueFocus(counts = {}) {
+  const newCount = Number(counts.new) || 0;
+  const claimedCount = Number(counts.claimed) || 0;
+  const inProgressCount = Number(counts.inProgress) || 0;
+  if (newCount) return `${newCount} ${newCount === 1 ? "nové hlášení čeká" : "nová hlášení čekají"} na převzetí.`;
+  if (inProgressCount) return `${inProgressCount} ${inProgressCount === 1 ? "hlášení má" : "hlášení mají"} rozpracovaný další krok.`;
+  if (claimedCount) return `${claimedCount} ${claimedCount === 1 ? "hlášení je" : "hlášení jsou"} převzatá k prověření.`;
+  return "Žádné nevyřízené hlášení nyní nečeká.";
+}
+
 function collectionRouteIncidentPhoto(incident, compact = false) {
   const photo = incident?.photos?.[0];
   if (!photo?.url) {
@@ -26665,19 +26686,19 @@ function collectionRouteIncidentPhoto(incident, compact = false) {
 function collectionRouteIncidentRow(incident) {
   const status = collectionRouteIncidentStatusMeta(incident.status);
   const lastActivity = incident.audit?.at(-1)?.createdAt || incident.workflow?.updatedAt || incident.reportedAt;
+  const assignedName = incident.workflow?.assignedName || "Čeká na převzetí";
+  const nextStep = collectionRouteIncidentNextStep(incident);
   return `
-    <article class="collection-route-incident-row ${incident.id === collectionRoutesPilotState.selectedIncidentId ? "collection-route-incident-row--active" : ""}">
+    <article class="collection-route-incident-row collection-route-incident-row--${escapeHtml(status.tone)} ${incident.id === collectionRoutesPilotState.selectedIncidentId ? "collection-route-incident-row--active" : ""}">
       ${collectionRouteIncidentPhoto(incident, true)}
       <div class="collection-route-incident-row__main">
         <strong>${escapeHtml(incident.typeLabel || "Jiný problém")}</strong>
-        <span>${escapeHtml(incident.companyName || "Firma neuvedena")} · ${escapeHtml(incident.stationName || incident.address || "Stanoviště neuvedeno")}</span>
-        <small>${escapeHtml(collectionRouteIncidentRelativeTime(incident.reportedAt))} · ${escapeHtml(incident.driverName || "Řidič neuveden")} · ${escapeHtml(incident.routeTitle || "Trasa neuvedena")}</small>
-        <small>E-mail: ${escapeHtml(collectionRouteIncidentCommunicationLabel(incident.email?.status))} · SMS: ${escapeHtml(collectionRouteIncidentCommunicationLabel(incident.sms?.status))}</small>
+        <div class="collection-route-incident-row__place"><strong>${escapeHtml(incident.companyName || "Firma neuvedena")}</strong><span>${escapeHtml(incident.stationName || incident.address || "Stanoviště neuvedeno")}</span></div>
+        <div class="collection-route-incident-row__context"><span>Oznámeno ${escapeHtml(collectionRouteIncidentRelativeTime(incident.reportedAt))}</span><span>${escapeHtml(incident.driverName || "Řidič neuveden")} · ${escapeHtml(incident.routeTitle || "Trasa neuvedena")}</span></div>
       </div>
       <div class="collection-route-incident-row__aside">
         <span class="collection-route-incident-status collection-route-incident-status--${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span>
-        <small>${escapeHtml(incident.workflow?.assignedName || "Bez přiřazení")}</small>
-        <small>${escapeHtml(collectionRouteIncidentRelativeTime(lastActivity))}</small>
+        <div class="collection-route-incident-row__work"><span>Odpovídá: <strong>${escapeHtml(assignedName)}</strong></span><strong>${escapeHtml(nextStep)}</strong><small>Aktualizováno ${escapeHtml(collectionRouteIncidentRelativeTime(lastActivity))} · E-mail ${escapeHtml(collectionRouteIncidentCommunicationLabel(incident.email?.status))} · SMS ${escapeHtml(collectionRouteIncidentCommunicationLabel(incident.sms?.status))}</small></div>
         <button class="secondary-link" type="button" data-collection-route-incident-open="${escapeHtml(incident.id)}">Otevřít</button>
       </div>
     </article>
@@ -26793,6 +26814,7 @@ function collectionRouteIncidentDetail(incident) {
   const canClaim = incident.canManage && incident.status === "new";
   const canWork = incident.canManage && assignedToActor && ["claimed", "in_progress"].includes(incident.status);
   const canReopen = incident.status === "resolved" && Boolean(incident.technicalDetails);
+  const primaryAction = canClaim ? "claim" : canWork ? "resolve" : "";
   return `
     <div class="collection-route-incident-drawer-shell">
       <button class="collection-route-incident-drawer-backdrop" type="button" data-collection-route-incident-close aria-label="Zavřít detail hlášení"></button>
@@ -26806,9 +26828,10 @@ function collectionRouteIncidentDetail(incident) {
           <section><h3>Poznámka řidiče</h3><p>${escapeHtml(incident.note || "Bez poznámky.")}</p></section>
           ${incident.status === "in_progress" && incident.workflow?.nextStep ? `<section class="collection-route-incident-follow-up"><h3>Další kontrola</h3><dl><div><dt>Důvod</dt><dd>${escapeHtml(incident.workflow.unresolvedReason)}</dd></div><div><dt>Další krok</dt><dd>${escapeHtml(incident.workflow.nextStep)}</dd></div><div><dt>Odpovídá</dt><dd>${escapeHtml(incident.workflow.responsibleName)}</dd></div><div><dt>Termín</dt><dd>${escapeHtml(formatDateTime(incident.workflow.followUpAt) || incident.workflow.followUpAt)}</dd></div></dl></section>` : ""}
           <div class="collection-route-incident-actions" aria-label="Hlavní akce hlášení">
-            <button class="primary-action" type="button" data-collection-route-incident-action="claim" data-incident-id="${escapeHtml(incident.id)}" ${canClaim ? "" : "disabled"}>Převzít</button>
-            <button class="primary-action" type="button" data-collection-route-incident-dialog="contact" ${canWork ? "" : "disabled"}>Kontaktovat zákazníka</button>
-            <button class="primary-action" type="button" data-collection-route-incident-dialog="resolve" ${canWork ? "" : "disabled"}>Vyřešit</button>
+            <span class="collection-route-incident-actions__label">Další pracovní krok</span>
+            <button class="${primaryAction === "claim" ? "primary-action" : "secondary-link"}" type="button" data-collection-route-incident-action="claim" data-incident-id="${escapeHtml(incident.id)}" ${canClaim ? "" : "disabled"}>Převzít</button>
+            <button class="secondary-link" type="button" data-collection-route-incident-dialog="contact" ${canWork ? "" : "disabled"}>Kontaktovat zákazníka</button>
+            <button class="${primaryAction === "resolve" ? "primary-action" : "secondary-link"}" type="button" data-collection-route-incident-dialog="resolve" ${canWork ? "" : "disabled"}>Vyřešit</button>
             <details class="collection-route-incident-more"><summary aria-label="Vedlejší akce">•••</summary><div>${canWork ? `<button type="button" data-collection-route-incident-dialog="follow-up">Naplánovat další krok</button>` : ""}${canReopen ? `<button type="button" data-collection-route-incident-dialog="reopen">Znovu otevřít</button>` : ""}<button type="button" data-collection-route-incident-close>Zavřít detail</button></div></details>
           </div>
           <section><h3>Komunikace</h3><div class="collection-route-incident-communication"><span>E-mail <strong>${escapeHtml(collectionRouteIncidentCommunicationLabel(incident.email?.status))}</strong></span><span>SMS <strong>${escapeHtml(collectionRouteIncidentCommunicationLabel(incident.sms?.status))}</strong></span></div></section>
@@ -26829,10 +26852,11 @@ function collectionRoutesIncidentsSection() {
   const counts = collectionRoutesPilotState.incidentCounts;
   const isTest = collectionRoutesPilotState.incidentScope === "test";
   const selected = collectionRouteIncidentSelected();
+  const openCount = (Number(counts.new) || 0) + (Number(counts.claimed) || 0) + (Number(counts.inProgress) || 0);
   return `
     <section class="collection-route-incidents" id="collection-routes-incidents" aria-labelledby="collection-route-incidents-title">
       <header class="collection-route-incidents__head">
-        <div><p class="module-feedback__eyebrow">Pracovní fronta dispečera</p><h2 id="collection-route-incidents-title">Hlášení ze svozových tras</h2><p>PROVOZ je výchozí. Seznam neukazuje technická ID ani dlouhé texty.</p></div>
+        <div><p class="module-feedback__eyebrow">Pracovní fronta dispečera</p><h2 id="collection-route-incidents-title">Hlášení ze svozových tras</h2><p>Od převzetí po výsledek řešení. Každá karta ukazuje stav, odpovědnost a nejbližší krok.</p></div>
         <button class="secondary-link" type="button" data-collection-route-incidents-refresh ${collectionRoutesPilotState.incidentsLoading ? "disabled" : ""}>${collectionRoutesPilotState.incidentsLoading ? "Načítám…" : "Obnovit"}</button>
       </header>
       <div class="collection-route-incident-scope" role="group" aria-label="Datové prostředí">
@@ -26840,8 +26864,8 @@ function collectionRoutesIncidentsSection() {
         <button class="${isTest ? "collection-route-incident-scope--test-active" : ""}" type="button" data-collection-route-incident-scope="test">TEST</button>
       </div>
       ${isTest ? `<div class="collection-route-incident-test-strip" role="status"><strong>TESTOVACÍ DATA – NEODESÍLÁ OSTRÉ ZPRÁVY</strong><span>Kontaktování proběhne přes simulovaný provider a oddělený TEST audit. Skutečný zákazník ani produkční trasa se nezmění.</span></div>` : `<div class="collection-route-incident-production-strip"><strong>PROVOZ</strong><span>Stavový workflow je interní. E-mail a SMS jsou do ověření providerů a webhooků vypnuté.</span></div>`}
-      <div class="collection-route-incident-counts" aria-label="Počty podle stavu"><span>Nové <strong>${Number(counts.new) || 0}</strong></span><span>Převzato <strong>${Number(counts.claimed) || 0}</strong></span><span>Řeší se <strong>${Number(counts.inProgress) || 0}</strong></span><span>Vyřešeno <strong>${Number(counts.resolved) || 0}</strong></span></div>
-      <div class="collection-route-incident-filters" role="group" aria-label="Filtr stavu">${[["open", "Nevyřízené"], ["new", "Nové"], ["claimed", "Převzato"], ["in_progress", "Řeší se"], ["resolved", "Vyřešeno"], ["all", "Vše"]].map(([value, label]) => `<button type="button" class="${collectionRoutesPilotState.incidentStatusFilter === value ? "active" : ""}" data-collection-route-incident-filter="${value}">${label}</button>`).join("")}</div>
+      <div class="collection-route-incident-overview" aria-label="Stav pracovní fronty"><div class="collection-route-incident-overview__lead"><span>Čeká na další krok</span><strong>${openCount}</strong><small>${escapeHtml(collectionRouteIncidentQueueFocus(counts))}</small></div><div class="collection-route-incident-counts"><span>Nové <strong>${Number(counts.new) || 0}</strong></span><span>Převzato <strong>${Number(counts.claimed) || 0}</strong></span><span>Řeší se <strong>${Number(counts.inProgress) || 0}</strong></span><span>Vyřešeno <strong>${Number(counts.resolved) || 0}</strong></span></div></div>
+      <div class="collection-route-incident-filter-bar"><div><span>Pracovní pohled</span><strong>${collectionRoutesPilotState.incidentStatusFilter === "open" ? "Nevyřízená hlášení" : "Filtrovaná fronta"}</strong></div><div class="collection-route-incident-filters" role="group" aria-label="Filtr stavu">${[["open", "Nevyřízené"], ["new", "Nové"], ["claimed", "Převzato"], ["in_progress", "Řeší se"], ["resolved", "Vyřešeno"], ["all", "Vše"]].map(([value, label]) => `<button type="button" class="${collectionRoutesPilotState.incidentStatusFilter === value ? "active" : ""}" data-collection-route-incident-filter="${value}">${label}</button>`).join("")}</div></div>
       ${collectionRoutesPilotState.incidentMessage ? `<p class="module-feedback__success">${escapeHtml(collectionRoutesPilotState.incidentMessage)}</p>` : ""}
       ${collectionRoutesPilotState.incidentError ? `<p class="module-feedback__error" role="alert">${escapeHtml(collectionRoutesPilotState.incidentError)}</p>` : ""}
       ${collectionRoutesPilotState.incidentsLoading && !items.length ? `<p class="collection-route-incident-empty">Načítám hlášení…</p>` : items.length ? `<div class="collection-route-incident-list">${items.map(collectionRouteIncidentRow).join("")}</div>` : `<div class="collection-route-incident-empty"><strong>V tomto pohledu nejsou žádná hlášení.</strong><span>Fronta zobrazuje pouze skutečné záznamy z cloudového API.</span></div>`}
