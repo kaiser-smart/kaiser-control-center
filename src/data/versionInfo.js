@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Šarlota: obnovená úplná KB výslovnosti",
+    text: "Jazyková Knowledge Base je znovu sestavená z úplné schválené příručky včetně skloňování, čísel, dat, jednotek, stupňů Celsia, identifikátorů, zkratek a oprav. Synchronizace i editor nově odmítnou zkrácenou verzi nebo verzi bez povinné části, takže se příručka nemůže znovu tiše ořezat."
+  },
+  {
     title: "Šarlota: neověřený úvod se už nepřehraje",
     text: "KSO nejdřív přijme celé audio do dočasné paměti a porovná text s ověřenou trasou, vozidlem, SPZ, počtem stanovišť a čerstvým počasím. Cizí údaj zablokuje celý zvuk i hologram. Počasí se smí použít jen jako přesné aktuální backendové shrnutí; šablony typu počasí přeje byly odstraněné."
   },
