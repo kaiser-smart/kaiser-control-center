@@ -275,7 +275,7 @@ export function validateCollectionRoutesSarlotaIntro(text, facts = {}) {
 
   const orderedNeedles = [
     requiredVocative,
-    exactCount > 0 ? String(exactCount) : "",
+    exactCount > 0 ? expectedCountPhrase : "",
     firstStop,
     facts.weather?.verified === true ? normalizedWeatherSummary(facts.weather.summary) : "",
     facts.fuel?.verified === true ? normalizedFactText(facts.fuel.value) : "",
