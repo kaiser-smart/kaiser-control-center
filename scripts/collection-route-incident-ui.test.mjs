@@ -25,13 +25,15 @@ for (const marker of [
   "data-collection-route-incident-resolve-form",
   "data-collection-route-incident-follow-up-form",
   "data-collection-route-incident-reopen-form",
-  "Fotografie je volitelná",
-  "POKRAČOVAT BEZ FOTOGRAFIE",
   "Hlášení bylo uloženo.",
   "Technické podrobnosti",
   "/api/collection-routes/incidents"
 ]) {
   assert.ok(app.includes(marker), `Chybí UI marker ${marker}`);
+}
+
+for (const forbiddenMarker of ["Fotografie je volitelná", "POKRAČOVAT BEZ FOTOGRAFIE"]) {
+  assert.ok(!app.includes(forbiddenMarker), `UI nesmí obsahovat marker ${forbiddenMarker}`);
 }
 
 for (const type of [

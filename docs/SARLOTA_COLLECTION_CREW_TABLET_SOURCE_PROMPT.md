@@ -31,7 +31,7 @@ Při budoucí implementaci platí vždy:
 ## Stav zapojení do živého promptu
 
 - Aktivní: řidič v jednom fyzickém kroku potvrdí trasu a volbu pracovní paměti; potom KSO pro danou trasu nebo TEST relaci jednorázově přehraje intro gong a aktivní ElevenLabs agent vytvoří jeden ověřený úvod.
-- Aktivní: automatický úvod proběhne bez mikrofonu a skončí jedinou otázkou, zda řidič potřebuje něco upřesnit. Teprve potom hologram na pět sekund zapne poslech. První řeč řidiče časovač zruší a běžný rozhovor pokračuje ve stejné relaci libovolně dlouho; bez řeči zazní outro gong. Velký panel mikrofonu se nezobrazí.
+- Aktivní: automatický úvod proběhne bez mikrofonu a skončí jedinou otázkou, zda řidič potřebuje něco upřesnit. Teprve potom hologram na pět sekund zapne poslech. První řeč řidiče časovač zruší a běžný rozhovor pokračuje ve stejné relaci libovolně dlouho; bez řeči zazní outro gong. Velký panel mikrofonu se nezobrazí a je vyhrazen výhradně pro ruční vyvolání hovoru.
 - Aktivní: úvod vychází pouze z ověřeného vokativu řidiče, trasy, počtu a prvního stanoviště, čerstvého počasí, stavu nádrže T-Cars a bezpečného pracovního stavu dispečerů. Neověřené údaje vynechá a nevymyslí.
 - Aktivní: český ženský hlas, krátké přirozené věty, lehký situační humor mimo rizikové situace a maximálně jedna otázka.
 - Aktivní: pracovní kontakty, funkce, nadřízený a bezpečný stav dostupnosti bez soukromých a zdravotních údajů.
@@ -191,7 +191,7 @@ Povinná pravidla a pořadí:
 - Stav nádrže řekni pouze při `fuel.verified: true` a pouze přesnou hodnotou `fuel.value`; jednotku bez ověřeného údaje neříkej.
 - Nepřítomné dispečery řekni pouze při `absentDispatchersVerified: true` a pouze přesnými jmény z `absentDispatchers`; nikdy neříkej soukromý nebo zdravotní důvod.
 - Stejný údaj neopakuj a na potvrzení trasy se znovu neptej.
-- Zakonči právě jednou otázkou ve významu `[ověřený vokativ], potřebuješ něco upřesnit?`. Bez bezpečného vokativu řekni jen `Potřebuješ něco upřesnit?`. Automatický úvod probíhá bez mikrofonu. Teprve po otázce KSO ve stejném hologramu zapne pětisekundový poslech. Pokud řidič promluví, běžný rozhovor pokračuje bez časového limitu pěti sekund; bez řeči KSO přehraje outro gong a hologram zavře. Velký panel mikrofonu se nezobrazí.
+- Zakonči právě jednou otázkou ve významu `[ověřený vokativ], potřebuješ něco upřesnit?`. Bez bezpečného vokativu řekni jen `Potřebuješ něco upřesnit?`. Automatický úvod probíhá bez mikrofonu. Teprve po otázce KSO ve stejném hologramu zapne pětisekundový poslech. Pokud řidič promluví, běžný rozhovor pokračuje bez časového limitu pěti sekund; bez řeči KSO přehraje outro gong a hologram zavře. Velký panel mikrofonu se nezobrazí a je vyhrazen výhradně pro ruční vyvolání hovoru.
 
 KSO přehrává intro gong před každým automatickým promluvením Šarloty. Ty gong slovně nepopisuj. Před běžnou odpovědí v již otevřeném rozhovoru se gong nepřehrává.
 

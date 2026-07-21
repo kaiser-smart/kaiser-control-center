@@ -102,8 +102,8 @@ assert.match(styleSource, /\.collection-daily-driver-route-confirmation > \.prim
 assert.match(styleSource, /\.collection-daily-driver-modal > section \{\s*max-height: calc\(100dvh - 8px\);/);
 assert.match(mantraSource, /v jednom okně a jedním finálním klepnutím/);
 assert.match(mantraSource, /paměť výslovně nezaškrtne, nezapne se ani se nic neuloží/);
-assert.match(mantraSource, /pětisekundový poslech/);
-assert.match(mantraSource, /První řeč řidiče limit zruší/);
+assert.match(mantraSource, /agentem vytvořený úvod bez mikrofonu/);
+assert.match(mantraSource, /Velký mikrofon je vyhrazen jen pro pozdější ruční vyvolání hovoru/);
 assert.match(mantraSource, /libovolně dlouho/);
 assert.match(mantraSource, /Mirku, s čím mohu pomoct/);
 assert.match(mantraSource, /signed URL, WebSocket, validace nebo audio selže/);
@@ -126,6 +126,17 @@ assert.match(voiceClientSource, /endAfterGeneratedIntro/);
 assert.match(voiceClientSource, /continueAfterGeneratedIntro/);
 assert.match(voiceClientSource, /listenAfterTechnicalFirstMessage/);
 assert.match(voiceClientSource, /state: "intro-silence-complete"/);
+assert.match(voiceClientSource, /payload\.type === "interruption"/);
+assert.match(voiceClientSource, /voiceAudioPlayer\.stop\(\)/);
+assert.match(voiceClientSource, /payload\.type === "agent_response_correction"/);
+const normalAudioStart = voiceClientSource.indexOf('if (payload.type === "audio")');
+const normalAudioEvent = voiceClientSource.slice(
+  normalAudioStart,
+  voiceClientSource.indexOf('if (payload.type === "agent_response")', normalAudioStart)
+);
+assert.match(normalAudioEvent, /audioInputPaused = true/);
+assert.doesNotMatch(normalAudioEvent, /audioInputPaused = false/);
+assert.match(voiceClientSource, /deferMicrophoneUntilAfterGeneratedIntro = Boolean\(continueAfterGeneratedIntro\)/);
 assert.match(sourcePrompt, /BEZPEČNÝ PROVOZNÍ VÝTAH JE AKTIVNÍ/);
 
 console.log("Šarlota route confirmation intro tests passed.");

@@ -903,6 +903,8 @@ export function useElevenLabsAssistant({
     const introGenerationRequest = String(callbacks.introGenerationRequest || "").trim();
     const endAfterGeneratedIntro = Boolean(introGenerationRequest && callbacks.endAfterGeneratedIntro === true);
     const continueAfterGeneratedIntro = Boolean(introGenerationRequest && callbacks.continueAfterGeneratedIntro === true);
+    // Automatický holografický úvod je bez mikrofonu. Zachycení řeči začíná
+    // až po jeho úplném dohrání, kdy KSO otevře pětisekundové okno poslechu.
     const deferMicrophoneUntilAfterGeneratedIntro = Boolean(continueAfterGeneratedIntro);
     const listenAfterTechnicalFirstMessage = Boolean(introGenerationRequest && callbacks.listenAfterTechnicalFirstMessage === true);
     const validateGeneratedIntro = typeof callbacks.validateGeneratedIntro === "function";
@@ -1532,6 +1534,44 @@ export function useElevenLabsAssistant({
           return;
         }
 
+        if (payload.type === "interruption") {
+          window.clearTimeout(responseTimer);
+          window.clearTimeout(finishTimer);
+          window.clearTimeout(introSilenceTimer);
+          voiceAudioPlayer.stop();
+          bufferedIntroAudio = [];
+          introFinalizing = false;
+          introAwaitingUser = false;
+          introUserEngaged = true;
+          if (introGenerationPhase !== "complete") {
+            introGenerationPhase = "complete";
+            introPlaybackFinished = true;
+          }
+          streamedAgentText = "";
+          finalAgentText = "";
+          audioChunkCount = 0;
+          audioInputPaused = false;
+          callbacks.onInterruption?.({ conversationId });
+          return;
+        }
+
+        if (payload.type === "agent_response_correction") {
+          const correction = payload.agent_response_correction_event || {};
+          const correctedText = String(
+            correction.corrected_agent_response ||
+            correction.agent_response ||
+            correction.text ||
+            ""
+          ).trim();
+          streamedAgentText = correctedText;
+          finalAgentText = correctedText;
+          callbacks.onAgentResponseCorrection?.({
+            text: correctedText,
+            conversationId
+          });
+          return;
+        }
+
         if (payload.type === "user_transcript") {
           userTranscript = String(payload.user_transcription_event?.user_transcript || userTranscript).trim();
           if (introGenerationPhase === "waiting-for-generated-intro" && userTranscript === introGenerationRequest) {
@@ -1541,6 +1581,11 @@ export function useElevenLabsAssistant({
           }
           if (userTranscript) {
             markIntroUserEngaged("user_transcript", userTranscript);
+            if (introGenerationPhase === "waiting-for-generated-intro") {
+              introGenerationPhase = "complete";
+              introPlaybackFinished = true;
+              bufferedIntroAudio = [];
+            }
             audioInputPaused = true;
             streamedAgentText = "";
             finalAgentText = "";
