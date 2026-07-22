@@ -405,7 +405,8 @@ async function enrichVistosVehicleRows(env, session, rows = [], columns = [], op
     capped: selectedRows.length > FLEET_VISTOS_VEHICLE_DETAIL_LIMIT,
     limit: FLEET_VISTOS_VEHICLE_DETAIL_LIMIT,
     concurrency: FLEET_VISTOS_VEHICLE_DETAIL_CONCURRENCY,
-    readOnly: true
+    readOnly: true,
+    attempts: []
   };
 
   for (let index = 0; index < detailRows.length; index += FLEET_VISTOS_VEHICLE_DETAIL_CONCURRENCY) {
@@ -416,15 +417,41 @@ async function enrichVistosVehicleRows(env, session, rows = [], columns = [], op
       try {
         const detail = await loadDetail(env, session, "Vehicle", id, columns);
         if (detail?.row && Object.keys(detail.row).length) {
-          return { id, ok: true, row: mergeVehicleDetailRow(row, detail.row) };
+          return {
+            id,
+            ok: true,
+            row: mergeVehicleDetailRow(row, detail.row),
+            status: Number(detail.status) || 0,
+            detailDiagnostics: detail.diagnostics || null
+          };
         }
-      } catch {
+        return {
+          id,
+          ok: false,
+          status: Number(detail?.status) || 0,
+          detailDiagnostics: detail?.diagnostics || null,
+          errorCode: "empty-detail-record"
+        };
+      } catch (error) {
         // Diagnostika odliší chybu detailového čtení od prázdného pole ve Vistosu.
+        return {
+          id,
+          ok: false,
+          status: Number(error?.status) || 0,
+          detailDiagnostics: null,
+          errorCode: clean(error?.code || error?.name || "detail-read-failed").slice(0, 80)
+        };
       }
-      return { id, ok: false };
     }));
 
     for (const result of results) {
+      diagnostics.attempts.push({
+        vehicleId: result.id,
+        ok: result.ok,
+        status: result.status || 0,
+        errorCode: result.errorCode || "",
+        response: result.detailDiagnostics
+      });
       if (result.ok) {
         enrichedById.set(result.id, result.row);
         diagnostics.succeeded += 1;

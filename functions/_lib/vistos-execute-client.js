@@ -139,6 +139,50 @@ export function extractVistosRecord(payload) {
   return {};
 }
 
+function vistosValueKind(value) {
+  if (Array.isArray(value)) return "array";
+  if (value === null) return "null";
+  return typeof value === "object" ? "object" : typeof value;
+}
+
+function collectVistosKeyPaths(value, path = "", depth = 0, paths = []) {
+  if (depth > 4 || paths.length >= 180 || !value || typeof value !== "object") {
+    return paths;
+  }
+  if (Array.isArray(value)) {
+    if (path) paths.push(`${path}[]`);
+    if (value[0] && typeof value[0] === "object") {
+      collectVistosKeyPaths(value[0], path ? `${path}[]` : "[]", depth + 1, paths);
+    }
+    return paths;
+  }
+
+  for (const key of Object.keys(value).sort((left, right) => left.localeCompare(right, "cs")).slice(0, 90)) {
+    const nextPath = path ? `${path}.${key}` : key;
+    paths.push(nextPath);
+    collectVistosKeyPaths(value[key], nextPath, depth + 1, paths);
+    if (paths.length >= 180) break;
+  }
+  return paths;
+}
+
+function matchesRequestedColumn(rowKey, columnName) {
+  return rowKey === columnName || rowKey.startsWith(`${columnName}_`) || rowKey.startsWith(`${columnName}.`);
+}
+
+export function vistosRecordDiagnostics(payload, row = {}, requestedColumns = []) {
+  const rowKeys = Object.keys(row || {}).sort((left, right) => left.localeCompare(right, "cs"));
+  const requested = Array.from(new Set(requestedColumns.map(cleanVistosValue).filter(Boolean)));
+  return {
+    responseKind: vistosValueKind(payload),
+    responseKeyPaths: collectVistosKeyPaths(payload).slice(0, 180),
+    extractedRowKind: vistosValueKind(row),
+    extractedRowKeys: rowKeys.slice(0, 180),
+    requestedColumnMatches: requested.filter((columnName) => rowKeys.some((rowKey) => matchesRequestedColumn(rowKey, columnName))),
+    requestedColumnCount: requested.length
+  };
+}
+
 function recordsTotal(payload) {
   const data = payload?.data;
   return {
@@ -268,16 +312,19 @@ export async function getVistosSchemaEntity(env, session, entityName) {
 
 export async function getVistosById(env, session, entityName, entityId, columns = []) {
   const numericId = Number(entityId);
+  const requestedColumns = Array.from(new Set(columns.map(cleanVistosValue).filter(Boolean)));
   const result = await fetchVistosExecute(env, "GetByIdParam", {
     EntityName: cleanVistosValue(entityName),
     EntityId: Number.isFinite(numericId) ? numericId : entityId,
     MethodMode: "HeaderColumns",
-    ColNameToRead: Array.from(new Set(columns.map(cleanVistosValue).filter(Boolean)))
+    ColNameToRead: requestedColumns
   }, session.cookieHeader);
+  const row = extractVistosRecord(result.body);
 
   return {
-    row: extractVistosRecord(result.body),
-    status: result.status
+    row,
+    status: result.status,
+    diagnostics: vistosRecordDiagnostics(result.body, row, requestedColumns)
   };
 }
 

@@ -46,6 +46,9 @@ export async function onRequestGet({ request, env, params }) {
       apiStatus: payload.apiStatus,
       assignmentApiStatus: payload.assignmentApiStatus,
       assignmentMessage: payload.assignmentMessage,
+      diagnostics: {
+        vehicleDetailEnrichment: payload.diagnostics?.vehicleDetailEnrichment || null
+      },
       driverCandidates: payload.driverCandidates || [],
       vehicle: payload.vehicle
     });
