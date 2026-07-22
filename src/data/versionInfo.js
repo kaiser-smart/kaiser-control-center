@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.669"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.670"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Řidičský tablet: jeden vzhled a viditelné nastavení",
+    text: "Zdrojový náhled používá stejné rozložení jako skutečný kiosk řidiče. Vpravo nahoře je společné nastavení automatického, denního nebo nočního režimu a zapnutí či vypnutí krátkého zvuku tlačítek. Šarlota je v náhledu i kiosku dočasně skrytá; funkce trasy, API, data a Vistos zůstávají beze změny."
+  },
   {
     title: "Denní svoz: jedna jasná práce dispečera",
     text: "Aktuální uložená trasa je vždy první a zřetelně označená. Výběr jiné trasy, dlouhý seznam zastávek a příprava nové trasy jsou oddělené a rozbalí se až podle potřeby. Nejasný technický jazyk nahradily provozní pokyny; funkce, API, data i Vistos zůstávají beze změny."

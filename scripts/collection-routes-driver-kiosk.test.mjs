@@ -271,6 +271,44 @@ assert.equal(
   "Kořen kiosku nesmí zachytit kliknutí určená ovládacím tlačítkům barevného režimu."
 );
 
+const sourcePreviewStart = appSource.indexOf("function collectionRoutesSourceDriverModePanel");
+const sourcePreviewEnd = appSource.indexOf("function collectionRoutesSourceDriverPreviewPanel", sourcePreviewStart);
+const sourcePreviewSource = appSource.slice(sourcePreviewStart, sourcePreviewEnd);
+assert.ok(sourcePreviewStart >= 0 && sourcePreviewEnd > sourcePreviewStart, "Zdrojový náhled musí mít vlastní vykreslovací funkci.");
+for (const marker of [
+  "collection-daily-driver-page--source-preview",
+  "collection-daily-driver-kiosk-bar",
+  "collection-daily-driver-workspace",
+  "collection-daily-driver-action--done",
+  "HLÁŠENÍ PRO DISPEČINK",
+  "data-collection-routes-source-driver-settings",
+  "data-collection-routes-source-driver-current-display-mode",
+  "data-collection-routes-source-driver-resolved-theme"
+]) {
+  assert.ok(sourcePreviewSource.includes(marker), `Zdrojový náhled nepoužívá prvek skutečného kiosku: ${marker}`);
+}
+assert.ok(
+  !sourcePreviewSource.includes("Šarlota") && !sourcePreviewSource.includes('"Jiné"') && !sourcePreviewSource.includes(">Problém<"),
+  "Zdrojový náhled nesmí vracet vypnutou Šarlotu, Jiný důvod ani starý název Problém."
+);
+assert.ok(
+  appSource.includes("function collectionRoutesSourceDriverSettingsPanel()")
+    && appSource.includes("data-collection-routes-source-driver-display-mode")
+    && appSource.includes("data-collection-routes-driver-sound-toggle")
+    && appSource.includes("sourceDriverDisplayMode: \"auto\"")
+    && appSource.includes("sourceDriverSettingsOpen: false"),
+  "Zdrojový náhled musí zpřístupnit stejné nastavení displeje a zvuku jako kiosk."
+);
+for (const marker of [
+  ".collection-daily-driver-page--source-preview",
+  ".collection-routes-driver-source-map__grid",
+  ".collection-routes-driver-source-route-list",
+  ".collection-daily-driver-modal h2",
+  "body:has([data-collection-routes-source-driver-preview-kiosk]) .ai-assistant-launcher"
+]) {
+  assert.ok(styleSource.includes(marker), `Sjednocený zdrojový náhled postrádá styl: ${marker}`);
+}
+
 for (const marker of [
   ".collection-daily-driver-map.is-fullscreen > .collection-daily-driver-simulated-gps",
   ".collection-daily-driver-map.is-fullscreen > .collection-daily-driver-map__primary-actions",
