@@ -241,7 +241,7 @@ for (const marker of [
 
 assert.match(
   styleSource,
-  /\.collection-daily-driver-page\.is-theme-night \.collection-daily-driver-sound-setting strong \{\s*color: #b9ef83;/,
+  /\.collection-daily-driver-page\.is-theme-night \.collection-daily-driver-sound-setting strong \{\s*color: #75bd25;/,
   "Stav zvuku musí zůstat čitelný i v nočním režimu."
 );
 
@@ -313,12 +313,39 @@ const nightThemeStart = styleSource.indexOf(".collection-daily-driver-page.is-th
 const nightThemeEnd = styleSource.indexOf(".collection-driver-kiosk-active .ai-assistant-launcher", nightThemeStart);
 const nightThemeSource = styleSource.slice(nightThemeStart, nightThemeEnd);
 assert.ok(nightThemeStart >= 0 && nightThemeEnd > nightThemeStart, "Noční režim tabletu musí mít vlastní stylový blok.");
-for (const marker of ["#151515", "#252525", "#2d2d2d", "#303030", "#2a2a2a"]) {
+for (const marker of ["#151515", "#252525", "#2d2d2d", "#303030", "#2a2a2a", "#75bd25"]) {
   assert.ok(nightThemeSource.includes(marker), `Noční režim postrádá antracitový odstín: ${marker}`);
 }
+assert.ok(
+  nightThemeSource.includes("background: rgba(20, 20, 20, 0.78);")
+    && nightThemeSource.includes(".collection-daily-driver-modal header span {\n  color: #75bd25;"),
+  "Noční dialog tabletu musí mít neutrální tmavě šedé pozadí a přesný zelený akcent."
+);
+assert.ok(
+  nightThemeSource.includes(".collection-daily-driver-kiosk-bar,")
+    && nightThemeSource.includes(".collection-daily-driver-actions {")
+    && nightThemeSource.includes("background: #252525;"),
+  "Noční režim musí změnit i horní lištu a pracovní sloupec z modré na tmavě šedou."
+);
 for (const legacyBlue of ["#090f19", "#111a28", "#182334", "#253044", "#142b4a", "#263247", "#202c3e", "#273347"]) {
   assert.ok(!nightThemeSource.includes(legacyBlue), `Noční režim stále obsahuje modrý odstín: ${legacyBlue}`);
 }
+for (const legacyGreenTint of ["#80ca39", "#72c82a", "#1d3c23", "#18351f", "#b9ef83", "#5ca91b", "#397e12"]) {
+  assert.ok(!nightThemeSource.includes(legacyGreenTint), `Noční režim stále obsahuje zelený odstín mimo akcent: ${legacyGreenTint}`);
+}
+
+const sourceNightThemeStart = styleSource.indexOf(".collection-daily-driver-page--source-preview.is-theme-night");
+const sourceNightThemeEnd = styleSource.indexOf("@media (max-width: 1100px)", sourceNightThemeStart);
+const sourceNightThemeSource = styleSource.slice(sourceNightThemeStart, sourceNightThemeEnd);
+assert.ok(sourceNightThemeStart >= 0 && sourceNightThemeEnd > sourceNightThemeStart, "Zdrojový náhled musí mít vlastní noční paletu.");
+for (const legacySourceGreenTint of ["#497c25", "#263a25", "#b9ef83", "#69b22b"]) {
+  assert.ok(!sourceNightThemeSource.includes(legacySourceGreenTint), `Noční zdrojový náhled stále obsahuje zelený odstín mimo akcent: ${legacySourceGreenTint}`);
+}
+assert.ok(
+  sourceNightThemeSource.includes("#75bd25")
+    && sourceNightThemeSource.includes(".collection-routes-driver-source-map__road"),
+  "Noční zdrojový náhled musí používat přesný akcent #75bd25 i pro trasu v mapě."
+);
 
 for (const marker of [
   ".collection-daily-driver-map.is-fullscreen > .collection-daily-driver-simulated-gps",

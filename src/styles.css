@@ -43768,17 +43768,21 @@ body.collection-driver-kiosk-active #app {
 }
 
 .collection-daily-driver-page--source-preview.is-theme-night .collection-routes-driver-source-notice {
-  border-color: #497c25;
-  background: #263a25;
-  color: #b9ef83;
+  border-color: #75bd25;
+  background: #292929;
+  color: #f4f8f2;
 }
 
 .collection-daily-driver-page--source-preview.is-theme-night .collection-routes-driver-source-map__grid {
   filter: brightness(0.52) saturate(0.78);
 }
 
+.collection-daily-driver-page--source-preview.is-theme-night .collection-routes-driver-source-map__road {
+  background: #75bd25;
+}
+
 .collection-daily-driver-page--source-preview.is-theme-night .collection-routes-driver-source-route-list {
-  border-color: #69b22b;
+  border-color: #75bd25;
   background: #1d1d1d;
   color: #f4f8f2;
 }
@@ -45788,7 +45792,7 @@ body.collection-driver-kiosk-active #app {
   --steel: #c7c7c7;
   color-scheme: dark;
   background:
-    radial-gradient(circle at 0 0, rgba(117, 189, 37, 0.12), transparent 34%),
+    radial-gradient(circle at 0 0, rgba(255, 255, 255, 0.045), transparent 34%),
     linear-gradient(145deg, #151515, #252525);
   color: #f2f6f1;
 }
@@ -45805,8 +45809,29 @@ body.collection-driver-kiosk-active #app {
   color: #f2f6f1;
 }
 
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-kiosk-bar,
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-actions {
+  border-color: #626262;
+  background: #252525;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+}
+
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-kiosk-brand span,
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-kiosk-user b,
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-actions__label {
+  color: #c7c7c7;
+}
+
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-modal h2 {
   color: #f2f6f1;
+}
+
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-modal {
+  background: rgba(20, 20, 20, 0.78);
+}
+
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-modal header span {
+  color: #75bd25;
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-route-head {
@@ -45821,7 +45846,8 @@ body.collection-driver-kiosk-active #app {
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-route-kpis article.is-ready {
-  background: #18351f;
+  border-color: #75bd25;
+  background: #303030;
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-route-kpi-link.is-warning {
@@ -45838,6 +45864,11 @@ body.collection-driver-kiosk-active #app {
   background: #303030;
 }
 
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-next-stop span,
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-navigation-guidance span {
+  color: #75bd25;
+}
+
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-stop-meta > aside,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-map > header,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-map > footer {
@@ -45849,6 +45880,50 @@ body.collection-driver-kiosk-active #app {
   filter: brightness(0.66) saturate(0.72) contrast(1.18);
 }
 
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map > header b.is-optimized,
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map__primary-actions button.is-active,
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map__primary-actions a,
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map__primary-actions [data-collection-driver-here-sequence] {
+  border-color: #75bd25;
+  background: #303030;
+  color: #f2f6f1;
+}
+
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map > header b.is-optimized {
+  color: #75bd25;
+}
+
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map__controls button,
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map__primary-actions {
+  border-color: #626262;
+  background: #252525;
+  color: #f2f6f1;
+}
+
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map__primary-actions button,
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map__primary-actions a,
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-stop-list__identity a {
+  border-color: #626262;
+  background: #2a2a2a;
+  color: #f2f6f1;
+}
+
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map__route-line,
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map-live > circle:not(.collection-daily-driver-map-live__pulse),
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map-cluster circle {
+  stroke: #75bd25;
+}
+
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map-live > circle:not(.collection-daily-driver-map-live__pulse),
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map-cluster circle {
+  fill: #75bd25;
+}
+
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-map-live__pulse {
+  fill: rgba(117, 189, 37, 0.2);
+  stroke: rgba(117, 189, 37, 0.65);
+}
+
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-action {
   border-color: #626262;
   background: #303030;
@@ -45856,8 +45931,9 @@ body.collection-driver-kiosk-active #app {
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-action--done {
-  border-color: #72c82a;
-  background: linear-gradient(180deg, #5ca91b, #397e12);
+  border-color: #75bd25;
+  background: #75bd25;
+  color: #0e1607;
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-action--report {
@@ -45888,8 +45964,8 @@ body.collection-driver-kiosk-active #app {
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-choice-grid button.is-selected,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-display-settings__modes button.is-selected,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-sound-setting.is-selected {
-  border-color: #80ca39;
-  background: #1d3c23;
+  border-color: #75bd25;
+  background: #303030;
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-display-settings__modes small,
@@ -45901,7 +45977,7 @@ body.collection-driver-kiosk-active #app {
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-sound-setting strong {
-  color: #b9ef83;
+  color: #75bd25;
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-stop-list li > span,
