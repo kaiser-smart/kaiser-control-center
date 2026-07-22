@@ -45,6 +45,7 @@ function configuredBaseUrl(env) {
 }
 
 const REQUIRED_ENV = [
+  "KB_ADAA_ENVIRONMENT",
   "KB_ADAA_OAUTH_API_KEY",
   "KB_ADAA_ACCOUNT_API_KEY",
   "KB_ADAA_CLIENT_ID",
@@ -54,11 +55,14 @@ const REQUIRED_ENV = [
 
 export function receivablesKbApiReadiness(env = {}) {
   const missingEnv = REQUIRED_ENV.filter((key) => !clean(env?.[key]));
+  const environment = clean(env.KB_ADAA_ENVIRONMENT).toLowerCase();
+  if (environment && environment !== "production") missingEnv.push("KB_ADAA_ENVIRONMENT");
+  const blockers = [...new Set(missingEnv)];
   return {
-    ready: missingEnv.length === 0,
-    missingEnv,
-    environment: clean(env.KB_ADAA_ENVIRONMENT) || "nenastaveno",
-    apiBaseUrl: missingEnv.length ? "" : configuredBaseUrl(env),
+    ready: blockers.length === 0,
+    missingEnv: blockers,
+    environment: environment || "nenastaveno",
+    apiBaseUrl: blockers.length ? "" : configuredBaseUrl(env),
     redirectUriConfigured: Boolean(clean(env.KB_ADAA_REDIRECT_URI)),
     accountAllowlistConfigured: Boolean(clean(env.KB_ADAA_ACCOUNT_IDS)),
     requiredEnv: [...REQUIRED_ENV]

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.685"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.686"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: ostrý KB import odmítne sandbox klíče",
+    text: "Stahování plateb se aktivuje pouze s výslovnou produkční KB konfigurací. Sandboxové API klíče zůstávají bezpečně oddělené pro onboarding a nemohou omylem spustit ostrý import ani zápis plateb do D1."
+  },
   {
     title: "Pohledávky: automatické stahování příchozích plateb z KB",
     text: "Samostatný cloudový runner po dokončení KB OAuth konfigurace každé dvě hodiny načte pouze zaúčtované příchozí transakce BOOK/CREDIT, dodrží bezpečný interval KB, deduplikuje je podle bankovní reference a uloží do D1 s auditem. Ruční stažení i pravdivý stav posledního běhu jsou v Importu; odchozí platby, platební příkazy, automatické přepisování faktur a zákaznická komunikace zůstávají vypnuté."

@@ -47,7 +47,7 @@ class D1Database {
 }
 
 const baseEnv = {
-  KB_ADAA_ENVIRONMENT: "sandbox",
+  KB_ADAA_ENVIRONMENT: "production",
   KB_ADAA_OAUTH_API_KEY: "oauth-key",
   KB_ADAA_ACCOUNT_API_KEY: "account-key",
   KB_ADAA_CLIENT_ID: "client-id",
@@ -58,12 +58,15 @@ const baseEnv = {
 
 assert.equal(receivablesKbApiReadiness(baseEnv).ready, true);
 assert.deepEqual(receivablesKbApiReadiness({}).missingEnv, [
+  "KB_ADAA_ENVIRONMENT",
   "KB_ADAA_OAUTH_API_KEY",
   "KB_ADAA_ACCOUNT_API_KEY",
   "KB_ADAA_CLIENT_ID",
   "KB_ADAA_CLIENT_SECRET",
   "KB_ADAA_REFRESH_TOKEN"
 ]);
+assert.equal(receivablesKbApiReadiness({ ...baseEnv, KB_ADAA_ENVIRONMENT: "sandbox" }).ready, false);
+assert.deepEqual(receivablesKbApiReadiness({ ...baseEnv, KB_ADAA_ENVIRONMENT: "sandbox" }).missingEnv, ["KB_ADAA_ENVIRONMENT"]);
 
 const normalized = normalizeReceivablesKbTransaction({
   status: "BOOK",
