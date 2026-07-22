@@ -161,6 +161,11 @@ for (const marker of [
   "await enableCollectionDailyDriverSarlota({",
   "data-collection-routes-test-gps-voice",
   "data-collection-routes-test-gps-save",
+  "PŘESTÁVKA BĚŽÍ",
+  "data-collection-driver-break-started-at",
+  "data-collection-driver-break-elapsed",
+  "data-collection-driver-break-start-time",
+  "syncCollectionRoutesDriverBreakRuntime",
   "prepareCollectionRouteGpsCapture",
   "prepareCollectionRoutesTestGpsFromSarlota",
   "vehicleSelectionRequired: false",
@@ -207,6 +212,19 @@ for (const marker of [
 ]) {
   assert.ok(appSource.includes(marker), `UI postrádá ochranný nebo viditelný prvek: ${marker}`);
 }
+
+assert.ok(
+  appSource.includes('eventType === action && ["started", "ended"].includes(item.payload?.phase)') &&
+    appSource.includes('data-collection-driver-operation="break" data-phase="ended"') &&
+    appSource.includes('data-phase="${active ? "ended" : "started"}'),
+  "Stav přestávky se musí obnovit z auditu a nabídnout jednoznačný začátek i konec."
+);
+assert.ok(
+  styleSource.includes(".collection-daily-driver-break-active") &&
+    styleSource.includes("position: fixed") &&
+    styleSource.includes("z-index: 4200"),
+  "Aktivní přestávka musí překrýt celý pracovní tablet."
+);
 
 const testDatasetPanelSource = appSource.slice(
   appSource.indexOf("function collectionRoutesTestDatasetPanel"),

@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Řidičský tablet: nepřehlédnutelná přestávka",
+    text: "Zahájená přestávka překryje pracovní tablet výrazným stavem PŘESTÁVKA BĚŽÍ, ukazuje čas zahájení i živou délku a skončí až velkým vědomým tlačítkem. Začátek a konec zůstávají v auditu, takže se aktivní přestávka obnoví i po znovunačtení tabletu."
+  },
+  {
     title: "Pneumatiky: rychlá evidence, klikací osazení a plovoucí MM",
     text: "Modul má sedm jasných pracovních záložek, kompaktní filtrovatelnou tabulku pro stovky záznamů, detail bez opuštění seznamu, pohled vozidel s klikacími pozicemi kol, mobilní průvodce měřením a obnovené plovoucí okno MM. Jednorázová migrace obnovuje doložené konfigurace pozic všech 28 vozidel; servis, náklady, historie, audit, oprávnění i ukládání dál používají chráněné KCC API a D1."
   },

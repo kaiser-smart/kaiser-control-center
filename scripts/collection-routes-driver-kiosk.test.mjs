@@ -180,24 +180,24 @@ assert.ok(
   "Souhrn HLÁŠENÍ musí jedním klepnutím otevřít formulář pro dispečink."
 );
 assert.ok(
-  appSource.includes("function showCollectionDailyDriverBreakNotice()")
-    && appSource.includes("INFO · PŘESTÁVKA BĚŽÍ")
-    && appSource.includes("Přestávka běží. Tato akce je dostupná")
-    && appSource.includes("myDailyRouteBreakNotice")
-    && appSource.includes("collection-daily-driver-break-notice"),
-  "Při jiné pracovní akci musí běžící přestávka zobrazit neblokující informaci."
+  appSource.includes("function collectionDailyDriverBreakActivePanel(")
+    && appSource.includes("PŘESTÁVKA BĚŽÍ")
+    && appSource.includes("data-collection-driver-break-elapsed")
+    && appSource.includes("data-collection-driver-break-start-time")
+    && appSource.includes('data-collection-driver-operation="break" data-phase="ended"'),
+  "Běžící přestávka musí být na celém tabletu nepřehlédnutelná a musí mít jednoznačné ukončení."
 );
 assert.ok(
-  appSource.includes('if (panel === "break") {')
-    && appSource.includes("showCollectionDailyDriverBreakNotice();")
-    && appSource.includes('collectionDailyDriverEvent.dataset.collectionDailyDriverEvent !== "break"'),
-  "Běžící přestávka nesmí blokovat další akci, navigaci ani fyzické potvrzení HOTOVO."
+  appSource.includes('collectionDailyDriverLatestOperation(collectionRoutesPilotState.myDailyRoute, "break") && action !== "break"')
+    && appSource.includes("Nejdřív ukonči běžící přestávku."),
+  "Běžící přestávka musí blokovat ostatní pracovní zápisy."
 );
 assert.ok(
-  styleSource.includes(".collection-daily-driver-break-notice")
-    && styleSource.includes("z-index: 3900;")
-    && styleSource.includes("pointer-events: none;"),
-  "Informace o běžící přestávce musí být nad pracovním oknem a nesmí zachytit další klepnutí."
+  styleSource.includes(".collection-daily-driver-break-active")
+    && styleSource.includes("z-index: 4200;")
+    && styleSource.includes("width: 100vw;")
+    && styleSource.includes("min-height: 100dvh;"),
+  "Běžící přestávka musí překrýt celou pracovní obrazovku."
 );
 assert.ok(
   appSource.includes('function collectionDailyDriverStopStatusLabel(status)')

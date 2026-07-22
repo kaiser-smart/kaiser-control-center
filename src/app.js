@@ -1539,7 +1539,6 @@ const collectionRoutesPilotState = {
   myDailyRoutePending: "",
   myDailyRouteMessage: "",
   myDailyRouteError: "",
-  myDailyRouteBreakNotice: "",
   myDailyRoutePanel: "",
   myDailyRouteMapMode: "leg",
   myDailyRouteMapFocusStopId: "",
@@ -1592,6 +1591,7 @@ const collectionRoutesPilotState = {
 };
 let collectionRoutesSitesAutoRefreshTimer = null;
 let collectionRoutesSitesCountdownTimer = null;
+let collectionRoutesDriverBreakTimer = null;
 let collectionRoutesSarlotaVoiceRequestId = 0;
 const collectionRoutesSarlotaMemoryRuntime = {
   timer: null,
@@ -22485,7 +22485,11 @@ function collectionDailyRouteStopStatusBadge(status) {
   return `<span class="collection-routes-site-status collection-routes-site-status--${tone}">${escapeHtml(collectionDailyRouteStopStatusLabel(status))}</span>`;
 }
 
-function collectionDailyRouteEventLabel(eventType) {
+function collectionDailyRouteEventLabel(eventType, payload = {}) {
+  if (eventType === "break") {
+    if (payload?.phase === "started") return "Přestávka zahájena";
+    if (payload?.phase === "ended") return "Přestávka ukončena";
+  }
   return {
     route_created: "Návrh uložen",
     driver_assigned: "Přiřazen řidič",
@@ -22497,7 +22501,7 @@ function collectionDailyRouteEventLabel(eventType) {
     done: "HOTOVO",
     problem: "Problém",
     dump: "Výklop",
-    break: "Pauza",
+    break: "Přestávka",
     gps_position_confirmed: "Fyzická GPS změřena"
   }[eventType] || eventType || "Událost";
 }
@@ -24951,7 +24955,7 @@ function collectionDailyRouteDispatcherDetail() {
       <details class="collection-daily-route-audit">
         <summary>Audit trasy (${escapeHtml(events.length)})</summary>
         <ol>
-          ${events.slice(0, 100).map((event) => `<li><time>${escapeHtml(formatDateTime(event.createdAt))}</time><strong>${escapeHtml(collectionDailyRouteEventLabel(event.eventType))}</strong><span>${escapeHtml(event.actorName || "Systém")}${event.reason ? ` · ${escapeHtml(event.reason)}` : ""}${event.note ? ` · ${escapeHtml(event.note)}` : ""}${event.payload?.photoUrl ? ` · <a href="${escapeHtml(event.payload.photoUrl)}" target="_blank" rel="noopener noreferrer">Fotografie hlášení</a>` : ""}</span></li>`).join("")}
+          ${events.slice(0, 100).map((event) => `<li><time>${escapeHtml(formatDateTime(event.createdAt))}</time><strong>${escapeHtml(collectionDailyRouteEventLabel(event.eventType, event.payload))}</strong><span>${escapeHtml(event.actorName || "Systém")}${event.reason ? ` · ${escapeHtml(event.reason)}` : ""}${event.note ? ` · ${escapeHtml(event.note)}` : ""}${event.payload?.photoUrl ? ` · <a href="${escapeHtml(event.payload.photoUrl)}" target="_blank" rel="noopener noreferrer">Fotografie hlášení</a>` : ""}</span></li>`).join("")}
         </ol>
       </details>
     </div>
@@ -25084,12 +25088,76 @@ function collectionDailyDriverLatestOperation(detail, action) {
   return event?.payload?.phase === "started" ? event : null;
 }
 
-function showCollectionDailyDriverBreakNotice() {
-  const breakIsRunning = Boolean(collectionDailyDriverLatestOperation(collectionRoutesPilotState.myDailyRoute, "break"));
-  collectionRoutesPilotState.myDailyRouteBreakNotice = breakIsRunning
-    ? "Přestávka běží. Tato akce je dostupná; přestávku můžeš ukončit později."
-    : "";
-  return breakIsRunning;
+function collectionDailyDriverBreakElapsedSeconds(startedAt, now = Date.now()) {
+  const startTime = Date.parse(String(startedAt || ""));
+  if (!Number.isFinite(startTime)) return 0;
+  return Math.max(0, Math.floor((now - startTime) / 1000));
+}
+
+function collectionDailyDriverBreakElapsedLabel(startedAt, now = Date.now()) {
+  const totalSeconds = collectionDailyDriverBreakElapsedSeconds(startedAt, now);
+  const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${hours}:${minutes}:${seconds}`;
+}
+
+function collectionDailyDriverBreakStartTimeLabel(startedAt) {
+  const date = new Date(String(startedAt || ""));
+  return Number.isNaN(date.getTime())
+    ? "neznámý čas"
+    : date.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
+}
+
+function updateCollectionRoutesDriverBreakNodes() {
+  document.querySelectorAll("[data-collection-driver-break-started-at]").forEach((panel) => {
+    const startedAt = panel.dataset.collectionDriverBreakStartedAt || "";
+    const elapsedNode = panel.querySelector("[data-collection-driver-break-elapsed]");
+    const startNode = panel.querySelector("[data-collection-driver-break-start-time]");
+    if (elapsedNode) elapsedNode.textContent = collectionDailyDriverBreakElapsedLabel(startedAt);
+    if (startNode) startNode.textContent = collectionDailyDriverBreakStartTimeLabel(startedAt);
+  });
+}
+
+function syncCollectionRoutesDriverBreakRuntime() {
+  if (typeof window === "undefined") return;
+  const hasActiveBreak = Boolean(document.querySelector("[data-collection-driver-break-started-at]"));
+  if (!hasActiveBreak && collectionRoutesDriverBreakTimer) {
+    window.clearInterval(collectionRoutesDriverBreakTimer);
+    collectionRoutesDriverBreakTimer = null;
+    return;
+  }
+  if (!hasActiveBreak) return;
+  updateCollectionRoutesDriverBreakNodes();
+  if (!collectionRoutesDriverBreakTimer) {
+    collectionRoutesDriverBreakTimer = window.setInterval(updateCollectionRoutesDriverBreakNodes, 1000);
+  }
+}
+
+function collectionDailyDriverBreakActivePanel(event, stopId, pending = "") {
+  if (!event) return "";
+  const startedAt = String(event.createdAt || "").trim();
+  const saving = String(pending || "").startsWith("break:");
+  return `
+    <section
+      class="collection-daily-driver-break-active"
+      role="alert"
+      aria-live="assertive"
+      aria-label="Přestávka právě běží"
+      data-collection-driver-break-started-at="${escapeHtml(startedAt)}"
+    >
+      <span class="collection-daily-driver-break-active__icon" aria-hidden="true">Ⅱ</span>
+      <div>
+        <span>PŘESTÁVKA BĚŽÍ</span>
+        <strong data-collection-driver-break-elapsed>${escapeHtml(collectionDailyDriverBreakElapsedLabel(startedAt))}</strong>
+        <p>Začala v <b data-collection-driver-break-start-time>${escapeHtml(collectionDailyDriverBreakStartTimeLabel(startedAt))}</b>. Trasa čeká, dokud přestávku vědomě neukončíš.</p>
+      </div>
+      <button type="button" data-collection-driver-operation="break" data-phase="ended" data-stop-id="${escapeHtml(stopId)}" ${saving ? "disabled" : ""}>
+        ${saving ? "UKONČUJI PŘESTÁVKU…" : "UKONČIT PŘESTÁVKU"}
+      </button>
+      <small>Stav zůstává viditelný i po obnovení stránky.</small>
+    </section>
+  `;
 }
 
 const collectionDailyDriverColorSchemeMedia = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
@@ -25338,6 +25406,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
   const adminTabletTest = collectionRoutesAdminTabletTestActive();
   const displayMode = collectionDailyDriverDisplayMode();
   const resolvedDisplayMode = collectionDailyDriverResolvedDisplayMode();
+  const activeBreak = run?.status === "active" ? collectionDailyDriverLatestOperation(detail, "break") : null;
   return `
     <main class="collection-daily-driver-page is-theme-${escapeHtml(resolvedDisplayMode)} ${testScope ? "is-isolated-test" : ""} ${adminTabletTest ? "is-admin-tablet-test" : ""}" data-collection-daily-driver-kiosk data-collection-driver-current-display-mode="${escapeHtml(displayMode)}" data-collection-driver-resolved-theme="${escapeHtml(resolvedDisplayMode)}" ${moduleThemeStyleAttribute()}>
       <header class="collection-daily-driver-kiosk-bar">
@@ -25358,7 +25427,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
         ${collectionRoutesPilotState.myDailyRouteError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.myDailyRouteError)}</p>` : ""}
         ${collectionRoutesPilotState.myDailyRouteMessage ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.myDailyRouteMessage)}</p>` : ""}
       </div>
-      ${collectionRoutesPilotState.myDailyRouteBreakNotice ? `<aside class="collection-daily-driver-break-notice" role="status"><strong>INFO · PŘESTÁVKA BĚŽÍ</strong><span>${escapeHtml(collectionRoutesPilotState.myDailyRouteBreakNotice)}</span></aside>` : ""}
+      ${collectionDailyDriverBreakActivePanel(activeBreak, eventStopId, pending)}
       ${collectionRoutesAdminTabletTestDiagnostics(detail, currentStop)}
       ${!run && collectionRoutesPilotState.myDailyRouteLoaded ? `<section class="collection-daily-driver-empty"><strong>${testScope ? "Nemáš přiřazenou testovací trasu." : "Dnes nemáš přiřazenou trasu."}</strong><span>Jakmile ji dispečink potvrdí a přiřadí přímo tobě, objeví se tady.</span><button class="secondary-link" type="button" data-collection-daily-driver-refresh>OBNOVIT</button></section>` : ""}
       ${run ? `
@@ -43842,9 +43911,6 @@ function applyMyCollectionDailyRoute(detail, message = "") {
     collectionRoutesPilotState.myDailyRouteSarlotaAutoAttemptedRunId = "";
     collectionDailyDriverMapRuntime.routeCache.clear();
   }
-  if (!collectionDailyDriverLatestOperation(detail, "break")) {
-    collectionRoutesPilotState.myDailyRouteBreakNotice = "";
-  }
   if (message) collectionRoutesPilotState.myDailyRouteMessage = message;
 }
 
@@ -44804,6 +44870,12 @@ async function optimizeMyCollectionDailyRouteWithHere() {
 async function recordMyCollectionDailyRouteEvent(action, stopId, input = {}) {
   const runId = collectionRoutesPilotState.myDailyRoute?.run?.id;
   if (!runId || !stopId || !action) return;
+  if (collectionDailyDriverLatestOperation(collectionRoutesPilotState.myDailyRoute, "break") && action !== "break") {
+    collectionRoutesPilotState.myDailyRouteError = "Nejdřív ukonči běžící přestávku.";
+    collectionRoutesPilotState.myDailyRouteMessage = "";
+    render();
+    return;
+  }
   collectionRoutesPilotState.myDailyRoutePending = `${action}:${stopId}`;
   collectionRoutesPilotState.myDailyRouteError = "";
   collectionRoutesPilotState.myDailyRouteMessage = "";
@@ -44836,13 +44908,17 @@ async function recordMyCollectionDailyRouteEvent(action, stopId, input = {}) {
         done: "Zastávka je uložená jako HOTOVO.",
         problem: "Hlášení bylo přijato v testovacím režimu.",
         dump: "Výsyp byl zapsán do testovacího auditu.",
-        break: "Přestávka byla zapsána do testovacího auditu."
+        break: input.payload?.phase === "started"
+          ? "Přestávka byla zahájena. Ukonči ji velkým tlačítkem na obrazovce."
+          : "Přestávka byla ukončena. Můžeš pokračovat v trase."
       }[action] || "Akce byla uložena."
       : {
         done: "Zastávka je uložená jako HOTOVO.",
         problem: "Problém byl uložen a dispečer ho vidí.",
         dump: "Výklop byl zapsán do auditu trasy.",
-        break: "Pauza byla zapsána do auditu trasy."
+        break: input.payload?.phase === "started"
+          ? "Přestávka byla zahájena. Ukonči ji velkým tlačítkem na obrazovce."
+          : "Přestávka byla ukončena. Můžeš pokračovat v trase."
       }[action] || "Akce byla uložena.");
     if (action === "done" && collectionRoutesPilotState.myDailyRouteSarlotaEnabled) {
       const nextStop = result.route?.stops?.find((stop) => stop.status === "planned");
@@ -51049,6 +51125,10 @@ async function logout() {
   collectionRoutesPilotState.myDailyRoutePending = "";
   collectionRoutesPilotState.myDailyRouteMessage = "";
   collectionRoutesPilotState.myDailyRouteError = "";
+  if (collectionRoutesDriverBreakTimer) {
+    window.clearInterval(collectionRoutesDriverBreakTimer);
+    collectionRoutesDriverBreakTimer = null;
+  }
   resetVehicleTrackingLiveState();
   navigateToUrl(routeHref("/"));
 }
@@ -51580,6 +51660,7 @@ function render() {
     syncVehicleTrackingDemoRuntime();
     syncCollectionRoutesTestTabletHereMap();
     syncCollectionDailyDriverInteractiveMap();
+    syncCollectionRoutesDriverBreakRuntime();
     if (aiAssistantState.welcomeVisible && aiAssistantState.welcomeAnimate) {
       aiAssistantState.welcomeAnimate = false;
     }
@@ -56444,11 +56525,6 @@ document.addEventListener("click", async (event) => {
   if (collectionDailyDriverPanelOpen) {
     event.preventDefault();
     const panel = collectionDailyDriverPanelOpen.dataset.collectionDriverPanel || "";
-    if (panel === "break") {
-      collectionRoutesPilotState.myDailyRouteBreakNotice = "";
-    } else {
-      showCollectionDailyDriverBreakNotice();
-    }
     if (panel === "report") clearCollectionDailyDriverReport();
     collectionRoutesPilotState.myDailyRoutePanel = panel;
     render();
@@ -56567,7 +56643,6 @@ document.addEventListener("click", async (event) => {
     if (collectionDailyDriverNavigation.dataset.collectionDriverNavigation === "stop") {
       stopCollectionDailyDriverNavigation();
     } else {
-      showCollectionDailyDriverBreakNotice();
       await startCollectionDailyDriverNavigation();
     }
     return;
@@ -56629,7 +56704,6 @@ document.addEventListener("click", async (event) => {
   if (collectionDailyDriverTransition) {
     event.preventDefault();
     if (!collectionDailyDriverTransition.disabled) {
-      showCollectionDailyDriverBreakNotice();
       await transitionMyCollectionDailyRoute(collectionDailyDriverTransition.dataset.collectionDailyDriverTransition || "");
     }
     return;
@@ -56639,9 +56713,6 @@ document.addEventListener("click", async (event) => {
   if (collectionDailyDriverEvent) {
     event.preventDefault();
     if (!collectionDailyDriverEvent.disabled) {
-      if (collectionDailyDriverEvent.dataset.collectionDailyDriverEvent !== "break") {
-        showCollectionDailyDriverBreakNotice();
-      }
       await recordMyCollectionDailyRouteEvent(
         collectionDailyDriverEvent.dataset.collectionDailyDriverEvent || "",
         collectionDailyDriverEvent.dataset.stopId || ""
