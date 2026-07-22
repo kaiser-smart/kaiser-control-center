@@ -322,6 +322,8 @@ const SARLOTA_VOICE_WRITE_TEST_ENDPOINT = "/api/ai/elevenlabs/sarlota-voice-writ
 const FEEDBACK_ROUTE = "/pripominky";
 const SELF_REPAIR_ROUTE = "/samoopravy";
 const SELF_REPAIR_MODULE_KEY = "self-repair";
+const SELF_REPAIR_ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024;
+const SELF_REPAIR_ATTACHMENT_ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.heic,.heif,.txt,.log,.csv,.doc,.docx,.xls,.xlsx";
 const SELF_REPAIR_ACTIVE_FILTER_VALUE = "active";
 const SELF_REPAIR_ARCHIVED_STATUSES = new Set(["closed", "rejected", "duplicate"]);
 const SELF_REPAIR_STATUS_OPTIONS = [
@@ -5722,7 +5724,7 @@ function currentFeedbackCreateDirtyTarget() {
 }
 
 function currentSelfRepairReportDirtyTarget() {
-  if (normalizePath(window.location.pathname) !== FEEDBACK_ROUTE || !hasPermission(currentUser(), "feedback", "create")) {
+  if (normalizePath(window.location.pathname) !== FEEDBACK_ROUTE || !canCreateCentralFeedback(currentUser())) {
     return null;
   }
 
@@ -34438,6 +34440,7 @@ function selfRepairCaseDetail(user) {
   const saving = selfRepairState.savingId === item.id;
   const disabled = saving ? "disabled" : "";
   const evidence = Array.isArray(detail.evidence) ? detail.evidence : [];
+  const attachments = Array.isArray(detail.attachments) ? detail.attachments : [];
 
   return `
     <section class="self-repair-detail" aria-labelledby="self-repair-detail-title">
@@ -34455,6 +34458,8 @@ function selfRepairCaseDetail(user) {
         <article><span>Očekávaný stav</span><p>${escapeHtml(item.expectedBehavior || "Neuvedeno")}</p></article>
         <article><span>Postup zopakování</span><p>${escapeHtml(item.reproductionSteps || "Neuvedeno")}</p></article>
       </div>
+
+      ${feedbackAttachmentList(attachments, "self-repair-detail__attachments")}
 
       ${canManage ? `
         <form class="self-repair-management" data-self-repair-case-form data-self-repair-case-id="${escapeHtml(item.id)}">
@@ -34500,6 +34505,7 @@ function selfRepairCaseDetail(user) {
             <div><dt>Verze</dt><dd>${escapeHtml(item.buildVersion || "Neuvedeno")}</dd></div>
             <div><dt>Uživatel</dt><dd>${escapeHtml(item.reporterUserName)}</dd></div>
             <div><dt>Důkazy / kontext</dt><dd>${escapeHtml(evidence.length)}</dd></div>
+            <div><dt>Přílohy</dt><dd>${escapeHtml(attachments.length)}</dd></div>
           </dl>
           ${selfRepairEvidencePanels(evidence)}
           <section class="self-repair-audit-panel">
@@ -39955,7 +39961,8 @@ function selfRepairReportDefaultDraft(context = {}) {
     expectedBehavior: "",
     reproductionSteps: "",
     priority: "Běžná",
-    sourceRoute: String(context.sourceRoute || "")
+    sourceRoute: String(context.sourceRoute || ""),
+    attachmentName: ""
   };
 }
 
@@ -40002,7 +40009,8 @@ function updateSelfRepairReportDraft(form) {
     expectedBehavior: form.elements.expectedBehavior?.value.trim() || "",
     reproductionSteps: form.elements.reproductionSteps?.value.trim() || "",
     priority: form.elements.priority?.value || "Běžná",
-    sourceRoute: selfRepairReportState.draft.sourceRoute || normalizePath(window.location.pathname)
+    sourceRoute: selfRepairReportState.draft.sourceRoute || normalizePath(window.location.pathname),
+    attachmentName: form.elements.attachment?.files?.[0]?.name || ""
   };
   return selfRepairReportState.draft;
 }
@@ -40023,13 +40031,34 @@ function resetSelfRepairReportAfterSubmit(context = {}) {
 }
 
 async function submitSelfRepairReport(form) {
-  if (!form || selfRepairReportState.saving || !hasPermission(currentUser(), "feedback", "create")) {
+  if (!form || selfRepairReportState.saving || !canCreateCentralFeedback(currentUser())) {
     return false;
   }
 
   if (!form.reportValidity()) return false;
 
   const draft = updateSelfRepairReportDraft(form);
+  const attachment = form.elements.attachment?.files?.[0] || null;
+  if (attachment && attachment.size > SELF_REPAIR_ATTACHMENT_MAX_SIZE_BYTES) {
+    selfRepairReportState.error = "Příloha může mít nejvýše 10 MB.";
+    render();
+    return false;
+  }
+  if (attachment && attachment.size <= 0) {
+    selfRepairReportState.error = "Příloha je prázdná.";
+    render();
+    return false;
+  }
+  const body = new FormData();
+  for (const [key, value] of Object.entries({
+    ...draft,
+    buildVersion: buildMeta.version || "v0.1.493",
+    buildCommit: buildMeta.commit || "",
+    browserInfo: navigator.userAgent || ""
+  })) {
+    if (key !== "attachmentName") body.append(key, String(value || ""));
+  }
+  if (attachment) body.append("attachment", attachment, attachment.name);
   selfRepairReportState.saving = true;
   selfRepairReportState.error = "";
   selfRepairReportState.message = "";
@@ -40039,14 +40068,11 @@ async function submitSelfRepairReport(form) {
   try {
     const result = await apiJson("/api/self-repair/cases", {
       method: "POST",
-      body: JSON.stringify({
-        ...draft,
-        buildVersion: buildMeta.version || "v0.1.493",
-        buildCommit: buildMeta.commit || "",
-        browserInfo: navigator.userAgent || ""
-      })
+      body
     });
-    selfRepairReportState.message = "Hlášení je uložené. Administrátor ho zkontroluje a zatřídí; nic se samo neopravilo ani neodeslalo.";
+    selfRepairReportState.message = result.attachment
+      ? "Hlášení i příloha jsou uložené. Administrátor je zkontroluje; nic se samo neopravilo ani neodeslalo."
+      : "Hlášení je uložené. Administrátor ho zkontroluje a zatřídí; nic se samo neopravilo ani neodeslalo.";
     selfRepairReportState.createdCaseId = result.case?.id || "";
     resetSelfRepairReportAfterSubmit(draft);
     if (result.feedback) {
@@ -40065,7 +40091,7 @@ async function submitSelfRepairReport(form) {
 }
 
 function selfRepairReportPanel(user, moduleOptions) {
-  if (!hasPermission(user, "feedback", "create")) return "";
+  if (!canCreateCentralFeedback(user)) return "";
   syncSelfRepairReportContext();
 
   const draft = selfRepairReportState.draft;
@@ -40132,6 +40158,11 @@ function selfRepairReportPanel(user, moduleOptions) {
         <label class="self-repair-report__wide">
           <span>Jak problém zopakovat</span>
           <textarea name="reproductionSteps" data-self-repair-report-field rows="3" maxlength="8000" placeholder="1. Otevřu Pneumatiky  2. Vyberu vozidlo  3. Zadám rozměr…" ${disabled}>${escapeHtml(draft.reproductionSteps)}</textarea>
+        </label>
+        <label class="self-repair-report__wide self-repair-report__attachment">
+          <span>Příloha</span>
+          <input name="attachment" type="file" data-self-repair-report-field accept="${SELF_REPAIR_ATTACHMENT_ACCEPT}" ${disabled} />
+          <small>Volitelná, jeden soubor do 10 MB. PDF, obrázek, text, Word nebo Excel.</small>
         </label>
         <div class="self-repair-report__actions">
           <button class="primary-action" type="submit" ${disabled}>${selfRepairReportState.saving ? "Ukládám…" : "Odeslat hlášení"}</button>
@@ -40253,6 +40284,24 @@ function feedbackCreatePanel(user, moduleOptions) {
   `;
 }
 
+function feedbackAttachmentList(attachments = [], className = "feedback-ticket__attachments") {
+  const items = (Array.isArray(attachments) ? attachments : []).filter((attachment) => attachment?.openUrl);
+  if (!items.length) return "";
+  return `
+    <section class="${className}" aria-label="Přílohy">
+      <strong>${items.length === 1 ? "Příloha" : "Přílohy"}</strong>
+      <div>
+        ${items.map((attachment) => `
+          <a href="${escapeHtml(attachment.openUrl)}" target="_blank" rel="noopener">
+            <span>${escapeHtml(attachment.filename || "Otevřít přílohu")}</span>
+            ${formatFileSize(attachment.sizeBytes) ? `<small>${escapeHtml(formatFileSize(attachment.sizeBytes))}</small>` : ""}
+          </a>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function feedbackAdminItem(item, canEdit) {
   const cardState = feedbackCardMessage(item.id);
   const isSaving = feedbackState.savingId === item.id;
@@ -40273,6 +40322,7 @@ function feedbackAdminItem(item, canEdit) {
       </header>
 
       <p class="feedback-ticket__message">${escapeHtml(item.message)}</p>
+      ${feedbackAttachmentList(item.attachments)}
 
       <dl class="feedback-ticket__meta">
         <div>

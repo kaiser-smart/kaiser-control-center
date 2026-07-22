@@ -34,7 +34,18 @@ export function normalizeFeedback(item = {}) {
     createdAt: item.createdAt || item.created_at || new Date().toISOString(),
     resolvedAt: item.resolvedAt || item.resolved_at || null,
     resolvedByUserId: item.resolvedByUserId || item.resolved_by_user_id || null,
-    internalNote: String(item.internalNote || item.internal_note || "")
+    internalNote: String(item.internalNote || item.internal_note || ""),
+    attachments: Array.isArray(item.attachments)
+      ? item.attachments.map((attachment) => ({
+          id: String(attachment?.id || ""),
+          caseId: String(attachment?.caseId || attachment?.case_id || ""),
+          filename: String(attachment?.filename || attachment?.fileName || attachment?.file_name || "Příloha"),
+          contentType: String(attachment?.contentType || attachment?.content_type || "application/octet-stream"),
+          sizeBytes: Math.max(0, Number(attachment?.sizeBytes || attachment?.size_bytes || 0)),
+          createdAt: String(attachment?.createdAt || attachment?.created_at || ""),
+          openUrl: String(attachment?.openUrl || attachment?.open_url || "")
+        })).filter((attachment) => attachment.id && attachment.openUrl)
+      : []
   };
 }
 

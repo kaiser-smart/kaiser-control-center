@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.671"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.672"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Připomínky: příloha pro management",
+    text: "Administrátor a všichni uživatelé role Management mohou v managerském formuláři Připomínek vložit jeden bezpečně uložený soubor do 10 MB. Příloha se zobrazí u připomínky i v detailu Samoopravy a otevře se pouze přihlášenému oprávněnému uživateli. Ostatní role managerské hlášení nevytvoří."
+  },
   {
     title: "Řidičský tablet: antracitový noční režim",
     text: "Noční režim řidičského tabletu používá neutrální antracit místo modrých ploch. Výrazné zelené potvrzení, žluté hlášení, kontrast a všechny pracovní funkce zůstávají stejné."
