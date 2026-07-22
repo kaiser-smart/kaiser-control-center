@@ -803,6 +803,12 @@ Aktualni implementacni smer:
 Preview pouziva backend Vistos Execute API pres Cloudflare secrets.
 Frontend Vistos nikdy nevola primo.
 
+Seznamovy `GetPageParam` je zdrojem seznamu a zakladnich projekcnich poli.
+Technicka pole, ktera Vistos zobrazuje pouze v detailu vozidla, se nacitaji
+cilene pres read-only `GetByIdParam` jen pro vozidla pozadovana konfiguraci HERE
+nebo pro prave otevreny detail Vozoveho parku. KSO nesmi pri beznem seznamu
+spoustet detailovy dotaz pro vsechna aktivni vozidla.
+
 ### Filtr aktivnich vozidel
 
 Overeny filtr pro `GetPageParam`:

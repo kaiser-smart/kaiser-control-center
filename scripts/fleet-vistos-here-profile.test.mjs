@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { __test as vistosTest } from "../functions/_lib/fleet-vistos-vehicle-preview.js";
+import { extractVistosRecord, getVistosById } from "../functions/_lib/vistos-execute-client.js";
 import {
   __test as hereTest,
   buildCollectionRouteHereProblem
@@ -15,6 +16,88 @@ const schema = {
   }))
 };
 const technicalFields = vistosTest.resolveVehicleTechnicalFields(schema);
+const detailCalls = [];
+const enriched = await vistosTest.enrichVistosVehicleRows(
+  {},
+  { cookieHeader: "read-only-test" },
+  [
+    { Id: "vehicle-100", Name: "Kouba", RegistrationPlate: "3BN 3558" },
+    { Id: "vehicle-200", Name: "Florian", RegistrationPlate: "3BE 2831" }
+  ],
+  schema.columns.map((column) => column.columnName),
+  {
+    detailRegistrationPlates: ["3BN3558"],
+    loadDetail: async (_env, _session, entityName, entityId, columns) => {
+      detailCalls.push({ entityName, entityId, columns });
+      return {
+        row: {
+          Id: entityId,
+          c_EmptyWeightKg: "13 500",
+          c_MaxPermittedWeightKg: "19 000",
+          c_PayloadKg: "5 500",
+          c_LengthMeters: "8,50",
+          c_WidthMeters: "2,40",
+          c_HeightMeters: "3,50",
+          c_VehicleType_FK_RecordId: "18358",
+          c_VehicleType_FK_Caption: "Pevný nákladní vůz",
+          c_BodyType_FK_RecordId: "18378",
+          c_BodyType_FK_Caption: "Popelář"
+        },
+        status: 200
+      };
+    }
+  }
+);
+assert.equal(detailCalls.length, 1);
+assert.equal(detailCalls[0].entityName, "Vehicle");
+assert.equal(detailCalls[0].entityId, "vehicle-100");
+assert.equal(enriched.diagnostics.requested, 1);
+assert.equal(enriched.diagnostics.succeeded, 1);
+assert.equal(enriched.rows[1].c_EmptyWeightKg, undefined);
+const screenshotVehicle = vistosTest.mapVehicle(enriched.rows[0], { fields: {} }, technicalFields);
+assert.equal(screenshotVehicle.technicalProfile.emptyWeightKg, 13500);
+assert.equal(screenshotVehicle.technicalProfile.maxPermittedWeightKg, 19000);
+assert.equal(screenshotVehicle.technicalProfile.payloadKg, 5500);
+assert.deepEqual(screenshotVehicle.technicalProfile.dimensionsCm, { length: 850, width: 240, height: 350 });
+assert.equal(screenshotVehicle.technicalProfile.vehicleType.caption, "Pevný nákladní vůz");
+assert.equal(screenshotVehicle.technicalProfile.bodyType.caption, "Popelář");
+assert.ok(screenshotVehicle.technicalProfile.blockers.includes("chybí potvrzené zatížení nápravy nebo skupiny náprav"));
+
+assert.deepEqual(extractVistosRecord({
+  status: "OK",
+  data: { data: { Id: "vehicle-100", c_EmptyWeightKg: "13 500" } }
+}), { Id: "vehicle-100", c_EmptyWeightKg: "13 500" });
+
+const originalFetch = globalThis.fetch;
+let detailRequest = null;
+try {
+  globalThis.fetch = async (url, init = {}) => {
+    detailRequest = { url: String(url), init, body: JSON.parse(init.body) };
+    return new Response(JSON.stringify({
+      status: "OK",
+      data: { data: { Id: 100, c_EmptyWeightKg: "13 500" } }
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  const detail = await getVistosById(
+    { VISTOS_API_BASE_URL: "https://example.test" },
+    { cookieHeader: "VistosAccessToken=read-only-test" },
+    "Vehicle",
+    "100",
+    ["Id", "c_EmptyWeightKg"]
+  );
+  assert.deepEqual(detail.row, { Id: 100, c_EmptyWeightKg: "13 500" });
+  assert.ok(detailRequest.url.endsWith("/API/VistosAPI/Execute?GetByIdParam"));
+  assert.equal(detailRequest.init.headers.Cookie, "VistosAccessToken=read-only-test");
+  assert.deepEqual(detailRequest.body.GetByIdParam, {
+    EntityName: "Vehicle",
+    EntityId: 100,
+    MethodMode: "HeaderColumns",
+    ColNameToRead: ["Id", "c_EmptyWeightKg"]
+  });
+} finally {
+  globalThis.fetch = originalFetch;
+}
+
 const vehicle = vistosTest.mapVehicle({
   Id: "vehicle-100",
   Name: "Popelář A",

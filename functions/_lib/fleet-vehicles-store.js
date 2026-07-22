@@ -618,10 +618,26 @@ function fleetVehicleFromVistos(vehicle = {}, tcarsVehicle = null) {
   };
 }
 
-async function loadVistosFleetVehiclesPayload(env = {}, tcarsPayload = null) {
+async function loadVistosFleetVehiclesPayload(env = {}, tcarsPayload = null, options = {}) {
   try {
-    const preview = await createFleetVistosVehiclePreview(env);
     const tcarsVehicles = Array.isArray(tcarsPayload?.vehicles) ? tcarsPayload.vehicles : [];
+    const requestedDetailVehicleId = cleanString(options.detailVehicleId);
+    const requestedTcarsVehicle = requestedDetailVehicleId
+      ? tcarsVehicles.find((vehicle) => [
+          vehicle?.tcarsVehicleId,
+          vehicle?.tcarsUnitId,
+          vehicle?.vehicleId,
+          vehicle?.id
+        ].some((value) => cleanString(value) === requestedDetailVehicleId))
+      : null;
+    const preview = await createFleetVistosVehiclePreview(env, {
+      detailVehicleId: requestedDetailVehicleId,
+      detailRegistrationPlates: [
+        options.detailRegistrationPlate,
+        requestedTcarsVehicle?.licensePlate,
+        requestedTcarsVehicle?.tcarsLicensePlate
+      ].filter(Boolean)
+    });
     const tcarsByPlate = tcarsByRegistrationPlate(tcarsVehicles);
     const vehicles = (Array.isArray(preview?.vehicles) ? preview.vehicles : []).map((vehicle) => {
       const match = tcarsByPlate.get(normalizedPlate(vehicle.registrationPlate));
@@ -667,7 +683,7 @@ async function loadVistosFleetVehiclesPayload(env = {}, tcarsPayload = null) {
   }
 }
 
-export async function loadFleetVehiclesWithAssignments(env = {}, user = null) {
+export async function loadFleetVehiclesWithAssignments(env = {}, user = null, options = {}) {
   const testPayload = testFleetPayloadFromEnv(env);
   if (testPayload) {
     return {
@@ -683,7 +699,7 @@ export async function loadFleetVehiclesWithAssignments(env = {}, user = null) {
   }
 
   const tcarsPayload = await loadTcarsFleetVehiclesPayload(env);
-  const vistosPayload = await loadVistosFleetVehiclesPayload(env, tcarsPayload);
+  const vistosPayload = await loadVistosFleetVehiclesPayload(env, tcarsPayload, options);
   const basePayload = vistosPayload.apiStatus === "ready" && vistosPayload.vehicles.length
     ? vistosPayload
     : {
@@ -724,7 +740,7 @@ export async function loadFleetVehiclesWithAssignments(env = {}, user = null) {
 }
 
 export async function getFleetVehicleWithAssignment(env = {}, vehicleId = "", user = null) {
-  const payload = await loadFleetVehiclesWithAssignments(env, user);
+  const payload = await loadFleetVehiclesWithAssignments(env, user, { detailVehicleId: vehicleId });
   const vehicle = payload.vehicles.find((item) => vehicleMatchesId(item, vehicleId)) || null;
 
   if (!vehicle) {

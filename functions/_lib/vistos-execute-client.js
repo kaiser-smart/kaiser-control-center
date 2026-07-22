@@ -114,6 +114,31 @@ export function extractVistosRows(payload) {
   return nested;
 }
 
+export function extractVistosRecord(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return {};
+  }
+
+  const nestedData = payload.data;
+  if (nestedData && typeof nestedData === "object" && !Array.isArray(nestedData)) {
+    if (nestedData.data && typeof nestedData.data === "object" && !Array.isArray(nestedData.data)) {
+      return nestedData.data;
+    }
+    if (!Array.isArray(nestedData.data)) {
+      return nestedData;
+    }
+  }
+
+  for (const key of ["record", "item", "value", "result"]) {
+    const value = payload[key];
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value;
+    }
+  }
+
+  return {};
+}
+
 function recordsTotal(payload) {
   const data = payload?.data;
   return {
@@ -239,6 +264,21 @@ export async function getVistosSchemaEntity(env, session, entityName) {
     EntityName: cleanVistosValue(entityName)
   }, session.cookieHeader);
   return result.body;
+}
+
+export async function getVistosById(env, session, entityName, entityId, columns = []) {
+  const numericId = Number(entityId);
+  const result = await fetchVistosExecute(env, "GetByIdParam", {
+    EntityName: cleanVistosValue(entityName),
+    EntityId: Number.isFinite(numericId) ? numericId : entityId,
+    MethodMode: "HeaderColumns",
+    ColNameToRead: Array.from(new Set(columns.map(cleanVistosValue).filter(Boolean)))
+  }, session.cookieHeader);
+
+  return {
+    row: extractVistosRecord(result.body),
+    status: result.status
+  };
 }
 
 export async function getAllVistosPages(env, session, entityName, columns, filter = null, options = {}) {

@@ -2,6 +2,7 @@ import {
   VistosExecuteError,
   cleanVistosValue,
   getAllVistosPages,
+  getVistosById,
   getVistosSchemaEntity,
   isVistosExecuteConfigured,
   loginVistosExecute
@@ -9,6 +10,8 @@ import {
 
 const VISTOS_NOT_CONFIGURED_MESSAGE = "Vistos API není nakonfigurováno";
 const FLEET_VISTOS_VEHICLE_PREVIEW_LIMIT = 200;
+const FLEET_VISTOS_VEHICLE_DETAIL_LIMIT = 12;
+const FLEET_VISTOS_VEHICLE_DETAIL_CONCURRENCY = 3;
 const FLEET_VISTOS_VEHICLE_COLUMNS = [
   "Id",
   "Name",
@@ -339,6 +342,108 @@ function withVehicleTechnicalColumns(columns, technicalFields) {
     .filter((field) => field.confirmed && field.columnName)
     .map((field) => field.columnName);
   return Array.from(new Set([...columns, ...extra]));
+}
+
+function normalizeRegistration(value) {
+  return clean(value).toUpperCase().replace(/[^A-Z0-9]+/g, "");
+}
+
+function normalizedDetailVehicleIds(options = {}) {
+  const values = [options.detailVehicleId, ...(Array.isArray(options.detailVehicleIds) ? options.detailVehicleIds : [])];
+  return new Set(values
+    .map((value) => clean(value).replace(/^vistos-/i, ""))
+    .filter(Boolean));
+}
+
+function normalizedDetailRegistrationPlates(options = {}) {
+  const values = [
+    options.detailRegistrationPlate,
+    ...(Array.isArray(options.detailRegistrationPlates) ? options.detailRegistrationPlates : [])
+  ];
+  return new Set(values.map(normalizeRegistration).filter(Boolean));
+}
+
+function selectedVehicleDetailRows(rows = [], options = {}) {
+  const requestedIds = normalizedDetailVehicleIds(options);
+  const requestedPlates = normalizedDetailRegistrationPlates(options);
+  if (!requestedIds.size && !requestedPlates.size) return [];
+
+  return rows.filter((row) => {
+    const id = firstValue(row, ["Id", "VehicleId"]);
+    const registrationPlate = normalizeRegistration(firstValue(row, ["RegistrationPlate", "RegistrationNumber", "SPZ"]));
+    return requestedIds.has(id) || requestedPlates.has(registrationPlate);
+  });
+}
+
+function hasVistosDetailValue(value) {
+  if (Array.isArray(value)) return value.length > 0;
+  if (value && typeof value === "object") return true;
+  return clean(value) !== "";
+}
+
+function mergeVehicleDetailRow(baseRow = {}, detailRow = {}) {
+  const merged = { ...baseRow };
+  for (const [key, value] of Object.entries(detailRow || {})) {
+    if (hasVistosDetailValue(value) && !hasVistosDetailValue(merged[key])) {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+async function enrichVistosVehicleRows(env, session, rows = [], columns = [], options = {}) {
+  const selectedRows = selectedVehicleDetailRows(rows, options);
+  const detailRows = selectedRows.slice(0, FLEET_VISTOS_VEHICLE_DETAIL_LIMIT);
+  const loadDetail = typeof options.loadDetail === "function" ? options.loadDetail : getVistosById;
+  const enrichedById = new Map();
+  const failedIds = new Set();
+  const diagnostics = {
+    source: "GetByIdParam",
+    requested: detailRows.length,
+    succeeded: 0,
+    failed: 0,
+    capped: selectedRows.length > FLEET_VISTOS_VEHICLE_DETAIL_LIMIT,
+    limit: FLEET_VISTOS_VEHICLE_DETAIL_LIMIT,
+    concurrency: FLEET_VISTOS_VEHICLE_DETAIL_CONCURRENCY,
+    readOnly: true
+  };
+
+  for (let index = 0; index < detailRows.length; index += FLEET_VISTOS_VEHICLE_DETAIL_CONCURRENCY) {
+    const chunk = detailRows.slice(index, index + FLEET_VISTOS_VEHICLE_DETAIL_CONCURRENCY);
+    const results = await Promise.all(chunk.map(async (row) => {
+      const id = firstValue(row, ["Id", "VehicleId"]);
+      if (!id) return { id, ok: false };
+      try {
+        const detail = await loadDetail(env, session, "Vehicle", id, columns);
+        if (detail?.row && Object.keys(detail.row).length) {
+          return { id, ok: true, row: mergeVehicleDetailRow(row, detail.row) };
+        }
+      } catch {
+        // Diagnostika odliší chybu detailového čtení od prázdného pole ve Vistosu.
+      }
+      return { id, ok: false };
+    }));
+
+    for (const result of results) {
+      if (result.ok) {
+        enrichedById.set(result.id, result.row);
+        diagnostics.succeeded += 1;
+      } else {
+        failedIds.add(result.id);
+        diagnostics.failed += 1;
+      }
+    }
+  }
+
+  return {
+    rows: rows.map((row) => {
+      const id = firstValue(row, ["Id", "VehicleId"]);
+      if (enrichedById.has(id)) return enrichedById.get(id);
+      if (failedIds.has(id)) return { ...row, __vistosVehicleDetailReadFailed: true };
+      return row;
+    }),
+    diagnostics
+  };
 }
 
 function readVistosDisplayValue(row, columnName) {
@@ -816,7 +921,7 @@ function issueSummary(vehicles) {
   return [...counts.entries()].map(([code, count]) => ({ code, count }));
 }
 
-export async function createFleetVistosVehiclePreview(env) {
+export async function createFleetVistosVehiclePreview(env, options = {}) {
   if (!isVistosExecuteConfigured(env)) {
     return {
       apiStatus: "not_configured",
@@ -859,7 +964,9 @@ export async function createFleetVistosVehiclePreview(env) {
     FLEET_VISTOS_VEHICLE_ACTIVE_FILTER,
     { maxPages: 20 }
   );
-  const vehicles = page.rows.slice(0, FLEET_VISTOS_VEHICLE_PREVIEW_LIMIT).map((row) => mapVehicle(row, termFields, technicalFields));
+  const previewRows = page.rows.slice(0, FLEET_VISTOS_VEHICLE_PREVIEW_LIMIT);
+  const detailEnrichment = await enrichVistosVehicleRows(env, session, previewRows, requestedColumns, options);
+  const vehicles = detailEnrichment.rows.map((row) => mapVehicle(row, termFields, technicalFields));
   const diagnostics = diagnosticsFromPage(page);
 
   return {
@@ -911,7 +1018,8 @@ export async function createFleetVistosVehiclePreview(env) {
           .filter((field) => !field.confirmed)
           .map((field) => field.label),
         error: technicalFields.error || ""
-      }
+      },
+      vehicleDetailEnrichment: detailEnrichment.diagnostics
     },
     loadedAt: new Date().toISOString()
   };
@@ -942,6 +1050,7 @@ export function fleetVistosVehiclePreviewError(error) {
 
 export const __test = {
   FLEET_VISTOS_VEHICLE_TECHNICAL_SPECS,
+  enrichVistosVehicleRows,
   mapVehicle,
   parseAxleLoadKg,
   resolveVehicleTechnicalFields
