@@ -1489,6 +1489,7 @@ const collectionRoutesPilotState = {
   myDailyRoutePending: "",
   myDailyRouteMessage: "",
   myDailyRouteError: "",
+  myDailyRouteBreakNotice: "",
   myDailyRoutePanel: "",
   myDailyRouteMapMode: "leg",
   myDailyRouteMapFocusStopId: "",
@@ -24920,6 +24921,14 @@ function collectionDailyDriverLatestOperation(detail, action) {
   return event?.payload?.phase === "started" ? event : null;
 }
 
+function showCollectionDailyDriverBreakNotice() {
+  const breakIsRunning = Boolean(collectionDailyDriverLatestOperation(collectionRoutesPilotState.myDailyRoute, "break"));
+  collectionRoutesPilotState.myDailyRouteBreakNotice = breakIsRunning
+    ? "Přestávka běží. Tato akce je dostupná; přestávku můžeš ukončit později."
+    : "";
+  return breakIsRunning;
+}
+
 const collectionDailyDriverColorSchemeMedia = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
 
 function collectionDailyDriverDisplayMode() {
@@ -25193,6 +25202,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
         ${collectionRoutesPilotState.myDailyRouteError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.myDailyRouteError)}</p>` : ""}
         ${collectionRoutesPilotState.myDailyRouteMessage ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.myDailyRouteMessage)}</p>` : ""}
       </div>
+      ${collectionRoutesPilotState.myDailyRouteBreakNotice ? `<aside class="collection-daily-driver-break-notice" role="status"><strong>INFO · PŘESTÁVKA BĚŽÍ</strong><span>${escapeHtml(collectionRoutesPilotState.myDailyRouteBreakNotice)}</span></aside>` : ""}
       ${collectionRoutesAdminTabletTestDiagnostics(detail, currentStop)}
       ${!run && collectionRoutesPilotState.myDailyRouteLoaded ? `<section class="collection-daily-driver-empty"><strong>${testScope ? "Nemáš přiřazenou testovací trasu." : "Dnes nemáš přiřazenou trasu."}</strong><span>Jakmile ji dispečink potvrdí a přiřadí přímo tobě, objeví se tady.</span><button class="secondary-link" type="button" data-collection-daily-driver-refresh>OBNOVIT</button></section>` : ""}
       ${run ? `
@@ -43300,6 +43310,9 @@ function applyMyCollectionDailyRoute(detail, message = "") {
     collectionRoutesPilotState.myDailyRouteSarlotaAutoAttemptedRunId = "";
     collectionDailyDriverMapRuntime.routeCache.clear();
   }
+  if (!collectionDailyDriverLatestOperation(detail, "break")) {
+    collectionRoutesPilotState.myDailyRouteBreakNotice = "";
+  }
   if (message) collectionRoutesPilotState.myDailyRouteMessage = message;
 }
 
@@ -55664,6 +55677,11 @@ document.addEventListener("click", async (event) => {
   if (collectionDailyDriverPanelOpen) {
     event.preventDefault();
     const panel = collectionDailyDriverPanelOpen.dataset.collectionDriverPanel || "";
+    if (panel === "break") {
+      collectionRoutesPilotState.myDailyRouteBreakNotice = "";
+    } else {
+      showCollectionDailyDriverBreakNotice();
+    }
     if (panel === "report") clearCollectionDailyDriverReport();
     collectionRoutesPilotState.myDailyRoutePanel = panel;
     render();
@@ -55782,6 +55800,7 @@ document.addEventListener("click", async (event) => {
     if (collectionDailyDriverNavigation.dataset.collectionDriverNavigation === "stop") {
       stopCollectionDailyDriverNavigation();
     } else {
+      showCollectionDailyDriverBreakNotice();
       await startCollectionDailyDriverNavigation();
     }
     return;
@@ -55843,6 +55862,7 @@ document.addEventListener("click", async (event) => {
   if (collectionDailyDriverTransition) {
     event.preventDefault();
     if (!collectionDailyDriverTransition.disabled) {
+      showCollectionDailyDriverBreakNotice();
       await transitionMyCollectionDailyRoute(collectionDailyDriverTransition.dataset.collectionDailyDriverTransition || "");
     }
     return;
@@ -55852,6 +55872,9 @@ document.addEventListener("click", async (event) => {
   if (collectionDailyDriverEvent) {
     event.preventDefault();
     if (!collectionDailyDriverEvent.disabled) {
+      if (collectionDailyDriverEvent.dataset.collectionDailyDriverEvent !== "break") {
+        showCollectionDailyDriverBreakNotice();
+      }
       await recordMyCollectionDailyRouteEvent(
         collectionDailyDriverEvent.dataset.collectionDailyDriverEvent || "",
         collectionDailyDriverEvent.dataset.stopId || ""

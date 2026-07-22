@@ -44291,6 +44291,35 @@ body.collection-driver-kiosk-active #app {
   box-shadow: 0 8px 26px rgba(37, 50, 39, 0.18);
 }
 
+.collection-daily-driver-break-notice {
+  position: fixed;
+  top: 4px;
+  right: 14px;
+  z-index: 3900;
+  display: grid;
+  width: min(620px, calc(100% - 28px));
+  gap: 3px;
+  padding: 11px 15px;
+  border: 2px solid #75bd25;
+  border-radius: 12px;
+  background: #f4fbef;
+  box-shadow: 0 14px 36px rgba(20, 31, 23, 0.28);
+  color: #263228;
+  pointer-events: none;
+}
+
+.collection-daily-driver-break-notice strong {
+  color: #467d1c;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.collection-daily-driver-break-notice span {
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
 .collection-daily-driver-route,
 .collection-daily-driver-empty {
   min-height: 0;
@@ -46062,6 +46091,17 @@ body.collection-driver-kiosk-active #app {
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-choice-grid button.is-selected {
   border-width: 3px;
   box-shadow: inset 0 0 0 1px #75bd25;
+}
+
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-break-notice {
+  border-color: #75bd25;
+  background: #252525;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.52);
+  color: #f7faf5;
+}
+
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-break-notice strong {
+  color: #75bd25;
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-display-settings__modes small,

@@ -180,6 +180,26 @@ assert.ok(
   "Souhrn HLÁŠENÍ musí jedním klepnutím otevřít formulář pro dispečink."
 );
 assert.ok(
+  appSource.includes("function showCollectionDailyDriverBreakNotice()")
+    && appSource.includes("INFO · PŘESTÁVKA BĚŽÍ")
+    && appSource.includes("Přestávka běží. Tato akce je dostupná")
+    && appSource.includes("myDailyRouteBreakNotice")
+    && appSource.includes("collection-daily-driver-break-notice"),
+  "Při jiné pracovní akci musí běžící přestávka zobrazit neblokující informaci."
+);
+assert.ok(
+  appSource.includes('if (panel === "break") {')
+    && appSource.includes("showCollectionDailyDriverBreakNotice();")
+    && appSource.includes('collectionDailyDriverEvent.dataset.collectionDailyDriverEvent !== "break"'),
+  "Běžící přestávka nesmí blokovat další akci, navigaci ani fyzické potvrzení HOTOVO."
+);
+assert.ok(
+  styleSource.includes(".collection-daily-driver-break-notice")
+    && styleSource.includes("z-index: 3900;")
+    && styleSource.includes("pointer-events: none;"),
+  "Informace o běžící přestávce musí být nad pracovním oknem a nesmí zachytit další klepnutí."
+);
+assert.ok(
   appSource.includes('function collectionDailyDriverStopStatusLabel(status)')
     && appSource.includes('return status === "problem" ? "Hlášení"')
     && appSource.includes('<i class="is-problem"></i> Hlášení'),
