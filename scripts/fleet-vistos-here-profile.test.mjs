@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 
 import { __test as vistosTest } from "../functions/_lib/fleet-vistos-vehicle-preview.js";
-import { extractVistosRecord, getVistosById } from "../functions/_lib/vistos-execute-client.js";
+import {
+  extractVistosRecord,
+  getVistosById,
+  vistosRecordDiagnostics
+} from "../functions/_lib/vistos-execute-client.js";
 import {
   __test as hereTest,
   buildCollectionRouteHereProblem
@@ -86,6 +90,10 @@ try {
     ["Id", "c_EmptyWeightKg"]
   );
   assert.deepEqual(detail.row, { Id: 100, c_EmptyWeightKg: "13 500" });
+  assert.equal(detail.diagnostics.requestedColumnCount, 2);
+  assert.deepEqual(detail.diagnostics.requestedColumnMatches, ["Id", "c_EmptyWeightKg"]);
+  assert.ok(detail.diagnostics.responseKeyPaths.includes("data.data.c_EmptyWeightKg"));
+  assert.equal(JSON.stringify(detail.diagnostics).includes("13 500"), false);
   assert.ok(detailRequest.url.endsWith("/API/VistosAPI/Execute?GetByIdParam"));
   assert.equal(detailRequest.init.headers.Cookie, "VistosAccessToken=read-only-test");
   assert.deepEqual(detailRequest.body.GetByIdParam, {
@@ -97,6 +105,13 @@ try {
 } finally {
   globalThis.fetch = originalFetch;
 }
+
+const nestedDiagnostic = vistosRecordDiagnostics({
+  status: "OK",
+  data: { Result: { Header: { c_EmptyWeightKg: "13 500" } } }
+}, {}, ["c_EmptyWeightKg"]);
+assert.ok(nestedDiagnostic.responseKeyPaths.includes("data.Result.Header.c_EmptyWeightKg"));
+assert.equal(JSON.stringify(nestedDiagnostic).includes("13 500"), false);
 
 const vehicle = vistosTest.mapVehicle({
   Id: "vehicle-100",
