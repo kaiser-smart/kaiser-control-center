@@ -1955,7 +1955,6 @@ const fleetVehiclesState = {
   detailLoading: false,
   detailVehicleId: "",
   detailLoadedVehicleId: "",
-  detailDiagnostics: null,
   detailError: ""
 };
 
@@ -11954,25 +11953,6 @@ function fleetHereEnumLabel(value = {}) {
   return fleetVehicleDisplayValue(value?.caption || value?.id, "není uvedeno");
 }
 
-function fleetVistosDetailDiagnostics(vehicle = {}) {
-  const params = new URLSearchParams(window.location.search);
-  const diagnostics = fleetVehiclesState.detailDiagnostics?.vehicleDetailEnrichment;
-  if (
-    params.get("vistosDiagnostics") !== "1" ||
-    !diagnostics ||
-    !fleetVehicleMatchesId(vehicle, fleetVehiclesState.detailVehicleId)
-  ) {
-    return "";
-  }
-
-  return `
-    <details class="fleet-tcars-expandable fleet-tcars-diagnostics" open>
-      <summary>Sanitizovaná diagnostika Vistosu <span>jen názvy polí a stav</span></summary>
-      <pre>${escapeHtml(JSON.stringify(diagnostics, null, 2))}</pre>
-    </details>
-  `;
-}
-
 function fleetHereProfileDetail(vehicle = {}) {
   const technical = vehicle.technicalProfile && typeof vehicle.technicalProfile === "object" ? vehicle.technicalProfile : {};
   const profile = vehicle.hereNavigation && typeof vehicle.hereNavigation === "object" ? vehicle.hereNavigation : {};
@@ -12032,7 +12012,6 @@ function fleetHereProfileDetail(vehicle = {}) {
           <span>Read-only profil se zobrazí, až Vistos potvrdí schéma Vehicle a vrátí technické údaje.</span>
         </div>
       `}
-      ${fleetVistosDetailDiagnostics(vehicle)}
     </article>
   `;
 }
@@ -47971,7 +47950,6 @@ async function loadFleetVehicleDetail(vehicleId, options = {}) {
 
   fleetVehiclesState.detailLoading = true;
   fleetVehiclesState.detailVehicleId = vehicleKey;
-  fleetVehiclesState.detailDiagnostics = null;
   fleetVehiclesState.detailError = "";
 
   try {
@@ -47980,7 +47958,6 @@ async function loadFleetVehicleDetail(vehicleId, options = {}) {
     if (Array.isArray(result?.driverCandidates)) {
       fleetVehiclesState.driverCandidates = result.driverCandidates.filter((item) => item && typeof item === "object");
     }
-    fleetVehiclesState.detailDiagnostics = result?.diagnostics || null;
     fleetVehiclesState.detailLoadedVehicleId = vehicleKey;
   } catch (error) {
     fleetVehiclesState.detailLoadedVehicleId = "";

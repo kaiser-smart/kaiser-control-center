@@ -26,7 +26,17 @@ const enriched = await vistosTest.enrichVistosVehicleRows(
   {},
   { cookieHeader: "read-only-test" },
   [
-    { Id: "vehicle-100", Name: "Kouba", RegistrationPlate: "3BN 3558" },
+    {
+      Id: "vehicle-100",
+      Name: "Kouba",
+      RegistrationPlate: "3BN 3558",
+      c_EmptyWeightKg: 0,
+      c_MaxPermittedWeightKg: 0,
+      c_PayloadKg: 0,
+      c_LengthMeters: 0,
+      c_WidthMeters: 0,
+      c_HeightMeters: 0
+    },
     { Id: "vehicle-200", Name: "Florian", RegistrationPlate: "3BE 2831" }
   ],
   schema.columns.map((column) => column.columnName),
@@ -203,7 +213,6 @@ const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf
 assert.match(appSource, /async function loadFleetVehicleDetail\(vehicleId/);
 assert.match(appSource, /apiJson\(`\/api\/vehicles\/\$\{encodeURIComponent\(vehicleKey\)\}`\)/);
 assert.match(appSource, /await loadFleetVehicleDetail\(fleetVehicleId\)/);
-assert.match(appSource, /params\.get\("vistosDiagnostics"\) !== "1"/);
 
 const problem = buildCollectionRouteHereProblem({
   ready: true,
