@@ -356,7 +356,7 @@ const FLEET_ROUTE = "/vozovy-park";
 const RECEIVABLES_ROUTE = "/pohledavky";
 const RECEIVABLES_ALIAS_ROUTE = "/receivables";
 const RECEIVABLES_MODULE_KEY = "receivables";
-const RECEIVABLES_PHASE_NOTICE = "Pohledávkový kompas AI běží ve Fázi 1D jako dry-run se staging importem a read-only Vistos preview. Nic neposílá, nespouští Šarlotu, nemá cron a bez potvrzení neukládá Vistos data do ostrých tabulek.";
+const RECEIVABLES_PHASE_NOTICE = "Pohledávkový kompas AI používá dry-run pro doporučení a komunikaci, staging/read-only Vistos preview a samostatný cloudový import zaúčtovaných příchozích KB plateb každé dvě hodiny. Nic neposílá zákazníkům, nespouští Šarlotu, nevytváří platební příkazy a bez potvrzení nepřepisuje stavy faktur.";
 const RECEIVABLES_TABS = [
   { id: "dashboard", label: "Dashboard", route: RECEIVABLES_ROUTE },
   { id: "customers", label: "Zákazníci", route: `${RECEIVABLES_ROUTE}#receivables-customers` },
@@ -1123,6 +1123,12 @@ const receivablesState = {
   kbSandboxProbeLoaded: false,
   kbSandboxProbeLoading: false,
   kbSandboxProbeError: "",
+  kbPaymentSync: null,
+  kbPaymentSyncLoaded: false,
+  kbPaymentSyncLoading: false,
+  kbPaymentSyncRunning: false,
+  kbPaymentSyncError: "",
+  kbPaymentSyncMessage: "",
   invoiceSnapshot: null,
   invoiceSnapshotRows: [],
   invoiceSnapshotPagination: null,
@@ -4574,6 +4580,14 @@ function moduleEventLogConfig(moduleItem = {}) {
   if (moduleId === RECEIVABLES_MODULE_KEY) {
     const apiState = moduleEventLogApiState(receivablesState.apiStatus, receivablesState.dashboardLoaded, receivablesState.dashboardError);
     const importState = receivablesState.importError ? "chyba" : receivablesState.importLoaded ? "dry-run" : "čeká na ověření";
+    const kbRun = receivablesState.kbPaymentSync?.lastRun || null;
+    const kbState = receivablesState.kbPaymentSyncError
+      ? "chyba"
+      : kbRun?.status === "completed"
+        ? "běží"
+        : receivablesState.kbPaymentSync?.configured
+          ? "čeká na první běh"
+          : "čeká na konfiguraci";
     return {
       moduleKey: RECEIVABLES_MODULE_KEY,
       moduleName: "Pohledávky",
@@ -4582,6 +4596,7 @@ function moduleEventLogConfig(moduleItem = {}) {
         moduleEventLogStatus("Dry-run kompas", "dry-run", "Modul připravuje interní doporučení a balíčky. Nic sám neposílá zákazníkům."),
         moduleEventLogStatus("API / dashboard", apiState, receivablesState.dashboardError || "Stav vychází z read-only načtení dashboardu."),
         moduleEventLogStatus("Import / Vistos preview", importState, receivablesState.importError || "Import a Vistos části jsou staging nebo read-only preview."),
+        moduleEventLogStatus("KB příchozí platby", kbState, receivablesState.kbPaymentSyncError || kbRun?.message || "Cloudový import každé dvě hodiny čeká na konfiguraci a první ověřený běh."),
         moduleEventLogStatus("E-mail / SMS / WhatsApp / hlas", "vypnuto", "Ostré outbound kanály jsou v tomto modulu vypnuté."),
         moduleEventLogStatus("AI doporučení", "jen návrh", "AI doporučení neprovádí autonomní vymáhací akci.")
       ],
@@ -4591,7 +4606,7 @@ function moduleEventLogConfig(moduleItem = {}) {
         "Autonomní právní nebo finanční krok."
       ],
       pilotItems: [
-        "Celý modul je Fáze 1D dry-run.",
+        "AI doporučení a zákaznická komunikace zůstávají dry-run.",
         "Vistos preview a import jsou read-only/staging podle aktuálního pohledu."
       ],
       events: [
@@ -4601,6 +4616,9 @@ function moduleEventLogConfig(moduleItem = {}) {
         receivablesState.importError
           ? moduleEventLogEvent("", "Import preview", "chyba", receivablesState.importError)
           : moduleEventLogEvent("", "Import preview", importState, receivablesState.importResult ? "Poslední import proběhl v režimu preview/staging." : "Čeká na import preview."),
+        receivablesState.kbPaymentSyncError
+          ? moduleEventLogEvent("", "KB příchozí platby", "chyba", receivablesState.kbPaymentSyncError)
+          : moduleEventLogEvent("", "KB příchozí platby", kbState, kbRun?.message || "Čeká na konfiguraci a první cloudový běh."),
         moduleEventLogEvent("", "Odesílání zákazníkům", "vypnuto", "Modul nic neposílá mimo systém.")
       ],
       diagnostics: [
@@ -4609,7 +4627,9 @@ function moduleEventLogConfig(moduleItem = {}) {
         moduleEventLogDiagnostic("customers", receivablesState.customers.length),
         moduleEventLogDiagnostic("importBatches", receivablesState.importBatches.length),
         moduleEventLogDiagnostic("invoiceSnapshotLoaded", receivablesState.invoiceSnapshotLoaded ? "true" : "false"),
-        moduleEventLogDiagnostic("lastError", receivablesState.dashboardError || receivablesState.importError || receivablesState.settingsError || "bez chyby")
+        moduleEventLogDiagnostic("kbPaymentSync.status", kbRun?.status || kbState),
+        moduleEventLogDiagnostic("kbPaymentSync.lastRunAt", kbRun?.startedAt || "zatím neproběhl"),
+        moduleEventLogDiagnostic("lastError", receivablesState.dashboardError || receivablesState.importError || receivablesState.kbPaymentSyncError || receivablesState.settingsError || "bez chyby")
       ]
     };
   }
@@ -38049,6 +38069,77 @@ function receivablesKbApiOnboardingPanel() {
   `;
 }
 
+function receivablesKbPaymentSyncTone(status) {
+  if (status === "completed" || status === "ready") return "ready";
+  if (status === "error") return "danger";
+  return "warning";
+}
+
+function receivablesKbPaymentSyncPanel() {
+  const status = receivablesState.kbPaymentSync || {};
+  const lastRun = status.lastRun || null;
+  const lastBatch = status.lastBatch || null;
+  const summary = lastBatch?.summary || {};
+  const canManage = hasPermission(currentUser(), "receivables", "manage");
+  const statusLabel = receivablesState.kbPaymentSyncRunning
+    ? "stahuji"
+    : lastRun?.status || status.apiStatus || "čeká";
+  const missingEnv = Array.isArray(status.missingEnv) ? status.missingEnv : [];
+
+  return `
+    <section class="receivables-panel" aria-labelledby="receivables-kb-payment-sync-title">
+      <div class="receivables-panel__head">
+        <div>
+          <p class="module-feedback__eyebrow">KB ADAA · ostrý import</p>
+          <h2 id="receivables-kb-payment-sync-title">Stahování příchozích plateb z KB</h2>
+          <p>Cloudový běh každé dvě hodiny stahuje pouze zaúčtované příchozí transakce BOOK/CREDIT. Interval je bezpečně delší než minimum KB. Platební příkazy, odchozí platby a automatické přepisování faktur jsou vypnuté.</p>
+        </div>
+        ${receivablesPill(statusLabel, receivablesKbPaymentSyncTone(statusLabel))}
+      </div>
+      ${receivablesState.kbPaymentSyncError ? `<p class="module-feedback__error">${escapeHtml(receivablesState.kbPaymentSyncError)}</p>` : ""}
+      ${receivablesState.kbPaymentSyncMessage ? `<p class="module-feedback__notice">${escapeHtml(receivablesState.kbPaymentSyncMessage)}</p>` : ""}
+      ${status.configured && status.automationEnabled === false ? `<p class="module-feedback__notice">Automatické stahování je vypnuté v pravidlech; ruční stažení zůstává dostupné.</p>` : ""}
+      <div class="receivables-import-summary" aria-label="Stav stahování plateb z KB">
+        <article><span>Poslední běh</span><strong>${escapeHtml(lastRun?.startedAt ? formatDateTime(lastRun.startedAt) : "zatím neproběhl")}</strong></article>
+        <article><span>Další cloudový běh</span><strong>${escapeHtml(status.nextScheduledAt ? formatDateTime(status.nextScheduledAt) : "čeká na konfiguraci")}</strong></article>
+        <article><span>Nové platby</span><strong>${escapeHtml(summary.insertedCount || 0)}</strong></article>
+        <article><span>Aktualizované / duplicitní</span><strong>${escapeHtml(summary.updatedCount || 0)}</strong></article>
+        <article><span>Importováno BOOK/CREDIT</span><strong>${escapeHtml(lastBatch?.acceptedCount || 0)}</strong></article>
+        <article><span>Ignorováno</span><strong>${escapeHtml(lastBatch?.ignoredCount || 0)}</strong></article>
+      </div>
+      <form class="receivables-import-form receivables-import-form--inline" data-receivables-kb-sync-form>
+        <button class="primary-button" type="submit" ${receivablesState.kbPaymentSyncRunning || !status.configured || !canManage ? "disabled" : ""}>
+          ${receivablesState.kbPaymentSyncRunning ? "Stahuji platby..." : "Stáhnout platby nyní"}
+        </button>
+        <span class="receivables-empty">Automaticky každé dvě hodiny · první běh načte 90 dní · další běhy znovu zkontrolují posledních 7 dní.</span>
+      </form>
+      ${!canManage ? `<p class="receivables-empty">Ruční spuštění vyžaduje oprávnění Pohledávky · spravovat.</p>` : ""}
+      ${missingEnv.length ? `<p class="receivables-empty receivables-kb-note">Cloudové napojení čeká na secrets: ${escapeHtml(missingEnv.join(", "))}</p>` : ""}
+      <div class="receivables-import-diagnostics">
+        <section>
+          <h3>Poslední výsledek</h3>
+          <dl class="receivables-diagnostics-list">
+            <div><dt>Stav</dt><dd>${escapeHtml(lastRun?.status || "čeká")}</dd></div>
+            <div><dt>Zdroj</dt><dd>KB Account Direct Access API v2</dd></div>
+            <div><dt>Období od</dt><dd>${escapeHtml(lastBatch?.periodFrom ? formatDateTime(lastBatch.periodFrom) : "-")}</dd></div>
+            <div><dt>Období do</dt><dd>${escapeHtml(lastBatch?.periodTo ? formatDateTime(lastBatch.periodTo) : "-")}</dd></div>
+            <div><dt>Zpráva</dt><dd>${escapeHtml(lastRun?.message || "První běh čeká.")}</dd></div>
+          </dl>
+        </section>
+        <section>
+          <h3>Pojistky</h3>
+          <ul class="receivables-clean-list">
+            <li>Deduplikace podle KB references.accountServicer.</li>
+            <li>PDNG a DEBIT se do ledgeru neukládají.</li>
+            <li>Párování na faktury zůstává v samostatné kontrolované funkci.</li>
+            <li>Žádné e-maily, SMS, notifikace ani platební příkazy.</li>
+          </ul>
+        </section>
+      </div>
+    </section>
+  `;
+}
+
 function receivablesLedgerMappingSummary(mapping) {
   const summary = mapping?.summary || {};
   const customerSummary = mapping?.customerEnrichment?.summary || {};
@@ -38644,6 +38735,7 @@ function receivablesVistosPreviewPanel() {
 
 function receivablesImportSection() {
   return `
+    ${receivablesKbPaymentSyncPanel()}
     ${receivablesKbApiOnboardingPanel()}
     ${receivablesInvoiceSnapshotPanel()}
     ${receivablesPaymentReconciliationPanel()}
@@ -38996,14 +39088,14 @@ function receivablesPage(moduleItem, user, isDashboard = false, context = { view
           <p>Dry-run modul pro balíčky otevřených faktur, párování plateb, rating platební morálky a bezpečná AI doporučení.</p>
           <div class="module-detail__status">
             <span>Stav</span>
-            <strong>Fáze 1D · dry-run + Vistos preview</strong>
+            <strong>Fáze 1D · dry-run komunikace + KB import</strong>
           </div>
         </div>
       </section>
 
       <div class="receivables-warning" role="status">
         <strong>${RECEIVABLES_PHASE_NOTICE}</strong>
-        <span>Zdroj pravdy bude D1 + backend API. Frontend neposílá zákaznické zprávy a neobsahuje žádné API klíče.</span>
+        <span>Zdroj pravdy je D1 + backend API. Frontend neposílá zákaznické zprávy a neobsahuje žádné API klíče.</span>
       </div>
 
       <nav class="receivables-tabs" aria-label="Sekce Pohledávkového kompasu AI">
@@ -41975,6 +42067,49 @@ async function loadReceivablesKbSandboxProbe(options = {}) {
   }
 }
 
+async function loadReceivablesKbPaymentSync(options = {}) {
+  if (receivablesState.kbPaymentSyncLoading) return;
+  receivablesState.kbPaymentSyncLoading = true;
+  receivablesState.kbPaymentSyncError = "";
+  try {
+    receivablesState.kbPaymentSync = await apiJson("/api/receivables/kb/payment-sync");
+    receivablesState.kbPaymentSyncLoaded = true;
+  } catch (error) {
+    receivablesState.kbPaymentSyncError = error.payload?.error || error.message || "Stav stahování plateb z KB se nepodařilo načíst.";
+    receivablesState.kbPaymentSyncLoaded = true;
+  } finally {
+    receivablesState.kbPaymentSyncLoading = false;
+    if (options.renderAfter !== false) render();
+  }
+}
+
+async function submitReceivablesKbPaymentSync() {
+  if (receivablesState.kbPaymentSyncRunning) return;
+  receivablesState.kbPaymentSyncRunning = true;
+  receivablesState.kbPaymentSyncError = "";
+  receivablesState.kbPaymentSyncMessage = "Stahuji zaúčtované příchozí platby z KB...";
+  render();
+  try {
+    const result = await apiJson("/api/receivables/kb/payment-sync", {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+    receivablesState.kbPaymentSyncMessage = result.message || "Platby z KB byly staženy.";
+    receivablesState.kbPaymentSyncLoaded = false;
+    await Promise.all([
+      loadReceivablesKbPaymentSync({ renderAfter: false }),
+      loadReceivablesDashboard({ force: true, renderAfter: false }),
+      loadReceivablesPaymentReconciliation({ page: 1, renderAfter: false })
+    ]);
+  } catch (error) {
+    receivablesState.kbPaymentSyncError = error.payload?.error || error.message || "Stahování plateb z KB selhalo.";
+    receivablesState.kbPaymentSyncMessage = "";
+  } finally {
+    receivablesState.kbPaymentSyncRunning = false;
+    render();
+  }
+}
+
 async function submitReceivablesImportPreview(form) {
   const kind = form?.dataset?.receivablesImportForm === "bank" ? "bank" : "invoices";
   if (receivablesState.importSaving) {
@@ -42145,6 +42280,10 @@ function ensureReceivablesData(context = { view: "dashboard" }) {
 
   if (context.view === "import" && !receivablesState.kbSandboxProbeLoaded && !receivablesState.kbSandboxProbeLoading) {
     void loadReceivablesKbSandboxProbe();
+  }
+
+  if (["import", "settings"].includes(context.view) && !receivablesState.kbPaymentSyncLoaded && !receivablesState.kbPaymentSyncLoading) {
+    void loadReceivablesKbPaymentSync();
   }
 
   if (context.view === "import" && receivablesFullRatingJobRequested()) {
@@ -51090,6 +51229,12 @@ async function logout() {
   receivablesState.kbSandboxProbeLoaded = false;
   receivablesState.kbSandboxProbeLoading = false;
   receivablesState.kbSandboxProbeError = "";
+  receivablesState.kbPaymentSync = null;
+  receivablesState.kbPaymentSyncLoaded = false;
+  receivablesState.kbPaymentSyncLoading = false;
+  receivablesState.kbPaymentSyncRunning = false;
+  receivablesState.kbPaymentSyncError = "";
+  receivablesState.kbPaymentSyncMessage = "";
   receivablesState.vistosPreview = null;
   receivablesState.vistosPreviewLoading = false;
   receivablesState.vistosPreviewError = "";
@@ -54483,6 +54628,13 @@ document.addEventListener("submit", async (event) => {
   if (receivablesVistosPreviewForm) {
     event.preventDefault();
     await submitReceivablesVistosPreview();
+    return;
+  }
+
+  const receivablesKbSyncForm = event.target.closest("[data-receivables-kb-sync-form]");
+  if (receivablesKbSyncForm) {
+    event.preventDefault();
+    await submitReceivablesKbPaymentSync();
     return;
   }
 
