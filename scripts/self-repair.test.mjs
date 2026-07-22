@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import {
   SelfRepairStoreError,
   createUserReportedSelfRepairCase,
+  getSelfRepairAttachmentFile,
   getSelfRepairCase,
   getSelfRepairStatus,
   listSelfRepairCases,
@@ -18,6 +19,10 @@ import {
   resolveSelfRepairTarget,
   targetForSelfRepairReport
 } from "../functions/_lib/self-repair-targets.js";
+import {
+  canCreateCentralModuleFeedback,
+  listModuleFeedback
+} from "../functions/_lib/module-feedback-store.js";
 import { hasPermission } from "../src/permissions.js";
 
 class D1Statement {
@@ -67,14 +72,38 @@ class D1Database {
   }
 }
 
+class R2Bucket {
+  constructor() {
+    this.objects = new Map();
+  }
+
+  async put(key, body, options = {}) {
+    const buffer = Buffer.from(body);
+    this.objects.set(key, { body: buffer, options });
+  }
+
+  async get(key) {
+    return this.objects.get(key) || null;
+  }
+
+  async delete(key) {
+    this.objects.delete(key);
+  }
+}
+
 const sqlite = new DatabaseSync(":memory:");
 sqlite.exec(readFileSync(new URL("../migrations/0007_create_module_feedback.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../migrations/0015_create_module_rules.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../migrations/0016_create_module_automation_runner_runs.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../migrations/0034_create_self_repair_cases.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../migrations/0035_activate_self_repair_hourly_monitor.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../migrations/0051_create_self_repair_case_attachments.sql", import.meta.url), "utf8"));
 
-const env = { SMART_ODPADY_DB: new D1Database(sqlite) };
+const attachmentBucket = new R2Bucket();
+const env = {
+  SMART_ODPADY_DB: new D1Database(sqlite),
+  SMART_ODPADY_DOCUMENTS: attachmentBucket
+};
 const reporter = {
   id: "user-driver-1",
   name: "Testovací řidič",
@@ -91,6 +120,9 @@ assert.equal(hasPermission({ ...reporter, active: true }, "feedback", "create"),
 assert.equal(hasPermission({ ...reporter, active: true }, "self-repair", "view"), false);
 assert.equal(hasPermission({ ...manager, active: true }, "self-repair", "view"), true);
 assert.equal(hasPermission({ ...manager, active: true }, "self-repair", "manage"), true);
+assert.equal(canCreateCentralModuleFeedback({ ...manager, active: true }), true);
+assert.equal(canCreateCentralModuleFeedback({ role: "admin", active: true }), true);
+assert.equal(canCreateCentralModuleFeedback({ ...reporter, active: true }), false);
 
 assert.equal(resolveSelfRepairTarget("pneumatiky").repoKey, "kaiser-control-center");
 assert.equal(resolveSelfRepairTarget("tyres").productionUrl, "https://smart-odpady.ai/pneumatiky");
@@ -118,7 +150,20 @@ const repeatedFingerprint = await selfRepairFingerprint({
 });
 assert.equal(firstFingerprint, repeatedFingerprint);
 
-const created = await createUserReportedSelfRepairCase(env, reporter, {
+const attachmentBytes = new TextEncoder().encode("Testovací příloha k managerské připomínce.");
+const attachmentFile = {
+  name: "doklad-testu.txt",
+  type: "text/plain",
+  size: attachmentBytes.byteLength,
+  async arrayBuffer() {
+    return attachmentBytes.buffer.slice(
+      attachmentBytes.byteOffset,
+      attachmentBytes.byteOffset + attachmentBytes.byteLength
+    );
+  }
+};
+
+const created = await createUserReportedSelfRepairCase(env, manager, {
   moduleId: "pneumatiky",
   caseType: "bug",
   title: "Nejde zadat rozměr pneumatiky",
@@ -132,17 +177,22 @@ const created = await createUserReportedSelfRepairCase(env, reporter, {
   buildCommit: "test-commit",
   browserInfo: "Test Browser",
   targetRepoKey: "attacker-controlled-repository"
-});
+}, { attachment: attachmentFile });
 
 assert.equal(created.case.moduleKey, "tyres");
 assert.equal(created.case.targetRepoKey, "kaiser-control-center");
 assert.equal(created.case.status, "new");
 assert.equal(created.case.riskLevel, "unclassified");
 assert.equal(created.feedback.status, "Nová");
+assert.equal(created.case.attachments.length, 1);
+assert.equal(created.feedback.attachments[0].filename, "doklad-testu.txt");
+assert.equal(created.attachment.sizeBytes, attachmentBytes.byteLength);
 assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM self_repair_cases").get().count, 1);
 assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM module_feedback").get().count, 1);
 assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM self_repair_case_evidence").get().count, 1);
 assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM self_repair_case_audit_log").get().count, 1);
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM self_repair_case_attachments").get().count, 1);
+assert.equal(attachmentBucket.objects.size, 1);
 assert.equal(await selfRepairCaseIdForFeedback(env, created.feedback.id), created.case.id);
 
 const storedTarget = sqlite.prepare(`
@@ -165,6 +215,21 @@ const detail = await getSelfRepairCase(env, created.case.id);
 assert.equal(detail.case.title, "Nejde zadat rozměr pneumatiky");
 assert.equal(detail.evidence[0].metadata.userSupplied, true);
 assert.equal(detail.audit[0].action, "created_from_user_feedback");
+assert.equal(detail.attachments[0].filename, "doklad-testu.txt");
+
+const visibleFeedback = await listModuleFeedback(env, manager);
+assert.equal(visibleFeedback.length, 1);
+assert.equal(visibleFeedback[0].attachments[0].openUrl, created.attachment.openUrl);
+
+const downloaded = await getSelfRepairAttachmentFile(env, manager, created.case.id, created.attachment.id);
+assert.equal(downloaded.attachment.filename, "doklad-testu.txt");
+assert.equal(Buffer.from(downloaded.body).toString("utf8"), "Testovací příloha k managerské připomínce.");
+assert.equal(downloaded.headers["Cache-Control"], "private, no-store");
+
+await assert.rejects(
+  getSelfRepairAttachmentFile(env, { ...reporter, id: "user-driver-2", active: true }, created.case.id, created.attachment.id),
+  (error) => error instanceof SelfRepairStoreError && error.code === "self_repair_attachment_forbidden"
+);
 
 const updated = await updateSelfRepairCase(env, manager, created.case.id, {
   status: "closed",
@@ -208,4 +273,22 @@ await assert.rejects(
 );
 assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM self_repair_cases").get().count, 1);
 
-console.log("Self-repair Phase 2A evidence and triage tests passed.");
+await assert.rejects(
+  createUserReportedSelfRepairCase(env, manager, {
+    moduleId: "pneumatiky",
+    title: "Nepovolená příloha",
+    description: "Příloha se nesmí uložit."
+  }, {
+    attachment: {
+      name: "skript.exe",
+      type: "application/octet-stream",
+      size: 4,
+      async arrayBuffer() { return new Uint8Array([1, 2, 3, 4]).buffer; }
+    }
+  }),
+  (error) => error instanceof SelfRepairStoreError && error.code === "self_repair_attachment_type_invalid"
+);
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM self_repair_cases").get().count, 1);
+assert.equal(attachmentBucket.objects.size, 1);
+
+console.log("Self-repair manager attachment, evidence and triage tests passed.");

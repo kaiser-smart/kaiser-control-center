@@ -1,10 +1,30 @@
 import { targetForSelfRepairReport } from "./self-repair-targets.js";
+import { hasPermission } from "../../src/permissions.js";
 import {
   SELF_REPAIR_MONITOR_PROMPT_VERSION,
   SELF_REPAIR_MONITOR_TARGET_URL
 } from "./self-repair-monitor-config.js";
 
 const DB_BINDING = "SMART_ODPADY_DB";
+const ATTACHMENTS_BUCKET_BINDING = "SMART_ODPADY_DOCUMENTS";
+export const SELF_REPAIR_ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024;
+export const SELF_REPAIR_ATTACHMENT_ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.heic,.heif,.txt,.log,.csv,.doc,.docx,.xls,.xlsx";
+const SELF_REPAIR_ATTACHMENT_TYPES = new Map([
+  ["pdf", "application/pdf"],
+  ["png", "image/png"],
+  ["jpg", "image/jpeg"],
+  ["jpeg", "image/jpeg"],
+  ["webp", "image/webp"],
+  ["heic", "image/heic"],
+  ["heif", "image/heif"],
+  ["txt", "text/plain"],
+  ["log", "text/plain"],
+  ["csv", "text/csv"],
+  ["doc", "application/msword"],
+  ["docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+  ["xls", "application/vnd.ms-excel"],
+  ["xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]
+]);
 const CASE_TYPES = new Set(["bug", "improvement"]);
 const CASE_STATUSES = new Set([
   "new",
@@ -72,6 +92,18 @@ function database(env, required = false) {
   return db;
 }
 
+function attachmentsBucket(env, required = false) {
+  const bucket = env?.[ATTACHMENTS_BUCKET_BINDING] || null;
+  if (!bucket && required) {
+    throw new SelfRepairStoreError(
+      "Úložiště příloh není nastavené. Chybí R2 binding SMART_ODPADY_DOCUMENTS.",
+      503,
+      "self_repair_attachment_storage_missing"
+    );
+  }
+  return bucket;
+}
+
 export function selfRepairApiStatus(env) {
   return database(env) ? "ready" : "waiting";
 }
@@ -98,6 +130,109 @@ function randomId(prefix) {
     ? globalThis.crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `${prefix}-${suffix}`;
+}
+
+function safeAttachmentFilename(value) {
+  return cleanText(value, 240)
+    .replace(/[\\/]+/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/^\.+/, "")
+    .trim();
+}
+
+function attachmentExtension(filename) {
+  const match = /\.([a-z0-9]+)$/i.exec(filename);
+  return String(match?.[1] || "").toLowerCase();
+}
+
+async function attachmentChecksum(bytes) {
+  if (!globalThis.crypto?.subtle) {
+    throw new SelfRepairStoreError(
+      "Přílohu nelze bezpečně ověřit.",
+      503,
+      "self_repair_attachment_checksum_unavailable"
+    );
+  }
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function normalizeSelfRepairAttachment(file) {
+  if (!file) return null;
+  if (typeof file.arrayBuffer !== "function") {
+    throw new SelfRepairStoreError("Vyberte platnou přílohu.", 400, "self_repair_attachment_invalid");
+  }
+
+  const filename = safeAttachmentFilename(file.name);
+  const sizeBytes = Number(file.size || 0);
+  if (!filename && sizeBytes === 0) return null;
+  if (!filename || sizeBytes <= 0) {
+    throw new SelfRepairStoreError("Příloha je prázdná.", 400, "self_repair_attachment_empty");
+  }
+  if (sizeBytes > SELF_REPAIR_ATTACHMENT_MAX_SIZE_BYTES) {
+    throw new SelfRepairStoreError("Příloha může mít nejvýše 10 MB.", 413, "self_repair_attachment_too_large");
+  }
+
+  const extension = attachmentExtension(filename);
+  const canonicalType = SELF_REPAIR_ATTACHMENT_TYPES.get(extension);
+  if (!canonicalType) {
+    throw new SelfRepairStoreError(
+      "Nepovolený typ přílohy. Použijte PDF, obrázek, text, Word nebo Excel.",
+      415,
+      "self_repair_attachment_type_invalid"
+    );
+  }
+
+  const declaredType = cleanText(file.type, 160).toLowerCase();
+  if (declaredType && declaredType !== "application/octet-stream" && declaredType !== canonicalType) {
+    const jpegAlias = extension === "jpg" || extension === "jpeg";
+    const textAlias = ["txt", "log", "csv"].includes(extension) && declaredType === "text/plain";
+    if (!jpegAlias || declaredType !== "image/jpeg") {
+      if (!textAlias) {
+        throw new SelfRepairStoreError(
+          "Typ přílohy neodpovídá názvu souboru.",
+          415,
+          "self_repair_attachment_content_type_mismatch"
+        );
+      }
+    }
+  }
+
+  const bytes = await file.arrayBuffer();
+  if (bytes.byteLength !== sizeBytes) {
+    throw new SelfRepairStoreError("Přílohu se nepodařilo načíst celou.", 400, "self_repair_attachment_size_mismatch");
+  }
+
+  return {
+    filename,
+    contentType: canonicalType,
+    sizeBytes,
+    bytes,
+    checksumSha256: await attachmentChecksum(bytes)
+  };
+}
+
+function attachmentStorageKey(caseId, attachmentId, filename) {
+  const safeName = safeAttachmentFilename(filename).replace(/[^a-zA-Z0-9._-]+/g, "-") || "priloha";
+  return `self-repair/${caseId}/${attachmentId}-${safeName}`;
+}
+
+function rowToAttachment(row) {
+  if (!row) return null;
+  const caseId = cleanText(row.case_id, 200);
+  const id = cleanText(row.id, 200);
+  return {
+    id,
+    caseId,
+    feedbackId: cleanText(row.feedback_id, 200),
+    filename: cleanText(row.file_name, 240),
+    contentType: cleanText(row.content_type, 160),
+    sizeBytes: Math.max(0, Number(row.size_bytes || 0)),
+    checksumSha256: cleanText(row.checksum_sha256, 128),
+    uploadedByUserId: cleanText(row.uploaded_by_user_id, 200),
+    createdAt: cleanText(row.created_at, 80),
+    openUrl: `/api/self-repair/cases/${encodeURIComponent(caseId)}/attachments/${encodeURIComponent(id)}`
+  };
 }
 
 function normalizeEnum(value, allowed, fallback) {
@@ -335,19 +470,24 @@ function normalizeUserReport(input, currentUser, target) {
   };
 }
 
-export async function createUserReportedSelfRepairCase(env, currentUser, input = {}) {
+export async function createUserReportedSelfRepairCase(env, currentUser, input = {}, options = {}) {
   const db = database(env, true);
   const target = targetForSelfRepairReport(input.moduleKey || input.moduleId);
   if (!target) {
     throw new SelfRepairStoreError("Vyberte platný modul aplikace.", 400, "self_repair_module_invalid");
   }
 
+  const preparedAttachment = await normalizeSelfRepairAttachment(options.attachment);
   const report = normalizeUserReport(input, currentUser, target);
   const now = new Date().toISOString();
   const caseId = randomId("self-repair-case");
   const feedbackId = randomId("module-feedback");
   const evidenceId = randomId("self-repair-evidence");
   const auditId = randomId("self-repair-audit");
+  const attachmentId = preparedAttachment ? randomId("self-repair-attachment") : "";
+  const attachmentKey = preparedAttachment
+    ? attachmentStorageKey(caseId, attachmentId, preparedAttachment.filename)
+    : "";
   const fingerprint = await selfRepairFingerprint(report);
   const feedbackMessage = reportFeedbackMessage(report);
   const evidenceMetadata = {
@@ -360,6 +500,17 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
     actualBehavior: report.actualBehavior,
     reproductionSteps: report.reproductionSteps
   };
+  const attachment = preparedAttachment ? rowToAttachment({
+    id: attachmentId,
+    case_id: caseId,
+    feedback_id: feedbackId,
+    file_name: preparedAttachment.filename,
+    content_type: preparedAttachment.contentType,
+    size_bytes: preparedAttachment.sizeBytes,
+    checksum_sha256: preparedAttachment.checksumSha256,
+    uploaded_by_user_id: report.reporterUserId,
+    created_at: now
+  }) : null;
   const createdCase = {
     id: caseId,
     feedbackId,
@@ -373,6 +524,7 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
     lastSeenAt: now,
     triageSummary: "",
     internalNote: "",
+    attachments: attachment ? [attachment] : [],
     createdAt: now,
     updatedAt: now,
     updatedByUserId: report.reporterUserId
@@ -390,9 +542,11 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
     createdAt: now,
     resolvedAt: null,
     resolvedByUserId: null,
-    internalNote: ""
+    internalNote: "",
+    attachments: attachment ? [attachment] : []
   };
 
+  let attachmentStored = false;
   try {
     if (typeof db.batch !== "function") {
       throw new SelfRepairStoreError(
@@ -402,7 +556,31 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
       );
     }
 
-    await db.batch([
+    if (preparedAttachment) {
+      const bucket = attachmentsBucket(env, true);
+      try {
+        await bucket.put(attachmentKey, preparedAttachment.bytes, {
+          httpMetadata: { contentType: preparedAttachment.contentType },
+          customMetadata: {
+            caseId,
+            feedbackId,
+            attachmentId,
+            uploadedByUserId: report.reporterUserId,
+            checksumSha256: preparedAttachment.checksumSha256
+          }
+        });
+        attachmentStored = true;
+      } catch (error) {
+        console.error("self_repair.attachment_put_failed", { message: cleanText(error?.message, 500) });
+        throw new SelfRepairStoreError(
+          "Přílohu se nepodařilo uložit do cloudového úložiště.",
+          503,
+          "self_repair_attachment_store_failed"
+        );
+      }
+    }
+
+    const statements = [
       db.prepare(`
         INSERT INTO module_feedback (
           id, module_id, module_name, user_id, user_name, user_role, message,
@@ -499,14 +677,50 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
           riskLevel: "unclassified",
           moduleKey: report.moduleKey,
           targetRepoKey: report.targetRepoKey,
-          feedbackId
+          feedbackId,
+          attachmentId: attachment?.id || "",
+          attachmentFilename: attachment?.filename || ""
         }),
-        "Případ vytvořen z formuláře Připomínky. Automatická oprava, e-mail ani nasazení nebyly spuštěny."
+        attachment
+          ? "Případ vytvořen z formuláře Připomínky včetně přílohy. Automatická oprava, e-mail ani nasazení nebyly spuštěny."
+          : "Případ vytvořen z formuláře Připomínky. Automatická oprava, e-mail ani nasazení nebyly spuštěny."
       )
-    ]);
+    ];
 
-    return { case: createdCase, feedback };
+    if (attachment) {
+      statements.push(db.prepare(`
+        INSERT INTO self_repair_case_attachments (
+          id, case_id, feedback_id, file_name, content_type, size_bytes,
+          storage_key, checksum_sha256, uploaded_by_user_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        attachment.id,
+        caseId,
+        feedbackId,
+        attachment.filename,
+        attachment.contentType,
+        attachment.sizeBytes,
+        attachmentKey,
+        attachment.checksumSha256,
+        report.reporterUserId,
+        now
+      ));
+    }
+
+    await db.batch(statements);
+
+    return { case: createdCase, feedback, attachment };
   } catch (error) {
+    if (attachmentStored && attachmentKey) {
+      try {
+        await attachmentsBucket(env, false)?.delete(attachmentKey);
+      } catch (cleanupError) {
+        console.error("self_repair.attachment_cleanup_failed", {
+          storageKey: attachmentKey,
+          message: cleanText(cleanupError?.message, 500)
+        });
+      }
+    }
     if (error instanceof SelfRepairStoreError) throw error;
     throw dbError(error);
   }
@@ -910,10 +1124,11 @@ export async function getSelfRepairCase(env, id) {
   }
 
   try {
-    const [row, evidenceResult, auditResult] = await Promise.all([
+    const [row, evidenceResult, auditResult, attachmentResult] = await Promise.all([
       caseRow(db, caseId),
       db.prepare("SELECT * FROM self_repair_case_evidence WHERE case_id = ? ORDER BY created_at ASC").bind(caseId).all(),
-      db.prepare("SELECT * FROM self_repair_case_audit_log WHERE case_id = ? ORDER BY changed_at DESC LIMIT 200").bind(caseId).all()
+      db.prepare("SELECT * FROM self_repair_case_audit_log WHERE case_id = ? ORDER BY changed_at DESC LIMIT 200").bind(caseId).all(),
+      db.prepare("SELECT * FROM self_repair_case_attachments WHERE case_id = ? ORDER BY created_at ASC").bind(caseId).all()
     ]);
     if (!row) {
       throw new SelfRepairStoreError("Případ nebyl nalezen.", 404, "self_repair_case_not_found");
@@ -921,7 +1136,64 @@ export async function getSelfRepairCase(env, id) {
     return {
       case: rowToCase(row),
       evidence: (evidenceResult.results || []).map(rowToEvidence),
-      audit: (auditResult.results || []).map(rowToAudit)
+      audit: (auditResult.results || []).map(rowToAudit),
+      attachments: (attachmentResult.results || []).map(rowToAttachment).filter(Boolean)
+    };
+  } catch (error) {
+    if (error instanceof SelfRepairStoreError) throw error;
+    throw dbError(error);
+  }
+}
+
+export async function getSelfRepairAttachmentFile(env, currentUser, caseIdValue, attachmentIdValue) {
+  const db = database(env, true);
+  const caseId = cleanText(caseIdValue, 200);
+  const attachmentId = cleanText(attachmentIdValue, 200);
+  if (!caseId || !attachmentId) {
+    throw new SelfRepairStoreError("Příloha nebyla nalezena.", 404, "self_repair_attachment_missing");
+  }
+
+  try {
+    const row = await db.prepare(`
+      SELECT a.*, c.reporter_user_id
+      FROM self_repair_case_attachments a
+      JOIN self_repair_cases c ON c.id = a.case_id
+      WHERE a.id = ? AND a.case_id = ?
+      LIMIT 1
+    `).bind(attachmentId, caseId).first();
+    if (!row) {
+      throw new SelfRepairStoreError("Příloha nebyla nalezena.", 404, "self_repair_attachment_not_found");
+    }
+
+    const sameReporter = cleanText(row.reporter_user_id, 200).toLowerCase()
+      === cleanText(currentUser?.id || currentUser?.email, 200).toLowerCase();
+    const canRead = hasPermission(currentUser, "self-repair", "view")
+      || (sameReporter && hasPermission(currentUser, "feedback", "view"));
+    if (!canRead) {
+      throw new SelfRepairStoreError("Nemáte oprávnění zobrazit tuto přílohu.", 403, "self_repair_attachment_forbidden");
+    }
+
+    const bucket = attachmentsBucket(env, true);
+    const object = await bucket.get(cleanText(row.storage_key, 700));
+    if (!object) {
+      throw new SelfRepairStoreError(
+        "Příloha je evidovaná, ale soubor nebyl v cloudovém úložišti nalezen.",
+        404,
+        "self_repair_attachment_object_missing"
+      );
+    }
+
+    const attachment = rowToAttachment(row);
+    return {
+      attachment,
+      body: object.body,
+      headers: {
+        "Content-Type": attachment.contentType || "application/octet-stream",
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(attachment.filename || "priloha")}`,
+        "Content-Length": String(attachment.sizeBytes || ""),
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff"
+      }
     };
   } catch (error) {
     if (error instanceof SelfRepairStoreError) throw error;

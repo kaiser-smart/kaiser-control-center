@@ -117,6 +117,7 @@ const mockPartslink24WorkflowUrl = "https://github.com/kaiser-smart/kaiser-contr
 let mockModuleFeedback = [];
 let mockSelfRepairCases = [];
 let mockSelfRepairAudit = new Map();
+let mockSelfRepairAttachmentFiles = new Map();
 let mockSelfRepairAutomationRuns = [];
 let mockSelfRepairRunnerRuns = [];
 let mockSelfRepairMonitorStatus = "active";
@@ -2730,7 +2731,45 @@ function mockSelfRepairAuditEntry(caseId, user, action, note, before = null, aft
   };
 }
 
-function createMockSelfRepairCase(user, payload = {}) {
+const MOCK_SELF_REPAIR_ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024;
+const MOCK_SELF_REPAIR_ATTACHMENT_ALLOWED_EXTENSIONS = new Set([
+  "pdf", "png", "jpg", "jpeg", "webp", "heic", "heif", "txt", "log", "csv", "doc", "docx", "xls", "xlsx"
+]);
+
+function normalizeMockSelfRepairAttachment(file) {
+  if (!file) return null;
+  const filename = String(file.name || "")
+    .trim()
+    .replace(/[\\/\u0000-\u001f\u007f]+/g, "-")
+    .replace(/^\.+/, "")
+    .slice(0, 180);
+  const extension = filename.includes(".") ? filename.split(".").pop().toLowerCase() : "";
+  const sizeBytes = Number(file.buffer?.length || 0);
+  if (!filename || !sizeBytes) {
+    const error = new Error("Vybraná příloha je prázdná.");
+    error.status = 400;
+    throw error;
+  }
+  if (sizeBytes > MOCK_SELF_REPAIR_ATTACHMENT_MAX_SIZE_BYTES) {
+    const error = new Error("Příloha může mít nejvýše 10 MB.");
+    error.status = 413;
+    throw error;
+  }
+  if (!MOCK_SELF_REPAIR_ATTACHMENT_ALLOWED_EXTENSIONS.has(extension)) {
+    const error = new Error("Tento typ přílohy není podporovaný.");
+    error.status = 415;
+    throw error;
+  }
+  return {
+    id: `self-repair-attachment-${randomUUID()}`,
+    filename,
+    contentType: String(file.type || "application/octet-stream").slice(0, 160),
+    sizeBytes,
+    buffer: file.buffer
+  };
+}
+
+function createMockSelfRepairCase(user, payload = {}, attachmentFile = null) {
   const target = targetForSelfRepairReport(payload.moduleId || payload.moduleKey);
   const title = String(payload.title || "").trim();
   const description = String(payload.description || "").trim();
@@ -2751,6 +2790,19 @@ function createMockSelfRepairCase(user, payload = {}) {
   const caseType = payload.caseType === "improvement" ? "improvement" : "bug";
   const priority = FEEDBACK_PRIORITIES.includes(payload.priority) ? payload.priority : "Běžná";
   const sourceRoute = String(payload.sourceRoute || "").startsWith("/") ? String(payload.sourceRoute).slice(0, 600) : "";
+  const attachment = normalizeMockSelfRepairAttachment(attachmentFile);
+  const attachments = attachment
+    ? [{
+        id: attachment.id,
+        caseId: id,
+        feedbackId,
+        filename: attachment.filename,
+        contentType: attachment.contentType,
+        sizeBytes: attachment.sizeBytes,
+        openUrl: `/api/self-repair/cases/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachment.id)}`,
+        createdAt: now
+      }]
+    : [];
   const item = {
     id,
     feedbackId,
@@ -2783,6 +2835,7 @@ function createMockSelfRepairCase(user, payload = {}) {
     lastSeenAt: now,
     triageSummary: "",
     internalNote: "",
+    attachments,
     createdAt: now,
     updatedAt: now,
     updatedByUserId: user.id
@@ -2798,8 +2851,18 @@ function createMockSelfRepairCase(user, payload = {}) {
     priority,
     status: "Nová",
     createdAt: now,
-    internalNote: ""
+    internalNote: "",
+    attachments
   });
+  if (attachment) {
+    mockSelfRepairAttachmentFiles.set(attachment.id, {
+      caseId: id,
+      reporterUserId: user.id,
+      name: attachment.filename,
+      type: attachment.contentType,
+      buffer: attachment.buffer
+    });
+  }
   mockSelfRepairCases = [item, ...mockSelfRepairCases];
   mockModuleFeedback = [feedback, ...mockModuleFeedback];
   mockSelfRepairAudit.set(id, [mockSelfRepairAuditEntry(
@@ -2808,9 +2871,9 @@ function createMockSelfRepairCase(user, payload = {}) {
     "created_from_user_feedback",
     "Lokální test: případ uložen bez automatické opravy, e-mailu a nasazení.",
     null,
-    { status: "new", riskLevel: "unclassified", feedbackId }
+    { status: "new", riskLevel: "unclassified", feedbackId, attachments: attachments.map(({ id: attachmentId, filename, sizeBytes }) => ({ id: attachmentId, filename, sizeBytes })) }
   )]);
-  return { case: item, feedback };
+  return { case: item, feedback, attachment: attachments[0] || null };
 }
 
 function mockSelfRepairDetail(id) {
@@ -2858,6 +2921,7 @@ function mockSelfRepairDetail(id) {
   return {
     case: item,
     evidence,
+    attachments: item.attachments || [],
     audit: mockSelfRepairAudit.get(id) || []
   };
 }
@@ -8996,12 +9060,27 @@ async function handleApi(request, response) {
       sendJson(response, 401, { error: "Nepřihlášeno." });
       return true;
     }
-    if (!hasPermission(user, "feedback", "create")) {
+    if (!canCreateCentralMockFeedback(user)) {
       sendJson(response, 403, { error: "Nemáte oprávnění." });
       return true;
     }
     try {
-      const result = createMockSelfRepairCase(user, await readJsonBody(request));
+      const contentType = String(request.headers["content-type"] || "");
+      let payload;
+      let attachment = null;
+      if (contentType.includes("multipart/form-data")) {
+        const parsed = await readMultipartFormData(request);
+        payload = Object.fromEntries(parsed.fields);
+        attachment = parsed.files.get("attachment") || null;
+        if (Array.isArray(attachment)) {
+          const error = new Error("Vložte nejvýše jednu přílohu.");
+          error.status = 400;
+          throw error;
+        }
+      } else {
+        payload = await readJsonBody(request);
+      }
+      const result = createMockSelfRepairCase(user, payload, attachment);
       sendJson(response, 201, {
         ...result,
         apiStatus: "ready",
@@ -9011,6 +9090,37 @@ async function handleApi(request, response) {
     } catch (error) {
       sendJson(response, error.status || 500, { error: error.message || "Hlášení se nepodařilo uložit.", apiStatus: "ready" });
     }
+    return true;
+  }
+
+  const selfRepairAttachmentMatch = /^\/api\/self-repair\/cases\/([^/]+)\/attachments\/([^/]+)$/.exec(url.pathname);
+  if (selfRepairAttachmentMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    const caseId = decodeURIComponent(selfRepairAttachmentMatch[1]);
+    const attachmentId = decodeURIComponent(selfRepairAttachmentMatch[2]);
+    const file = mockSelfRepairAttachmentFiles.get(attachmentId);
+    const canOpen = hasPermission(user, "self-repair", "view")
+      || (hasPermission(user, "feedback", "view") && file?.reporterUserId === user.id);
+    if (!canOpen) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    if (!file || file.caseId !== caseId) {
+      sendJson(response, 404, { error: "Příloha nebyla nalezena." });
+      return true;
+    }
+    response.writeHead(200, {
+      "Content-Type": file.type || "application/octet-stream",
+      "Content-Length": String(file.buffer.length),
+      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.name || "priloha")}`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff"
+    });
+    response.end(file.buffer);
     return true;
   }
 
