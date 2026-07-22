@@ -1403,6 +1403,8 @@ const collectionRoutesPilotState = {
   sourceDriverRunKey: "",
   sourceDriverEventPending: "",
   sourceDriverSoundsEnabled: true,
+  sourceDriverDisplayMode: "auto",
+  sourceDriverSettingsOpen: false,
   sourceRouteView: "print",
   mantraExpanded: false,
   dailyRouteScope: "production",
@@ -21262,7 +21264,49 @@ function collectionRoutesSourceDriverReadonlyButton(label, action, tone = "defau
   `;
 }
 
-function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisplayRows()) {
+function collectionRoutesSourceDriverDisplayMode() {
+  const mode = String(collectionRoutesPilotState.sourceDriverDisplayMode || "auto");
+  return Object.hasOwn(COLLECTION_DAILY_DRIVER_DISPLAY_MODES, mode) ? mode : "auto";
+}
+
+function collectionRoutesSourceDriverResolvedDisplayMode() {
+  const mode = collectionRoutesSourceDriverDisplayMode();
+  if (mode !== "auto") return mode;
+  return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "night" : "day";
+}
+
+function collectionRoutesSourceDriverSettingsSummary() {
+  return `${COLLECTION_DAILY_DRIVER_DISPLAY_MODES[collectionRoutesSourceDriverDisplayMode()]} · ZVUK ${collectionRoutesSourceDriverSoundsEnabled() ? "ZAP" : "VYP"}`;
+}
+
+function collectionRoutesSourceDriverSettingsPanel() {
+  if (!collectionRoutesPilotState.sourceDriverSettingsOpen) return "";
+  const displayMode = collectionRoutesSourceDriverDisplayMode();
+  const soundsEnabled = collectionRoutesSourceDriverSoundsEnabled();
+  return `
+    <div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-labelledby="collection-routes-source-driver-display-title">
+      <section>
+        <header>
+          <div><span>ŘIDIČSKÝ TABLET</span><h2 id="collection-routes-source-driver-display-title">Displej a zvuk</h2><p>Stejné nastavení jako ve skutečném kiosku řidiče.</p></div>
+          <button type="button" class="collection-daily-driver-modal__close" data-collection-routes-source-driver-settings-close>ZAVŘÍT</button>
+        </header>
+        <div class="collection-daily-driver-display-settings">
+          <div class="collection-daily-driver-display-settings__modes" aria-label="Barevný režim">
+            ${Object.entries(COLLECTION_DAILY_DRIVER_DISPLAY_MODES).map(([value, label]) => `<button type="button" class="${displayMode === value ? "is-selected" : ""}" data-collection-routes-source-driver-display-mode="${escapeHtml(value)}" aria-pressed="${displayMode === value ? "true" : "false"}"><span>${escapeHtml(label)}</span><small>${value === "auto" ? "PODLE ANDROIDU" : value === "day" ? "SVĚTLÝ DISPLEJ" : "TMAVÝ DISPLEJ"}</small></button>`).join("")}
+          </div>
+          <button type="button" class="collection-daily-driver-sound-setting ${soundsEnabled ? "is-selected" : ""}" data-collection-routes-driver-sound-toggle aria-pressed="${soundsEnabled ? "true" : "false"}"><span>ZVUK TLAČÍTEK</span><strong>${soundsEnabled ? "ZAPNUTÝ" : "VYPNUTÝ"}</strong><small>Krátké tlumené klepnutí · bez melodie a gongu</small></button>
+          <p>AUTOMATICKY sleduje denní nebo noční režim Androidu. Zdrojový náhled i skutečný tablet používají stejné tři režimy.</p>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function collectionRoutesSourceDriverKioskAction(label, action, className = "", detail = "") {
+  return `<button class="collection-daily-driver-action ${escapeHtml(className)}" type="button" data-collection-routes-driver-readonly-action="${escapeHtml(action)}"><span>${escapeHtml(label)}</span>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</button>`;
+}
+
+function collectionRoutesLegacySourceDriverModePanel(rows = collectionRoutesSourceDisplayRows()) {
   if (!rows.length) {
     return `
       <div class="collection-routes-driver-mode collection-routes-driver-mode--empty" id="collection-routes-source-driver-mode">
@@ -21463,6 +21507,107 @@ function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisp
           </div>
         </div>
       ` : ""}
+    </div>
+  `;
+}
+
+function collectionRoutesSourceDriverModePanel(rows = collectionRoutesSourceDisplayRows()) {
+  const displayMode = collectionRoutesSourceDriverDisplayMode();
+  const resolvedDisplayMode = collectionRoutesSourceDriverResolvedDisplayMode();
+  const settingsButton = `<button type="button" data-collection-routes-source-driver-settings aria-label="Otevřít nastavení displeje a zvuku">${escapeHtml(collectionRoutesSourceDriverSettingsSummary())}</button>`;
+  const kioskHead = (driverLabel = "Řidič nepřiřazen") => `
+    <header class="collection-daily-driver-kiosk-bar">
+      <div class="collection-daily-driver-kiosk-brand"><strong>kaiser.</strong><span>ŘIDIČSKÝ DISPLEJ</span></div>
+      <div class="collection-daily-driver-kiosk-user"><span>${escapeHtml(driverLabel)}</span><b>ZDROJOVÝ NÁHLED · BEZ FYZICKÉ GPS</b>${settingsButton}</div>
+    </header>
+  `;
+
+  if (!rows.length) {
+    return `
+      <div class="collection-routes-driver-mode collection-daily-driver-page collection-daily-driver-page--source-preview is-theme-${escapeHtml(resolvedDisplayMode)}" id="collection-routes-source-driver-mode" data-collection-routes-source-driver-preview-kiosk data-collection-routes-source-driver-current-display-mode="${escapeHtml(displayMode)}" data-collection-routes-source-driver-resolved-theme="${escapeHtml(resolvedDisplayMode)}">
+        ${kioskHead()}
+        <section class="collection-daily-driver-empty"><strong>Čeká na trasu</strong><span>Vyber termín, vůz a odpad. Potom se zobrazí stejná pracovní obrazovka, jakou používá řidič.</span></section>
+        ${collectionRoutesSourceDriverSettingsPanel()}
+      </div>
+    `;
+  }
+
+  const selectedIndex = collectionRoutesSourceDriverSelectedIndex(rows);
+  const selectedRow = rows[selectedIndex] || rows[0];
+  const nextRow = rows[selectedIndex + 1] || null;
+  const visibleRows = collectionRoutesSourceDriverVisibleRows(rows, selectedIndex);
+  const progressValue = Math.max(1, selectedIndex + 1);
+  const routeDone = Boolean(collectionRoutesPilotState.sourceDriverRouteDone)
+    && collectionRoutesPilotState.sourceDriverSelectedRowKey === collectionRoutesSourceDriverRowKey(rows[rows.length - 1], rows.length - 1);
+  const completedCount = routeDone ? rows.length : Math.max(0, progressValue - 1);
+  const remainingCount = Math.max(0, rows.length - completedCount);
+  const progressPercent = collectionRoutesSourceDriverProgressPercent(completedCount, rows.length);
+  const isVistosRoute = rows.some((row) => row.sourceKind === "vistos");
+  const filters = isVistosRoute ? (collectionRoutesPilotState.vistosRouteFilters || {}) : (collectionRoutesPilotState.sourceFilters || {});
+  const vehicle = isVistosRoute ? "vistos" : (filters.vehicle || selectedRow?.vehicleCode || "all");
+  const dayLabel = collectionRoutesSourceDayLabel(filters.day || selectedRow?.dayCode || "all");
+  const weekLabel = collectionRoutesSourceWeekLabel(filters.week || selectedRow?.weekMode || "all");
+  const routeDayLabel = dayLabel === "všechny dny" ? "Den není vybraný" : dayLabel;
+  const routeWeekLabel = weekLabel === "všechny týdny" ? "Týden není vybraný" : weekLabel;
+  const routeVehicleLabel = isVistosRoute ? "Vistos Svoz Kaiser" : collectionRoutesSourceDriverVehicleRouteLabel(vehicle);
+  const driverName = selectedRow?.driverName || selectedRow?.driver || "Řidič nepřiřazen";
+  const currentServiceLabel = [collectionRoutesSourceDriverWasteLabel(selectedRow), collectionRoutesSourceDriverContainerLabel(selectedRow)].filter((value) => value && value !== "-").join(" · ") || "Svoz podle trasy";
+  const mapReadiness = collectionRoutesSourceMapReadiness(selectedRow);
+  const isProblemPanelOpen = Boolean(collectionRoutesPilotState.sourceDriverProblemPanelOpen);
+  const isDoneConfirmOpen = Boolean(collectionRoutesPilotState.sourceDriverDoneConfirmOpen);
+  const isDonePending = Boolean(collectionRoutesPilotState.sourceDriverDonePending);
+  const isExpanded = Boolean(collectionRoutesPilotState.sourceDriverListExpanded);
+  const runtimeProblemCount = Number(collectionRoutesPilotState.sourceDriverRun?.summary?.problemCount || 0);
+
+  return `
+    <div class="collection-routes-driver-mode collection-daily-driver-page collection-daily-driver-page--source-preview is-theme-${escapeHtml(resolvedDisplayMode)}" id="collection-routes-source-driver-mode" data-collection-routes-source-driver-preview-kiosk data-collection-routes-source-driver-current-display-mode="${escapeHtml(displayMode)}" data-collection-routes-source-driver-resolved-theme="${escapeHtml(resolvedDisplayMode)}">
+      ${kioskHead(driverName)}
+      ${collectionRoutesPilotState.sourceImportMessage ? `<div class="collection-routes-driver-source-notice" role="status">${escapeHtml(collectionRoutesPilotState.sourceImportMessage)}</div>` : ""}
+      <section class="collection-daily-driver-route">
+        <header class="collection-daily-driver-route-head">
+          <div class="collection-daily-driver-route-identity"><span>${escapeHtml(routeDayLabel)} · ${escapeHtml(routeWeekLabel)}</span><strong>${escapeHtml(routeVehicleLabel)}</strong><small>Zdrojový náhled stejného UI · bez fyzické GPS</small></div>
+          <div class="collection-daily-driver-route-kpis">
+            <article><span>ČEKÁ</span><strong>${escapeHtml(remainingCount)}</strong></article>
+            <article class="is-ready"><span>HOTOVO</span><strong>${escapeHtml(completedCount)}</strong></article>
+            <button type="button" class="collection-daily-driver-route-kpi-link ${runtimeProblemCount ? "is-warning" : ""}" data-collection-routes-driver-readonly-action="problem" aria-label="Otevřít hlášení pro dispečink"><span>HLÁŠENÍ</span><strong>${escapeHtml(runtimeProblemCount)}</strong><small>OTEVŘÍT</small></button>
+          </div>
+          <div class="collection-daily-driver-header-actions"><span class="collection-daily-route-status collection-daily-route-status--active">${routeDone ? "DOKONČENO" : "NÁHLED"}</span><strong>${escapeHtml(progressPercent)} %</strong></div>
+        </header>
+
+        <div class="collection-daily-driver-workspace">
+          <article class="collection-daily-driver-current">
+            <section class="collection-daily-driver-stop-overview" aria-label="Aktuální a následující stanoviště">
+              <header><span>ZASTÁVKA ${escapeHtml(selectedRow.routeOrder || progressValue)} / ${escapeHtml(rows.length)}</span><h1>${escapeHtml(collectionRoutesSourceDriverStopTitle(selectedRow))}</h1>${selectedRow.stationName ? `<strong>${escapeHtml(selectedRow.stationName)}</strong>` : ""}</header>
+              <div class="collection-daily-driver-stop-meta"><p class="collection-daily-driver-address">${escapeHtml(selectedRow.addressText || "Adresa není uvedená")}</p><div class="collection-daily-driver-waste"><b>${escapeHtml(collectionRoutesSourceDriverWasteLabel(selectedRow))}</b><span>${escapeHtml(collectionRoutesSourceDriverContainerLabel(selectedRow))}</span></div>${selectedRow.note ? `<aside>${escapeHtml(selectedRow.note)}</aside>` : ""}</div>
+              ${nextRow ? `<section class="collection-daily-driver-next-stop" aria-label="Následující zastávka"><span>NÁSLEDUJÍCÍ ZASTÁVKA · ${escapeHtml(nextRow.routeOrder || selectedIndex + 2)}</span><strong>${escapeHtml(collectionRoutesSourceDriverStopTitle(nextRow))}</strong><small>${escapeHtml(nextRow.addressText || "Adresa není uvedená")}</small></section>` : `<section class="collection-daily-driver-next-stop" aria-label="Následující zastávka"><span>NÁSLEDUJÍCÍ ZASTÁVKA</span><strong>KONEC TRASY</strong><small>Po obsloužení potvrď dokončení trasy.</small></section>`}
+            </section>
+
+            <section class="collection-daily-driver-map collection-routes-driver-source-map" aria-label="Mapový náhled zdrojové trasy">
+              <header><div><span>AKTUÁLNÍ ÚSEK PO SILNICI</span><strong>${escapeHtml(selectedRow.addressText || collectionRoutesSourceDriverStopTitle(selectedRow))}</strong></div><b>${escapeHtml(mapReadiness.label)}</b></header>
+              <div class="collection-daily-driver-map__canvas"><div class="collection-routes-driver-source-map__grid" aria-hidden="true"><span class="collection-routes-driver-source-map__road"></span><b>1</b></div></div>
+              <div class="collection-daily-driver-map__primary-actions">
+                <button type="button" class="is-active" data-collection-routes-driver-readonly-action="map">ÚSEK</button>
+                <button type="button" data-collection-routes-source-driver-toggle-list>CELÁ TRASA</button>
+                <button type="button" data-collection-routes-driver-readonly-action="navigate">SPUSTIT NAVIGACI</button>
+                <button type="button" data-collection-routes-driver-readonly-action="navigate">MAPY</button>
+              </div>
+            </section>
+          </article>
+
+          <aside class="collection-daily-driver-actions" aria-label="Pracovní akce řidiče">
+            <div class="collection-daily-driver-actions__primary"><span class="collection-daily-driver-actions__label">HLAVNÍ AKCE</span>${collectionRoutesSourceDriverKioskAction("HOTOVO", "done", "collection-daily-driver-action--done", "STANOVIŠTĚ OBSLOUŽENO")}${collectionRoutesSourceDriverKioskAction("HLÁŠENÍ PRO DISPEČINK", "problem", "collection-daily-driver-action--report", "TYP · FOTO · POZNÁMKA")}</div>
+            <div class="collection-daily-driver-actions__context"><span class="collection-daily-driver-actions__label">DALŠÍ AKCE</span>${collectionRoutesSourceDriverKioskAction("MUSÍM JET VYSYPAT", "dump", "collection-daily-driver-action--operational")}${collectionRoutesSourceDriverKioskAction("PŘESTÁVKA", "break", "collection-daily-driver-action--operational")}<button class="collection-daily-driver-action collection-daily-driver-action--route collection-daily-driver-action--wide" type="button" data-collection-routes-source-driver-toggle-list><span>CELÁ TRASA</span></button></div>
+          </aside>
+        </div>
+
+        ${isExpanded ? `<section class="collection-routes-driver-source-route-list" aria-label="Celá trasa"><header><strong>CELÁ TRASA · ${escapeHtml(rows.length)} ZASTÁVEK</strong><button type="button" data-collection-routes-source-driver-toggle-list>ZAVŘÍT</button></header><div>${visibleRows.map(({ row, index }) => { const key = collectionRoutesSourceDriverRowKey(row, index); return `<button type="button" class="${index === selectedIndex ? "is-active" : ""}" data-collection-routes-source-driver-stop="${escapeHtml(key)}"><span>${escapeHtml(row.routeOrder || index + 1)}</span><strong>${escapeHtml(collectionRoutesSourceDriverStopTitle(row))}</strong><small>${escapeHtml(collectionRoutesSourceDriverStopSubtitle(row))}</small></button>`; }).join("")}</div></section>` : ""}
+      </section>
+
+      ${isDoneConfirmOpen ? `<div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-label="Potvrzení obsloužení stanoviště"><section><header><div><span>FYZICKÉ POTVRZENÍ</span><h2>${isDonePending ? "Ukládám…" : "Je stanoviště opravdu hotové?"}</h2><p>${escapeHtml(collectionRoutesSourceDriverStopTitle(selectedRow))} · ${escapeHtml(selectedRow.addressText || "-")}</p></div><button type="button" class="collection-daily-driver-modal__close" data-collection-routes-driver-readonly-action="done-cancel">ZAVŘÍT</button></header><div class="collection-daily-driver-operation-active"><strong>Potvrzení ukládá stejnou řidičskou akci jako dosud.</strong><span>${escapeHtml(currentServiceLabel)}</span><button class="primary-action" type="button" data-collection-routes-driver-readonly-action="done-confirm" ${isDonePending ? "disabled" : ""}>${isDonePending ? "UKLÁDÁM…" : "ANO, STANOVIŠTĚ JE HOTOVÉ"}</button></div></section></div>` : ""}
+
+      ${isProblemPanelOpen ? `<div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-labelledby="collection-routes-source-report-title"><section><header><div><span>HLÁŠENÍ</span><h2 id="collection-routes-source-report-title">Hlášení pro dispečink</h2><p>${escapeHtml(collectionRoutesSourceDriverStopTitle(selectedRow))} · ${escapeHtml(selectedRow.addressText || "-")}</p></div><button type="button" class="collection-daily-driver-modal__close" data-collection-routes-driver-readonly-action="problem-close">ZAVŘÍT</button></header><div class="collection-daily-driver-choice-grid" aria-label="Vyber důvod">${["Nádoba není venku", "Přeplněno", "Překážka", "Špatná adresa", "Nelze obsloužit"].map((label) => `<button type="button" data-collection-routes-driver-readonly-action="problem:${escapeHtml(label)}"><span>${escapeHtml(label)}</span><small>ULOŽIT HLÁŠENÍ</small></button>`).join("")}</div></section></div>` : ""}
+
+      ${collectionRoutesSourceDriverSettingsPanel()}
     </div>
   `;
 }
@@ -44942,10 +45087,12 @@ function selectCollectionRoutesSourceDriverStop(rowKey) {
   if (index < 0) {
     return;
   }
+  playCollectionRoutesDriverSound("tap");
   selectCollectionRoutesSourceDriverIndex(index);
 }
 
 function toggleCollectionRoutesSourceDriverList() {
+  playCollectionRoutesDriverSound("tap");
   collectionRoutesPilotState.sourceDriverListExpanded = !collectionRoutesPilotState.sourceDriverListExpanded;
   render();
   focusCollectionRoutesSourceDriverMode();
@@ -54313,14 +54460,14 @@ document.addEventListener("pointerup", (event) => {
 let collectionDailyDriverPressedTarget = null;
 
 document.addEventListener("pointerdown", (event) => {
-  const kiosk = event.target.closest?.("[data-collection-daily-driver-kiosk]");
+  const kiosk = event.target.closest?.("[data-collection-daily-driver-kiosk], [data-collection-routes-source-driver-preview-kiosk]");
   if (!kiosk) return;
   const target = event.target.closest("button:not(:disabled), a[href], label.collection-daily-driver-photo-button");
   if (!target || !kiosk.contains(target)) return;
   collectionDailyDriverPressedTarget?.classList.remove("is-pressed");
   collectionDailyDriverPressedTarget = target;
   target.classList.add("is-pressed");
-  if (!target.matches("[data-collection-driver-sound-toggle]")) playCollectionDailyDriverTapSound();
+  if (kiosk.matches("[data-collection-daily-driver-kiosk]") && !target.matches("[data-collection-driver-sound-toggle]")) playCollectionDailyDriverTapSound();
 }, true);
 
 function releaseCollectionDailyDriverPressedTarget() {
@@ -54332,7 +54479,9 @@ document.addEventListener("pointerup", releaseCollectionDailyDriverPressedTarget
 document.addEventListener("pointercancel", releaseCollectionDailyDriverPressedTarget, true);
 
 collectionDailyDriverColorSchemeMedia?.addEventListener?.("change", () => {
-  if (collectionDailyDriverDisplayMode() === "auto" && document.querySelector("[data-collection-daily-driver-kiosk]")) {
+  const driverKioskUsesAuto = collectionDailyDriverDisplayMode() === "auto" && document.querySelector("[data-collection-daily-driver-kiosk]");
+  const sourcePreviewUsesAuto = collectionRoutesSourceDriverDisplayMode() === "auto" && document.querySelector("[data-collection-routes-source-driver-preview-kiosk]");
+  if (driverKioskUsesAuto || sourcePreviewUsesAuto) {
     render();
   }
 });
@@ -56357,6 +56506,34 @@ document.addEventListener("click", async (event) => {
   const collectionRoutesSourceView = event.target.closest("[data-collection-routes-source-view]");
   if (collectionRoutesSourceView) {
     setCollectionRoutesSourceRouteView(collectionRoutesSourceView.dataset.collectionRoutesSourceView || "print");
+    return;
+  }
+
+  const collectionRoutesSourceDriverSettings = event.target.closest("[data-collection-routes-source-driver-settings]");
+  if (collectionRoutesSourceDriverSettings) {
+    playCollectionRoutesDriverSound("tap");
+    collectionRoutesPilotState.sourceDriverSettingsOpen = true;
+    render();
+    return;
+  }
+
+  const collectionRoutesSourceDriverSettingsClose = event.target.closest("[data-collection-routes-source-driver-settings-close]");
+  if (collectionRoutesSourceDriverSettingsClose) {
+    playCollectionRoutesDriverSound("tap");
+    collectionRoutesPilotState.sourceDriverSettingsOpen = false;
+    render();
+    focusCollectionRoutesSourceDriverMode();
+    return;
+  }
+
+  const collectionRoutesSourceDriverDisplayModeButton = event.target.closest("[data-collection-routes-source-driver-display-mode]");
+  if (collectionRoutesSourceDriverDisplayModeButton) {
+    const mode = collectionRoutesSourceDriverDisplayModeButton.dataset.collectionRoutesSourceDriverDisplayMode || "auto";
+    if (Object.hasOwn(COLLECTION_DAILY_DRIVER_DISPLAY_MODES, mode)) {
+      playCollectionRoutesDriverSound("tap");
+      collectionRoutesPilotState.sourceDriverDisplayMode = mode;
+      render();
+    }
     return;
   }
 
