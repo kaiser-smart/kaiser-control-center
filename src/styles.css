@@ -40050,6 +40050,154 @@ body:has(.ds-plus-page) {
   background: linear-gradient(145deg, #f8fcf3, #ffffff 58%);
 }
 
+.collection-daily-routes--production {
+  gap: 18px;
+  min-width: 0;
+  background: #f5f8f3;
+}
+
+.collection-daily-routes--production > * {
+  min-width: 0;
+}
+
+.collection-daily-routes--production > .collection-daily-routes__head {
+  padding: 2px 2px 14px;
+  border-bottom: 1px solid rgba(66, 80, 74, 0.12);
+}
+
+.collection-daily-routes__current > .collection-daily-route-detail {
+  border: 2px solid rgba(117, 189, 37, 0.48);
+  box-shadow: 0 14px 34px rgba(53, 88, 34, 0.11);
+}
+
+.collection-daily-routes__empty {
+  display: grid;
+  gap: 4px;
+  padding: 18px;
+  border: 2px dashed rgba(66, 80, 74, 0.2);
+  border-radius: 13px;
+  background: #fff;
+}
+
+.collection-daily-routes__empty span {
+  color: var(--steel);
+  font-weight: 700;
+}
+
+.collection-daily-routes__route-picker,
+.collection-daily-route-stops {
+  overflow: hidden;
+  border: 1px solid rgba(66, 80, 74, 0.14);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.collection-daily-routes__route-picker > summary,
+.collection-daily-route-stops > summary {
+  display: flex;
+  min-height: 56px;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.collection-daily-routes__route-picker > summary::-webkit-details-marker,
+.collection-daily-route-stops > summary::-webkit-details-marker {
+  display: none;
+}
+
+.collection-daily-routes__route-picker > summary span,
+.collection-daily-route-stops > summary span,
+.collection-daily-routes__prepare-toggle span,
+.collection-daily-routes__prepare > header span {
+  color: var(--steel);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.collection-daily-routes__route-picker > summary::after,
+.collection-daily-route-stops > summary::after {
+  content: "ROZBALIT";
+  min-width: 74px;
+  color: #4c7f28;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-align: right;
+}
+
+.collection-daily-routes__route-picker[open] > summary::after,
+.collection-daily-route-stops[open] > summary::after {
+  content: "SBALIT";
+}
+
+.collection-daily-routes__route-picker > .collection-daily-routes__saved {
+  padding: 0 14px 14px;
+}
+
+.collection-daily-route-stops > .collection-daily-route-table-wrap {
+  border-inline: 0;
+  border-bottom: 0;
+  border-radius: 0;
+}
+
+.collection-daily-routes__prepare-toggle {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px;
+  border: 1px solid rgba(66, 80, 74, 0.14);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.collection-daily-routes__prepare-toggle > div {
+  display: grid;
+  gap: 3px;
+}
+
+.collection-daily-routes__prepare-toggle small {
+  color: var(--steel);
+  font-weight: 700;
+}
+
+.collection-daily-routes__prepare-toggle button {
+  min-height: 50px;
+  flex: 0 0 auto;
+}
+
+.collection-daily-routes__prepare {
+  display: grid;
+  gap: 12px;
+  padding: 15px;
+  border: 2px solid rgba(64, 115, 161, 0.3);
+  border-radius: 13px;
+  background: #f7fbff;
+}
+
+.collection-daily-routes__prepare > header h4 {
+  margin: 2px 0 3px;
+  color: var(--ink);
+  font-size: 1.12rem;
+}
+
+.collection-daily-routes__prepare > header p {
+  margin: 0;
+  color: var(--steel);
+  font-weight: 700;
+}
+
+@media (max-width: 1100px) {
+  .collection-daily-routes--production .collection-daily-route-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .collection-daily-routes__head,
 .collection-daily-route-detail > header,
 .collection-daily-driver-route > header {

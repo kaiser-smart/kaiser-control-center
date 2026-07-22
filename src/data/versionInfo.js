@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.668"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.669"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Denní svoz: jedna jasná práce dispečera",
+    text: "Aktuální uložená trasa je vždy první a zřetelně označená. Výběr jiné trasy, dlouhý seznam zastávek a příprava nové trasy jsou oddělené a rozbalí se až podle potřeby. Nejasný technický jazyk nahradily provozní pokyny; funkce, API, data i Vistos zůstávají beze změny."
+  },
   {
     title: "Řidičský tablet: jisté ovládání v terénu",
     text: "Ovládací plochy jsou větší a dál od sebe, klepnutí má výraznou odezvu a volitelný krátký zvuk. Přibyl denní, noční a automatický režim. PROBLÉM se mění na prokliknutelné HLÁŠENÍ, z nabídky hlášení mizí Jiný problém a fotografie mají jednoznačné volby. Šarlota je na tabletu dočasně vypnutá; její Prompt, Knowledge Base, API, databáze ani ostatní funkce se nemění."

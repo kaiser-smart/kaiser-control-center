@@ -1409,6 +1409,7 @@ const collectionRoutesPilotState = {
   hereOptimizationError: "",
   dailyRouteSelectedId: "",
   dailyRouteDetail: null,
+  dailyRoutePreparationOpen: false,
   dailyRouteStopsVisible: COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE,
   dailyRoutePending: "",
   dailyRouteMessage: "",
@@ -22948,7 +22949,7 @@ function collectionDailyRoutesList() {
           <button class="collection-daily-route-card ${selected ? "is-selected" : ""}" type="button" data-collection-daily-route-select="${escapeHtml(route.id)}">
             <span>${stationaryFieldTest ? collectionRoutesStationaryFieldStatusBadge(route.status) : collectionDailyRouteStatusBadge(route.status)} ${collectionDailyRouteTestDatasetBadge(route)} <small>${stationaryFieldTest ? "Stacionární TEST · bez jízdy" : escapeHtml(route.vehicleLabel || route.vehicleRegistration || route.vehicleCode)}</small></span>
             <strong>${escapeHtml(collectionDailyRouteDateLabel(route.routeDate))}</strong>
-            <small>${escapeHtml(stationaryFieldTest ? `Terénní tester ${collectionRoutesStationaryFieldTesterName(route)}` : route.driverName || "Řidič nepřiřazen")} · ${escapeHtml(completed)}/${escapeHtml(route.stopCount || 0)} vyřízeno${summary.problemCount ? ` · ${escapeHtml(summary.problemCount)} problém` : ""}${route.scope === "test" && !stationaryFieldTest ? " · ruční pilot bez AI" : ""}</small>
+            <small>${escapeHtml(stationaryFieldTest ? `Terénní tester ${collectionRoutesStationaryFieldTesterName(route)}` : route.driverName || "Řidič nepřiřazen")} · ${escapeHtml(completed)}/${escapeHtml(route.stopCount || 0)} vyřízeno${summary.problemCount ? ` · ${escapeHtml(summary.problemCount)} hlášení` : ""}${route.scope === "test" && !stationaryFieldTest ? " · ruční pilot bez AI" : ""}</small>
           </button>
         `;
       }).join("")}
@@ -24509,12 +24510,20 @@ function collectionDailyRouteDispatcherDetail() {
   );
   const actorLabel = stationaryFieldTest
     ? `Terénní tester ${collectionRoutesStationaryFieldTesterName(run)} · bez jízdy a zpráv`
-    : `${run.driverName || "řidič nepřiřazen"} · ${isTest ? "ruční pilot bez AI optimalizace" : "snapshot se po uložení nemění"}`;
+    : isTest
+      ? `${run.driverName || "řidič nepřiřazen"} · ruční pilot bez AI optimalizace`
+      : `Řidič: ${run.driverName || "nepřiřazen"}`;
+  const productionStateLabel = {
+    draft: "ROZPRACOVANÁ TRASA",
+    confirmed: "PŘIPRAVENÁ TRASA",
+    active: "AKTUÁLNÍ TRASA",
+    completed: "DOKONČENÁ TRASA"
+  }[run.status] || "DENNÍ TRASA";
   return `
     <div class="collection-daily-route-detail">
       <header>
         <div>
-          <span>${stationaryFieldTest ? "Vybraný stacionární terénní TEST" : isTest ? "Vybraná ruční TEST trasa" : "Vybraná denní trasa"}</span>
+          <span>${stationaryFieldTest ? "Vybraný stacionární terénní TEST" : isTest ? "Vybraná ruční TEST trasa" : productionStateLabel}</span>
           <h3>${escapeHtml(run.title || collectionDailyRouteDateLabel(run.routeDate))}</h3>
           <p>${stationaryFieldTest ? "Firma test 501 · Trnkova 3052/137, 628 00 Brno" : escapeHtml(run.vehicleLabel || run.vehicleRegistration)} · ${escapeHtml(actorLabel)}</p>
         </div>
@@ -24527,7 +24536,7 @@ function collectionDailyRouteDispatcherDetail() {
       <div class="collection-daily-route-kpis">
         <article><span>Čeká</span><strong>${escapeHtml(summary.plannedCount || 0)}</strong></article>
         <article class="is-ready"><span>Hotovo</span><strong>${escapeHtml(summary.doneCount || 0)}</strong></article>
-        <article class="${summary.problemCount ? "is-warning" : ""}"><span>Problém</span><strong>${escapeHtml(summary.problemCount || 0)}</strong></article>
+        <article class="${summary.problemCount ? "is-warning" : ""}"><span>${isTest ? "Problém" : "Hlášení"}</span><strong>${escapeHtml(summary.problemCount || 0)}</strong></article>
       </div>
 
       ${canAssign ? `
@@ -24545,15 +24554,17 @@ function collectionDailyRouteDispatcherDetail() {
       <div class="collection-daily-route-actions">
         ${run.status === "draft" ? `<button class="primary-action" type="button" data-collection-daily-route-transition="confirm" ${(stationaryFieldTest || run.driverUserId) && !pending ? "" : "disabled"}>${stationaryFieldTest ? "Potvrdit stacionární TEST" : isTest ? "Potvrdit ruční TEST trasu" : "Potvrdit trasu"}</button>` : ""}
         ${run.status === "confirmed" ? `<button class="primary-action" type="button" data-collection-daily-route-transition="start" ${pending ? "disabled" : ""}>${stationaryFieldTest ? "Spustit TEST tabletu" : isTest ? "Spustit ruční TEST trasu" : "Zahájit trasu"}</button>` : ""}
-        ${run.status === "active" ? `<button class="primary-action" type="button" data-collection-daily-route-transition="complete" ${canComplete && !pending ? "" : "disabled"}>${stationaryFieldTest ? "Dokončit TEST tabletu" : isTest ? "Dokončit TEST trasu" : "Dokončit trasu"}</button>` : ""}
+        ${run.status === "active" ? `<button class="primary-action" type="button" data-collection-daily-route-transition="complete" ${canComplete && !pending ? "" : "disabled"}>${stationaryFieldTest ? "Dokončit TEST tabletu" : isTest ? "Dokončit TEST trasu" : canComplete ? "DOKONČIT TRASU" : "TRASU ZATÍM NELZE DOKONČIT"}</button>` : ""}
         ${run.status === "completed" ? `<button class="secondary-link" type="button" data-collection-daily-route-transition="reopen" ${pending ? "disabled" : ""}>Znovu otevřít</button>` : ""}
-        ${run.status === "active" && !canComplete ? `<span>${stationaryFieldTest ? "Dokončit půjde po uložení fyzického GPS měření." : "Dokončit půjde po vyřízení všech čekajících zastávek."}</span>` : ""}
+        ${run.status === "active" && !canComplete ? `<span>${stationaryFieldTest ? "Dokončit půjde po uložení fyzického GPS měření." : `Zbývá vyřídit ${escapeHtml(summary.plannedCount || 0)} zastávek. Potom se dokončení zpřístupní.`}</span>` : ""}
       </div>
 
       ${!collectionRoutesPilotState.testTabletOpen ? collectionRoutesTestGpsPanel(detail) : ""}
 
-      <div class="collection-daily-route-table-wrap collection-routes-sites-table collection-routes-preview-table">
-        <table class="collection-daily-route-table">
+      <details class="collection-daily-route-stops">
+        <summary><span>ZASTÁVKY TRASY</span><strong>Zobrazit seznam (${escapeHtml(stops.length)})</strong></summary>
+        <div class="collection-daily-route-table-wrap collection-routes-sites-table collection-routes-preview-table">
+          <table class="collection-daily-route-table">
           <thead><tr><th>Stav</th><th>Pořadí</th><th>Zákazník</th><th>Stanoviště</th><th>Odpad / nádoba</th><th>Interval</th><th>Den svozu</th><th>Smlouva</th><th>Akce</th></tr></thead>
           <tbody>
             ${visibleStops.map((stop) => `
@@ -24570,18 +24581,19 @@ function collectionDailyRouteDispatcherDetail() {
               </tr>
             `).join("")}
           </tbody>
-        </table>
-      </div>
-      ${stops.length > COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE ? `
-        <div class="collection-daily-route-pagination" aria-live="polite">
-          <span>Zobrazeno ${escapeHtml(visibleStopCount)} z ${escapeHtml(stops.length)} zastávek.</span>
-          ${remainingStops ? `
-            <button class="secondary-link" type="button" data-collection-daily-route-show-more>
-              Zobrazit dalších ${escapeHtml(Math.min(COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE, remainingStops))} zastávek
-            </button>
-          ` : `<strong>Zobrazeny všechny zastávky.</strong>`}
+          </table>
         </div>
-      ` : ""}
+        ${stops.length > COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE ? `
+          <div class="collection-daily-route-pagination" aria-live="polite">
+            <span>Zobrazeno ${escapeHtml(visibleStopCount)} z ${escapeHtml(stops.length)} zastávek.</span>
+            ${remainingStops ? `
+              <button class="secondary-link" type="button" data-collection-daily-route-show-more>
+                Zobrazit dalších ${escapeHtml(Math.min(COLLECTION_DAILY_ROUTE_STOP_PAGE_SIZE, remainingStops))} zastávek
+              </button>
+            ` : `<strong>Zobrazeny všechny zastávky.</strong>`}
+          </div>
+        ` : ""}
+      </details>
       ${stationaryFieldTest ? "" : collectionRoutesTestNotificationPanel(detail)}
 
       <details class="collection-daily-route-audit">
@@ -24613,6 +24625,54 @@ function collectionDailyRoutesDispatcherPanel(rows = [], options = {}) {
   const sourceIds = isTest ? [] : rows.map((row) => String(row.id || "").trim()).filter(Boolean);
   const testSiteCount = Number(collectionRoutesPilotState.testDataset?.siteCount || collectionRoutesPilotState.testDatasetRows.length || 0);
   const sourceReady = isTest ? testSiteCount > 0 : sourceIds.length > 0;
+  if (!isTest) {
+    const detailHtml = collectionDailyRouteDispatcherDetail();
+    const preparationOpen = collectionRoutesPilotState.dailyRoutePreparationOpen || !collectionRoutesPilotState.dailyRouteDetail?.run;
+    const pending = collectionRoutesPilotState.dailyRoutePending;
+    return `
+      ${options.showMantra !== false ? mantraPanel : ""}
+      <section class="collection-daily-routes collection-daily-routes--production" aria-labelledby="collection-daily-routes-title">
+        <header class="collection-daily-routes__head">
+          <div>
+            <p class="module-feedback__eyebrow">DISPEČINK</p>
+            <h3 id="collection-daily-routes-title">Denní svoz</h3>
+            <p>Nejdřív pracuj s aktuální trasou. Novou trasu připravuj jen pro další datum nebo vůz.</p>
+          </div>
+          <span class="employee-card-status employee-card-status--ready">PROVOZ</span>
+        </header>
+        ${collectionRoutesPilotState.dailyRouteMessage ? `<p class="module-feedback__notice">${escapeHtml(collectionRoutesPilotState.dailyRouteMessage)}</p>` : ""}
+        ${collectionRoutesPilotState.dailyRouteError ? `<p class="module-feedback__error">${escapeHtml(collectionRoutesPilotState.dailyRouteError)}</p>` : ""}
+        <div class="collection-daily-routes__current" aria-label="Aktuální vybraná trasa">
+          ${detailHtml || `<div class="collection-daily-routes__empty"><strong>Není vybraná žádná uložená trasa.</strong><span>Vyber ji níže, nebo připrav novou trasu.</span></div>`}
+        </div>
+        <details class="collection-daily-routes__route-picker" ${detailHtml ? "" : "open"}>
+          <summary><span>JINÁ ULOŽENÁ TRASA</span><strong>Vybrat jinou trasu</strong></summary>
+          <div class="collection-daily-routes__saved">
+            <div><div><h4>Uložené denní trasy</h4></div><button class="text-action" type="button" data-collection-daily-routes-refresh ${collectionRoutesPilotState.dailyRoutesLoading ? "disabled" : ""}>Obnovit</button></div>
+            ${collectionDailyRoutesList()}
+          </div>
+        </details>
+        ${detailHtml ? `
+          <div class="collection-daily-routes__prepare-toggle">
+            <div><span>DALŠÍ KROK</span><strong>Příprava nové trasy</strong><small>Oddělené od právě rozjeté trasy.</small></div>
+            <button class="secondary-link" type="button" data-collection-daily-route-prepare-toggle aria-expanded="${preparationOpen ? "true" : "false"}" ${pending ? "disabled" : ""}>${preparationOpen ? "ZAVŘÍT PŘÍPRAVU" : "PŘIPRAVIT NOVOU TRASU"}</button>
+          </div>
+        ` : ""}
+        ${preparationOpen ? `
+          <section class="collection-daily-routes__prepare" aria-labelledby="collection-daily-route-prepare-title">
+            <header><div><span>NOVÁ TRASA</span><h4 id="collection-daily-route-prepare-title">Zkontrolovat podklady</h4><p>Tento krok ještě nic neukládá a nemění Vistos.</p></div></header>
+            <form class="collection-daily-route-form" data-collection-daily-route-preview-form data-source-row-ids="${escapeHtml(JSON.stringify(sourceIds))}" data-route-scope="production">
+              <label><span>Datum nové trasy</span><input type="date" name="routeDate" value="${escapeHtml(collectionRoutesPilotState.dailyRouteDate)}" required></label>
+              <label><span>Vůz nové trasy</span><select name="vehicleCode">${collectionRoutesPilotState.dailyRouteVehicles.map((vehicle) => `<option value="${escapeHtml(vehicle.code)}" ${vehicle.code === collectionRoutesPilotState.dailyRouteVehicleCode ? "selected" : ""}>${escapeHtml(vehicle.label)}</option>`).join("")}</select></label>
+              <div><span>Podklady z filtru</span><strong>${escapeHtml(sourceIds.length)} řádků</strong><small>Použije se právě zobrazený výběr zdrojových dat.</small></div>
+              <button class="primary-action" type="submit" ${sourceReady && !pending ? "" : "disabled"}>${pending === "preview" ? "KONTROLUJI PODKLADY…" : "ZKONTROLOVAT PODKLADY NOVÉ TRASY"}</button>
+            </form>
+            ${collectionDailyRoutePreviewPanel()}
+          </section>
+        ` : ""}
+      </section>
+    `;
+  }
   return `
     ${isTest && options.showTestPrelude !== false ? collectionRoutesTestDatasetPanel(user) : ""}
     ${options.showMantra !== false ? mantraPanel : ""}
@@ -43366,6 +43426,7 @@ async function createCollectionDailyRoute() {
     collectionRoutesPilotState.dailyRouteCalculation = null;
     collectionRoutesPilotState.hereOptimizationReadiness = null;
     collectionRoutesPilotState.hereOptimizationRun = null;
+    if (!collectionDailyRouteIsTestScope()) collectionRoutesPilotState.dailyRoutePreparationOpen = false;
     if (preview.testMode === COLLECTION_ROUTES_STATIONARY_FIELD_TEST_MODE && result.route?.run?.id) {
       collectionRoutesPilotState.testTabletSelectedRunId = result.route.run.id;
     }
@@ -54662,6 +54723,14 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const collectionDailyRoutePrepareToggle = event.target.closest("[data-collection-daily-route-prepare-toggle]");
+  if (collectionDailyRoutePrepareToggle) {
+    event.preventDefault();
+    collectionRoutesPilotState.dailyRoutePreparationOpen = !collectionRoutesPilotState.dailyRoutePreparationOpen;
+    render();
+    return;
+  }
+
   const collectionDailyRouteCreate = event.target.closest("[data-collection-daily-route-create]");
   if (collectionDailyRouteCreate) {
     event.preventDefault();
@@ -54678,6 +54747,7 @@ document.addEventListener("click", async (event) => {
       collectionRoutesPilotState.testTabletSelectedRunId = runId;
     }
     collectionRoutesPilotState.dailyRouteSelectedId = runId;
+    if (!collectionDailyRouteIsTestScope()) collectionRoutesPilotState.dailyRoutePreparationOpen = false;
     collectionRoutesPilotState.dailyRouteMessage = "";
     collectionRoutesPilotState.dailyRouteError = "";
     await loadCollectionDailyRouteDetail(runId);

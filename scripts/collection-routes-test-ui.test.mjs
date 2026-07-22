@@ -510,6 +510,53 @@ assert.ok(
   dispatcherDetailSource.indexOf("collectionRoutesTestGpsPanel(detail)") < dispatcherDetailSource.indexOf("collection-daily-route-table-wrap"),
   "GPS panel musí být i v běžném detailu před dlouhou tabulkou zastávek."
 );
+for (const marker of [
+  "AKTUÁLNÍ TRASA",
+  "Řidič:",
+  "TRASU ZATÍM NELZE DOKONČIT",
+  "Zbývá vyřídit",
+  "collection-daily-route-stops"
+]) {
+  assert.ok(dispatcherDetailSource.includes(marker), `Aktuální denní trasa postrádá srozumitelný prvek: ${marker}`);
+}
+assert.ok(
+  !dispatcherDetailSource.includes("snapshot se po uložení nemění") &&
+    !dispatcherDetailSource.includes("Vybraná denní trasa"),
+  "Produkční detail nesmí používat interní technický jazyk místo srozumitelného stavu trasy."
+);
+
+const dispatcherPanelStart = appSource.indexOf("function collectionDailyRoutesDispatcherPanel");
+const dispatcherPanelEnd = appSource.indexOf("function collectionRoutesSourceTable", dispatcherPanelStart);
+const dispatcherPanelSource = appSource.slice(dispatcherPanelStart, dispatcherPanelEnd);
+for (const marker of [
+  "collection-daily-routes__current",
+  "collection-daily-routes__route-picker",
+  "data-collection-daily-route-prepare-toggle",
+  "PŘIPRAVIT NOVOU TRASU",
+  "ZKONTROLOVAT PODKLADY NOVÉ TRASY",
+  "Tento krok ještě nic neukládá a nemění Vistos."
+]) {
+  assert.ok(dispatcherPanelSource.includes(marker), `Dispečink denních tras postrádá oddělení aktuální a nové trasy: ${marker}`);
+}
+assert.ok(
+  dispatcherPanelSource.indexOf("collection-daily-routes__current") < dispatcherPanelSource.indexOf("collection-daily-routes__prepare-toggle"),
+  "Aktuální trasa musí být v dispečinku dřív než příprava nové trasy."
+);
+for (const marker of [
+  ".collection-daily-routes--production",
+  ".collection-daily-routes__current",
+  ".collection-daily-routes__route-picker",
+  ".collection-daily-routes__prepare-toggle",
+  ".collection-daily-routes__prepare",
+  ".collection-daily-route-stops"
+]) {
+  assert.ok(styleSource.includes(marker), `Dispečink denních tras postrádá styl: ${marker}`);
+}
+assert.ok(
+  appSource.includes("dailyRoutePreparationOpen: false") &&
+    appSource.includes("dailyRoutePreparationOpen = !collectionRoutesPilotState.dailyRoutePreparationOpen"),
+  "Příprava nové trasy musí být výchozím stavem zavřená a mít vlastní ovládání."
+);
 
 const tabletMapStart = appSource.indexOf("function collectionRoutesTestTabletMapPanel");
 const tabletMapEnd = appSource.indexOf("function collectionDailyRouteDriverMapPanel", tabletMapStart);
