@@ -102,7 +102,24 @@ function rowToFeedback(row) {
     createdAt: cleanString(row.created_at),
     resolvedAt: row.resolved_at || null,
     resolvedByUserId: row.resolved_by_user_id || null,
-    internalNote: cleanString(row.internal_note)
+    internalNote: cleanString(row.internal_note),
+    attachments: []
+  };
+}
+
+function rowToFeedbackAttachment(row) {
+  const caseId = cleanString(row?.case_id);
+  const id = cleanString(row?.id);
+  if (!caseId || !id) return null;
+  return {
+    id,
+    caseId,
+    feedbackId: cleanString(row.feedback_id),
+    filename: cleanString(row.file_name),
+    contentType: cleanString(row.content_type),
+    sizeBytes: Math.max(0, Number(row.size_bytes || 0)),
+    createdAt: cleanString(row.created_at),
+    openUrl: `/api/self-repair/cases/${encodeURIComponent(caseId)}/attachments/${encodeURIComponent(id)}`
   };
 }
 
@@ -116,8 +133,8 @@ export function canCreateCentralModuleFeedback(user) {
 
 export async function listModuleFeedback(env, currentUser) {
   const db = feedbackDatabase(env, true);
-  const result = await db
-    .prepare(`
+  const [result, attachmentResult] = await Promise.all([
+    db.prepare(`
       SELECT
         id,
         module_id,
@@ -136,8 +153,28 @@ export async function listModuleFeedback(env, currentUser) {
       ORDER BY created_at DESC
       LIMIT 500
     `)
-    .all();
-  const items = (result.results || []).map(rowToFeedback).filter(Boolean);
+      .all(),
+    db.prepare(`
+      SELECT id, case_id, feedback_id, file_name, content_type, size_bytes, created_at
+      FROM self_repair_case_attachments
+      WHERE feedback_id IN (
+        SELECT id FROM module_feedback ORDER BY created_at DESC LIMIT 500
+      )
+      ORDER BY created_at ASC
+    `).all()
+  ]);
+  const attachmentsByFeedback = new Map();
+  for (const row of attachmentResult.results || []) {
+    const attachment = rowToFeedbackAttachment(row);
+    if (!attachment?.feedbackId) continue;
+    const items = attachmentsByFeedback.get(attachment.feedbackId) || [];
+    items.push(attachment);
+    attachmentsByFeedback.set(attachment.feedbackId, items);
+  }
+  const items = (result.results || [])
+    .map(rowToFeedback)
+    .filter(Boolean)
+    .map((item) => ({ ...item, attachments: attachmentsByFeedback.get(item.id) || [] }));
 
   if (canEditModuleFeedback(currentUser)) {
     return items;
