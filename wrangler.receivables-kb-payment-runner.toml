@@ -4,6 +4,7 @@ compatibility_date = "2026-07-22"
 workers_dev = false
 
 [vars]
+KB_ADAA_ENVIRONMENT = "production"
 KB_ADAA_PAYMENT_SYNC_ENABLED = "true"
 KB_ADAA_INITIAL_LOOKBACK_DAYS = "90"
 KB_ADAA_OVERLAP_DAYS = "7"
