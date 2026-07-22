@@ -104,6 +104,7 @@ let mockUsers = DEFAULT_USERS.map((user) => user.id === "pneumatiky-miroslav-vas
   : { ...user });
 let mockThemeSettings = normalizeThemeSettings(DEFAULT_THEME_SETTINGS);
 let mockAbsenceSettings = normalizeAbsenceSettings();
+let mockReceivablesKbPaymentRun = null;
 let mockEmployeeCards = new Map();
 let mockEmployeeWorkHistory = new Map();
 let mockEmployeeDocuments = new Map();
@@ -5998,6 +5999,79 @@ async function handleApi(request, response) {
       return true;
     }
     sendJson(response, 200, mockReceivablesPaymentReconciliation());
+    return true;
+  }
+
+  if (url.pathname === "/api/receivables/kb/payment-sync" && ["GET", "POST"].includes(request.method)) {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (request.method === "POST" && !hasPermission(user, "receivables", "manage")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    if (request.method === "POST") {
+      const now = new Date().toISOString();
+      mockReceivablesKbPaymentRun = {
+        id: `mock-kb-sync-${Date.now()}`,
+        startedAt: now,
+        finishedAt: now,
+        status: "completed",
+        message: "Lokální mock: nové 3, aktualizované 1, ignorované 2.",
+        triggeredBy: "manual-ui",
+        batch: {
+          id: `mock-kb-batch-${Date.now()}`,
+          createdAt: now,
+          periodFrom: new Date(Date.now() - 7 * 86400000).toISOString(),
+          periodTo: now,
+          rowCount: 6,
+          acceptedCount: 4,
+          ignoredCount: 2,
+          summary: { insertedCount: 3, updatedCount: 1, ignoredCount: 2 }
+        }
+      };
+      sendJson(response, 200, {
+        apiStatus: "ready",
+        status: "completed",
+        message: mockReceivablesKbPaymentRun.message,
+        summary: mockReceivablesKbPaymentRun.batch.summary,
+        createsPaymentOrders: false,
+        reconcilesInvoicesAutomatically: false,
+        sendsCustomerCommunication: false
+      });
+      return true;
+    }
+    sendJson(response, 200, {
+      apiStatus: "ready",
+      provider: "Komerční banka",
+      service: "Account Direct Access API v2",
+      mode: "local_mock_cloud_payment_import",
+      configured: true,
+      missingEnv: [],
+      automationEnabled: true,
+      cron: "7 */2 * * *",
+      nextScheduledAt: new Date(Date.now() + 7200000).toISOString(),
+      lastRun: mockReceivablesKbPaymentRun ? {
+        id: mockReceivablesKbPaymentRun.id,
+        startedAt: mockReceivablesKbPaymentRun.startedAt,
+        finishedAt: mockReceivablesKbPaymentRun.finishedAt,
+        status: mockReceivablesKbPaymentRun.status,
+        message: mockReceivablesKbPaymentRun.message,
+        triggeredBy: mockReceivablesKbPaymentRun.triggeredBy
+      } : null,
+      lastBatch: mockReceivablesKbPaymentRun?.batch || null,
+      safety: {
+        readsKbApi: false,
+        writesPaymentTransactions: false,
+        createsPaymentOrders: false,
+        importsDebits: false,
+        importsPendingTransactions: false,
+        reconcilesInvoicesAutomatically: false,
+        sendsCustomerCommunication: false
+      }
+    });
     return true;
   }
 
