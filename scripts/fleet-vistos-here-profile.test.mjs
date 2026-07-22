@@ -53,10 +53,8 @@ const enriched = await vistosTest.enrichVistosVehicleRows(
           c_LengthMeters: "8,50",
           c_WidthMeters: "2,40",
           c_HeightMeters: "3,50",
-          c_VehicleType_FK_RecordId: "18358",
-          c_VehicleType_FK_Caption: "Pevný nákladní vůz",
-          c_BodyType_FK_RecordId: "18378",
-          c_BodyType_FK_Caption: "Popelář"
+          c_VehicleType_FK: 18358,
+          c_BodyType_FK: 18378
         },
         status: 200
       };
@@ -77,6 +75,27 @@ assert.deepEqual(screenshotVehicle.technicalProfile.dimensionsCm, { length: 850,
 assert.equal(screenshotVehicle.technicalProfile.vehicleType.caption, "Pevný nákladní vůz");
 assert.equal(screenshotVehicle.technicalProfile.bodyType.caption, "Popelář");
 assert.ok(screenshotVehicle.technicalProfile.blockers.includes("chybí potvrzené zatížení nápravy nebo skupiny náprav"));
+assert.equal(vistosTest.FLEET_VISTOS_VEHICLE_ENUM_CAPTIONS.c_AxleConfiguration_FK["18352"], "6x4");
+
+const enumeratedVehicle = vistosTest.mapVehicle({
+  Id: "vehicle-enums",
+  Name: "Číselníkový test",
+  RegistrationPlate: "ENUM 1",
+  c_AxleCount_FK: 18345,
+  c_AxleConfiguration_FK: 18352,
+  c_TrailerCount_FK: 18360,
+  FuelType_FK: 18363,
+  c_EuroEmissionStandard_FK: 18371,
+  c_AdditionalEquipment_FK: [18379, 18381],
+  c_SupportedContainerSizes_FK: [18384, 18386]
+}, { fields: {} }, technicalFields);
+assert.equal(enumeratedVehicle.technicalProfile.axleCount.caption, "3");
+assert.equal(enumeratedVehicle.technicalProfile.axleConfiguration.caption, "6x4");
+assert.equal(enumeratedVehicle.technicalProfile.trailerCount.caption, "0");
+assert.equal(enumeratedVehicle.technicalProfile.fuelType.caption, "Nafta");
+assert.equal(enumeratedVehicle.technicalProfile.euroEmissionStandard.caption, "6");
+assert.deepEqual(enumeratedVehicle.technicalProfile.additionalEquipment.captions, ["Hydraulická ruka", "Váha"]);
+assert.deepEqual(enumeratedVehicle.technicalProfile.supportedContainerSizes.captions, ["120 ltr", "1100 ltr"]);
 
 assert.deepEqual(extractVistosRecord({
   status: "OK",

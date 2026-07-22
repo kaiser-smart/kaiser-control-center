@@ -154,6 +154,34 @@ const FLEET_VISTOS_VEHICLE_TECHNICAL_SPECS = [
   { field: "depotAddressGps", label: "GPS domovského depa", aliases: ["DepoAddressGps"], kind: "gps" }
 ];
 
+// Oficiální číselník dodaný ve Vehicle- EnumerationList.xlsx.
+// Vistos GetByIdParam někdy vrací pouze ID bez *_Caption; hodnoty se zde jen překládají, nevymýšlejí.
+const FLEET_VISTOS_VEHICLE_ENUM_CAPTIONS = Object.freeze({
+  c_VehicleType_FK: { "18358": "Pevný nákladní vůz", "18359": "Tahač" },
+  c_TrailerCount_FK: { "18360": "0", "18361": "1", "18362": "2" },
+  FuelType_FK: { "18363": "Nafta", "18364": "Benzín", "18365": "Elektřina" },
+  c_FuelType_FK: { "18363": "Nafta", "18364": "Benzín", "18365": "Elektřina" },
+  c_EuroEmissionStandard_FK: {
+    "18366": "1", "18367": "2", "18368": "3", "18369": "4", "18370": "5", "18371": "6", "18372": "7"
+  },
+  c_BodyType_FK: {
+    "18373": "Plošina", "18374": "Plachta", "18375": "Pevná skříň", "18376": "Kontejnerová",
+    "18377": "Cisternová", "18378": "Popelář"
+  },
+  c_AdditionalEquipment_FK: {
+    "18379": "Hydraulická ruka", "18380": "Lisovací zařízení", "18381": "Váha",
+    "18382": "Čerpadlo", "18383": "Hydraulické čelo"
+  },
+  c_SupportedContainerSizes_FK: {
+    "18384": "120 ltr", "18385": "240 ltr", "18386": "1100 ltr", "18387": "2500 ltr", "18388": "5000 ltr"
+  },
+  c_AxleCount_FK: { "18344": "2", "18345": "3", "18346": "4", "18347": "5 a více", "18348": "Jiná hodnota" },
+  c_AxleConfiguration_FK: {
+    "18349": "4x2", "18350": "4x4", "18351": "6x2", "18352": "6x4", "18353": "6x6",
+    "18354": "8x2", "18355": "8x4", "18356": "8x6", "18357": "8x8"
+  }
+});
+
 function clean(value) {
   return cleanVistosValue(value);
 }
@@ -678,6 +706,10 @@ function fieldSource(technicalFields, field) {
   };
 }
 
+function vehicleEnumCaption(columnName, id) {
+  return clean(FLEET_VISTOS_VEHICLE_ENUM_CAPTIONS[clean(columnName)]?.[clean(id)]);
+}
+
 function technicalRawValue(row, technicalFields, field) {
   const source = fieldSource(technicalFields, field);
   if (!source.columnName) return "";
@@ -696,9 +728,18 @@ function technicalNumericValue(row, technicalFields, field, options = {}) {
 function technicalEnumValue(row, technicalFields, field) {
   const source = fieldSource(technicalFields, field);
   if (!source.columnName) return { id: "", caption: "", source };
+  const id = recordId(row, source.columnName);
+  const explicitCaption = firstValue(row, [
+    `${source.columnName}_Caption`,
+    `${source.columnName}.Caption`,
+    `${source.columnName}_Name`,
+    `${source.columnName}.Name`,
+    `${source.columnName}_MainProjection`,
+    `${source.columnName}.MainProjection`
+  ]);
   return {
-    id: recordId(row, source.columnName),
-    caption: caption(row, source.columnName),
+    id,
+    caption: explicitCaption || vehicleEnumCaption(source.columnName, id) || id,
     source
   };
 }
@@ -710,14 +751,18 @@ function technicalMultiEnumValue(row, technicalFields, field) {
     `${source.columnName}_RecordId`, `${source.columnName}.RecordId`, `${source.columnName}_Id`, source.columnName
   ]);
   const rawCaptions = firstRawValue(row, [
-    `${source.columnName}_Caption`, `${source.columnName}.Caption`, `${source.columnName}_MainProjection`, source.columnName
+    `${source.columnName}_Caption`, `${source.columnName}.Caption`, `${source.columnName}_MainProjection`
   ]);
   const values = (value) => Array.isArray(value)
     ? value.flatMap(values)
     : clean(value).split(/[;,|]/).map((item) => item.trim()).filter(Boolean);
+  const ids = [...new Set(values(rawIds))];
+  const explicitCaptions = [...new Set(values(rawCaptions))];
   return {
-    ids: [...new Set(values(rawIds))],
-    captions: [...new Set(values(rawCaptions))],
+    ids,
+    captions: explicitCaptions.length
+      ? explicitCaptions
+      : [...new Set(ids.map((id) => vehicleEnumCaption(source.columnName, id)).filter(Boolean))],
     source
   };
 }
@@ -1078,6 +1123,7 @@ export function fleetVistosVehiclePreviewError(error) {
 }
 
 export const __test = {
+  FLEET_VISTOS_VEHICLE_ENUM_CAPTIONS,
   FLEET_VISTOS_VEHICLE_TECHNICAL_SPECS,
   enrichVistosVehicleRows,
   mapVehicle,
