@@ -99,10 +99,27 @@ for (const marker of [
   "collection-daily-driver-actions__primary",
   "collection-daily-driver-actions__context",
   "collection-daily-driver-actions__assistant",
+  "collection-daily-driver-actions__label",
   "collection-daily-driver-action--wide",
-  "aria-label=\"Pomoc Šarloty\""
+  "aria-label=\"Pomoc Šarloty\"",
+  "HLAVNÍ AKCE",
+  "DALŠÍ AKCE",
+  "HLASOVÁ POMOC",
+  "STANOVIŠTĚ OBSLOUŽENO",
+  "PROBLÉM · FOTO · POZNÁMKA",
+  "is-admin-tablet-test"
 ]) {
   assert.ok(driverPageSource.includes(marker), `Řidičský displej postrádá bezpečnou skupinu akcí: ${marker}`);
+}
+
+for (const marker of [
+  "collection-routes-tablet-test-status is-${summaryTone}",
+  "collection-routes-tablet-test-status__result",
+  "collection-routes-tablet-test-status__toggle",
+  "Kontrola testu",
+  "připraveno"
+]) {
+  assert.ok(appSource.includes(marker), `Administrátorská kontrola tabletu postrádá kompaktní stav: ${marker}`);
 }
 
 assert.ok(
@@ -174,8 +191,11 @@ for (const marker of [
   ".collection-daily-driver-actions__primary",
   ".collection-daily-driver-actions__context",
   ".collection-daily-driver-actions__assistant",
-  "min-height: 76px",
-  "min-height: 62px",
+  ".collection-daily-driver-actions__label",
+  ".collection-daily-driver-page.is-admin-tablet-test",
+  ".collection-routes-tablet-test-status > summary",
+  "min-height: 86px",
+  "min-height: 72px",
   "overflow-wrap: anywhere"
 ]) {
   assert.ok(styleSource.includes(marker), `Tabletový kiosk postrádá terénní ergonomii: ${marker}`);

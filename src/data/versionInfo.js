@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.666"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.667"),
   status: "development",
   backupName: "Bod nula – Evidence pneumatik",
   backupNote: "Plně funkční původní aplikace evidence pneumatik.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Řidičský displej: nové pracovní rozložení pro terén",
+    text: "Řidičský kiosk má novou kontrastní pracovní plochu s dominantním potvrzením stanoviště, jasně odděleným hlášením, provozními volbami a hlasovou pomocí. Administrátorská kontrola TESTU je nově kompaktní a nezakrývá řidiči trasu; všechny funkce, API, role, zápisy i bezpečnostní potvrzení zůstávají beze změny."
+  },
   {
     title: "Hlášení tras: dispečerská fronta podle dalšího kroku",
     text: "Pracovní fronta hlášení nyní zvýrazňuje nevyřízené případy, odpovědnou osobu a konkrétní další krok. PROVOZ a TEST zůstávají oddělené; stavový workflow, audit, API a pravidla odesílání se nemění."

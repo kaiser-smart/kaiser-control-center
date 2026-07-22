@@ -261,7 +261,8 @@ assert.match(appSource, /data-collection-routes-admin-tablet-test-open>TEST TABL
 assert.match(appSource, /TEST REŽIM · ŘIDIČ: VAŠEK MIROSLAV/);
 assert.match(appSource, /UKONČIT A RESETOVAT TEST/);
 assert.match(appSource, /Tato funkce zatím není v testovacím režimu dostupná/);
-assert.match(appSource, /Stav testu/);
+assert.match(appSource, /Kontrola testu/);
+assert.match(appSource, /collection-routes-tablet-test-status__toggle/);
 const tabletTestStart = appSource.indexOf("async function startCollectionRoutesAdminTabletTest()");
 const tabletTestStartEnd = appSource.indexOf("async function resetCollectionRoutesAdminTabletTest", tabletTestStart);
 assert.ok(tabletTestStart >= 0 && tabletTestStartEnd > tabletTestStart);
