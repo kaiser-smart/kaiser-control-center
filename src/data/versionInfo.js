@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.680"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.681"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vozový park: technické údaje přímo z detailu Vistosu",
+    text: "KSO načítá hmotnosti, rozměry, typ vozidla a nástavbu cíleným read-only dotazem z detailu vozidla. Seznam zůstává rychlý, detail se čte pouze pro vůz požadovaný HERE nebo právě otevřenou kartu; Vistos, trasy ani notifikace se nemění."
+  },
   {
     title: "Řidičský tablet: nepřehlédnutelná přestávka",
     text: "Zahájená přestávka překryje pracovní tablet výrazným stavem PŘESTÁVKA BĚŽÍ, ukazuje čas zahájení i živou délku a skončí až velkým vědomým tlačítkem. Začátek a konec zůstávají v auditu, takže se aktivní přestávka obnoví i po znovunačtení tabletu."

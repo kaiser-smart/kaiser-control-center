@@ -438,7 +438,11 @@ export async function getCollectionRouteHereReadiness(env, user, input = {}) {
     };
     if (usesVistosVehicleTechnicalData(storedSettings.config)) {
       try {
-        technicalPreview = await createFleetVistosVehiclePreview(env);
+        const technicalVehicles = configuredVehicles(storedSettings.config);
+        technicalPreview = await createFleetVistosVehiclePreview(env, {
+          detailVehicleIds: technicalVehicles.map((vehicle) => vehicle?.vistosVehicleId).filter(Boolean),
+          detailRegistrationPlates: technicalVehicles.map((vehicle) => vehicle?.registration).filter(Boolean)
+        });
         technicalResolution = resolveVistosVehicleTechnicalConfiguration(storedSettings.config, technicalPreview, wasteType);
       } catch (error) {
         technicalResolution = {
