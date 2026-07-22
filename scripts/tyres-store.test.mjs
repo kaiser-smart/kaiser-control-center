@@ -139,6 +139,19 @@ assert.equal(dashboard.vehicles[0].licensePlate, "3BH 5548");
 assert.equal(dashboard.latestImport.status, "completed");
 assert.deepEqual(dashboard.latestImport.summary, { vehicles: 1, tyres: 1, measurements: 1, services: 1 });
 
+const placeholderImport = await importLegacyTyres(env, manager, {
+  source: "legacy-placeholder-test",
+  state: {
+    vehicles: [{ spz: "NEZJISTENO" }],
+    tires: [],
+    measurements: [],
+    services: [{ id: "S-unknown", date: "2026-07-21", vehicle: "NEZJISTENO", type: "kontrola" }]
+  }
+});
+assert.deepEqual(placeholderImport.summary, { vehicles: 0, tyres: 0, measurements: 0, services: 1 });
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM tyre_vehicle_profiles WHERE normalized_license_plate = 'NEZJISTENO'").get().count, 0);
+assert.equal(sqlite.prepare("SELECT vehicle_license_plate AS vehicle FROM tyre_service_records WHERE legacy_id = 'S-unknown'").get().vehicle, "");
+
 const created = await createTyre(env, technician, {
   manufacturer: "Pirelli",
   model: "R02",
@@ -205,6 +218,6 @@ await assert.rejects(
   (error) => error instanceof TyresStoreError && error.code === "tyres_tread_invalid"
 );
 
-assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM tyre_audit_log").get().count, 6);
+assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM tyre_audit_log").get().count, 7);
 
 console.log("tyres store tests: ok");

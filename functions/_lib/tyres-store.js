@@ -71,6 +71,12 @@ function requirePlate(value) {
   return plate;
 }
 
+function legacyPlate(value) {
+  const raw = cleanString(value, 32);
+  if (!raw || ["NEZJISTENO", "BEZSPZ"].includes(plateKey(raw))) return "";
+  return requirePlate(raw);
+}
+
 function requireText(value, label, maxLength = 180) {
   const cleaned = cleanString(value, maxLength);
   if (!cleaned) {
@@ -492,7 +498,8 @@ function legacyState(value) {
 }
 
 async function upsertLegacyVehicle(db, vehicle, importId, now) {
-  const plate = requirePlate(vehicle?.spz || vehicle?.licensePlate || vehicle?.license_plate);
+  const plate = legacyPlate(vehicle?.spz || vehicle?.licensePlate || vehicle?.license_plate);
+  if (!plate) return;
   const recordId = `tyre-vehicle-${plateKey(plate).toLowerCase()}`;
   await db.prepare(`
     INSERT INTO tyre_vehicle_profiles (
@@ -516,7 +523,8 @@ async function upsertLegacyVehicle(db, vehicle, importId, now) {
 }
 
 async function ensureLegacyVehicleProfile(db, value, importId, now) {
-  const plate = requirePlate(value);
+  const plate = legacyPlate(value);
+  if (!plate) return;
   const recordId = `tyre-vehicle-${plateKey(plate).toLowerCase()}`;
   await db.prepare(`
     INSERT INTO tyre_vehicle_profiles (
@@ -538,7 +546,7 @@ async function upsertLegacyTyre(db, tyre, importId, user, now) {
     tyre?.manufacturer, tyre?.model, tyre?.size, tyre?.vehicle, tyre?.position, tyre?.purchaseDate, tyre?.invoice
   ]);
   const recordId = `legacy-tyre-${legacyId}`;
-  const payload = tyrePayload(tyre);
+  const payload = tyrePayload({ ...tyre, vehicle: legacyPlate(tyre?.vehicle) });
   const event = actor(user);
   await db.prepare(`
     INSERT INTO tyre_inventory (
@@ -601,7 +609,7 @@ async function upsertLegacyService(db, service, importId, user, now) {
   ]);
   const recordId = `legacy-service-${legacyId}`;
   const event = actor(user);
-  const vehicle = cleanString(service?.vehicle, 32) ? requirePlate(service.vehicle) : "";
+  const vehicle = legacyPlate(service?.vehicle);
   await db.prepare(`
     INSERT INTO tyre_service_records (
       id, legacy_id, service_date, vehicle_license_plate, technician_name, service_type, supplier,
@@ -628,9 +636,9 @@ export async function importLegacyTyres(env, user, value) {
   try {
     const db = database(env);
     const state = legacyState(value);
-    const vehicles = legacyArray(state.vehicles);
+    const vehicles = legacyArray(state.vehicles).filter((vehicle) => legacyPlate(vehicle?.spz || vehicle?.licensePlate || vehicle?.license_plate));
     const tyres = legacyArray(state.tires);
-    const measurements = legacyArray(state.measurements);
+    const measurements = legacyArray(state.measurements).filter((measurement) => legacyPlate(measurement?.vehicle));
     const services = legacyArray(state.services);
     if (!vehicles.length && !tyres.length && !measurements.length && !services.length) {
       throw new TyresStoreError("Původní evidence neobsahuje žádná data k převodu.", 400, "tyres_legacy_state_empty");
@@ -648,13 +656,13 @@ export async function importLegacyTyres(env, user, value) {
     ).run();
     for (const vehicle of vehicles) await upsertLegacyVehicle(db, vehicle, importId, createdAt);
     for (const tyre of tyres) {
-      if (cleanString(tyre?.vehicle, 32)) await ensureLegacyVehicleProfile(db, tyre.vehicle, importId, createdAt);
+      if (legacyPlate(tyre?.vehicle)) await ensureLegacyVehicleProfile(db, tyre.vehicle, importId, createdAt);
     }
     for (const measurement of measurements) {
-      if (cleanString(measurement?.vehicle, 32)) await ensureLegacyVehicleProfile(db, measurement.vehicle, importId, createdAt);
+      if (legacyPlate(measurement?.vehicle)) await ensureLegacyVehicleProfile(db, measurement.vehicle, importId, createdAt);
     }
     for (const service of services) {
-      if (cleanString(service?.vehicle, 32)) await ensureLegacyVehicleProfile(db, service.vehicle, importId, createdAt);
+      if (legacyPlate(service?.vehicle)) await ensureLegacyVehicleProfile(db, service.vehicle, importId, createdAt);
     }
     for (const tyre of tyres) await upsertLegacyTyre(db, tyre, importId, user, createdAt);
     for (const [index, measurement] of measurements.entries()) await insertLegacyMeasurement(db, measurement, importId, user, index, createdAt);
