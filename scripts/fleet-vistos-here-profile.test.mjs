@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 import { __test as vistosTest } from "../functions/_lib/fleet-vistos-vehicle-preview.js";
 import {
@@ -197,6 +198,12 @@ assert.equal(resolved.profiles[0].match, "registration-plate");
 assert.equal(resolved.config.vehicles[0].truck.currentWeightKg, 19000);
 assert.deepEqual(resolved.config.vehicles[0].truck.weightPerAxleGroup, { single: 7000, tandem: 11500, triple: 16000 });
 assert.deepEqual(hereTest.configurationBlockers({ status: "ready", config: resolved.config }, "SKO"), []);
+
+const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
+assert.match(appSource, /async function loadFleetVehicleDetail\(vehicleId/);
+assert.match(appSource, /apiJson\(`\/api\/vehicles\/\$\{encodeURIComponent\(vehicleKey\)\}`\)/);
+assert.match(appSource, /await loadFleetVehicleDetail\(fleetVehicleId\)/);
+assert.match(appSource, /params\.get\("vistosDiagnostics"\) !== "1"/);
 
 const problem = buildCollectionRouteHereProblem({
   ready: true,
