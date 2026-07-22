@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.683"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.684"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vozový park: detail Vistosu má přednost před nulami seznamu",
+    text: "Hmotnosti, rozměry a technická pole z cíleného read-only detailu vozidla nově přepisují nulové zástupné hodnoty seznamu. Dočasná diagnostika byla z pracovního UI odstraněna; Vistos, trasy, databáze ani notifikace se nemění."
+  },
   {
     title: "Vozový park: detail skutečně načítá techniku Vistosu",
     text: "Karta vozidla nově volá chráněný detailový endpoint, který pro otevřený vůz spustí cílené read-only čtení GetByIdParam. Seznam vozidel zůstává beze změny a do Vistosu, tras ani notifikací se nic nezapisuje."

@@ -377,14 +377,16 @@ function selectedVehicleDetailRows(rows = [], options = {}) {
 
 function hasVistosDetailValue(value) {
   if (Array.isArray(value)) return value.length > 0;
-  if (value && typeof value === "object") return true;
+  if (value && typeof value === "object") return Object.keys(value).length > 0;
   return clean(value) !== "";
 }
 
 function mergeVehicleDetailRow(baseRow = {}, detailRow = {}) {
   const merged = { ...baseRow };
   for (const [key, value] of Object.entries(detailRow || {})) {
-    if (hasVistosDetailValue(value) && !hasVistosDetailValue(merged[key])) {
+    // GetByIdParam je pro otevřený vůz přesnější než seznam GetPage.
+    // Proto jeho potvrzené hodnoty přepisují i nulové zástupné hodnoty seznamu.
+    if (hasVistosDetailValue(value)) {
       merged[key] = value;
     }
   }
