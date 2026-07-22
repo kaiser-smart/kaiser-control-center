@@ -267,15 +267,49 @@ assert.match(
 
 assert.ok(
   appSource.includes("function playCollectionDailyDriverTapSound()")
+    && appSource.includes("function withCollectionRoutesDriverAudioContext(onReady)")
     && appSource.includes("data-collection-driver-sound-toggle")
     && appSource.includes("data-collection-driver-display-mode")
     && appSource.includes('oscillator.type = "triangle"')
-    && appSource.includes("oscillator.frequency.setValueAtTime(235")
-    && appSource.includes("endAt = startAt + 0.058")
+    && appSource.includes("context.resume().then(scheduleWhenRunning)")
+    && appSource.includes('if (context.state !== "running") return false;')
+    && appSource.includes("oscillator.frequency.setValueAtTime(520")
+    && appSource.includes("endAt = startAt + 0.082")
+    && appSource.includes("gain.gain.exponentialRampToValueAtTime(0.065")
+    && appSource.includes("collectionDailyDriverSoundTarget")
     && !appSource.slice(appSource.indexOf("function playCollectionDailyDriverTapSound()"), appSource.indexOf("function collectionDailyDriverSettingsSummary()"))
       .includes("forEach"),
-  "Zvuk tlačítka musí být jediný krátký tlumený tón bez zvonkohry."
+  "Zvuk tlačítka musí po odemčení prohlížeče zahrát jeden krátký, slyšitelný tlumený tón bez zvonkohry."
 );
+
+const audioHelperStart = appSource.indexOf("let collectionRoutesDriverAudioContext = null;");
+const audioHelperEnd = appSource.indexOf("function collectionRoutesSourceDriverSoundsEnabled()", audioHelperStart);
+assert.ok(audioHelperStart >= 0 && audioHelperEnd > audioHelperStart, "Zvuková pomocná funkce tabletu musí být dostupná pro regresní test.");
+const audioHelperSource = appSource.slice(audioHelperStart, audioHelperEnd);
+let finishAudioResume;
+const simulatedAudioContext = {
+  state: "suspended",
+  resume() {
+    return new Promise((resolve) => {
+      finishAudioResume = resolve;
+    });
+  }
+};
+const withTabletAudioContext = new Function(
+  "window",
+  "console",
+  `${audioHelperSource}\nreturn withCollectionRoutesDriverAudioContext;`
+)(
+  { AudioContext: function SimulatedAudioContext() { return simulatedAudioContext; } },
+  { warn() {} }
+);
+const scheduledAudioStates = [];
+withTabletAudioContext((context) => scheduledAudioStates.push(context.state));
+assert.deepEqual(scheduledAudioStates, [], "Tón se nesmí plánovat do pozastaveného AudioContextu.");
+simulatedAudioContext.state = "running";
+finishAudioResume();
+await Promise.resolve();
+assert.deepEqual(scheduledAudioStates, ["running"], "Tón se musí naplánovat až po skutečném odemčení AudioContextu.");
 
 assert.ok(
   appSource.includes('window.matchMedia?.("(prefers-color-scheme: dark)")')

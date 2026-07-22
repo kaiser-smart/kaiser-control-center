@@ -21087,6 +21087,30 @@ const COLLECTION_ROUTES_DRIVER_ACTION_ICONS = {
 
 let collectionRoutesDriverAudioContext = null;
 
+function withCollectionRoutesDriverAudioContext(onReady) {
+  if (typeof window === "undefined") return;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+  try {
+    if (!collectionRoutesDriverAudioContext || collectionRoutesDriverAudioContext.state === "closed") {
+      collectionRoutesDriverAudioContext = new AudioContextClass();
+    }
+    const context = collectionRoutesDriverAudioContext;
+    const scheduleWhenRunning = () => {
+      if (context.state !== "running") return false;
+      onReady(context);
+      return true;
+    };
+    if (scheduleWhenRunning()) return;
+    if (typeof context.resume !== "function") return;
+    void context.resume().then(scheduleWhenRunning).catch((error) => {
+      console.warn("Zvuk řidičského tabletu se nepodařilo odemknout.", error);
+    });
+  } catch (error) {
+    console.warn("Zvuk řidičského tabletu se nepodařilo přehrát.", error);
+  }
+}
+
 function collectionRoutesSourceDriverSoundsEnabled() {
   return collectionRoutesPilotState.sourceDriverSoundsEnabled !== false;
 }
@@ -21141,16 +21165,7 @@ function playCollectionRoutesDriverSound(type = "tap") {
   if (!collectionRoutesSourceDriverSoundsEnabled() || typeof window === "undefined") {
     return;
   }
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) {
-    return;
-  }
-  try {
-    collectionRoutesDriverAudioContext = collectionRoutesDriverAudioContext || new AudioContextClass();
-    const context = collectionRoutesDriverAudioContext;
-    if (context.state === "suspended") {
-      context.resume().catch(() => {});
-    }
+  withCollectionRoutesDriverAudioContext((context) => {
     const now = context.currentTime;
     collectionRoutesSourceDriverTonePlan(type).forEach((tone) => {
       const oscillator = context.createOscillator();
@@ -21167,9 +21182,7 @@ function playCollectionRoutesDriverSound(type = "tap") {
       oscillator.start(startAt);
       oscillator.stop(endAt + 0.025);
     });
-  } catch (error) {
-    console.warn("Zvuk řidičského tabletu se nepodařilo přehrát.", error);
-  }
+  });
 }
 
 function collectionRoutesSourceDriverReadonlySoundType(action) {
@@ -24957,29 +24970,22 @@ function collectionDailyDriverSoundAllowed() {
 
 function playCollectionDailyDriverTapSound() {
   if (!collectionDailyDriverSoundAllowed()) return;
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return;
-  try {
-    collectionRoutesDriverAudioContext = collectionRoutesDriverAudioContext || new AudioContextClass();
-    const context = collectionRoutesDriverAudioContext;
-    if (context.state === "suspended") context.resume?.().catch(() => {});
+  withCollectionRoutesDriverAudioContext((context) => {
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     const startAt = context.currentTime;
-    const endAt = startAt + 0.058;
+    const endAt = startAt + 0.082;
     oscillator.type = "triangle";
-    oscillator.frequency.setValueAtTime(235, startAt);
-    oscillator.frequency.exponentialRampToValueAtTime(185, endAt);
+    oscillator.frequency.setValueAtTime(520, startAt);
+    oscillator.frequency.exponentialRampToValueAtTime(430, endAt);
     gain.gain.setValueAtTime(0.0001, startAt);
-    gain.gain.exponentialRampToValueAtTime(0.024, startAt + 0.009);
+    gain.gain.exponentialRampToValueAtTime(0.065, startAt + 0.012);
     gain.gain.exponentialRampToValueAtTime(0.0001, endAt);
     oscillator.connect(gain);
     gain.connect(context.destination);
     oscillator.start(startAt);
     oscillator.stop(endAt + 0.015);
-  } catch (error) {
-    console.warn("Zvuk řidičského tabletu se nepodařilo přehrát.", error);
-  }
+  });
 }
 
 function collectionDailyDriverSettingsSummary() {
@@ -54521,6 +54527,7 @@ document.addEventListener("pointerup", (event) => {
 }, true);
 
 let collectionDailyDriverPressedTarget = null;
+let collectionDailyDriverSoundTarget = null;
 
 document.addEventListener("pointerdown", (event) => {
   const kiosk = event.target.closest?.("[data-collection-daily-driver-kiosk], [data-collection-routes-source-driver-preview-kiosk]");
@@ -54530,7 +54537,21 @@ document.addEventListener("pointerdown", (event) => {
   collectionDailyDriverPressedTarget?.classList.remove("is-pressed");
   collectionDailyDriverPressedTarget = target;
   target.classList.add("is-pressed");
-  if (kiosk.matches("[data-collection-daily-driver-kiosk]") && !target.matches("[data-collection-driver-sound-toggle]")) playCollectionDailyDriverTapSound();
+  if (kiosk.matches("[data-collection-daily-driver-kiosk]") && !target.matches("[data-collection-driver-sound-toggle]")) {
+    collectionDailyDriverSoundTarget = target;
+    playCollectionDailyDriverTapSound();
+  }
+}, true);
+
+document.addEventListener("click", (event) => {
+  const kiosk = event.target.closest?.("[data-collection-daily-driver-kiosk]");
+  const target = event.target.closest?.("button:not(:disabled), a[href], label.collection-daily-driver-photo-button");
+  if (!kiosk || !target || !kiosk.contains(target) || target.matches("[data-collection-driver-sound-toggle]")) return;
+  if (target === collectionDailyDriverSoundTarget) {
+    collectionDailyDriverSoundTarget = null;
+    return;
+  }
+  playCollectionDailyDriverTapSound();
 }, true);
 
 function releaseCollectionDailyDriverPressedTarget() {
@@ -54539,7 +54560,10 @@ function releaseCollectionDailyDriverPressedTarget() {
 }
 
 document.addEventListener("pointerup", releaseCollectionDailyDriverPressedTarget, true);
-document.addEventListener("pointercancel", releaseCollectionDailyDriverPressedTarget, true);
+document.addEventListener("pointercancel", () => {
+  releaseCollectionDailyDriverPressedTarget();
+  collectionDailyDriverSoundTarget = null;
+}, true);
 
 collectionDailyDriverColorSchemeMedia?.addEventListener?.("change", () => {
   const driverKioskUsesAuto = collectionDailyDriverDisplayMode() === "auto" && document.querySelector("[data-collection-daily-driver-kiosk]");
