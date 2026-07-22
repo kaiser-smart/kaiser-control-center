@@ -119,6 +119,37 @@ const FLEET_VISTOS_VEHICLE_TERM_SPECS = [
     tokens: [["servis", "service"], ["next", "pristi", "dalsi", "datum", "date", "konec", "interval"]]
   }
 ];
+const FLEET_VISTOS_VEHICLE_TECHNICAL_SPECS = [
+  { field: "emptyWeightKg", label: "Prázdná hmotnost", aliases: ["c_EmptyWeightKg"], kind: "integer" },
+  { field: "maxPermittedWeightKg", label: "Nejvyšší povolená hmotnost", aliases: ["c_MaxPermittedWeightKg"], kind: "integer" },
+  { field: "payloadKg", label: "Nosnost", aliases: ["c_PayloadKg"], kind: "integer" },
+  { field: "lengthMeters", label: "Délka", aliases: ["c_LengthMeters"], kind: "decimal" },
+  { field: "widthMeters", label: "Šířka", aliases: ["c_WidthMeters"], kind: "decimal" },
+  { field: "heightMeters", label: "Výška", aliases: ["c_HeightMeters"], kind: "decimal" },
+  { field: "axleCount", label: "Počet náprav", aliases: ["c_AxleCount_FK"], kind: "enum" },
+  { field: "axleCountOther", label: "Vlastní počet náprav", aliases: ["c_AxleCountOther"], kind: "integer" },
+  { field: "axleConfiguration", label: "Konfigurace náprav", aliases: ["c_AxleConfiguration_FK"], kind: "enum" },
+  { field: "maxSingleAxleLoad", label: "Nejvyšší zatížení jedné nápravy", aliases: ["c_MaxSingleAxleLoad"], kind: "axle-load" },
+  { field: "singleAxleGroupLoadT", label: "Zatížení jednoduché skupiny náprav", aliases: ["c_SingleAxleGroupLoadT"], kind: "decimal" },
+  { field: "tandemAxleGroupLoadT", label: "Zatížení tandemové skupiny náprav", aliases: ["c_TandemAxleGroupLoadT"], kind: "decimal" },
+  { field: "tridemAxleGroupLoadT", label: "Zatížení tridemové skupiny náprav", aliases: ["c_TridemAxleGroupLoadT"], kind: "decimal" },
+  { field: "vehicleType", label: "Typ vozidla", aliases: ["c_VehicleType_FK"], kind: "enum" },
+  { field: "trailerCount", label: "Počet přívěsů", aliases: ["c_TrailerCount_FK"], kind: "enum" },
+  // Ve zdrojovém číselníku je pole bez prefixu c_; podporujeme obě bezpečně potvrzené varianty.
+  { field: "fuelType", label: "Palivo", aliases: ["c_FuelType_FK", "FuelType_FK"], kind: "enum" },
+  { field: "euroEmissionStandard", label: "Emisní norma EURO", aliases: ["c_EuroEmissionStandard_FK"], kind: "enum" },
+  { field: "bodyType", label: "Typ nástavby", aliases: ["c_BodyType_FK"], kind: "enum" },
+  { field: "usableBodyVolumeM3", label: "Využitelný objem nástavby", aliases: ["c_UsableBodyVolumeM3"], kind: "decimal" },
+  { field: "additionalEquipment", label: "Další vybavení", aliases: ["c_AdditionalEquipment_FK"], kind: "multi-enum" },
+  { field: "supportedContainerSizes", label: "Podporované nádoby", aliases: ["c_SupportedContainerSizes_FK"], kind: "multi-enum" },
+  { field: "depotAddressRuian", label: "RÚIAN domovského depa", aliases: ["DepoAddressRuian"], kind: "text" },
+  { field: "depotAddressStreet", label: "Ulice domovského depa", aliases: ["DepoAddressStreet"], kind: "text" },
+  { field: "depotAddressCity", label: "Město domovského depa", aliases: ["DepoAddressCity"], kind: "text" },
+  { field: "depotAddressState", label: "Kraj domovského depa", aliases: ["DepoAddressState_FK"], kind: "enum" },
+  { field: "depotAddressCountry", label: "Země domovského depa", aliases: ["DepoAddressCountry_FK"], kind: "enum" },
+  { field: "depotAddressPostalCode", label: "PSČ domovského depa", aliases: ["DepoAddressPostalCode"], kind: "text" },
+  { field: "depotAddressGps", label: "GPS domovského depa", aliases: ["DepoAddressGps"], kind: "gps" }
+];
 
 function clean(value) {
   return cleanVistosValue(value);
@@ -198,6 +229,19 @@ function termColumnScore(column = {}, spec = {}) {
   return 0;
 }
 
+function technicalColumnScore(column = {}, spec = {}) {
+  const columnName = clean(column.columnName);
+  if (!columnName) return 0;
+
+  const columnKey = normalizeMetadataKey(columnName);
+  const captionKey = normalizeMetadataKey(column.caption);
+  const aliases = (spec.aliases || []).map(normalizeMetadataKey).filter(Boolean);
+
+  if (aliases.includes(columnKey)) return 120;
+  if (captionKey && aliases.includes(captionKey)) return 105;
+  return 0;
+}
+
 async function resolveVehicleTermFields(env, session) {
   try {
     const payload = await getVistosSchemaEntity(env, session, "Vehicle");
@@ -246,8 +290,52 @@ async function resolveVehicleTermFields(env, session) {
   }
 }
 
+function resolveVehicleTechnicalFields(termFields = {}) {
+  const schemaColumns = Array.isArray(termFields?.columns) ? termFields.columns : [];
+  const fields = {};
+
+  for (const spec of FLEET_VISTOS_VEHICLE_TECHNICAL_SPECS) {
+    const candidates = schemaColumns
+      .map((column) => ({
+        ...column,
+        score: technicalColumnScore(column, spec)
+      }))
+      .filter((column) => column.score > 0)
+      .sort((left, right) => right.score - left.score || left.columnName.localeCompare(right.columnName, "cs"));
+    const best = candidates[0] || null;
+    fields[spec.field] = {
+      field: spec.field,
+      label: spec.label,
+      kind: spec.kind,
+      confirmed: Boolean(best),
+      columnName: best?.columnName || "",
+      caption: best?.caption || "",
+      score: best?.score || 0,
+      candidates: candidates.slice(0, 5).map((column) => ({
+        columnName: column.columnName,
+        caption: column.caption,
+        score: column.score
+      }))
+    };
+  }
+
+  return {
+    ok: Boolean(termFields?.ok),
+    source: termFields?.source || "GetSchemaEntity",
+    fields,
+    error: clean(termFields?.error).slice(0, 160)
+  };
+}
+
 function withVehicleTermColumns(columns, termFields) {
   const extra = Object.values(termFields?.fields || {})
+    .filter((field) => field.confirmed && field.columnName)
+    .map((field) => field.columnName);
+  return Array.from(new Set([...columns, ...extra]));
+}
+
+function withVehicleTechnicalColumns(columns, technicalFields) {
+  const extra = Object.values(technicalFields?.fields || {})
     .filter((field) => field.confirmed && field.columnName)
     .map((field) => field.columnName);
   return Array.from(new Set([...columns, ...extra]));
@@ -365,6 +453,252 @@ function gpsFromRow(row) {
   };
 }
 
+function firstRawValue(row, keys = []) {
+  for (const key of keys) {
+    const value = row?.[key];
+    if (value !== undefined && value !== null && clean(value)) return value;
+  }
+  return null;
+}
+
+function parseVistosNumber(value, { integer = false } = {}) {
+  const compact = clean(value)
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, "");
+  const raw = compact.includes(",")
+    ? compact.replace(/\./g, "").replace(",", ".")
+    : integer && /^\d{1,3}(?:\.\d{3})+$/.test(compact)
+      ? compact.replace(/\./g, "")
+      : compact;
+  if (!raw || !/^[+-]?\d+(?:\.\d+)?$/.test(raw)) return null;
+  const number = Number(raw);
+  if (!Number.isFinite(number) || number < 0 || (integer && !Number.isInteger(number))) return null;
+  return number;
+}
+
+function parseAxleLoadKg(value) {
+  const raw = clean(value).replace(/\u00a0/g, " ").trim();
+  if (!raw) return null;
+  const match = raw.match(/^([0-9][0-9\s.,]*)\s*(kg|t|tun|tuny)$/iu);
+  if (!match) return null;
+  const numeric = parseVistosNumber(match[1], { integer: /^kg$/iu.test(match[2]) });
+  if (!numeric || numeric <= 0) return null;
+  return Math.round(/^(t|tun|tuny)$/iu.test(match[2]) ? numeric * 1000 : numeric);
+}
+
+function validCoordinate(latitude, longitude) {
+  return Number.isFinite(latitude) && Number.isFinite(longitude) &&
+    latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180 &&
+    !(latitude === 0 && longitude === 0);
+}
+
+function coordinateFromObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const latitude = Number(value.lat ?? value.latitude ?? value.Lat ?? value.Latitude);
+  const longitude = Number(value.lng ?? value.lon ?? value.longitude ?? value.Long ?? value.Longitude);
+  return validCoordinate(latitude, longitude) ? { lat: latitude, lng: longitude } : null;
+}
+
+function depotGpsFromRow(row, columnName) {
+  if (!columnName) return null;
+  const direct = firstRawValue(row, [
+    columnName,
+    `${columnName}_Value`,
+    `${columnName}_MainProjection`
+  ]);
+  const objectCoordinate = coordinateFromObject(direct);
+  if (objectCoordinate) return objectCoordinate;
+
+  const raw = clean(direct);
+  if (raw.startsWith("{")) {
+    try {
+      const parsedCoordinate = coordinateFromObject(JSON.parse(raw));
+      if (parsedCoordinate) return parsedCoordinate;
+    } catch {
+      // Neplatný JSON není navigační bod.
+    }
+  }
+  const textMatch = raw.match(/^\s*(-?\d+(?:[.,]\d+)?)\s*[,;]\s*(-?\d+(?:[.,]\d+)?)\s*$/);
+  if (textMatch) {
+    const latitude = Number(textMatch[1].replace(",", "."));
+    const longitude = Number(textMatch[2].replace(",", "."));
+    if (validCoordinate(latitude, longitude)) return { lat: latitude, lng: longitude };
+  }
+
+  const latitude = Number(firstRawValue(row, [
+    `${columnName}_Lat`, `${columnName}.Lat`, `${columnName}_Latitude`, `${columnName}.Latitude`
+  ]));
+  const longitude = Number(firstRawValue(row, [
+    `${columnName}_Long`, `${columnName}.Long`, `${columnName}_Lng`, `${columnName}.Lng`,
+    `${columnName}_Longitude`, `${columnName}.Longitude`
+  ]));
+  return validCoordinate(latitude, longitude) ? { lat: latitude, lng: longitude } : null;
+}
+
+function fieldSource(technicalFields, field) {
+  const source = technicalFields?.fields?.[field] || {};
+  return {
+    columnName: clean(source.columnName),
+    caption: clean(source.caption),
+    confirmed: Boolean(source.confirmed)
+  };
+}
+
+function technicalRawValue(row, technicalFields, field) {
+  const source = fieldSource(technicalFields, field);
+  if (!source.columnName) return "";
+  const raw = firstRawValue(row, [
+    source.columnName,
+    `${source.columnName}_Value`,
+    `${source.columnName}_FK_Value`
+  ]);
+  return raw !== null ? clean(raw) : readVistosDisplayValue(row, source.columnName);
+}
+
+function technicalNumericValue(row, technicalFields, field, options = {}) {
+  return parseVistosNumber(technicalRawValue(row, technicalFields, field), options);
+}
+
+function technicalEnumValue(row, technicalFields, field) {
+  const source = fieldSource(technicalFields, field);
+  if (!source.columnName) return { id: "", caption: "", source };
+  return {
+    id: recordId(row, source.columnName),
+    caption: caption(row, source.columnName),
+    source
+  };
+}
+
+function technicalMultiEnumValue(row, technicalFields, field) {
+  const source = fieldSource(technicalFields, field);
+  if (!source.columnName) return { ids: [], captions: [], source };
+  const rawIds = firstRawValue(row, [
+    `${source.columnName}_RecordId`, `${source.columnName}.RecordId`, `${source.columnName}_Id`, source.columnName
+  ]);
+  const rawCaptions = firstRawValue(row, [
+    `${source.columnName}_Caption`, `${source.columnName}.Caption`, `${source.columnName}_MainProjection`, source.columnName
+  ]);
+  const values = (value) => Array.isArray(value)
+    ? value.flatMap(values)
+    : clean(value).split(/[;,|]/).map((item) => item.trim()).filter(Boolean);
+  return {
+    ids: [...new Set(values(rawIds))],
+    captions: [...new Set(values(rawCaptions))],
+    source
+  };
+}
+
+function hasPositiveNumber(value) {
+  return Number.isFinite(Number(value)) && Number(value) > 0;
+}
+
+function technicalProfileFromRow(row, technicalFields) {
+  const emptyWeightKg = technicalNumericValue(row, technicalFields, "emptyWeightKg", { integer: true });
+  const maxPermittedWeightKg = technicalNumericValue(row, technicalFields, "maxPermittedWeightKg", { integer: true });
+  const payloadKg = technicalNumericValue(row, technicalFields, "payloadKg", { integer: true });
+  const lengthMeters = technicalNumericValue(row, technicalFields, "lengthMeters");
+  const widthMeters = technicalNumericValue(row, technicalFields, "widthMeters");
+  const heightMeters = technicalNumericValue(row, technicalFields, "heightMeters");
+  const maxSingleAxleLoadRaw = technicalRawValue(row, technicalFields, "maxSingleAxleLoad");
+  const axleGroupLoadsKg = {
+    single: technicalNumericValue(row, technicalFields, "singleAxleGroupLoadT") * 1000 || null,
+    tandem: technicalNumericValue(row, technicalFields, "tandemAxleGroupLoadT") * 1000 || null,
+    triple: technicalNumericValue(row, technicalFields, "tridemAxleGroupLoadT") * 1000 || null
+  };
+  const dimensionsCm = {
+    length: hasPositiveNumber(lengthMeters) ? Math.round(lengthMeters * 100) : null,
+    width: hasPositiveNumber(widthMeters) ? Math.round(widthMeters * 100) : null,
+    height: hasPositiveNumber(heightMeters) ? Math.round(heightMeters * 100) : null
+  };
+  const blockers = [];
+  if (!hasPositiveNumber(dimensionsCm.length) || !hasPositiveNumber(dimensionsCm.width) || !hasPositiveNumber(dimensionsCm.height)) {
+    blockers.push("chybí délka, šířka nebo výška");
+  }
+  if (!hasPositiveNumber(emptyWeightKg) || !hasPositiveNumber(maxPermittedWeightKg) || !hasPositiveNumber(payloadKg)) {
+    blockers.push("chybí prázdná, nejvyšší povolená hmotnost nebo nosnost");
+  } else if (Math.abs((maxPermittedWeightKg - emptyWeightKg) - payloadKg) > 2) {
+    blockers.push("prázdná hmotnost, nosnost a nejvyšší povolená hmotnost si neodpovídají");
+  }
+  const resolvedGroupLoads = Object.fromEntries(Object.entries(axleGroupLoadsKg)
+    .filter(([, value]) => hasPositiveNumber(value))
+    .map(([key, value]) => [key, Math.round(value)]));
+  const maxSingleAxleLoadKg = parseAxleLoadKg(maxSingleAxleLoadRaw);
+  if (!Object.keys(resolvedGroupLoads).length && !hasPositiveNumber(maxSingleAxleLoadKg)) {
+    blockers.push("chybí potvrzené zatížení nápravy nebo skupiny náprav");
+  }
+
+  return {
+    source: "Vistos Vehicle",
+    emptyWeightKg,
+    maxPermittedWeightKg,
+    payloadKg,
+    lengthMeters,
+    widthMeters,
+    heightMeters,
+    dimensionsCm,
+    axleCount: technicalEnumValue(row, technicalFields, "axleCount"),
+    axleCountOther: technicalNumericValue(row, technicalFields, "axleCountOther", { integer: true }),
+    axleConfiguration: technicalEnumValue(row, technicalFields, "axleConfiguration"),
+    maxSingleAxleLoadRaw,
+    maxSingleAxleLoadKg,
+    axleGroupLoadsKg: resolvedGroupLoads,
+    vehicleType: technicalEnumValue(row, technicalFields, "vehicleType"),
+    trailerCount: technicalEnumValue(row, technicalFields, "trailerCount"),
+    fuelType: technicalEnumValue(row, technicalFields, "fuelType"),
+    euroEmissionStandard: technicalEnumValue(row, technicalFields, "euroEmissionStandard"),
+    bodyType: technicalEnumValue(row, technicalFields, "bodyType"),
+    usableBodyVolumeM3: technicalNumericValue(row, technicalFields, "usableBodyVolumeM3"),
+    additionalEquipment: technicalMultiEnumValue(row, technicalFields, "additionalEquipment"),
+    supportedContainerSizes: technicalMultiEnumValue(row, technicalFields, "supportedContainerSizes"),
+    fieldSources: Object.fromEntries(FLEET_VISTOS_VEHICLE_TECHNICAL_SPECS.map((spec) => [spec.field, fieldSource(technicalFields, spec.field)])),
+    blockers,
+    status: blockers.length ? "needs_review" : "ready"
+  };
+}
+
+function homeDepotFromRow(row, technicalFields) {
+  const gpsSource = fieldSource(technicalFields, "depotAddressGps");
+  const gps = depotGpsFromRow(row, gpsSource.columnName);
+  const address = {
+    ruian: technicalRawValue(row, technicalFields, "depotAddressRuian"),
+    street: technicalRawValue(row, technicalFields, "depotAddressStreet"),
+    city: technicalRawValue(row, technicalFields, "depotAddressCity"),
+    state: technicalEnumValue(row, technicalFields, "depotAddressState"),
+    country: technicalEnumValue(row, technicalFields, "depotAddressCountry"),
+    postalCode: technicalRawValue(row, technicalFields, "depotAddressPostalCode")
+  };
+  return {
+    gps,
+    address,
+    gpsSource,
+    status: gps ? "ready" : "needs_gps",
+    warning: gps ? "" : "GPS domovského depa není potvrzené; textová adresa se nepoužije jako tichá náhrada pro navigaci."
+  };
+}
+
+function hereNavigationFromTechnicalProfile(technicalProfile, homeDepot) {
+  const options = {
+    height: technicalProfile?.dimensionsCm?.height || null,
+    width: technicalProfile?.dimensionsCm?.width || null,
+    length: technicalProfile?.dimensionsCm?.length || null,
+    grossWeight: technicalProfile?.maxPermittedWeightKg || null,
+    currentWeightPolicy: "empty-plus-planned-route-load"
+  };
+  if (Object.keys(technicalProfile?.axleGroupLoadsKg || {}).length) {
+    options.weightPerAxleGroup = technicalProfile.axleGroupLoadsKg;
+  } else if (hasPositiveNumber(technicalProfile?.maxSingleAxleLoadKg)) {
+    options.weightPerAxle = Math.round(technicalProfile.maxSingleAxleLoadKg);
+  }
+  return {
+    status: technicalProfile?.status || "needs_review",
+    blockers: [...(technicalProfile?.blockers || [])],
+    options,
+    homeDepotStatus: homeDepot?.status || "needs_gps",
+    homeDepotGps: homeDepot?.gps || null,
+    currentWeightPolicy: "Prázdná hmotnost + konzervativní plánovaný náklad; nosnost se nikdy nezaměňuje za aktuální hmotnost."
+  };
+}
+
 function vehicleIssueCodes(vehicle) {
   const issues = [];
 
@@ -377,11 +711,14 @@ function vehicleIssueCodes(vehicle) {
   return issues;
 }
 
-function mapVehicle(row, termFields = null) {
+function mapVehicle(row, termFields = null, technicalFields = null) {
   const vin = firstValue(row, ["VIN", "Vin"]);
   const termValues = Object.fromEntries(
     FLEET_VISTOS_VEHICLE_TERM_SPECS.map((spec) => [spec.field, termValueFromRow(row, termFields, spec.field)])
   );
+  const technicalProfile = technicalProfileFromRow(row, technicalFields);
+  const homeDepot = homeDepotFromRow(row, technicalFields);
+  const hereNavigation = hereNavigationFromTechnicalProfile(technicalProfile, homeDepot);
   const vehicle = {
     vistosVehicleId: firstValue(row, ["Id", "VehicleId"]),
     name: firstValue(row, ["Name", "Caption"]),
@@ -424,6 +761,9 @@ function mapVehicle(row, termFields = null) {
           caption: item.sourceCaption
         }])
     ),
+    technicalProfile,
+    homeDepot,
+    hereNavigation,
     sourceEntity: "Vehicle",
     mappingTarget: "fleet",
     readOnly: true
@@ -459,6 +799,8 @@ function summaryFromVehicles(vehicles, page) {
     withRegistrationPlate: vehicles.filter((vehicle) => vehicle.registrationPlate).length,
     withVin: vehicles.filter((vehicle) => vehicle.vinMasked).length,
     withGps: vehicles.filter((vehicle) => vehicle.gps).length,
+    hereReady: vehicles.filter((vehicle) => vehicle.hereNavigation?.status === "ready").length,
+    withHomeDepotGps: vehicles.filter((vehicle) => vehicle.homeDepot?.gps).length,
     needsReview: vehicles.filter((vehicle) => vehicle.issues.length).length
   };
 }
@@ -490,6 +832,8 @@ export async function createFleetVistosVehiclePreview(env) {
         withRegistrationPlate: 0,
         withVin: 0,
         withGps: 0,
+        hereReady: 0,
+        withHomeDepotGps: 0,
         needsReview: 0
       },
       vehicles: [],
@@ -505,15 +849,17 @@ export async function createFleetVistosVehiclePreview(env) {
 
   const session = await loginVistosExecute(env);
   const termFields = await resolveVehicleTermFields(env, session);
+  const technicalFields = resolveVehicleTechnicalFields(termFields);
+  const requestedColumns = withVehicleTechnicalColumns(withVehicleTermColumns(FLEET_VISTOS_VEHICLE_COLUMNS, termFields), technicalFields);
   const page = await getAllVistosPages(
     env,
     session,
     "Vehicle",
-    withVehicleTermColumns(FLEET_VISTOS_VEHICLE_COLUMNS, termFields),
+    requestedColumns,
     FLEET_VISTOS_VEHICLE_ACTIVE_FILTER,
     { maxPages: 20 }
   );
-  const vehicles = page.rows.slice(0, FLEET_VISTOS_VEHICLE_PREVIEW_LIMIT).map((row) => mapVehicle(row, termFields));
+  const vehicles = page.rows.slice(0, FLEET_VISTOS_VEHICLE_PREVIEW_LIMIT).map((row) => mapVehicle(row, termFields, technicalFields));
   const diagnostics = diagnosticsFromPage(page);
 
   return {
@@ -531,7 +877,7 @@ export async function createFleetVistosVehiclePreview(env) {
     issues: issueSummary(vehicles),
     diagnostics: {
       ...diagnostics,
-      columns: withVehicleTermColumns(FLEET_VISTOS_VEHICLE_COLUMNS, termFields),
+      columns: requestedColumns,
       vehicleTermFields: {
         ok: termFields.ok,
         source: termFields.source,
@@ -548,6 +894,23 @@ export async function createFleetVistosVehiclePreview(env) {
           .filter((field) => !field.confirmed)
           .map((field) => field.label),
         error: termFields.error || ""
+      },
+      vehicleTechnicalFields: {
+        ok: technicalFields.ok,
+        source: technicalFields.source,
+        matched: Object.values(technicalFields.fields || {})
+          .filter((field) => field.confirmed)
+          .map((field) => ({
+            field: field.field,
+            label: field.label,
+            columnName: field.columnName,
+            caption: field.caption,
+            score: field.score
+          })),
+        missing: Object.values(technicalFields.fields || {})
+          .filter((field) => !field.confirmed)
+          .map((field) => field.label),
+        error: technicalFields.error || ""
       }
     },
     loadedAt: new Date().toISOString()
@@ -576,3 +939,10 @@ export function fleetVistosVehiclePreviewError(error) {
     }
   };
 }
+
+export const __test = {
+  FLEET_VISTOS_VEHICLE_TECHNICAL_SPECS,
+  mapVehicle,
+  parseAxleLoadKg,
+  resolveVehicleTechnicalFields
+};
