@@ -12,7 +12,7 @@ const TARGETS = Object.freeze({
   "data-box-plus": { moduleKey: "data-box-plus", moduleName: "Datové schránky", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl },
   "driver-reports": { moduleKey: "driver-reports", moduleName: "Hlášení z vozidel", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl },
   "service-maintenance": { moduleKey: "service-maintenance", moduleName: "Servis vozidel", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl },
-  tyres: { moduleKey: "tyres", moduleName: "Pneumatiky", repoKey: "kaiser-pneu-evidence", productionUrl: "https://kaiser-smart.github.io/kaiser-pneu-evidence/" },
+  tyres: { moduleKey: "tyres", moduleName: "Pneumatiky", repoKey: "kaiser-control-center", productionUrl: "https://smart-odpady.ai/pneumatiky" },
   "collection-routes": { moduleKey: "collection-routes", moduleName: "Svozové trasy", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl },
   "sampling-routes": { moduleKey: "sampling-routes", moduleName: "Odběrové trasy", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl },
   vistos: { moduleKey: "vistos", moduleName: "Zákazníci / Vistos", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl },
