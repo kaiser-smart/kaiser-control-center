@@ -90,7 +90,7 @@ for (const marker of [
   "data-collection-driver-panel=\"report\"",
   "data-collection-driver-panel=\"dump\"",
   "data-collection-driver-panel=\"break\"",
-  "ZAPNOUT ŠARLOTU"
+  "data-collection-driver-settings"
 ]) {
   assert.ok(driverPageSource.includes(marker), `Řidičský displej postrádá prvek: ${marker}`);
 }
@@ -106,7 +106,7 @@ for (const marker of [
   "DALŠÍ AKCE",
   "HLASOVÁ POMOC",
   "STANOVIŠTĚ OBSLOUŽENO",
-  "PROBLÉM · FOTO · POZNÁMKA",
+  "TYP · FOTO · POZNÁMKA",
   "is-admin-tablet-test"
 ]) {
   assert.ok(driverPageSource.includes(marker), `Řidičský displej postrádá bezpečnou skupinu akcí: ${marker}`);
@@ -146,9 +146,9 @@ assert.equal(driverPageSource.includes("<details"), false, "Pracovní akce řidi
 assert.equal(driverPageSource.includes("<select"), false, "Hlášení řidiče nesmí používat rozbalovací select.");
 for (const marker of [
   "VYFOTIT STAV",
-  "DALŠÍ FOTKA?",
-  "ANO · PŘIDAT DALŠÍ FOTKU",
-  "NE · POKRAČOVAT",
+  "PŘIDAT DALŠÍ FOTKU",
+  "POKRAČOVAT KE KONTROLE",
+  "ZPĚT K TYPU HLÁŠENÍ",
   "POTVRDIT A ULOŽIT HLÁŠENÍ",
   "ZMĚŘIT GPS STANOVIŠTĚ",
   "ULOŽIT FYZICKOU GPS",
@@ -159,6 +159,32 @@ for (const marker of [
 ]) {
   assert.ok(appSource.includes(marker), `Krokový tablet postrádá prvek: ${marker}`);
 }
+for (const forbidden of ["DALŠÍ FOTKA?", "ANO · PŘIDAT DALŠÍ FOTKU", "NE · POKRAČOVAT"]) {
+  assert.equal(appSource.includes(forbidden), false, `Hlášení řidiče nesmí obsahovat nejasnou volbu: ${forbidden}`);
+}
+assert.ok(
+  appSource.includes('Object.entries(COLLECTION_DAILY_DRIVER_REPORT_TYPES).filter(([value]) => value !== "other")')
+    && appSource.includes("COLLECTION_DAILY_DRIVER_REPORT_TYPE_OPTIONS.map"),
+  "Řidičské hlášení nesmí nabízet kartu Jiný problém."
+);
+assert.ok(
+  appSource.includes("const COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED = false")
+    && appSource.includes("if (!COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED) return \"\";")
+    && appSource.includes("COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED && collectionRoutesAdminTabletTestActive()"),
+  "Šarlota musí být na tabletu dočasně vypnutá v UI i ve všech automatických startech."
+);
+assert.ok(
+  driverPageSource.includes("collection-daily-driver-route-kpi-link")
+    && driverPageSource.includes("<span>HLÁŠENÍ</span>")
+    && driverPageSource.includes('aria-label="Otevřít hlášení pro dispečink"'),
+  "Souhrn HLÁŠENÍ musí jedním klepnutím otevřít formulář pro dispečink."
+);
+assert.ok(
+  appSource.includes('function collectionDailyDriverStopStatusLabel(status)')
+    && appSource.includes('return status === "problem" ? "Hlášení"')
+    && appSource.includes('<i class="is-problem"></i> Hlášení'),
+  "Řidičský tablet nesmí provozní stav nazývat slovem Problém."
+);
 assert.equal(driverPageSource.includes("collection-daily-driver-test-identity"), false, "Řidičský displej nesmí vypisovat auditní identitu testera.");
 
 assert.ok(
@@ -194,12 +220,56 @@ for (const marker of [
   ".collection-daily-driver-actions__label",
   ".collection-daily-driver-page.is-admin-tablet-test",
   ".collection-routes-tablet-test-status > summary",
-  "min-height: 86px",
-  "min-height: 72px",
+  "min-height: 88px",
+  "min-height: 76px",
   "overflow-wrap: anywhere"
 ]) {
   assert.ok(styleSource.includes(marker), `Tabletový kiosk postrádá terénní ergonomii: ${marker}`);
 }
+
+for (const marker of [
+  ".collection-daily-driver-action--operational",
+  "minmax(360px, 0.82fr)",
+  "minmax(350px, 0.88fr)",
+  "translateY(4px) scale(0.985)",
+  ".collection-daily-driver-page.is-theme-night",
+  ".collection-daily-driver-display-settings__modes",
+  ".collection-daily-driver-sound-setting"
+]) {
+  assert.ok(styleSource.includes(marker), `Tabletový kiosk postrádá nové ovládání: ${marker}`);
+}
+
+assert.match(
+  styleSource,
+  /\.collection-daily-driver-page\.is-theme-night \.collection-daily-driver-sound-setting strong \{\s*color: #b9ef83;/,
+  "Stav zvuku musí zůstat čitelný i v nočním režimu."
+);
+
+assert.ok(
+  appSource.includes("function playCollectionDailyDriverTapSound()")
+    && appSource.includes("data-collection-driver-sound-toggle")
+    && appSource.includes("data-collection-driver-display-mode")
+    && appSource.includes('oscillator.type = "triangle"')
+    && appSource.includes("oscillator.frequency.setValueAtTime(235")
+    && appSource.includes("endAt = startAt + 0.058")
+    && !appSource.slice(appSource.indexOf("function playCollectionDailyDriverTapSound()"), appSource.indexOf("function collectionDailyDriverSettingsSummary()"))
+      .includes("forEach"),
+  "Zvuk tlačítka musí být jediný krátký tlumený tón bez zvonkohry."
+);
+
+assert.ok(
+  appSource.includes('window.matchMedia?.("(prefers-color-scheme: dark)")')
+    && appSource.includes("data-collection-driver-resolved-theme")
+    && appSource.includes("data-collection-driver-current-display-mode")
+    && appSource.includes("collectionDailyDriverColorSchemeMedia?.addEventListener"),
+  "Automatický režim musí živě sledovat denní/noční režim Androidu."
+);
+
+assert.equal(
+  appSource.includes("data-collection-daily-driver-kiosk data-collection-driver-display-mode="),
+  false,
+  "Kořen kiosku nesmí zachytit kliknutí určená ovládacím tlačítkům barevného režimu."
+);
 
 for (const marker of [
   ".collection-daily-driver-map.is-fullscreen > .collection-daily-driver-simulated-gps",

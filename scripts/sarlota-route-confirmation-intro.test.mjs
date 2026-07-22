@@ -14,13 +14,21 @@ const transitionEnd = appSource.indexOf("async function optimizeMyCollectionDail
 assert.ok(transitionStart >= 0 && transitionEnd > transitionStart);
 const transitionSource = appSource.slice(transitionStart, transitionEnd);
 
-assert.match(transitionSource, /if \(action === "start"\) \{[\s\S]*unlockVoiceAudio/);
+assert.match(appSource, /const COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED = false;/);
+assert.match(
+  transitionSource,
+  /if \(COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED && action === "start"\) \{[\s\S]*unlockVoiceAudio/,
+  "Dočasně vypnutá Šarlota nesmí při zahájení trasy aktivovat audio."
+);
 assert.doesNotMatch(
   transitionSource.slice(0, transitionSource.indexOf("let startSarlotaAfterTransition")),
   /prepareVoiceInput/,
   "Automatický úvod nesmí připravit ani otevřít mikrofon."
 );
-assert.match(transitionSource, /startSarlotaAfterTransition = action === "start";/);
+assert.match(
+  transitionSource,
+  /startSarlotaAfterTransition = COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED && action === "start";/
+);
 assert.match(transitionSource, /await enableCollectionDailyDriverSarlota\(\{ promptForMemory: false, invocation: "automatic" \}\);/);
 assert.match(transitionSource, /Trasa je zahájená\. Připravuji úvodní přivítání Šarloty/);
 assert.doesNotMatch(transitionSource, /speechSynthesis|SpeechSynthesisUtterance/);
@@ -79,20 +87,26 @@ assert.match(appSource, /data-collection-driver-route-confirmation-open/);
 assert.match(appSource, /data-collection-driver-route-confirmation-form/);
 assert.match(appSource, /async function openCollectionDailyDriverRouteConfirmation\(\)/);
 assert.match(appSource, /async function confirmAndStartMyCollectionDailyRoute\(form\)/);
-assert.match(appSource, /const requestedMemory = Boolean\(form\?\.elements\?\.useMemory\?\.checked\);/);
+assert.match(
+  appSource,
+  /const requestedMemory = COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED && Boolean\(form\?\.elements\?\.useMemory\?\.checked\);/
+);
 assert.match(appSource, /const context = await loadCollectionRoutesSarlotaContext\(\);/);
 assert.match(appSource, /if \(context\.readiness\?\.canStart !== true\)/);
 assert.match(appSource, /Dnešní trasu se nepodařilo bezpečně ověřit\. Trasa nebyla zahájená\./);
-assert.match(appSource, /const useMemory = memory\.consent === true \|\| requestedMemory;/);
+assert.match(
+  appSource,
+  /const useMemory = COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED && \(memory\.consent === true \|\| requestedMemory\);/
+);
 assert.match(appSource, /Pracovní paměť se nepodařilo nastavit\. Trasa nebyla zahájená\./);
 assert.match(appSource, /await transitionMyCollectionDailyRoute\("start"\);/);
 assert.match(appSource, /DNEŠNÍ TRASA · JEDEN KROK/);
 assert.match(appSource, /Když volbu nezaškrtneš, Šarlota se spustí bez paměti/);
-assert.match(appSource, /Šarlota nic dalšího sama neuloží ani neodešle/);
+assert.match(appSource, /COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED[\s\S]*collection-daily-driver-route-confirmation__memory/);
 assert.match(appSource, /POTVRDIT DNEŠNÍ TRASU/);
 assert.match(appSource, /POTVRDIT A ZAHÁJIT TEST/);
 assert.match(appSource, /POTVRDIT A ZAHÁJIT TRASU/);
-assert.match(appSource, /V jednom okně potvrdíš trasu i pracovní paměť Šarloty/);
+assert.match(appSource, /Šarlota je dočasně vypnutá/);
 assert.match(appSource, /POČASÍ PRO SMĚNU/);
 assert.match(appSource, /Osádka|OSÁDKA/);
 assert.match(appSource, /TRASU TEĎ NELZE ZAHÁJIT/);
