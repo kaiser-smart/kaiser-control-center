@@ -1,5 +1,15 @@
 import { json, readJson, requireUserPermission } from "../_lib/auth.js";
-import { createTyre, getTyresDashboard, TyresStoreError } from "../_lib/tyres-store.js";
+import {
+  createTyre,
+  getTyresDashboard,
+  getTyresHistory,
+  getTyresOverview,
+  getTyresSettings,
+  getTyresVehicleDetail,
+  getTyresVehicles,
+  listTyres,
+  TyresStoreError
+} from "../_lib/tyres-store.js";
 
 function errorResponse(error) {
   if (error instanceof TyresStoreError) {
@@ -13,6 +23,15 @@ export async function onRequestGet({ request, env }) {
   const { response } = await requireUserPermission(env, request, "tyres", "view");
   if (response) return response;
   try {
+    const url = new URL(request.url);
+    const view = url.searchParams.get("view") || "";
+    const query = Object.fromEntries(url.searchParams.entries());
+    if (view === "overview") return json(await getTyresOverview(env));
+    if (view === "inventory") return json(await listTyres(env, query));
+    if (view === "vehicles") return json({ apiStatus: "ready", vehicles: await getTyresVehicles(env) });
+    if (view === "vehicle") return json(await getTyresVehicleDetail(env, url.searchParams.get("vehicle")));
+    if (view === "history") return json(await getTyresHistory(env, query));
+    if (view === "settings") return json(await getTyresSettings(env));
     return json(await getTyresDashboard(env));
   } catch (error) {
     return errorResponse(error);

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.677"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.678"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pneumatiky: rychlá evidence, klikací osazení a plovoucí MM",
+    text: "Modul má sedm jasných pracovních záložek, kompaktní filtrovatelnou tabulku pro stovky záznamů, detail bez opuštění seznamu, pohled vozidel s klikacími pozicemi kol, mobilní průvodce měřením a obnovené plovoucí okno MM. Jednorázová migrace obnovuje doložené konfigurace pozic všech 28 vozidel; servis, náklady, historie, audit, oprávnění i ukládání dál používají chráněné KCC API a D1."
+  },
   {
     title: "Řidičský tablet: spolehlivější zvuk tlačítek",
     text: "Zvuk tlačítka se nyní plánuje až po skutečném odemčení zvuku prohlížeče. Krátké tlumené klepnutí je slyšitelnější v kabině, zůstává bez melodie a lze jej vypnout."

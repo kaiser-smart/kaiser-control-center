@@ -124,22 +124,57 @@ let mockSelfRepairMonitorStatus = "active";
 let mockNotificationLogs = [];
 let mockAssistantDailyPromos = new Map();
 let mockCollectionRouteBatches = [];
+const mockTyresLayouts = [
+  ["L", "P", "ZL", "ZP"],
+  ["L", "P", "HL vnitřní", "HL vnější", "HP vnitřní", "HP vnější"],
+  ["L", "P", "HL vnitřní", "HL vnější", "HP vnitřní", "HP vnější", "VL vnitřní", "VL vnější", "VP vnitřní", "VP vnější"],
+  ["L", "P", "VL", "VP", "ZL", "ZP"]
+];
+const mockTyresPositions = mockTyresLayouts[0];
+const mockTyresVehicles = Array.from({ length: 28 }, (_, index) => ({
+  id: `tyre-vehicle-local-${index + 1}`,
+  licensePlate: `TST ${String(index + 1).padStart(3, "0")}`,
+  type: ["Osobní vozidlo", "Dvouosé nákladní vozidlo", "Tříosé nákladní vozidlo", "Třínápravový přívěs"][index % mockTyresLayouts.length],
+  driver: `Testovací řidič ${index + 1}`,
+  odometer: 120000 + index * 3175,
+  depot: "Brno",
+  configuration: [...mockTyresLayouts[index % mockTyresLayouts.length]],
+  updatedAt: "2026-07-22T08:00:00.000Z"
+}));
+const mockTyresInventory = Array.from({ length: 202 }, (_, index) => {
+  const mounted = index < 112;
+  const vehicle = mounted ? mockTyresVehicles[Math.floor(index / 4)] : null;
+  const position = mounted ? mockTyresPositions[index % 4] : "";
+  return {
+    id: `local-tyre-${String(index + 1).padStart(4, "0")}`,
+    manufacturer: ["Hankook", "Pirelli", "Continental", "Michelin", "Sailun"][index % 5],
+    model: ["AH31", "R02", "Conti Hybrid", "X Multi", "S702"][index % 5],
+    size: index % 3 === 0 ? "385/65 R22,5" : "315/80 R22,5",
+    loadIndex: index % 2 ? "156/150K" : "160K",
+    dot: index % 17 === 0 ? "" : `${String((index % 52) + 1).padStart(2, "0")}24`,
+    type: index % 7 === 0 ? "protektorovaná" : "nová",
+    priceEx: 7800 + (index % 11) * 310,
+    supplier: "Lokální dodavatel",
+    purchaseDate: "2026-03-13",
+    invoice: `TEST-FV-${String(index + 1).padStart(4, "0")}`,
+    state: mounted ? "na vozidle" : "sklad",
+    vehicle: vehicle?.licensePlate || "",
+    position,
+    mounted: mounted ? "2026-04-01" : "",
+    mountedOdo: mounted ? vehicle.odometer - 8000 : 0,
+    currentTread: index % 23 === 0 ? 3.2 : index % 19 === 0 ? null : 7.4 + (index % 7),
+    pressure: mounted ? 8.2 : null,
+    mileage: mounted ? 8000 : 0,
+    defects: index % 41 === 0 ? 1 : 0,
+    updatedAt: new Date(Date.UTC(2026, 6, 22, 8, 0, index % 60)).toISOString(),
+    lastMeasurementAt: index % 19 === 0 ? "" : "2026-07-20T08:00:00.000Z"
+  };
+});
 const mockTyresState = {
-  tyres: [],
-  vehicles: [
-    {
-      id: "tyre-vehicle-local-4b21234",
-      licensePlate: "4B2 1234",
-      type: "Nákladní vozidlo",
-      driver: "Lokální test",
-      odometer: 124000,
-      depot: "Brno",
-      configuration: ["HL vnitřní", "HL vnější", "HP vnitřní", "HP vnější"],
-      updatedAt: ""
-    }
-  ],
-  measurements: [],
-  services: [],
+  tyres: mockTyresInventory,
+  vehicles: mockTyresVehicles,
+  measurements: mockTyresInventory.filter((item) => item.vehicle && item.lastMeasurementAt).map((item, index) => ({ id: `local-measurement-${index + 1}`, tyreId: item.id, vehicle: item.vehicle, position: item.position, tread: item.currentTread, pressure: item.pressure, odometer: item.mountedOdo + item.mileage, measuredAt: item.lastMeasurementAt, note: "Lokální kontrolní měření", actor: "Lokální dílna" })),
+  services: Array.from({ length: 36 }, (_, index) => ({ id: `local-service-${index + 1}`, date: `2026-${String((index % 7) + 1).padStart(2, "0")}-${String((index % 25) + 1).padStart(2, "0")}`, vehicle: mockTyresVehicles[index % 28].licensePlate, person: "Lokální technik", type: index % 2 ? "kontrola" : "přezutí", supplier: "Lokální pneuservis", labor: 500 + index * 10, material: 120, tireCost: index % 3 ? 0 : 8200, invoice: `SERV-${index + 1}`, tyreIds: [], note: "Lokální servisní záznam", createdAt: "2026-07-22T08:00:00.000Z" })),
   audit: []
 };
 const mockCollectionRouteIncidentItems = [
@@ -740,13 +775,74 @@ function mockTyresSummary() {
   const serviceCost = (service) => service.labor + service.material + service.tireCost;
   return {
     totalTyres: tyres.length,
+    warehouseTyres: tyres.filter((item) => item.state === "sklad").length,
     mountedTyres: tyres.filter((item) => item.state === "na vozidle").length,
-    lowTreadTyres: tyres.filter((item) => Number.isFinite(Number(item.currentTread)) && Number(item.currentTread) <= 3.5).length,
+    lowTreadTyres: tyres.filter((item) => item.currentTread != null && item.currentTread !== "" && Number.isFinite(Number(item.currentTread)) && Number(item.currentTread) <= 3.5).length,
+    attentionTyres: tyres.filter((item) => (item.currentTread != null && item.currentTread !== "" && Number(item.currentTread) <= 3.5) || item.currentTread == null || !item.dot || !item.lastMeasurementAt).length,
+    incompleteVehicles: 0,
     vehicles: mockTyresState.vehicles.length,
     serviceCostYtd: mockTyresState.services.filter((item) => String(item.date).startsWith(String(currentYear))).reduce((sum, item) => sum + serviceCost(item), 0),
     serviceCostMonth: mockTyresState.services.filter((item) => String(item.date).startsWith(currentMonth)).reduce((sum, item) => sum + serviceCost(item), 0),
     treadAlertMm: 3.5
   };
+}
+
+function mockTyresVehicleRows() {
+  return mockTyresState.vehicles.map((vehicle) => {
+    const tyres = mockTyresState.tyres.filter((item) => item.vehicle === vehicle.licensePlate && item.state === "na vozidle");
+    const occupied = new Set(tyres.map((item) => item.position).filter(Boolean));
+    const minimum = tyres.filter((item) => item.currentTread != null && item.currentTread !== "").map((item) => Number(item.currentTread)).filter(Number.isFinite);
+    const problemCount = Math.max(vehicle.configuration.length - occupied.size, 0) + tyres.filter((item) => item.currentTread == null || Number(item.currentTread) <= 3.5 || !item.dot || !item.lastMeasurementAt).length;
+    return { ...vehicle, positionCount: vehicle.configuration.length, mountedCount: tyres.length, occupiedCount: occupied.size, minimumTread: minimum.length ? Math.min(...minimum) : null, lastMeasurementAt: tyres.map((item) => item.lastMeasurementAt).filter(Boolean).sort().at(-1) || "", complete: occupied.size === vehicle.configuration.length, problemCount };
+  });
+}
+
+function mockTyresOverview() {
+  const vehicles = mockTyresVehicleRows();
+  const summary = mockTyresSummary();
+  summary.incompleteVehicles = vehicles.filter((item) => !item.complete).length;
+  const attention = mockTyresState.tyres.filter((item) => Number(item.currentTread) <= 3.5 || item.currentTread == null || !item.dot || !item.lastMeasurementAt).slice(0, 24).map((item) => ({ ...item, reasons: [Number(item.currentTread) <= 3.5 ? "Nízký dezén" : "", item.currentTread == null || !item.lastMeasurementAt ? "Chybí měření" : "", !item.dot ? "Chybí DOT" : ""].filter(Boolean) }));
+  const activity = [
+    ...mockTyresState.measurements.slice(0, 8).map((item) => ({ id: item.id, type: "measurement", title: `${item.vehicle} · ${item.position}`, detail: `${item.tread} mm`, createdAt: item.measuredAt })),
+    ...mockTyresState.services.slice(0, 8).map((item) => ({ id: item.id, type: "service", title: item.type, detail: item.vehicle, createdAt: item.date })),
+    ...mockTyresState.audit.slice(0, 8).map((item) => ({ id: item.id, type: "audit", title: item.action, detail: item.actor, createdAt: item.createdAt }))
+  ].sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt))).slice(0, 12);
+  return { apiStatus: "ready", summary, attention, activity, vehicles, latestImport: null };
+}
+
+function mockTyresInventoryView(url) {
+  const query = String(url.searchParams.get("q") || "").toLocaleLowerCase("cs-CZ");
+  const exact = (key, field) => !url.searchParams.get(key) || String(field || "") === url.searchParams.get(key);
+  let items = mockTyresState.tyres.filter((item) => {
+    if (query && ![item.id, item.manufacturer, item.model, item.size, item.dot, item.vehicle].join(" ").toLocaleLowerCase("cs-CZ").includes(query)) return false;
+    if (!exact("manufacturer", item.manufacturer) || !exact("size", item.size) || !exact("type", item.type) || !exact("state", item.state) || !exact("vehicle", item.vehicle)) return false;
+    const location = url.searchParams.get("location");
+    if (location === "warehouse" && item.state !== "sklad") return false;
+    if (location === "vehicle" && !item.vehicle) return false;
+    if (location === "unassigned" && (item.vehicle || item.state === "sklad")) return false;
+    const tread = url.searchParams.get("tread");
+    if (tread === "low" && !(Number.isFinite(Number(item.currentTread)) && Number(item.currentTread) <= 3.5)) return false;
+    if (tread === "missing" && item.currentTread != null) return false;
+    if (tread === "ok" && !(Number(item.currentTread) > 3.5)) return false;
+    if (url.searchParams.get("attention") === "1" && !(Number(item.currentTread) <= 3.5 || item.currentTread == null || !item.dot || !item.lastMeasurementAt)) return false;
+    return true;
+  });
+  const sort = url.searchParams.get("sort") || "updated";
+  const direction = url.searchParams.get("direction") === "asc" ? 1 : -1;
+  const value = (item) => ({ name: `${item.manufacturer} ${item.model}`, size: item.size, type: item.type, state: item.state, location: item.vehicle, tread: item.currentTread ?? -1, dot: item.dot, price: item.priceEx, measurement: item.lastMeasurementAt, updated: item.updatedAt }[sort]);
+  items.sort((left, right) => String(value(left) ?? "").localeCompare(String(value(right) ?? ""), "cs", { numeric: true }) * direction);
+  const total = items.length;
+  const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+  const pageSize = [25, 50, 100].includes(Number(url.searchParams.get("pageSize"))) ? Number(url.searchParams.get("pageSize")) : 25;
+  items = items.slice((page - 1) * pageSize, page * pageSize);
+  const unique = (key) => [...new Set(mockTyresState.tyres.map((item) => item[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, "cs"));
+  return { apiStatus: "ready", items, total, page, pageSize, facets: { manufacturers: unique("manufacturer"), sizes: unique("size"), types: unique("type"), states: unique("state") } };
+}
+
+function mockTyreDetail(tyre) {
+  const measurements = mockTyresState.measurements.filter((item) => item.tyreId === tyre.id);
+  const services = mockTyresState.services.filter((item) => item.tyreIds?.includes(tyre.id));
+  return { apiStatus: "ready", tyre, measurements, services, costs: services.reduce((sum, item) => sum + Number(item.labor || 0) + Number(item.material || 0) + Number(item.tireCost || 0), 0), audit: mockTyresState.audit.filter((item) => item.entityId === tyre.id) };
 }
 
 function mockTyresDashboard() {
@@ -5014,7 +5110,22 @@ async function handleApi(request, response) {
       return true;
     }
     if (request.method === "GET") {
-      sendJson(response, 200, mockTyresDashboard());
+      const view = url.searchParams.get("view");
+      if (view === "overview") sendJson(response, 200, mockTyresOverview());
+      else if (view === "inventory") sendJson(response, 200, mockTyresInventoryView(url));
+      else if (view === "vehicles") sendJson(response, 200, { apiStatus: "ready", vehicles: mockTyresVehicleRows() });
+      else if (view === "vehicle") {
+        const vehicle = mockTyresState.vehicles.find((item) => item.licensePlate === url.searchParams.get("vehicle"));
+        if (!vehicle) sendJson(response, 404, { error: "Vozidlo nebylo nalezeno." });
+        else sendJson(response, 200, { apiStatus: "ready", vehicle, tyres: mockTyresState.tyres.filter((item) => item.vehicle === vehicle.licensePlate && item.state === "na vozidle") });
+      } else if (view === "history") {
+        const type = url.searchParams.get("type") === "services" ? "services" : "measurements";
+        const source = type === "services" ? mockTyresState.services : mockTyresState.measurements.map((item) => { const tyre = mockTyresState.tyres.find((candidate) => candidate.id === item.tyreId); return { ...item, tyreLabel: tyre ? `${tyre.manufacturer} ${tyre.model}` : "Neuvedeno", tyreSize: tyre?.size || "" }; });
+        const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+        const pageSize = [25, 50, 100].includes(Number(url.searchParams.get("pageSize"))) ? Number(url.searchParams.get("pageSize")) : 25;
+        sendJson(response, 200, { apiStatus: "ready", type, items: source.slice((page - 1) * pageSize, page * pageSize), total: source.length, page, pageSize });
+      } else if (view === "settings") sendJson(response, 200, { apiStatus: "ready", audit: mockTyresState.audit.slice(0, 100), latestImport: null });
+      else sendJson(response, 200, mockTyresDashboard());
       return true;
     }
     const payload = mockTyresSavePayload(await readJsonBody(request));
@@ -5030,19 +5141,24 @@ async function handleApi(request, response) {
   }
 
   const mockTyreItemMatch = /^\/api\/tyres\/([^/]+)$/.exec(url.pathname);
-  if (mockTyreItemMatch && request.method === "PATCH") {
+  if (mockTyreItemMatch && ["GET", "PATCH"].includes(request.method)) {
     const user = currentDevUser(request);
     if (!user) {
       sendJson(response, 401, { error: "Nepřihlášeno." });
       return true;
     }
-    if (!mockTyresCan(user, "edit")) {
+    const action = request.method === "GET" ? "view" : "edit";
+    if (!mockTyresCan(user, action)) {
       sendJson(response, 403, { error: "Nemáte oprávnění upravovat Pneumatiky." });
       return true;
     }
     const tyre = mockTyresState.tyres.find((item) => item.id === decodeURIComponent(mockTyreItemMatch[1]));
     if (!tyre) {
       sendJson(response, 404, { error: "Pneumatika nebyla nalezena." });
+      return true;
+    }
+    if (request.method === "GET") {
+      sendJson(response, 200, mockTyreDetail(tyre));
       return true;
     }
     const payload = mockTyresSavePayload(await readJsonBody(request), tyre);
@@ -5053,6 +5169,44 @@ async function handleApi(request, response) {
     Object.assign(tyre, payload.value);
     mockTyresAudit(user, "updated", "tyre", tyre.id);
     sendJson(response, 200, { tyre, apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/tyres/fitments" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) { sendJson(response, 401, { error: "Nepřihlášeno." }); return true; }
+    if (!mockTyresCan(user, "edit")) { sendJson(response, 403, { error: "Nemáte oprávnění měnit osazení." }); return true; }
+    const payload = await readJsonBody(request);
+    const tyre = mockTyresState.tyres.find((item) => item.id === mockTyresText(payload.tyreId, 160));
+    if (!tyre) { sendJson(response, 404, { error: "Pneumatika nebyla nalezena." }); return true; }
+    if (payload.action === "dismount") {
+      Object.assign(tyre, { state: "sklad", vehicle: "", position: "", mounted: "", mountedOdo: 0, updatedAt: new Date().toISOString() });
+      mockTyresAudit(user, "dismounted", "tyre", tyre.id);
+    } else {
+      const vehicle = mockTyresState.vehicles.find((item) => item.licensePlate === mockTyresText(payload.vehicle, 32));
+      const position = mockTyresText(payload.position, 80);
+      if (!vehicle || !vehicle.configuration.includes(position)) { sendJson(response, 400, { error: "Vyberte platné vozidlo a pozici kola." }); return true; }
+      if (mockTyresState.tyres.some((item) => item.id !== tyre.id && item.vehicle === vehicle.licensePlate && item.position === position && item.state === "na vozidle")) { sendJson(response, 409, { error: "Na této pozici je už osazená jiná pneumatika." }); return true; }
+      Object.assign(tyre, { state: "na vozidle", vehicle: vehicle.licensePlate, position, mounted: new Date().toISOString().slice(0, 10), mountedOdo: mockTyresNumber(payload.mountedOdo), updatedAt: new Date().toISOString() });
+      mockTyresAudit(user, "mounted", "tyre", tyre.id);
+    }
+    sendJson(response, 200, { tyre, apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/tyres/measurements/bulk" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) { sendJson(response, 401, { error: "Nepřihlášeno." }); return true; }
+    if (!mockTyresCan(user, "edit")) { sendJson(response, 403, { error: "Nemáte oprávnění zapisovat měření." }); return true; }
+    const payload = await readJsonBody(request);
+    const rows = Array.isArray(payload.measurements) ? payload.measurements : [];
+    const prepared = rows.map((row) => ({ row, tyre: mockTyresState.tyres.find((item) => item.id === mockTyresText(row.tyreId, 160)) }));
+    if (!prepared.length || prepared.some(({ row, tyre }) => !tyre || tyre.vehicle !== row.vehicle || tyre.position !== row.position || !Number.isFinite(Number(row.tread)))) { sendJson(response, 400, { error: "Zkontrolujte všechny měřené pozice a hodnoty." }); return true; }
+    const measurements = prepared.map(({ row, tyre }) => {
+      const measurement = { id: `local-tyre-measurement-${randomUUID()}`, tyreId: tyre.id, vehicle: tyre.vehicle, position: tyre.position, tread: Number(row.tread), pressure: row.pressure === "" ? null : mockTyresNumber(row.pressure, null), odometer: mockTyresNumber(row.odometer), measuredAt: mockTyresDate(row.measuredAt, new Date().toISOString().slice(0, 10)), note: mockTyresText(row.note, 2000), actor: user.name || user.email || "Lokální uživatel" };
+      mockTyresState.measurements.unshift(measurement); tyre.currentTread = measurement.tread; tyre.pressure = measurement.pressure; tyre.lastMeasurementAt = measurement.measuredAt; tyre.mileage = tyre.mountedOdo && measurement.odometer >= tyre.mountedOdo ? Math.max(tyre.mileage || 0, measurement.odometer - tyre.mountedOdo) : tyre.mileage; mockTyresAudit(user, "created", "measurement", measurement.id); return measurement;
+    });
+    sendJson(response, 201, { measurements, apiStatus: "ready" });
     return true;
   }
 
@@ -5094,7 +5248,8 @@ async function handleApi(request, response) {
     mockTyresState.measurements.unshift(measurement);
     tyre.currentTread = measurement.tread;
     tyre.pressure = measurement.pressure;
-    tyre.mileage = measurement.odometer;
+    tyre.lastMeasurementAt = measurement.measuredAt;
+    tyre.mileage = tyre.mountedOdo && measurement.odometer >= tyre.mountedOdo ? Math.max(tyre.mileage || 0, measurement.odometer - tyre.mountedOdo) : tyre.mileage;
     tyre.updatedAt = measuredAt;
     mockTyresAudit(user, "created", "measurement", measurement.id);
     sendJson(response, 201, { measurement, apiStatus: "ready" });
@@ -5133,6 +5288,7 @@ async function handleApi(request, response) {
       material: mockTyresNumber(payload.material),
       tireCost: mockTyresNumber(payload.tireCost),
       invoice: mockTyresText(payload.invoice, 120),
+      tyreIds: Array.isArray(payload.tyreIds) ? payload.tyreIds.filter((id) => mockTyresState.tyres.some((item) => item.id === id)) : [],
       note: mockTyresText(payload.note, 4000),
       createdAt: new Date().toISOString()
     };

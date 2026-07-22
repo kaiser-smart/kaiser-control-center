@@ -5,9 +5,17 @@ import { DatabaseSync } from "node:sqlite";
 import {
   createTyre,
   createTyreMeasurement,
+  createTyreMeasurements,
   createTyreServiceRecord,
+  fitTyre,
+  getTyreDetail,
   getTyresDashboard,
+  getTyresHistory,
+  getTyresOverview,
+  getTyresVehicleDetail,
+  getTyresVehicles,
   importLegacyTyres,
+  listTyres,
   TyresStoreError,
   updateTyre
 } from "../functions/_lib/tyres-store.js";
@@ -44,10 +52,25 @@ class D1Database {
   prepare(sql) {
     return new D1Statement(this.database, sql);
   }
+
+  async batch(statements) {
+    this.database.exec("BEGIN");
+    try {
+      const results = [];
+      for (const statement of statements) results.push(await statement.run());
+      this.database.exec("COMMIT");
+      return results;
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
+  }
 }
 
 const sqlite = new DatabaseSync(":memory:");
 sqlite.exec(readFileSync(new URL("../migrations/0050_create_tyres_module.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../migrations/0052_extend_tyres_workflows.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../migrations/0053_restore_tyre_vehicle_profiles.sql", import.meta.url), "utf8"));
 const env = { SMART_ODPADY_DB: new D1Database(sqlite) };
 const manager = { id: "tyres-manager", name: "Testovací správce" };
 const technician = { id: "tyres-technician", name: "Testovací dílna" };
@@ -139,6 +162,22 @@ assert.equal(dashboard.vehicles[0].licensePlate, "3BH 5548");
 assert.equal(dashboard.latestImport.status, "completed");
 assert.deepEqual(dashboard.latestImport.summary, { vehicles: 1, tyres: 1, measurements: 1, services: 1 });
 
+await importLegacyTyres(env, manager, {
+  source: "legacy-profile-protection-test",
+  state: { vehicles: [{ spz: "3BH5548" }], tires: [], measurements: [], services: [] }
+});
+const preservedVehicle = sqlite.prepare(`
+  SELECT vehicle_type AS type, driver_label AS driver, odometer_km AS odometer,
+    depot, wheel_positions_json AS positions
+  FROM tyre_vehicle_profiles
+  WHERE normalized_license_plate = '3BH5548'
+`).get();
+assert.equal(preservedVehicle.type, "Nákladní vozidlo");
+assert.equal(preservedVehicle.driver, "Testovací řidič");
+assert.equal(preservedVehicle.odometer, 125000);
+assert.equal(preservedVehicle.depot, "Brno");
+assert.deepEqual(JSON.parse(preservedVehicle.positions), ["L", "P", "HL vnitřní", "HP vnější"]);
+
 const placeholderImport = await importLegacyTyres(env, manager, {
   source: "legacy-placeholder-test",
   state: {
@@ -194,9 +233,53 @@ const service = await createTyreServiceRecord(env, technician, {
   labor: 350,
   material: 0,
   tireCost: 0,
-  note: "Kontrolní servis"
+  note: "Kontrolní servis",
+  tyreIds: [updated.id]
 });
 assert.equal(service.type, "kontrola");
+assert.deepEqual(service.tyreIds, [updated.id]);
+
+const overview = await getTyresOverview(env);
+assert.equal(overview.summary.totalTyres, 2);
+assert.equal(overview.summary.mountedTyres, 2);
+assert.equal(overview.summary.serviceCostYtd, 11306);
+assert.ok(Array.isArray(overview.attention));
+
+const inventory = await listTyres(env, { q: "Pirelli", page: 1, pageSize: 25, sort: "name", direction: "asc" });
+assert.equal(inventory.total, 1);
+assert.equal(inventory.items[0].manufacturer, "Pirelli");
+assert.ok(inventory.facets.manufacturers.includes("Hankook"));
+
+const detail = await getTyreDetail(env, updated.id);
+assert.equal(detail.tyre.id, updated.id);
+assert.equal(detail.measurements.length, 1);
+assert.equal(detail.services.length, 1);
+assert.equal(detail.costs, 350);
+
+const vehicles = await getTyresVehicles(env);
+assert.equal(vehicles.length, 1);
+assert.equal(vehicles[0].mountedCount, 2);
+const vehicleDetail = await getTyresVehicleDetail(env, "3BH5548");
+assert.equal(vehicleDetail.tyres.length, 2);
+
+const history = await getTyresHistory(env, { type: "services", page: 1, pageSize: 25 });
+assert.equal(history.total, 3);
+assert.ok(history.items.some((item) => item.tyreIds.includes(updated.id)));
+
+await fitTyre(env, technician, { tyreId: updated.id, action: "dismount" });
+const remounted = await fitTyre(env, technician, { tyreId: updated.id, action: "mount", vehicle: "3BH5548", position: "P", mountedOdo: 125010 });
+assert.equal(remounted.position, "P");
+
+const bulk = await createTyreMeasurements(env, technician, [{
+  tyreId: updated.id,
+  vehicle: "3BH5548",
+  position: "P",
+  tread: 15.5,
+  pressure: 8.3,
+  odometer: 125020,
+  measuredAt: "2026-07-22"
+}]);
+assert.equal(bulk.length, 1);
 
 await assert.rejects(
   createTyreMeasurement(env, technician, { vehicle: "1AB1234", position: "L", tread: 6 }),
@@ -204,8 +287,8 @@ await assert.rejects(
 );
 
 sqlite.prepare(`
-  INSERT INTO tyre_vehicle_profiles (id, license_plate, normalized_license_plate)
-  VALUES ('tyre-vehicle-1ab1234', '1AB 1234', '1AB1234')
+  INSERT INTO tyre_vehicle_profiles (id, license_plate, normalized_license_plate, wheel_positions_json)
+  VALUES ('tyre-vehicle-1ab1234', '1AB 1234', '1AB1234', '["L"]')
 `).run();
 
 await assert.rejects(
@@ -213,11 +296,62 @@ await assert.rejects(
   (error) => error instanceof TyresStoreError && error.code === "tyres_measurement_vehicle_mismatch"
 );
 
+sqlite.prepare(`
+  INSERT INTO tyre_vehicle_profiles (id, license_plate, normalized_license_plate)
+  VALUES ('tyre-vehicle-2ab1234', '2AB 1234', '2AB1234')
+`).run();
+
+await assert.rejects(
+  fitTyre(env, technician, { tyreId: created.id, action: "mount", vehicle: "2AB1234", position: "L" }),
+  (error) => error instanceof TyresStoreError && error.code === "tyres_vehicle_positions_missing"
+);
+
 await assert.rejects(
   createTyreMeasurement(env, technician, { tyreId: updated.id, vehicle: "3BH5548", position: "P", tread: -1 }),
   (error) => error instanceof TyresStoreError && error.code === "tyres_tread_invalid"
 );
 
-assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM tyre_audit_log").get().count, 7);
+assert.ok(sqlite.prepare("SELECT COUNT(*) AS count FROM tyre_audit_log").get().count >= 10);
+
+const recoverySqlite = new DatabaseSync(":memory:");
+recoverySqlite.exec(readFileSync(new URL("../migrations/0050_create_tyres_module.sql", import.meta.url), "utf8"));
+const recoveryMigration = readFileSync(new URL("../migrations/0053_restore_tyre_vehicle_profiles.sql", import.meta.url), "utf8");
+const restoredPlateKeys = [...recoveryMigration.matchAll(/^\s+\('([A-Z0-9]+)'/gm)].map((match) => match[1]);
+assert.equal(restoredPlateKeys.length, 28);
+recoverySqlite.prepare(`
+  INSERT INTO tyre_vehicle_profiles (id, license_plate, normalized_license_plate)
+  VALUES (?, ?, ?)
+`).run("tyre-vehicle-1bf9638", "1BF 9638", "1BF9638");
+recoverySqlite.prepare(`
+  INSERT INTO tyre_vehicle_profiles (
+    id, license_plate, normalized_license_plate, vehicle_type, wheel_positions_json
+  ) VALUES (?, ?, ?, ?, ?)
+`).run("tyre-vehicle-custom", "3BH 5548", "3BH5548", "Ručně ověřený typ", '["VL","VP"]');
+const recoveryInsert = recoverySqlite.prepare(`
+  INSERT OR IGNORE INTO tyre_vehicle_profiles (id, license_plate, normalized_license_plate)
+  VALUES (?, ?, ?)
+`);
+restoredPlateKeys.forEach((plate) => recoveryInsert.run(`tyre-vehicle-${plate.toLowerCase()}`, plate, plate));
+recoverySqlite.exec(recoveryMigration);
+assert.equal(recoverySqlite.prepare(`
+  SELECT COUNT(*) AS count
+  FROM tyre_vehicle_profiles
+  WHERE wheel_positions_json <> '[]'
+`).get().count, 28);
+const recoveredVehicle = recoverySqlite.prepare(`
+  SELECT vehicle_type AS type, driver_label AS driver, wheel_positions_json AS positions
+  FROM tyre_vehicle_profiles
+  WHERE normalized_license_plate = '1BF9638'
+`).get();
+assert.equal(recoveredVehicle.type, "MINI Cooper 2017");
+assert.equal(recoveredVehicle.driver, "bez řidiče");
+assert.deepEqual(JSON.parse(recoveredVehicle.positions), ["L", "P", "ZL", "ZP"]);
+const untouchedVehicle = recoverySqlite.prepare(`
+  SELECT vehicle_type AS type, wheel_positions_json AS positions
+  FROM tyre_vehicle_profiles
+  WHERE normalized_license_plate = '3BH5548'
+`).get();
+assert.equal(untouchedVehicle.type, "Ručně ověřený typ");
+assert.deepEqual(JSON.parse(untouchedVehicle.positions), ["VL", "VP"]);
 
 console.log("tyres store tests: ok");

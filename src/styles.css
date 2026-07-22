@@ -22,6 +22,10 @@
   --tyres-surface: #ffffff;
 }
 
+/* Modul má čtyři skutečné gridové řádky. Globální sidebarový span 100 by sem
+   přidal 96 prázdných mezer a téměř dvě obrazovky mrtvého scrollu. */
+.tyres-page > .ui-pilot-sidebar { grid-row: 1 / span 4; }
+
 .tyres-page .tyres-hero .module-detail__body p {
   max-width: 780px;
 }
@@ -361,6 +365,434 @@
   .tyres-inventory-grid { grid-template-columns: 1fr; }
   .tyres-entry-form { margin-bottom: 12px; }
   .tyres-card { padding: 12px; }
+}
+
+/* Pneumatiky 2.0: kompaktní pracovní modul */
+.tyres-page {
+  width: min(100%, 1920px);
+  max-width: none;
+  padding-bottom: 96px;
+}
+
+.tyres-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 12px 0 0;
+  padding: 16px 18px;
+  border: 1px solid var(--tyres-line);
+  border-radius: 14px 14px 0 0;
+  background: var(--tyres-surface);
+}
+
+.tyres-header__title,
+.tyres-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.tyres-header__title .module-detail__icon { width: 52px; height: 52px; flex: 0 0 52px; }
+.tyres-header h1 { margin: 1px 0 2px; font-size: clamp(1.45rem, 2vw, 2rem); }
+.tyres-header p { margin: 0; color: var(--tyres-muted); font-weight: 500; }
+.tyres-header .primary-action { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; white-space: nowrap; }
+
+.tyres-api-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #edf2f0;
+  color: #35433d;
+  font-size: .82rem;
+  font-weight: 700;
+}
+.tyres-api-status.is-ready { background: #e8f7e3; color: #285c25; }
+.tyres-api-status.is-error { background: #fff0ed; color: #a33a2b; }
+
+.tyres-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding: 7px 8px;
+  border: 1px solid var(--tyres-line);
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+  background: rgba(255, 255, 255, .97);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, .05);
+}
+
+.tyres-tabs button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--tyres-muted);
+  font: inherit;
+  font-size: .88rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.tyres-tabs button:hover { background: rgba(117, 189, 37, .08); color: var(--ink); }
+.tyres-tabs button.is-active { background: rgba(117, 189, 37, .15); color: #2d5d1d; }
+
+.tyres-workspace { min-height: 360px; }
+.tyres-panel { border-radius: 14px; box-shadow: 0 8px 24px rgba(15, 23, 42, .04); }
+.tyres-panel--flush { padding: 0; overflow: clip; }
+.tyres-panel--flush > .tyres-panel__head { padding: 16px 18px 12px; }
+.tyres-panel__head h2 { font-size: 1.18rem; }
+
+.tyres-command-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(140px, 1fr));
+  gap: 9px;
+  margin: 12px 0;
+}
+
+.tyres-kpi-card {
+  display: grid;
+  align-content: space-between;
+  min-height: 88px;
+  padding: 12px 13px;
+  border: 1px solid var(--tyres-line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, .035);
+}
+.tyres-kpi-card:hover { border-color: rgba(84, 148, 36, .52); transform: translateY(-1px); }
+.tyres-kpi-card span { color: var(--tyres-muted); font-size: .78rem; line-height: 1.22; }
+.tyres-kpi-card strong { font-size: 1.35rem; line-height: 1.1; }
+.tyres-kpi-card--danger { border-color: rgba(190, 68, 47, .28); background: #fff9f7; }
+.tyres-kpi-card--danger strong { color: #b23f2e; }
+.tyres-kpi-card--warning { border-color: rgba(190, 126, 22, .28); background: #fffbf2; }
+.tyres-kpi-card--ready { border-color: rgba(72, 145, 55, .25); background: #f8fcf6; }
+
+.tyres-overview-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(340px, .7fr);
+  gap: 12px;
+}
+.tyres-overview-columns .tyres-panel { margin: 0; }
+
+.tyres-attention-list { display: grid; gap: 6px; }
+.tyres-attention-list > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  min-height: 54px;
+  padding: 9px 11px;
+  border: 1px solid var(--tyres-line);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+}
+.tyres-attention-list > button:hover { border-color: rgba(117, 189, 37, .55); background: #fbfef9; }
+.tyres-attention-list strong, .tyres-attention-list small { display: block; }
+.tyres-attention-list small { margin-top: 2px; color: var(--tyres-muted); }
+.tyres-reason-list { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px; }
+.tyres-reason-list em { padding: 3px 7px; border-radius: 999px; background: #fff0ed; color: #a33a2b; font-size: .73rem; font-style: normal; font-weight: 700; }
+
+.tyres-positive-state { display: flex; align-items: center; gap: 12px; padding: 18px; border-radius: 10px; background: #f2faef; color: #2d6228; }
+.tyres-positive-state > span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #dff3d7; font-size: 1.25rem; }
+.tyres-positive-state p { margin: 2px 0 0; color: #477342; }
+.tyres-activity-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.tyres-activity-list li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--tyres-line); }
+.tyres-activity-list li:last-child { border-bottom: 0; }
+.tyres-activity-list strong, .tyres-activity-list small { display: block; }
+.tyres-activity-list small { color: var(--tyres-muted); }
+.tyres-activity-icon { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; border-radius: 8px; background: #edf7e8; color: #356b25; font-size: .72rem; font-weight: 800; }
+
+.tyres-inventory-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.5fr) repeat(7, minmax(120px, .7fr)) auto auto auto;
+  gap: 7px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--tyres-line);
+  border-bottom: 1px solid var(--tyres-line);
+  background: #f8faf9;
+}
+.tyres-inventory-toolbar input,
+.tyres-inventory-toolbar select,
+.tyres-column-picker summary {
+  min-height: 38px;
+  width: 100%;
+  border: 1px solid #cfd8d3;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: .82rem;
+  padding: 7px 9px;
+}
+.tyres-search { min-width: 0; }
+.tyres-search input { padding-left: 12px; }
+.tyres-column-picker { position: relative; }
+.tyres-column-picker summary { display: grid; place-items: center; cursor: pointer; white-space: nowrap; }
+.tyres-column-picker > div { position: absolute; right: 0; z-index: 12; display: grid; min-width: 210px; padding: 10px; border: 1px solid var(--tyres-line); border-radius: 9px; background: #fff; box-shadow: 0 16px 34px rgba(15, 23, 42, .16); }
+.tyres-column-picker label { display: flex; align-items: center; gap: 8px; min-height: 34px; }
+
+.tyres-table-shell { width: 100%; }
+.tyres-data-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: .82rem; }
+.tyres-data-table thead { position: sticky; top: 52px; z-index: 5; }
+.tyres-data-table th { padding: 8px 7px; border-bottom: 1px solid #bccac2; background: #f0f4f2; color: #44524b; text-align: left; font-size: .75rem; }
+.tyres-data-table th button { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 750; text-align: left; }
+.tyres-data-table td { padding: 8px 7px; border-bottom: 1px solid #e2e8e4; vertical-align: middle; overflow-wrap: anywhere; }
+.tyres-data-table tbody tr { cursor: pointer; background: #fff; }
+.tyres-data-table tbody tr:hover, .tyres-data-table tbody tr:focus { background: #f7fcf4; outline: none; }
+.tyres-data-table td strong, .tyres-data-table td small { display: block; }
+.tyres-data-table td small { margin-top: 2px; color: var(--tyres-muted); font-size: .7rem; }
+.tyres-data-table .text-action { min-height: 32px; white-space: nowrap; }
+.tyres-history-table { table-layout: auto; }
+
+.tyres-state, .tyres-tread { display: inline-flex; align-items: center; min-height: 25px; padding: 3px 7px; border-radius: 999px; background: #edf2f0; white-space: nowrap; }
+.tyres-tread--ready { background: #e9f7e4; color: #2b6428; }
+.tyres-tread--warning { background: #fff5db; color: #8b651c; }
+.tyres-tread--danger { background: #ffebe7; color: #a83b2c; }
+.tyres-tread--waiting { background: #f0f2f1; color: #65736c; }
+
+.tyres-pagination { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 12px; background: #f8faf9; color: var(--tyres-muted); font-size: .82rem; }
+.tyres-pagination label, .tyres-pagination > div { display: flex; align-items: center; gap: 8px; }
+.tyres-pagination select, .tyres-pagination button { min-height: 34px; border: 1px solid #cfd8d3; border-radius: 7px; background: #fff; color: var(--ink); font: inherit; padding: 5px 8px; }
+.tyres-pagination button:disabled { opacity: .45; }
+
+.tyres-empty-state { padding: 28px 18px; text-align: center; color: var(--tyres-muted); }
+.tyres-empty-state strong { color: var(--ink); }
+.tyres-empty-state p { margin: 5px auto 0; max-width: 560px; }
+.tyres-skeleton { display: grid; gap: 8px; padding: 16px; }
+.tyres-skeleton span { height: 44px; border-radius: 9px; background: linear-gradient(90deg, #eef2f0 25%, #f7f9f8 45%, #eef2f0 65%); background-size: 300% 100%; animation: tyres-skeleton 1.2s ease-in-out infinite; }
+@keyframes tyres-skeleton { to { background-position: -100% 0; } }
+.tyres-load-error { display: grid; justify-items: start; gap: 8px; margin: 12px 0; padding: 22px; border: 1px solid #e9b8af; border-radius: 12px; background: #fff8f6; color: #8f3428; }
+.tyres-load-error p { margin: 0; }
+
+.tyres-vehicle-layout { display: grid; grid-template-columns: minmax(520px, .9fr) minmax(520px, 1.1fr); min-height: 570px; border-top: 1px solid var(--tyres-line); }
+.tyres-vehicle-table { max-height: 690px; overflow-y: auto; border-right: 1px solid var(--tyres-line); }
+.tyres-vehicle-table > button { display: grid; grid-template-columns: 100px repeat(5, minmax(105px, 1fr)); align-items: center; gap: 8px; width: 100%; min-height: 52px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--tyres-line); background: #fff; color: var(--ink); text-align: left; font: inherit; font-size: .8rem; }
+.tyres-vehicle-table > button:hover, .tyres-vehicle-table > button.is-active { background: #f3faef; }
+.tyres-vehicle-table em { font-style: normal; }
+.tyres-vehicle-table .is-complete { color: #347029; }
+.tyres-vehicle-table .is-incomplete { color: #a05a20; }
+.tyres-vehicle-map-panel { min-width: 0; padding: 16px; background: #fbfcfb; }
+.tyres-vehicle-detail__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.tyres-vehicle-detail__head h3 { margin: 1px 0; font-size: 1.35rem; }
+.tyres-vehicle-detail__head p { margin: 0; color: var(--tyres-muted); }
+
+.tyres-vehicle-map { position: relative; width: min(100%, 510px); min-height: 390px; margin: 14px auto; border-radius: 18px; background: linear-gradient(180deg, #f2f5f3, #e8eeeb); box-shadow: inset 0 0 0 1px #d8e0db; }
+.tyres-vehicle-cab, .tyres-vehicle-body { position: absolute; left: 50%; transform: translateX(-50%); display: grid; place-items: center; border: 2px solid #819087; background: #cbd4cf; color: #536159; font-size: .7rem; text-transform: uppercase; }
+.tyres-vehicle-cab { top: 25px; width: 160px; height: 85px; border-radius: 32px 32px 14px 14px; }
+.tyres-vehicle-body { top: 118px; width: 210px; height: 238px; border-radius: 12px; }
+.tyres-wheel { position: absolute; z-index: 2; display: grid; place-items: center; width: 76px; min-height: 50px; padding: 5px; border: 3px solid #6d7a73; border-radius: 13px; background: #fff; color: var(--ink); font: inherit; font-size: .67rem; box-shadow: 0 5px 14px rgba(15, 23, 42, .12); }
+.tyres-wheel strong, .tyres-wheel span { display: block; }
+.tyres-wheel.is-mounted { border-color: #69a937; background: #f4fbea; }
+.tyres-wheel.is-empty { border-style: dashed; color: #77847d; }
+.tyres-wheel[data-position-side="left"] { left: 28px; }
+.tyres-wheel[data-position-side="right"] { right: 28px; }
+.tyres-wheel[data-position-row="0"][data-position-side="left"] { left: 44px; }
+.tyres-wheel[data-position-row="0"][data-position-side="right"] { right: 44px; }
+.tyres-wheel[data-position-side="left"][data-position-axle="inner"] { transform: translateX(62px); }
+.tyres-wheel[data-position-side="left"][data-position-axle="outer"] { transform: translateX(-22px); }
+.tyres-wheel[data-position-side="right"][data-position-axle="inner"] { transform: translateX(-62px); }
+.tyres-wheel[data-position-side="right"][data-position-axle="outer"] { transform: translateX(22px); }
+
+.tyres-position-list { display: grid; gap: 5px; }
+.tyres-position-list article { display: grid; grid-template-columns: minmax(200px, 1fr) auto auto auto; align-items: center; gap: 8px; min-height: 45px; padding: 7px 9px; border: 1px solid var(--tyres-line); border-radius: 8px; background: #fff; }
+.tyres-position-list strong, .tyres-position-list span { display: block; }
+.tyres-position-list article > div span { color: var(--tyres-muted); font-size: .75rem; }
+.tyres-position-list .is-empty { background: #fafbfa; }
+.tyres-action-danger { color: #a43d31 !important; }
+
+.tyres-fitment-form { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(150px, .8fr) minmax(150px, .7fr); align-items: end; gap: 9px; margin-top: 12px; padding: 12px; border: 1px solid rgba(117, 189, 37, .4); border-radius: 10px; background: #f6fbed; }
+.tyres-fitment-form > div:first-child { grid-column: 1 / -1; }
+.tyres-fitment-form p { margin: 3px 0 0; color: var(--tyres-muted); font-size: .78rem; }
+
+.tyres-fitment-form label,
+.tyres-measure-selector label,
+.tyres-measure-form label,
+.tyres-service-form label,
+.tyres-mm-panel label { display: grid; gap: 5px; color: var(--tyres-muted); font-size: .78rem; font-weight: 650; }
+.tyres-fitment-form input, .tyres-fitment-form select,
+.tyres-measure-selector input, .tyres-measure-selector select,
+.tyres-measure-form input, .tyres-measure-form select, .tyres-measure-form textarea,
+.tyres-service-form input, .tyres-service-form select, .tyres-service-form textarea,
+.tyres-mm-panel input, .tyres-mm-panel select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #c9d4ce;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  padding: 9px 10px;
+}
+
+.tyres-workflow-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 14px; }
+.tyres-workflow-steps span { padding: 8px; border-radius: 8px; background: #eff2f0; color: #6d7972; text-align: center; font-size: .8rem; }
+.tyres-workflow-steps span.is-active { background: #e8f5df; color: #356728; }
+.tyres-measure-grid { display: grid; grid-template-columns: minmax(280px, .7fr) minmax(420px, 1.3fr); gap: 16px; }
+.tyres-measure-selector, .tyres-measure-form { display: grid; align-content: start; gap: 10px; }
+.tyres-numeric-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.tyres-numeric-row input { min-height: 58px; font-size: 1.25rem; }
+.tyres-selected-tyre, .tyres-missing-fitment { display: grid; gap: 3px; padding: 12px; border-radius: 9px; background: #f2f8ee; }
+.tyres-selected-tyre span, .tyres-selected-tyre small { color: var(--tyres-muted); }
+.tyres-missing-fitment { background: #fff5e5; color: #79561f; }
+.tyres-missing-fitment p { margin: 0 0 6px; }
+.tyres-measure-summary { padding: 12px; border: 1px solid #cfe2c4; border-radius: 9px; background: #f8fcf5; }
+.tyres-measure-summary p, .tyres-measure-summary span { display: block; margin: 3px 0 0; color: var(--tyres-muted); }
+
+.tyres-service-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tyres-service-form fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--tyres-line); border-radius: 10px; }
+.tyres-service-form legend { padding: 0 5px; font-weight: 700; }
+.tyres-service-tyres { grid-column: 1 / -1; display: grid; gap: 5px; padding-top: 4px; }
+.tyres-service-tyres > span { font-weight: 700; }
+.tyres-service-tyres label { display: flex; align-items: center; gap: 7px; min-height: 30px; }
+.tyres-service-tyres input { width: 18px; min-height: 18px; }
+.tyres-service-total { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 16px; border-radius: 10px; background: #edf7e7; }
+.tyres-service-total strong { color: #2e6626; font-size: 1.45rem; }
+
+.tyres-segmented { display: inline-flex; gap: 3px; padding: 3px; border-radius: 9px; background: #edf1ef; }
+.tyres-segmented button { min-height: 34px; padding: 6px 11px; border: 0; border-radius: 7px; background: transparent; color: var(--tyres-muted); font: inherit; }
+.tyres-segmented button.is-active { background: #fff; color: var(--ink); box-shadow: 0 2px 7px rgba(15, 23, 42, .08); }
+
+.tyres-drawer-backdrop, .tyres-dialog-backdrop { position: fixed; inset: 0; z-index: 70; background: rgba(15, 23, 42, .32); backdrop-filter: blur(2px); }
+.tyres-detail-drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 71; width: min(720px, 94vw); overflow-y: auto; padding: 20px; background: #fff; box-shadow: -20px 0 55px rgba(15, 23, 42, .2); }
+.tyres-detail-drawer > header, .tyres-editor-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 13px; border-bottom: 1px solid var(--tyres-line); }
+.tyres-detail-drawer h2, .tyres-editor-dialog h2 { margin: 2px 0; }
+.tyres-detail-drawer header p { margin: 0; color: var(--tyres-muted); }
+.tyres-detail-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; padding: 12px 0; }
+.tyres-detail-actions button { min-height: 42px; border: 1px solid #cfd9d3; border-radius: 8px; background: #fff; color: var(--ink); font: inherit; font-size: .8rem; }
+.tyres-detail-drawer section { padding: 13px 0; border-bottom: 1px solid var(--tyres-line); }
+.tyres-detail-drawer h3 { margin: 0 0 9px; font-size: 1rem; }
+.tyres-detail-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin: 0; }
+.tyres-detail-list div { padding: 9px; border-radius: 8px; background: #f6f8f7; }
+.tyres-detail-list dt { color: var(--tyres-muted); font-size: .73rem; }
+.tyres-detail-list dd { margin: 3px 0 0; }
+.tyres-detail-drawer details, .tyres-panel--settings > details { margin-top: 9px; padding: 10px 11px; border: 1px solid var(--tyres-line); border-radius: 9px; }
+.tyres-detail-drawer summary, .tyres-panel--settings > details > summary { cursor: pointer; font-weight: 700; }
+.tyres-compact-history { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.tyres-compact-history li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--tyres-line); }
+.tyres-detail-cost { color: #2f6728; font-size: 1.55rem; font-weight: 700; }
+
+.tyres-editor-dialog { position: fixed; top: 4vh; left: 50%; z-index: 72; width: min(1000px, calc(100vw - 32px)); max-height: 92vh; overflow-y: auto; transform: translateX(-50%); padding: 18px; border-radius: 14px; background: #fff; box-shadow: 0 24px 70px rgba(15, 23, 42, .25); }
+.tyres-editor-dialog .tyres-form { margin-top: 13px; }
+.tyres-editor-dialog .tyres-form__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+
+.tyres-mm { position: fixed; right: 164px; bottom: 18px; z-index: 60; display: grid; justify-items: end; gap: 8px; pointer-events: none; }
+.tyres-mm > * { pointer-events: auto; }
+body:has([data-tyres-measurement-form]) .tyres-mm:not(.is-open),
+body:has([data-tyres-service-form]) .tyres-mm:not(.is-open),
+body:has(.tyres-editor-dialog) .tyres-mm { display: none; }
+.tyres-mm-toggle { display: grid; grid-template-columns: 44px auto; align-items: center; gap: 10px; min-width: 196px; min-height: 58px; padding: 7px 14px 7px 7px; border: 0; border-radius: 14px; background: linear-gradient(135deg, var(--brand, #75bd25), #3f7d13); color: #fff; text-align: left; font: inherit; box-shadow: 0 16px 38px rgba(63, 125, 19, .27); }
+.tyres-mm-toggle span { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 10px; background: rgba(255,255,255,.2); font-weight: 800; text-transform: uppercase; }
+.tyres-mm:not(.is-open) .tyres-mm-toggle { grid-template-columns: 44px; min-width: 58px; width: 58px; padding: 7px; }
+.tyres-mm:not(.is-open) .tyres-mm-toggle strong { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+.tyres-mm-panel { width: min(820px, calc(100vw - 36px)); max-height: min(82vh, 760px); overflow-y: auto; padding: 16px; border: 1px solid var(--tyres-line); border-radius: 14px; background: #fff; box-shadow: 0 24px 70px rgba(15, 23, 42, .22); }
+.tyres-mm-panel > header { display: flex; justify-content: space-between; gap: 12px; }
+.tyres-mm-panel h2 { margin: 1px 0 10px; font-size: 1.15rem; }
+.tyres-mm-panel > label, .tyres-mm-panel form { display: grid; gap: 9px; margin-top: 10px; }
+.tyres-mm-values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tyres-mm-values input { min-height: 54px; font-size: 1.15rem; }
+.tyres-mm-bulk-rows { display: grid; gap: 7px; max-height: 420px; overflow-y: auto; }
+.tyres-mm-bulk-rows fieldset { display: grid; grid-template-columns: 1.2fr repeat(3, 1fr); align-items: end; gap: 7px; margin: 0; padding: 8px; border: 1px solid var(--tyres-line); border-radius: 9px; }
+.tyres-mm-bulk-rows fieldset:disabled { opacity: .55; }
+.tyres-mm-bulk-rows legend { font-weight: 700; }
+
+.tyres-settings-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 12px 0 0; }
+.tyres-settings-list div { padding: 10px; border-radius: 8px; background: #f6f8f7; }
+.tyres-settings-list dt { color: var(--tyres-muted); font-size: .75rem; }
+.tyres-settings-list dd { margin: 3px 0 0; }
+
+@media (max-width: 1500px) {
+  .tyres-command-grid { grid-template-columns: repeat(4, minmax(150px, 1fr)); }
+  .tyres-inventory-toolbar { grid-template-columns: minmax(260px, 1.5fr) repeat(4, minmax(130px, 1fr)) auto auto; }
+  .tyres-inventory-toolbar select:nth-of-type(n+5) { grid-row: 2; }
+  .tyres-vehicle-layout { grid-template-columns: minmax(470px, .9fr) minmax(470px, 1.1fr); }
+}
+
+@media (max-width: 1050px) {
+  .tyres-header { align-items: flex-start; }
+  .tyres-header__actions { flex-direction: column; align-items: flex-end; }
+  .tyres-command-grid { grid-template-columns: repeat(3, minmax(150px, 1fr)); }
+  .tyres-overview-columns, .tyres-vehicle-layout, .tyres-measure-grid { grid-template-columns: 1fr; }
+  .tyres-vehicle-layout:has(.tyres-vehicle-detail) .tyres-vehicle-map-panel { order: -1; }
+  .tyres-vehicle-table { max-height: 420px; border-right: 0; border-bottom: 1px solid var(--tyres-line); }
+  .tyres-inventory-toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tyres-inventory-toolbar .tyres-search { grid-column: 1 / -1; }
+  .tyres-table-shell { padding: 8px; }
+  .tyres-data-table, .tyres-data-table tbody, .tyres-data-table tr, .tyres-data-table td { display: block; width: 100%; }
+  .tyres-data-table thead { display: none; }
+  .tyres-data-table tbody { display: grid; gap: 8px; }
+  .tyres-data-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 12px; padding: 10px; border: 1px solid var(--tyres-line); border-radius: 10px; }
+  .tyres-data-table td { display: grid; grid-template-columns: minmax(115px, .5fr) 1fr; gap: 7px; padding: 4px 0; border: 0; }
+  .tyres-data-table td::before { content: attr(data-label); color: var(--tyres-muted); font-size: .72rem; }
+  .tyres-service-form { grid-template-columns: 1fr; }
+  .tyres-editor-dialog .tyres-form__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .tyres-page { padding-bottom: 86px; }
+  .tyres-header { display: grid; padding: 12px; border-radius: 11px 11px 0 0; }
+  .tyres-header__title { align-items: flex-start; }
+  .tyres-header__title .module-detail__icon { width: 42px; height: 42px; flex-basis: 42px; }
+  .tyres-header p { font-size: .82rem; }
+  .tyres-header__actions { flex-direction: row; align-items: center; justify-content: space-between; }
+  .tyres-header__actions .primary-action { width: auto; min-height: 42px; }
+  .tyres-tabs { margin: 0; border-radius: 0 0 11px 11px; }
+  .tyres-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
+  .tyres-tabs button { min-height: 42px; white-space: normal; }
+  .tyres-command-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tyres-kpi-card { min-height: 82px; }
+  .tyres-overview-columns { gap: 8px; }
+  .tyres-panel { padding: 12px; }
+  .tyres-panel--flush { padding: 0; }
+  .tyres-inventory-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 8px; }
+  .tyres-inventory-toolbar select:nth-of-type(n+5) { grid-row: auto; }
+  .tyres-inventory-toolbar > button.primary-action, .tyres-inventory-toolbar > button.secondary-link { width: 100%; }
+  .tyres-data-table tbody tr { grid-template-columns: 1fr; }
+  .tyres-pagination { align-items: stretch; flex-direction: column; }
+  .tyres-pagination > div { justify-content: space-between; }
+  .tyres-vehicle-table > button { grid-template-columns: 90px 1fr 1fr; }
+  .tyres-vehicle-table > button > :nth-child(n+4) { display: none; }
+  .tyres-vehicle-map-panel { overflow: hidden; padding: 10px; }
+  .tyres-vehicle-map { left: 50%; width: 390px; max-width: none; min-height: 360px; margin-left: -195px; transform: scale(.88); transform-origin: top center; margin-bottom: -35px; }
+  .tyres-position-list article { grid-template-columns: 1fr auto; }
+  .tyres-position-list article > button { grid-column: 1 / -1; width: 100%; }
+  .tyres-fitment-form, .tyres-numeric-row, .tyres-service-form fieldset { grid-template-columns: 1fr; }
+  .tyres-fitment-form > button { width: 100%; }
+  .tyres-workflow-steps { font-size: .72rem; }
+  .tyres-detail-drawer { width: 100vw; padding: 14px; }
+  .tyres-detail-actions { grid-template-columns: repeat(2, 1fr); }
+  .tyres-detail-list { grid-template-columns: 1fr; }
+  .tyres-compact-history li { flex-direction: column; }
+  .tyres-editor-dialog { top: 0; width: 100vw; max-height: 100vh; min-height: 100vh; border-radius: 0; padding: 14px; }
+  .tyres-editor-dialog .tyres-form__grid { grid-template-columns: 1fr; }
+  .tyres-mm { right: 12px; bottom: 78px; }
+  .tyres-mm.is-open { left: 12px; }
+  .tyres-mm-panel { width: 100%; max-height: calc(100vh - 92px); }
+  .tyres-mm-values, .tyres-mm-bulk-rows fieldset { grid-template-columns: 1fr; }
+  .tyres-mm-bulk-rows { max-height: none; }
+  .tyres-settings-list { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 390px) {
+  .tyres-inventory-toolbar { grid-template-columns: 1fr; }
+  .tyres-header__actions { align-items: stretch; flex-direction: column; }
+  .tyres-header__actions .primary-action { width: 100%; }
+  .tyres-attention-list > button { align-items: flex-start; flex-direction: column; }
+  .tyres-reason-list { justify-content: flex-start; }
+  .tyres-vehicle-map { transform: scale(.72); margin-bottom: -92px; }
 }
 
 /* Datové schránky Plus: lokální read-only triage pilot. */
