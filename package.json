@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.685",
+  "version": "0.1.686",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,7 +19,7 @@
     "test:orwii-fuel": "node scripts/orwii-fuel-store.test.mjs && node scripts/fleet-vehicle-aliases.test.mjs && node scripts/fleet-fuel-analytics.test.mjs",
     "test:vehicle-tracking": "node scripts/tcars-vehicle-detail.test.mjs && node scripts/tcars-pairing-audit.test.mjs && node scripts/vehicle-tracking-maps-config.test.mjs && node scripts/vehicle-tracking-history.test.mjs && node scripts/vehicle-tracking-analytics.test.mjs && node scripts/fleet-trip-job-pairing.test.mjs && node scripts/vehicle-tracking-preferences.test.mjs",
     "test:fleet-vistos": "node scripts/fleet-vistos-here-profile.test.mjs",
-    "test:receivables": "node scripts/receivables-engines.test.mjs && node scripts/receivables-rating-store.test.mjs && node scripts/receivables-navigation.test.mjs && node scripts/receivables-invoice-sync-runner.test.mjs && node scripts/receivables-incremental-ledger-diff.test.mjs && node scripts/receivables-payment-reconciliation.test.mjs",
+    "test:receivables": "node scripts/receivables-engines.test.mjs && node scripts/receivables-rating-store.test.mjs && node scripts/receivables-navigation.test.mjs && node scripts/receivables-invoice-sync-runner.test.mjs && node scripts/receivables-incremental-ledger-diff.test.mjs && node scripts/receivables-payment-reconciliation.test.mjs && node scripts/receivables-kb-payment-sync.test.mjs",
     "test:data-box-plus": "node scripts/data-box-plus-chat-context.test.mjs && node scripts/data-box-plus-chat-tools.test.mjs && node scripts/data-box-plus-openai.test.mjs && node scripts/data-box-plus-confirmation.test.mjs && node scripts/data-box-plus-instruction-flow.test.mjs && node scripts/data-box-plus-chat-ui.test.mjs && node scripts/data-box-plus-command-center.test.mjs && node scripts/data-box-plus-triage.test.mjs && node scripts/data-box-plus-triage-ui.test.mjs",
     "test:customer-messaging": "node scripts/customer-messaging.test.mjs",
     "test:rcs-consent": "node scripts/rcs-consent.test.mjs",

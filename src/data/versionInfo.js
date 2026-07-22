@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.685"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.686"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -23,6 +23,10 @@ export const versionNews = [
   {
     title: "Vozový park: popisky technických číselníků Vistosu",
     text: "ID typu vozidla, přívěsů, paliva, EURO, nástavby, náprav, vybavení a nádob se převádějí podle oficiálního Vehicle EnumerationList. Pokud Vistos vrátí vlastní Caption, má stále přednost; žádná provozní hodnota se neodhaduje ani nezapisuje."
+  },
+  {
+    title: "Pohledávky: automatické stahování příchozích plateb z KB",
+    text: "Samostatný cloudový runner po dokončení KB OAuth konfigurace každé dvě hodiny načte pouze zaúčtované příchozí transakce BOOK/CREDIT, dodrží bezpečný interval KB, deduplikuje je podle bankovní reference a uloží do D1 s auditem. Ruční stažení i pravdivý stav posledního běhu jsou v Importu; odchozí platby, platební příkazy, automatické přepisování faktur a zákaznická komunikace zůstávají vypnuté."
   },
   {
     title: "Vozový park: detail Vistosu má přednost před nulami seznamu",
