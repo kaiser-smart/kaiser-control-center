@@ -309,6 +309,17 @@ for (const marker of [
   assert.ok(styleSource.includes(marker), `Sjednocený zdrojový náhled postrádá styl: ${marker}`);
 }
 
+const nightThemeStart = styleSource.indexOf(".collection-daily-driver-page.is-theme-night {");
+const nightThemeEnd = styleSource.indexOf(".collection-driver-kiosk-active .ai-assistant-launcher", nightThemeStart);
+const nightThemeSource = styleSource.slice(nightThemeStart, nightThemeEnd);
+assert.ok(nightThemeStart >= 0 && nightThemeEnd > nightThemeStart, "Noční režim tabletu musí mít vlastní stylový blok.");
+for (const marker of ["#151515", "#252525", "#2d2d2d", "#303030", "#2a2a2a"]) {
+  assert.ok(nightThemeSource.includes(marker), `Noční režim postrádá antracitový odstín: ${marker}`);
+}
+for (const legacyBlue of ["#090f19", "#111a28", "#182334", "#253044", "#142b4a", "#263247", "#202c3e", "#273347"]) {
+  assert.ok(!nightThemeSource.includes(legacyBlue), `Noční režim stále obsahuje modrý odstín: ${legacyBlue}`);
+}
+
 for (const marker of [
   ".collection-daily-driver-map.is-fullscreen > .collection-daily-driver-simulated-gps",
   ".collection-daily-driver-map.is-fullscreen > .collection-daily-driver-map__primary-actions",

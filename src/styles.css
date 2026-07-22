@@ -43779,13 +43779,13 @@ body.collection-driver-kiosk-active #app {
 
 .collection-daily-driver-page--source-preview.is-theme-night .collection-routes-driver-source-route-list {
   border-color: #69b22b;
-  background: #17221b;
+  background: #1d1d1d;
   color: #f4f8f2;
 }
 
 .collection-daily-driver-page--source-preview.is-theme-night .collection-routes-driver-source-route-list button {
-  border-color: #445347;
-  background: #202c23;
+  border-color: #5f5f5f;
+  background: #292929;
   color: #f4f8f2;
 }
 
@@ -45785,11 +45785,11 @@ body.collection-driver-kiosk-active #app {
 
 .collection-daily-driver-page.is-theme-night {
   --ink: #f2f6f1;
-  --steel: #bdc8d3;
+  --steel: #c7c7c7;
   color-scheme: dark;
   background:
     radial-gradient(circle at 0 0, rgba(117, 189, 37, 0.12), transparent 34%),
-    linear-gradient(145deg, #090f19, #111a28);
+    linear-gradient(145deg, #151515, #252525);
   color: #f2f6f1;
 }
 
@@ -45800,8 +45800,8 @@ body.collection-driver-kiosk-active #app {
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-modal > section > header,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-sheet,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-sheet > header {
-  border-color: rgba(190, 210, 230, 0.18);
-  background: #111a28;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: #252525;
   color: #f2f6f1;
 }
 
@@ -45810,13 +45810,13 @@ body.collection-driver-kiosk-active #app {
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-route-head {
-  background: #182334;
+  background: #2d2d2d;
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-route-kpis article,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-route-kpi-link {
   border-color: rgba(235, 190, 80, 0.55);
-  background: #253044;
+  background: #303030;
   color: #f5f7fb;
 }
 
@@ -45834,14 +45834,14 @@ body.collection-driver-kiosk-active #app {
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-next-stop,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-navigation-guidance {
-  border-color: #4f8ee8;
-  background: #142b4a;
+  border-color: #777;
+  background: #303030;
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-stop-meta > aside,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-map > header,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-map > footer {
-  background: rgba(17, 26, 40, 0.94);
+  background: rgba(37, 37, 37, 0.94);
   color: #f2f6f1;
 }
 
@@ -45850,8 +45850,8 @@ body.collection-driver-kiosk-active #app {
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-action {
-  border-color: #4b5a70;
-  background: #263247;
+  border-color: #626262;
+  background: #303030;
   color: #f7f9fc;
 }
 
@@ -45880,8 +45880,8 @@ body.collection-driver-kiosk-active #app {
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-modal__more,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-report-review textarea,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-stop-list__identity button {
-  border-color: #526279;
-  background: #202c3e;
+  border-color: #686868;
+  background: #2a2a2a;
   color: #f3f6fa;
 }
 
@@ -45897,7 +45897,7 @@ body.collection-driver-kiosk-active #app {
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-display-settings > p,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-stop-list small,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-route-head small {
-  color: #bdc8d3;
+  color: #c7c7c7;
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-sound-setting strong {
@@ -45907,7 +45907,7 @@ body.collection-driver-kiosk-active #app {
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-stop-list li > span,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-photo-grid img,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-report-review img {
-  background: #273347;
+  background: #333;
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-stop-list__identity p {
