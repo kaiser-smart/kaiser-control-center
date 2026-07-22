@@ -177,9 +177,7 @@ const result = await importLegacyTyres(
 
 await writeFile(outputPath, [
   "-- Auditovaný jednorázový převod veřejně publikované evidence Pneumatik.",
-  "BEGIN TRANSACTION;",
   ...statements.map(({ sql, values }) => bindSql(sql, values)),
-  "COMMIT;",
   ""
 ].join("\n"), { mode: 0o600 });
 
