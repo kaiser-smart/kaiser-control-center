@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.686"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.687"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vozový park: popisky technických číselníků Vistosu",
+    text: "ID typu vozidla, přívěsů, paliva, EURO, nástavby, náprav, vybavení a nádob se převádějí podle oficiálního Vehicle EnumerationList. Pokud Vistos vrátí vlastní Caption, má stále přednost; žádná provozní hodnota se neodhaduje ani nezapisuje."
+  },
   {
     title: "Pohledávky: ostrý KB import odmítne sandbox klíče",
     text: "Stahování plateb se aktivuje pouze s výslovnou produkční KB konfigurací. Sandboxové API klíče zůstávají bezpečně oddělené pro onboarding a nemohou omylem spustit ostrý import ani zápis plateb do D1."
