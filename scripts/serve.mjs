@@ -123,6 +123,24 @@ let mockSelfRepairMonitorStatus = "active";
 let mockNotificationLogs = [];
 let mockAssistantDailyPromos = new Map();
 let mockCollectionRouteBatches = [];
+const mockTyresState = {
+  tyres: [],
+  vehicles: [
+    {
+      id: "tyre-vehicle-local-4b21234",
+      licensePlate: "4B2 1234",
+      type: "Nákladní vozidlo",
+      driver: "Lokální test",
+      odometer: 124000,
+      depot: "Brno",
+      configuration: ["HL vnitřní", "HL vnější", "HP vnitřní", "HP vnější"],
+      updatedAt: ""
+    }
+  ],
+  measurements: [],
+  services: [],
+  audit: []
+};
 const mockCollectionRouteIncidentItems = [
   {
     id: "local-incident-production-new",
@@ -685,6 +703,100 @@ function currentDevUser(request) {
   }
 
   return mockUsers.find((user) => user.id === session.userId && user.status === "active") || null;
+}
+
+function mockTyresNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function mockTyresText(value, maxLength = 500) {
+  return String(value ?? "").trim().slice(0, maxLength);
+}
+
+function mockTyresDate(value, fallback = "") {
+  const text = mockTyresText(value, 40);
+  if (!text) return fallback;
+  const date = new Date(text);
+  return Number.isNaN(date.valueOf()) ? fallback : date.toISOString().slice(0, 10);
+}
+
+function mockTyresAudit(user, action, entityType, entityId) {
+  mockTyresState.audit.unshift({
+    id: `local-tyre-audit-${randomUUID()}`,
+    action,
+    entityType,
+    entityId,
+    actor: user.name || user.email || "Lokální uživatel",
+    createdAt: new Date().toISOString()
+  });
+}
+
+function mockTyresSummary() {
+  const tyres = mockTyresState.tyres;
+  const currentYear = new Date().getUTCFullYear();
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const serviceCost = (service) => service.labor + service.material + service.tireCost;
+  return {
+    totalTyres: tyres.length,
+    mountedTyres: tyres.filter((item) => item.state === "na vozidle").length,
+    lowTreadTyres: tyres.filter((item) => Number.isFinite(Number(item.currentTread)) && Number(item.currentTread) <= 3.5).length,
+    vehicles: mockTyresState.vehicles.length,
+    serviceCostYtd: mockTyresState.services.filter((item) => String(item.date).startsWith(String(currentYear))).reduce((sum, item) => sum + serviceCost(item), 0),
+    serviceCostMonth: mockTyresState.services.filter((item) => String(item.date).startsWith(currentMonth)).reduce((sum, item) => sum + serviceCost(item), 0),
+    treadAlertMm: 3.5
+  };
+}
+
+function mockTyresDashboard() {
+  return {
+    apiStatus: "ready",
+    summary: mockTyresSummary(),
+    tyres: [...mockTyresState.tyres],
+    vehicles: [...mockTyresState.vehicles],
+    measurements: [...mockTyresState.measurements],
+    services: [...mockTyresState.services],
+    audit: mockTyresState.audit.slice(0, 12)
+  };
+}
+
+function mockTyresCan(user, action) {
+  return Boolean(user && hasPermission(user, "tyres", action));
+}
+
+function mockTyresSavePayload(input, current = {}) {
+  const manufacturer = mockTyresText(input.manufacturer ?? current.manufacturer, 120);
+  const size = mockTyresText(input.size ?? current.size, 120);
+  if (!manufacturer || !size) return { error: "Výrobce a rozměr pneumatiky jsou povinné." };
+  const vehicle = mockTyresText(input.vehicle ?? current.vehicle, 32);
+  if (vehicle && !mockTyresState.vehicles.some((item) => item.licensePlate === vehicle)) {
+    return { error: "Vybrané vozidlo není v lokální evidenci Pneumatik." };
+  }
+  return {
+    value: {
+      ...current,
+      manufacturer,
+      model: mockTyresText(input.model ?? current.model, 160),
+      size,
+      type: mockTyresText(input.type ?? current.type ?? "nová", 80) || "nová",
+      state: mockTyresText(input.state ?? current.state ?? "sklad", 80) || "sklad",
+      vehicle,
+      position: mockTyresText(input.position ?? current.position, 80),
+      currentTread: input.currentTread === "" || input.currentTread == null ? null : mockTyresNumber(input.currentTread, null),
+      pressure: input.pressure === "" || input.pressure == null ? null : mockTyresNumber(input.pressure, null),
+      priceEx: mockTyresNumber(input.priceEx ?? current.priceEx),
+      supplier: mockTyresText(input.supplier ?? current.supplier, 180),
+      purchaseDate: mockTyresDate(input.purchaseDate ?? current.purchaseDate),
+      invoice: mockTyresText(input.invoice ?? current.invoice, 120),
+      dot: mockTyresText(input.dot ?? current.dot, 40),
+      loadIndex: mockTyresText(input.loadIndex ?? current.loadIndex, 80),
+      mounted: mockTyresDate(input.mounted ?? current.mounted),
+      mountedOdo: mockTyresNumber(input.mountedOdo ?? current.mountedOdo),
+      mileage: mockTyresNumber(input.mileage ?? current.mileage),
+      defects: mockTyresNumber(input.defects ?? current.defects),
+      updatedAt: new Date().toISOString()
+    }
+  };
 }
 
 function mockFleetVehicleFixtures() {
@@ -4823,6 +4935,174 @@ async function handleApi(request, response) {
       return true;
     }
     sendJson(response, 200, { user: publicUser(user) });
+    return true;
+  }
+
+  if (url.pathname === "/api/tyres" && ["GET", "POST"].includes(request.method)) {
+    const user = currentDevUser(request);
+    const action = request.method === "GET" ? "view" : "edit";
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!mockTyresCan(user, action)) {
+      sendJson(response, 403, { error: "Nemáte oprávnění pro evidenci Pneumatik." });
+      return true;
+    }
+    if (request.method === "GET") {
+      sendJson(response, 200, mockTyresDashboard());
+      return true;
+    }
+    const payload = mockTyresSavePayload(await readJsonBody(request));
+    if (payload.error) {
+      sendJson(response, 400, { error: payload.error });
+      return true;
+    }
+    const tyre = { id: `local-tyre-${randomUUID()}`, ...payload.value };
+    mockTyresState.tyres.unshift(tyre);
+    mockTyresAudit(user, "created", "tyre", tyre.id);
+    sendJson(response, 201, { tyre, apiStatus: "ready" });
+    return true;
+  }
+
+  const mockTyreItemMatch = /^\/api\/tyres\/([^/]+)$/.exec(url.pathname);
+  if (mockTyreItemMatch && request.method === "PATCH") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!mockTyresCan(user, "edit")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění upravovat Pneumatiky." });
+      return true;
+    }
+    const tyre = mockTyresState.tyres.find((item) => item.id === decodeURIComponent(mockTyreItemMatch[1]));
+    if (!tyre) {
+      sendJson(response, 404, { error: "Pneumatika nebyla nalezena." });
+      return true;
+    }
+    const payload = mockTyresSavePayload(await readJsonBody(request), tyre);
+    if (payload.error) {
+      sendJson(response, 400, { error: payload.error });
+      return true;
+    }
+    Object.assign(tyre, payload.value);
+    mockTyresAudit(user, "updated", "tyre", tyre.id);
+    sendJson(response, 200, { tyre, apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/tyres/measurements" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!mockTyresCan(user, "edit")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění zapisovat měření." });
+      return true;
+    }
+    const payload = await readJsonBody(request);
+    const vehicle = mockTyresText(payload.vehicle, 32);
+    const tyre = mockTyresState.tyres.find((item) => item.id === mockTyresText(payload.tyreId, 160));
+    const tread = Number(payload.tread);
+    if (!tyre || !vehicle || tyre.vehicle !== vehicle) {
+      sendJson(response, 400, { error: "Měření lze zapsat jen k pneumatice osazené na zvoleném vozidle." });
+      return true;
+    }
+    if (!Number.isFinite(tread) || tread < 0 || tread > 100 || !mockTyresText(payload.position, 80)) {
+      sendJson(response, 400, { error: "Vyplňte pozici kola a platnou hloubku dezénu." });
+      return true;
+    }
+    const measuredAt = new Date().toISOString();
+    const measurement = {
+      id: `local-tyre-measurement-${randomUUID()}`,
+      tyreId: tyre.id,
+      vehicle,
+      position: mockTyresText(payload.position, 80),
+      tread,
+      pressure: payload.pressure === "" || payload.pressure == null ? null : mockTyresNumber(payload.pressure, null),
+      odometer: mockTyresNumber(payload.odometer),
+      measuredAt: mockTyresDate(payload.measuredAt, measuredAt.slice(0, 10)),
+      note: mockTyresText(payload.note, 2000),
+      actor: user.name || user.email || "Lokální uživatel"
+    };
+    mockTyresState.measurements.unshift(measurement);
+    tyre.currentTread = measurement.tread;
+    tyre.pressure = measurement.pressure;
+    tyre.mileage = measurement.odometer;
+    tyre.updatedAt = measuredAt;
+    mockTyresAudit(user, "created", "measurement", measurement.id);
+    sendJson(response, 201, { measurement, apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/tyres/services" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!mockTyresCan(user, "edit")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění zapisovat servis." });
+      return true;
+    }
+    const payload = await readJsonBody(request);
+    const type = mockTyresText(payload.type, 120);
+    const vehicle = mockTyresText(payload.vehicle, 32);
+    if (!type) {
+      sendJson(response, 400, { error: "Typ servisního zásahu je povinný." });
+      return true;
+    }
+    if (vehicle && !mockTyresState.vehicles.some((item) => item.licensePlate === vehicle)) {
+      sendJson(response, 400, { error: "Vybrané vozidlo není v lokální evidenci Pneumatik." });
+      return true;
+    }
+    const service = {
+      id: `local-tyre-service-${randomUUID()}`,
+      date: mockTyresDate(payload.date, new Date().toISOString().slice(0, 10)),
+      vehicle,
+      person: mockTyresText(payload.person, 180),
+      type,
+      supplier: mockTyresText(payload.supplier, 180),
+      labor: mockTyresNumber(payload.labor),
+      material: mockTyresNumber(payload.material),
+      tireCost: mockTyresNumber(payload.tireCost),
+      invoice: mockTyresText(payload.invoice, 120),
+      note: mockTyresText(payload.note, 4000),
+      createdAt: new Date().toISOString()
+    };
+    mockTyresState.services.unshift(service);
+    mockTyresAudit(user, "created", "service", service.id);
+    sendJson(response, 201, { service, apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/modules/tyres/rules" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!mockTyresCan(user, "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění číst pravidla Pneumatik." });
+      return true;
+    }
+    sendJson(response, 200, { rules: [], apiStatus: "ready" });
+    return true;
+  }
+
+  if (url.pathname === "/api/modules/tyres/automation-runs" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!mockTyresCan(user, "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění číst běhy pravidel Pneumatik." });
+      return true;
+    }
+    sendJson(response, 200, { runs: [], runnerRuns: [], apiStatus: "ready" });
     return true;
   }
 
@@ -9769,6 +10049,7 @@ const server = createServer(async (request, response) => {
   const filePath = await resolveFile(request.url || "/");
   const extension = path.extname(filePath);
   response.setHeader("Content-Type", contentTypes.get(extension) || "application/octet-stream");
+  response.setHeader("Cache-Control", "no-store");
   createReadStream(filePath).pipe(response);
 });
 

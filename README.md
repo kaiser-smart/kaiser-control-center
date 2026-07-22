@@ -19,9 +19,9 @@ Interní provozní systém pro správu odpadových služeb, vozového parku, ser
 
 ## Pneumatiky
 
-Modul Pneumatiky není v tomto projektu přepisovaný ani refaktorovaný. V aplikaci je karta se štítkem `HOTOVO` a stránka `/pneumatiky`, která otevírá hotovou externí aplikaci:
+`/pneumatiky` je plnohodnotný modul Kaiser Control Center. Evidence pneumatik, měření dezénu, servisní historie, náklady a audit běží přes chráněné Pages API a Cloudflare D1. Přístup se řídí oprávněním `tyres:view`, zápisy vyžadují `tyres:edit` a jednorázový převod historických dat `tyres:manage`.
 
-https://kaiser-smart.github.io/kaiser-pneu-evidence/
+Veřejná externí aplikace se už do pracovního toku neotevírá. Automatické objednávky, zprávy mimo KCC a autonomní změny stavu jsou vypnuté.
 
 ## Hlášení řidičů: partslink24 VIN pilot
 

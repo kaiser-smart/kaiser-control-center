@@ -824,7 +824,7 @@ https://kaiser-control-center.pages.dev/
 
 Veřejná adresa evidence Pneumatiky je:
 
-https://kaiser-smart.github.io/kaiser-pneu-evidence/
+https://smart-odpady.ai/pneumatiky
 
 ## 4. Verze aplikace
 
@@ -910,8 +910,9 @@ Kaiser repozitáře:
 
 ```text
 https://github.com/kaiser-smart/kaiser-control-center.git
-https://github.com/kaiser-smart/kaiser-pneu-evidence.git
 ```
+
+Evidence Pneumatiky je součástí `kaiser-control-center`; starý samostatný repozitář slouží pouze jako zdroj jednorázového převodu historických dat.
 
 Nanolab / Shoptet repozitáře ve stejné organizaci:
 
@@ -1219,7 +1220,7 @@ Kaiser Control Center:
 https://github.com/kaiser-smart/kaiser-control-center.git
 
 Pneumatiky:
-https://github.com/kaiser-smart/kaiser-pneu-evidence.git
+součást `kaiser-control-center` (starý samostatný repozitář je pouze historický zdroj dat)
 
 Nanolab / Shoptet:
 https://github.com/kaiser-smart/prostuduj-shoptet-vs-nanolab-cz-a.git

@@ -15,6 +15,354 @@
   --shadow-card-hover: 0 18px 38px rgba(36, 45, 34, 0.14);
 }
 
+/* Pneumatiky */
+.tyres-page {
+  --tyres-line: rgba(15, 23, 42, 0.12);
+  --tyres-muted: #5f6b7a;
+  --tyres-surface: #ffffff;
+}
+
+.tyres-page .tyres-hero .module-detail__body p {
+  max-width: 780px;
+}
+
+.tyres-panel,
+.tyres-notice,
+.tyres-error {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--tyres-line);
+  border-radius: 10px;
+  background: var(--tyres-surface);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.055);
+}
+
+.tyres-notice {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: #f0fdf4;
+  color: #155e35;
+}
+
+.tyres-error {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: #fff1f2;
+  color: #9f1239;
+}
+
+.tyres-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.tyres-panel__head h2 {
+  margin: 2px 0 5px;
+  font-size: 1.28rem;
+}
+
+.tyres-panel__head p,
+.tyres-empty {
+  margin: 0;
+  color: var(--tyres-muted);
+  line-height: 1.5;
+}
+
+.tyres-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tyres-kpi-grid article {
+  display: grid;
+  align-content: space-between;
+  gap: 7px;
+  min-width: 0;
+  min-height: 108px;
+  padding: 13px;
+  border: 1px solid var(--tyres-line);
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.tyres-kpi-grid span {
+  color: var(--tyres-muted);
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+.tyres-kpi-grid strong {
+  overflow-wrap: anywhere;
+  color: #172033;
+  font-size: 1.18rem;
+  line-height: 1.15;
+}
+
+.tyres-kpi--danger {
+  border-color: rgba(220, 38, 38, 0.28) !important;
+  background: #fff5f5 !important;
+}
+
+.tyres-kpi--danger strong,
+.tyres-tread--danger {
+  color: #b42318;
+}
+
+.tyres-kpi--ready {
+  border-color: rgba(22, 163, 74, 0.24) !important;
+  background: #f0fdf4 !important;
+}
+
+.tyres-alert-list,
+.tyres-inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.tyres-alert-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  padding: 12px;
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  border-radius: 8px;
+  background: #fff7f7;
+}
+
+.tyres-alert-list strong,
+.tyres-alert-list span {
+  overflow-wrap: anywhere;
+}
+
+.tyres-alert-list span {
+  grid-column: 1;
+  color: var(--tyres-muted);
+  font-size: 0.84rem;
+}
+
+.tyres-alert-list b {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: #b42318;
+  white-space: nowrap;
+}
+
+.tyres-entry-form {
+  margin: 0 0 14px;
+  border: 1px solid var(--tyres-line);
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.tyres-entry-form summary {
+  padding: 12px 14px;
+  cursor: pointer;
+  color: #172033;
+  font-weight: 700;
+}
+
+.tyres-form {
+  padding: 0 14px 14px;
+}
+
+.tyres-form__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tyres-form label {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  color: #344054;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.tyres-form input,
+.tyres-form select,
+.tyres-form textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 10px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  border-radius: 7px;
+  background: #fff;
+  color: #172033;
+  font: inherit;
+  font-weight: 500;
+}
+
+.tyres-form textarea {
+  min-height: 66px;
+  resize: vertical;
+}
+
+.tyres-form input:focus,
+.tyres-form select:focus,
+.tyres-form textarea:focus {
+  outline: 3px solid rgba(22, 163, 74, 0.18);
+  border-color: #16a34a;
+}
+
+.tyres-form__wide {
+  grid-column: span 2;
+}
+
+.tyres-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 13px;
+}
+
+.tyres-card {
+  display: grid;
+  align-content: start;
+  gap: 13px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--tyres-line);
+  border-radius: 9px;
+  background: #fff;
+}
+
+.tyres-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 9px;
+}
+
+.tyres-card h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #172033;
+  font-size: 1rem;
+}
+
+.tyres-card__head p {
+  margin: 3px 0 0;
+  color: var(--tyres-muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.tyres-state {
+  flex: 0 0 auto;
+  max-width: 48%;
+  padding: 4px 7px;
+  border-radius: 99px;
+  background: #edf2f7;
+  color: #344054;
+  font-size: 0.7rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.tyres-card dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.tyres-card dl div {
+  display: grid;
+  gap: 2px;
+}
+
+.tyres-card dt {
+  color: var(--tyres-muted);
+  font-size: 0.7rem;
+}
+
+.tyres-card dd {
+  margin: 0;
+  color: #172033;
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.tyres-tread--warning { color: #9a6700; }
+.tyres-tread--ready { color: #057a55; }
+.tyres-tread--waiting { color: var(--tyres-muted); }
+
+.tyres-two-column {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.tyres-two-column .tyres-panel {
+  min-width: 0;
+}
+
+.tyres-form--compact {
+  padding: 0;
+}
+
+.tyres-form--compact .tyres-form__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tyres-history {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tyres-history li {
+  display: grid;
+  gap: 3px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--tyres-line);
+}
+
+.tyres-history li:last-child { border-bottom: 0; }
+
+.tyres-history strong { color: #172033; overflow-wrap: anywhere; }
+.tyres-history span,
+.tyres-history p { margin: 0; color: var(--tyres-muted); font-size: 0.84rem; overflow-wrap: anywhere; }
+
+.tyres-panel--settings .module-event-log,
+.tyres-panel--settings .module-rules-panel {
+  margin-top: 16px;
+}
+
+@media (max-width: 1180px) {
+  .tyres-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tyres-form__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .tyres-panel,
+  .tyres-notice,
+  .tyres-error { margin: 12px 0; padding: 12px; }
+  .tyres-panel__head { align-items: stretch; flex-direction: column; gap: 10px; }
+  .tyres-panel__head > .primary-action,
+  .tyres-panel__head > .secondary-link { width: 100%; }
+  .tyres-kpi-grid,
+  .tyres-two-column,
+  .tyres-form__grid,
+  .tyres-form--compact .tyres-form__grid { grid-template-columns: 1fr; }
+  .tyres-kpi-grid article { min-height: 78px; }
+  .tyres-form__wide { grid-column: auto; }
+  .tyres-form__actions { display: grid; grid-template-columns: 1fr; }
+  .tyres-form__actions > * { width: 100%; }
+  .tyres-alert-list,
+  .tyres-inventory-grid { grid-template-columns: 1fr; }
+  .tyres-entry-form { margin-bottom: 12px; }
+  .tyres-card { padding: 12px; }
+}
+
 /* Datové schránky Plus: lokální read-only triage pilot. */
 .ds-plus-triage-preview {
   --ds-triage-border: #dfe6dc;

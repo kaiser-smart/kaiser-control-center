@@ -96,7 +96,7 @@ export const modules = [
     description: "Evidence pneumatik, dezénu, tlaku a nákladů.",
     route: "/pneumatiky",
     icon: TyresIcon,
-    status: "HOTOVO",
+    status: "Funkční přes API",
     ctaLabel: "Zobrazit pneumatiky",
     active: true,
     disabled: false,

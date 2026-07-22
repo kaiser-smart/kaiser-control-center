@@ -92,8 +92,8 @@ assert.equal(hasPermission({ ...reporter, active: true }, "self-repair", "view")
 assert.equal(hasPermission({ ...manager, active: true }, "self-repair", "view"), true);
 assert.equal(hasPermission({ ...manager, active: true }, "self-repair", "manage"), true);
 
-assert.equal(resolveSelfRepairTarget("pneumatiky").repoKey, "kaiser-pneu-evidence");
-assert.equal(resolveSelfRepairTarget("tyres").productionUrl, "https://kaiser-smart.github.io/kaiser-pneu-evidence/");
+assert.equal(resolveSelfRepairTarget("pneumatiky").repoKey, "kaiser-control-center");
+assert.equal(resolveSelfRepairTarget("tyres").productionUrl, "https://smart-odpady.ai/pneumatiky");
 assert.equal(resolveSelfRepairTarget("dashboard").productionUrl, "https://smart-odpady.ai/");
 assert.equal(targetForSelfRepairReport("unknown-module"), null);
 assert.equal(sanitizeSelfRepairSourceRoute("/pneumatiky?vehicle=1#detail"), "/pneumatiky?vehicle=1#detail");
@@ -135,7 +135,7 @@ const created = await createUserReportedSelfRepairCase(env, reporter, {
 });
 
 assert.equal(created.case.moduleKey, "tyres");
-assert.equal(created.case.targetRepoKey, "kaiser-pneu-evidence");
+assert.equal(created.case.targetRepoKey, "kaiser-control-center");
 assert.equal(created.case.status, "new");
 assert.equal(created.case.riskLevel, "unclassified");
 assert.equal(created.feedback.status, "Nová");
@@ -151,8 +151,8 @@ const storedTarget = sqlite.prepare(`
   WHERE id = ?
 `).get(created.case.id);
 assert.deepEqual({ ...storedTarget }, {
-  target_repo_key: "kaiser-pneu-evidence",
-  target_production_url: "https://kaiser-smart.github.io/kaiser-pneu-evidence/"
+  target_repo_key: "kaiser-control-center",
+  target_production_url: "https://smart-odpady.ai/pneumatiky"
 });
 
 const listed = await listSelfRepairCases(env, { moduleKey: "tyres" });

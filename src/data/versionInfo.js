@@ -11,9 +11,9 @@ export const versionInfo = {
   appName: "Smart odpady",
   version: valueOrUnknown(buildMeta.version, "v0.1.669"),
   status: "development",
-  backupName: "Bod nula – Evidence pneumatik",
-  backupNote: "Plně funkční původní aplikace evidence pneumatik.",
-  tyreModuleStatus: "Hotovo – neměnit",
+  backupName: "Pneumatiky v KCC – chráněná evidence",
+  backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
+  tyreModuleStatus: "Funkční v KCC přes chráněné API",
   branch: valueOrUnknown(buildMeta.branch),
   commit: valueOrUnknown(buildMeta.commit),
   backupDate: valueOrUnknown(buildMeta.backupDate)
@@ -27,6 +27,10 @@ export const versionNews = [
   {
     title: "Řidičský tablet: jisté ovládání v terénu",
     text: "Ovládací plochy jsou větší a dál od sebe, klepnutí má výraznou odezvu a volitelný krátký zvuk. Přibyl denní, noční a automatický režim. PROBLÉM se mění na prokliknutelné HLÁŠENÍ, z nabídky hlášení mizí Jiný problém a fotografie mají jednoznačné volby. Šarlota je na tabletu dočasně vypnutá; její Prompt, Knowledge Base, API, databáze ani ostatní funkce se nemění."
+  },
+  {
+    title: "Pneumatiky: plnohodnotný modul přímo v KCC",
+    text: "Evidence pneumatik, měření dezénu, servisní záznamy, náklady a audit nyní běží přímo v Kaiser Control Center přes chráněné API a D1. Veřejná externí aplikace už není součástí pracovního toku; automatické objednávky, zprávy a jiné autonomní akce zůstávají vypnuté."
   },
   {
     title: "Řidičský displej: nové pracovní rozložení pro terén",
@@ -1906,7 +1910,7 @@ export const versionNews = [
   },
   {
     title: "Pneumatiky pod Kaiser Smart",
-    text: "Modul Pneumatiky otevírá hotovou evidenci na nové adrese organizace kaiser-smart bez zásahu do funkční aplikace pneumatik."
+    text: "Historický mezikrok: evidence Pneumatik byla dočasně otevřená jako samostatná aplikace. Aktuální pracovní verze je přímo v KCC přes chráněné API a D1."
   },
   {
     title: "PDF žádost o zdravotní způsobilost",
@@ -2178,7 +2182,7 @@ export const versionNews = [
   },
   {
     title: "Pneumatiky",
-    text: "Hotový modul zůstává napojený jako samostatná externí aplikace."
+    text: "Historická informace: samostatná externí aplikace byla nahrazena plnohodnotným modulem v KCC."
   }
 ];
 

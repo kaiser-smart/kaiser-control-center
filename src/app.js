@@ -307,7 +307,6 @@ const feedbackMenuItem = {
 const permissionModules = [...orderedModules, feedbackMenuItem];
 const primaryRoutes = new Map(orderedModules.map((moduleItem) => [moduleItem.route, moduleItem]));
 const dashboardRoutes = new Map(moduleDashboards.map((moduleItem) => [moduleItem.route, moduleItem]));
-const TYRES_MODULE_URL = "https://kaiser-smart.github.io/kaiser-pneu-evidence/";
 const APP_NAME = "Smart odpady";
 const HOME_SUBTITLE = "Provozní systém pro odpady, vozidla a trasy";
 const LOGIN_SUBTITLE = "Přihlášení do interního provozního systému";
@@ -1158,6 +1157,25 @@ const receivablesState = {
     multipleCandidates: 0
   },
   directoryAuditSources: {}
+};
+
+const tyresState = {
+  loaded: false,
+  loading: false,
+  saving: false,
+  apiStatus: "waiting",
+  data: {
+    summary: {},
+    tyres: [],
+    vehicles: [],
+    measurements: [],
+    services: [],
+    audit: [],
+    latestImport: null
+  },
+  editingId: "",
+  message: "",
+  error: ""
 };
 
 const driverReportsState = {
@@ -4118,17 +4136,16 @@ function moduleEventLogBlock(config = {}) {
 function genericModuleEventLogConfig(moduleItem = {}) {
   const moduleName = moduleItem.title || "Modul";
   const statusLabel = moduleStatusLabel(moduleItem) || "Rozpracováno";
-  const isExternalTyres = moduleItem.id === "tyres";
   const isSkeleton = ["skeleton", "připraveno", "mock data", "ROZPRACOVÁN"].includes(moduleItem.status);
   return {
     moduleKey: moduleItem.id || "module",
     moduleName,
-    badgeState: isExternalTyres ? "čeká na ověření" : (isSkeleton ? "čeká na ověření" : "částečně ověřeno"),
+    badgeState: isSkeleton ? "čeká na ověření" : "částečně ověřeno",
     statuses: [
       moduleEventLogStatus("Automatizace", "čeká na ověření", "V tomto UI není doložený pravidelný cloud runner, cron ani queue. Modul proto není označený jako běžící."),
-      moduleEventLogStatus("API / import / synchronizace", isExternalTyres ? "čeká na ověření" : "nezapojeno", isExternalTyres ? "Modul Pneumatiky se otevírá jako externí aplikace. Tento shell její backend neověřuje." : "Pro tento modul není v aplikaci doložené ostré napojení API/import/sync."),
+      moduleEventLogStatus("API / import / synchronizace", "nezapojeno", "Pro tento modul není v aplikaci doložené ostré napojení API/import/sync."),
       moduleEventLogStatus("Odesílání mimo systém", "vypnuto", "Z tohoto modulu se v této obrazovce neposílá e-mail, SMS ani jiná zpráva mimo systém."),
-      moduleEventLogStatus("Napojené účty / zdroje dat", isExternalTyres ? "čeká na ověření" : "nezapojeno", isExternalTyres ? "Externí zdroj není z tohoto nastavení ověřený." : "Není uvedený žádný ověřený externí účet ani zdroj dat."),
+      moduleEventLogStatus("Napojené účty / zdroje dat", "nezapojeno", "Není uvedený žádný ověřený externí účet ani zdroj dat."),
       moduleEventLogStatus("AI doporučení a autonomní akce", "jen návrh", "Bez doloženého backendu a oprávnění nesmí modul provést autonomní akci.")
     ],
     inactiveItems: [
@@ -5718,6 +5735,24 @@ function currentSelfRepairReportDirtyTarget() {
   };
 }
 
+function currentTyresDirtyTarget() {
+  if (normalizePath(window.location.pathname) !== "/pneumatiky") {
+    return null;
+  }
+
+  const form = [
+    ...document.querySelectorAll("[data-tyres-tyre-form], [data-tyres-measurement-form], [data-tyres-service-form]")
+  ].find((candidate) => tyresFormIsDirty(candidate));
+
+  if (!form) return null;
+
+  return {
+    type: "tyres",
+    form,
+    isDirty: true
+  };
+}
+
 function currentDirtyTarget() {
   const accessTarget = currentAccessDirtyTarget();
 
@@ -5747,6 +5782,12 @@ function currentDirtyTarget() {
 
   if (selfRepairReportTarget?.isDirty) {
     return selfRepairReportTarget;
+  }
+
+  const tyresTarget = currentTyresDirtyTarget();
+
+  if (tyresTarget?.isDirty) {
+    return tyresTarget;
   }
 
   const employeeTarget = currentEmployeeCardDirtyTarget();
@@ -38617,6 +38658,411 @@ function receivablesPage(moduleItem, user, isDashboard = false, context = { view
   `;
 }
 
+function tyresDashboardData() {
+  return tyresState.data || { summary: {}, tyres: [], vehicles: [], measurements: [], services: [], audit: [], latestImport: null };
+}
+
+function tyresText(value, fallback = "—") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function tyresNumber(value, digits = 1) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "—";
+  return new Intl.NumberFormat("cs-CZ", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits
+  }).format(number);
+}
+
+function tyresCurrency(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "—";
+  return new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(number);
+}
+
+function tyresDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return "—";
+  return new Intl.DateTimeFormat("cs-CZ", { dateStyle: "medium" }).format(date);
+}
+
+function tyresTreadTone(value, threshold = tyresDashboardData().summary?.treadAlertMm || 3.5) {
+  const tread = Number(value);
+  if (!Number.isFinite(tread)) return "waiting";
+  if (tread <= threshold) return "danger";
+  if (tread <= threshold + 1.5) return "warning";
+  return "ready";
+}
+
+function tyresFormBaseline(fields) {
+  return escapeHtml(JSON.stringify(Object.fromEntries(
+    Object.entries(fields).map(([name, value]) => [name, String(value ?? "").trim()])
+  )));
+}
+
+function tyresDraftFields(form) {
+  let baseline = {};
+  try {
+    baseline = JSON.parse(form?.dataset?.tyresBaseline || "{}");
+  } catch {
+    baseline = {};
+  }
+  return Object.fromEntries(Object.keys(baseline).map((name) => [name, String(form?.elements?.[name]?.value ?? "").trim()]));
+}
+
+function tyresFormIsDirty(form) {
+  let baseline = {};
+  try {
+    baseline = JSON.parse(form?.dataset?.tyresBaseline || "{}");
+  } catch {
+    return false;
+  }
+  return JSON.stringify(tyresDraftFields(form)) !== JSON.stringify(baseline);
+}
+
+function tyresVehicleOptions(selected = "", { includeEmpty = true } = {}) {
+  const vehicles = tyresDashboardData().vehicles || [];
+  const options = vehicles.map((vehicle) => `
+    <option value="${escapeHtml(vehicle.licensePlate)}" ${vehicle.licensePlate === selected ? "selected" : ""}>
+      ${escapeHtml(vehicle.licensePlate)}${vehicle.type ? ` · ${escapeHtml(vehicle.type)}` : ""}
+    </option>
+  `).join("");
+  return `${includeEmpty ? `<option value="" ${selected ? "" : "selected"}>Bez přiřazení</option>` : ""}${options}`;
+}
+
+function tyresInventoryForm(user) {
+  const data = tyresDashboardData();
+  const editing = (data.tyres || []).find((item) => item.id === tyresState.editingId) || null;
+  const canEdit = hasPermission(user, "tyres", "edit") || isFullAccessRole(user);
+  const fields = {
+    tyreId: editing?.id || "",
+    manufacturer: editing?.manufacturer || "",
+    model: editing?.model || "",
+    size: editing?.size || "",
+    type: editing?.type || "nová",
+    state: editing?.state || "sklad",
+    vehicle: editing?.vehicle || "",
+    position: editing?.position || "",
+    currentTread: editing?.currentTread ?? "",
+    pressure: editing?.pressure ?? "",
+    priceEx: editing?.priceEx ?? "",
+    supplier: editing?.supplier || "",
+    purchaseDate: editing?.purchaseDate || "",
+    invoice: editing?.invoice || "",
+    dot: editing?.dot || "",
+    loadIndex: editing?.loadIndex || "",
+    mounted: editing?.mounted || "",
+    mountedOdo: editing?.mountedOdo ?? "",
+    mileage: editing?.mileage ?? "",
+    defects: editing?.defects ?? ""
+  };
+
+  if (!canEdit) return "";
+
+  return `
+    <details class="tyres-entry-form" ${editing || !(data.tyres || []).length ? "open" : ""}>
+      <summary>${editing ? "Upravit vybranou pneumatiku" : "Přidat pneumatiku"}</summary>
+      <form class="tyres-form" data-tyres-tyre-form data-tyres-baseline="${tyresFormBaseline(fields)}">
+        <input type="hidden" name="tyreId" value="${escapeHtml(fields.tyreId)}" />
+        <div class="tyres-form__grid">
+          <label><span>Výrobce *</span><input name="manufacturer" required maxlength="120" value="${escapeHtml(fields.manufacturer)}" /></label>
+          <label><span>Model</span><input name="model" maxlength="160" value="${escapeHtml(fields.model)}" /></label>
+          <label><span>Rozměr *</span><input name="size" required maxlength="120" placeholder="např. 315/80 R22,5" value="${escapeHtml(fields.size)}" /></label>
+          <label><span>Typ</span><input name="type" maxlength="80" placeholder="nová / protektorovaná" value="${escapeHtml(fields.type)}" /></label>
+          <label><span>Stav</span><select name="state"><option value="sklad" ${fields.state === "sklad" ? "selected" : ""}>Sklad</option><option value="na vozidle" ${fields.state === "na vozidle" ? "selected" : ""}>Na vozidle</option><option value="vyřazená" ${fields.state === "vyřazená" ? "selected" : ""}>Vyřazená</option></select></label>
+          <label><span>Vozidlo</span><select name="vehicle">${tyresVehicleOptions(fields.vehicle)}</select></label>
+          <label><span>Pozice kola</span><input name="position" maxlength="80" placeholder="např. HL vnější" value="${escapeHtml(fields.position)}" /></label>
+          <label><span>Aktuální dezén (mm)</span><input name="currentTread" inputmode="decimal" type="number" min="0" max="100" step="0.1" value="${escapeHtml(fields.currentTread)}" /></label>
+          <label><span>Tlak (bar)</span><input name="pressure" inputmode="decimal" type="number" min="0" max="30" step="0.1" value="${escapeHtml(fields.pressure)}" /></label>
+          <label><span>Cena bez DPH</span><input name="priceEx" inputmode="decimal" type="number" min="0" max="1000000" step="1" value="${escapeHtml(fields.priceEx)}" /></label>
+          <label><span>Dodavatel</span><input name="supplier" maxlength="180" value="${escapeHtml(fields.supplier)}" /></label>
+          <label><span>Datum nákupu</span><input name="purchaseDate" type="date" value="${escapeHtml(fields.purchaseDate)}" /></label>
+          <label><span>Faktura</span><input name="invoice" maxlength="120" value="${escapeHtml(fields.invoice)}" /></label>
+          <label><span>DOT</span><input name="dot" maxlength="40" value="${escapeHtml(fields.dot)}" /></label>
+          <label><span>Nosnostní index</span><input name="loadIndex" maxlength="80" value="${escapeHtml(fields.loadIndex)}" /></label>
+          <label><span>Datum montáže</span><input name="mounted" type="date" value="${escapeHtml(fields.mounted)}" /></label>
+          <label><span>Stav km při montáži</span><input name="mountedOdo" inputmode="numeric" type="number" min="0" max="10000000" step="1" value="${escapeHtml(fields.mountedOdo)}" /></label>
+          <label><span>Nájezd (km)</span><input name="mileage" inputmode="numeric" type="number" min="0" max="10000000" step="1" value="${escapeHtml(fields.mileage)}" /></label>
+          <label><span>Počet závad</span><input name="defects" inputmode="numeric" type="number" min="0" max="999" step="1" value="${escapeHtml(fields.defects)}" /></label>
+        </div>
+        <div class="tyres-form__actions">
+          <button class="primary-action" type="submit" ${tyresState.saving ? "disabled" : ""}>${tyresState.saving ? "Ukládám..." : editing ? "Uložit změny" : "Uložit pneumatiku"}</button>
+          ${editing ? `<button class="secondary-link" type="button" data-tyres-edit-cancel ${tyresState.saving ? "disabled" : ""}>Zrušit úpravu</button>` : ""}
+        </div>
+      </form>
+    </details>
+  `;
+}
+
+function tyresMeasurementForm(user) {
+  const data = tyresDashboardData();
+  const canEdit = hasPermission(user, "tyres", "edit") || isFullAccessRole(user);
+  const mounted = (data.tyres || []).filter((item) => item.vehicle);
+  const fields = { tyreId: "", vehicle: "", position: "", tread: "", pressure: "", odometer: "", measuredAt: new Date().toISOString().slice(0, 10), note: "" };
+  if (!canEdit) return "";
+  return `
+    <form class="tyres-form tyres-form--compact" data-tyres-measurement-form data-tyres-baseline="${tyresFormBaseline(fields)}">
+      <div class="tyres-form__grid">
+        <label><span>Pneumatika *</span><select name="tyreId" required data-tyres-measurement-tyre><option value="">Vyberte pneumatiku</option>${mounted.map((item) => `<option value="${escapeHtml(item.id)}" data-tyres-vehicle="${escapeHtml(item.vehicle)}">${escapeHtml(`${item.manufacturer} ${item.model} · ${item.vehicle} · ${item.position || "bez pozice"}`)}</option>`).join("")}</select></label>
+        <label><span>Vozidlo *</span><select name="vehicle" required>${tyresVehicleOptions("", { includeEmpty: false })}</select></label>
+        <label><span>Pozice kola *</span><input name="position" required maxlength="80" placeholder="např. HP vnější" /></label>
+        <label><span>Dezén (mm) *</span><input name="tread" required inputmode="decimal" type="number" min="0" max="100" step="0.1" /></label>
+        <label><span>Tlak (bar)</span><input name="pressure" inputmode="decimal" type="number" min="0" max="30" step="0.1" /></label>
+        <label><span>Stav km</span><input name="odometer" inputmode="numeric" type="number" min="0" max="10000000" step="1" /></label>
+        <label><span>Datum měření</span><input name="measuredAt" type="date" value="${escapeHtml(fields.measuredAt)}" /></label>
+        <label class="tyres-form__wide"><span>Poznámka</span><textarea name="note" maxlength="2000" rows="2" placeholder="Volitelná poznámka k měření"></textarea></label>
+      </div>
+      <div class="tyres-form__actions"><button class="primary-action" type="submit" ${tyresState.saving || !mounted.length ? "disabled" : ""}>${mounted.length ? "Uložit měření" : "Chybí osazená pneumatika"}</button></div>
+    </form>
+  `;
+}
+
+function tyresServiceForm(user) {
+  const canEdit = hasPermission(user, "tyres", "edit") || isFullAccessRole(user);
+  const fields = { date: new Date().toISOString().slice(0, 10), vehicle: "", type: "", person: "", supplier: "", labor: "", material: "", tireCost: "", invoice: "", note: "" };
+  if (!canEdit) return "";
+  return `
+    <form class="tyres-form tyres-form--compact" data-tyres-service-form data-tyres-baseline="${tyresFormBaseline(fields)}">
+      <div class="tyres-form__grid">
+        <label><span>Datum</span><input name="date" type="date" value="${escapeHtml(fields.date)}" /></label>
+        <label><span>Vozidlo</span><select name="vehicle">${tyresVehicleOptions("")}</select></label>
+        <label><span>Typ zásahu *</span><input name="type" required maxlength="120" placeholder="např. přezutí" /></label>
+        <label><span>Technik</span><input name="person" maxlength="180" /></label>
+        <label><span>Dodavatel</span><input name="supplier" maxlength="180" /></label>
+        <label><span>Práce bez DPH</span><input name="labor" inputmode="decimal" type="number" min="0" max="10000000" step="1" /></label>
+        <label><span>Materiál bez DPH</span><input name="material" inputmode="decimal" type="number" min="0" max="10000000" step="1" /></label>
+        <label><span>Pneumatiky bez DPH</span><input name="tireCost" inputmode="decimal" type="number" min="0" max="10000000" step="1" /></label>
+        <label><span>Faktura</span><input name="invoice" maxlength="120" /></label>
+        <label class="tyres-form__wide"><span>Poznámka</span><textarea name="note" maxlength="4000" rows="2" placeholder="Volitelná poznámka k servisu"></textarea></label>
+      </div>
+      <div class="tyres-form__actions"><button class="primary-action" type="submit" ${tyresState.saving ? "disabled" : ""}>Uložit servisní záznam</button></div>
+    </form>
+  `;
+}
+
+function tyresEventLog() {
+  const data = tyresDashboardData();
+  const apiState = moduleEventLogApiState(tyresState.apiStatus, tyresState.loaded, tyresState.error);
+  const latestImport = data.latestImport || null;
+  const importCompleted = latestImport?.status === "completed";
+  const importStatus = importCompleted ? "ověřeno" : latestImport?.status === "running" ? "čeká na ověření" : "čeká na převod";
+  const importText = importCompleted
+    ? `Převod ${tyresDate(latestImport.createdAt)} je auditovaný. Zdroj: ${tyresText(latestImport.source, "neuvedený zdroj")}.`
+    : latestImport?.status === "running"
+      ? "Převod byl zahájen a čeká na dokončení nebo ověření správou."
+      : "Převod zatím nebyl v této evidenci spuštěn.";
+  return moduleEventLogBlock({
+    moduleKey: "tyres",
+    moduleName: "Pneumatiky",
+    badgeState: tyresState.error ? "chyba" : tyresState.loaded ? "částečně ověřeno" : "čeká na ověření",
+    truthText: "Přehled používá chráněné KCC API a D1. Neoznačuje pravidelný import ani automatické zásahy jako běžící, dokud pro ně není doložený cloudový běh.",
+    statuses: [
+      moduleEventLogStatus("Evidence Pneumatik", apiState, tyresState.error || (tyresState.loaded ? "Data byla načtena z chráněného KCC API." : "Čeká se na načtení evidence.")),
+      moduleEventLogStatus("Jednorázový převod dat", importStatus, importText),
+      moduleEventLogStatus("Automatizace", "vypnuto", "Modul nemá zapnutý cron, queue ani autonomní servisní akci."),
+      moduleEventLogStatus("Odesílání mimo systém", "vypnuto", "Z evidence Pneumatik se neposílá e-mail, SMS ani objednávka servisu."),
+      moduleEventLogStatus("AI doporučení", "jen návrh", "Nízký dezén je upozornění pro člověka; modul nic sám neobjedná ani nevyřadí.")
+    ],
+    inactiveItems: ["Pravidelná synchronizace z externí aplikace.", "Automatická objednávka pneumatik nebo servisu.", "Odesílání e-mailů, SMS a notifikací mimo KCC."],
+    pilotItems: ["Pravidla a automatizace jsou evidované zvlášť a kritické kroky vždy vyžadují člověka.", "Jednorázový převod starých dat je určený jen oprávněné správě a zapisuje audit."],
+    events: (data.audit || []).length
+      ? data.audit.map((entry) => moduleEventLogEvent(entry.createdAt, entry.action || "změna", "zapsáno", `${entry.entityType || "evidence"}${entry.actor ? ` · ${entry.actor}` : ""}`))
+      : [moduleEventLogEvent("", "Audit evidence", tyresState.loaded ? "čeká na nové záznamy" : "čeká na ověření", tyresState.loaded ? "V evidenci zatím není žádná auditní událost." : "Čeká se na načtení z API.")],
+    diagnostics: [
+      moduleEventLogDiagnostic("apiStatus", tyresState.apiStatus),
+      moduleEventLogDiagnostic("loaded", tyresState.loaded ? "true" : "false"),
+      moduleEventLogDiagnostic("tyres", (data.tyres || []).length),
+      moduleEventLogDiagnostic("vehicles", (data.vehicles || []).length),
+      moduleEventLogDiagnostic("latestImport", latestImport?.status || "neproveden"),
+      moduleEventLogDiagnostic("lastError", tyresState.error || "bez chyby")
+    ]
+  });
+}
+
+function tyresModulePage(moduleItem, user) {
+  const data = tyresDashboardData();
+  const summary = data.summary || {};
+  const tyres = data.tyres || [];
+  const measurements = data.measurements || [];
+  const services = data.services || [];
+  const canEdit = hasPermission(user, "tyres", "edit") || isFullAccessRole(user);
+  const lowTread = tyres.filter((item) => tyresTreadTone(item.currentTread) === "danger");
+  ensureModuleRulesData("tyres");
+
+  return `
+    <main class="app-shell module-page module-theme-scope tyres-page" ${moduleThemeStyleAttribute()}>
+      ${userBar(user)}
+      <nav class="topbar" aria-label="Navigace">
+        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
+        <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
+      </nav>
+
+      <section class="module-detail tyres-hero" aria-labelledby="tyres-title">
+        <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
+        <div class="module-detail__body">
+          <div class="module-detail__eyebrow">SMART ODPADY / VOZIDLA</div>
+          <h1 id="tyres-title">Pneumatiky</h1>
+          <p>Jednotná evidence pneumatik, měření dezénu, servisních zásahů a nákladů přímo v Kaiser Control Center.</p>
+          <div class="module-detail__status"><span>Stav</span><strong>${escapeHtml(tyresState.error ? "Vyžaduje pozornost" : tyresState.loaded ? "Funkční přes chráněné API" : "Načítám evidenci")}</strong></div>
+        </div>
+      </section>
+
+      ${tyresState.message ? `<p class="tyres-notice" role="status">${escapeHtml(tyresState.message)}</p>` : ""}
+      ${tyresState.error ? `<p class="tyres-error" role="alert">${escapeHtml(tyresState.error)}</p>` : ""}
+
+      <section class="tyres-panel" aria-labelledby="tyres-summary-title">
+        <div class="tyres-panel__head"><div><p class="module-feedback__eyebrow">Přehled</p><h2 id="tyres-summary-title">Stav evidence</h2><p>Hodnoty vznikají z uložené evidence; nic není dopočítané z externího veřejného webu.</p></div><button class="secondary-link" type="button" data-tyres-refresh ${tyresState.loading ? "disabled" : ""}>${tyresState.loading ? "Načítám..." : "Obnovit"}</button></div>
+        <div class="tyres-kpi-grid">
+          <article><span>Celkem pneumatik</span><strong>${Number(summary.totalTyres || 0)}</strong></article>
+          <article><span>Na vozidle</span><strong>${Number(summary.mountedTyres || 0)}</strong></article>
+          <article class="tyres-kpi--${Number(summary.lowTreadTyres || 0) ? "danger" : "ready"}"><span>Dezén ≤ ${tyresNumber(summary.treadAlertMm || 3.5)} mm</span><strong>${Number(summary.lowTreadTyres || 0)}</strong></article>
+          <article><span>Vozidla v evidenci</span><strong>${Number(summary.vehicles || 0)}</strong></article>
+          <article><span>Servis letos bez DPH</span><strong>${tyresCurrency(summary.serviceCostYtd || 0)}</strong></article>
+          <article><span>Servis tento měsíc bez DPH</span><strong>${tyresCurrency(summary.serviceCostMonth || 0)}</strong></article>
+        </div>
+      </section>
+
+      <section class="tyres-panel" aria-labelledby="tyres-alert-title">
+        <div class="tyres-panel__head"><div><p class="module-feedback__eyebrow">Priorita</p><h2 id="tyres-alert-title">Kontrola dezénu</h2><p>Upozornění je pouze pracovní doporučení. Vyřazení nebo objednávka vyžadují rozhodnutí člověka.</p></div></div>
+        ${lowTread.length ? `<div class="tyres-alert-list">${lowTread.map((item) => `<article><strong>${escapeHtml(`${item.manufacturer} ${item.model}`)}</strong><span>${escapeHtml(tyresText(item.vehicle, "Bez vozidla"))} · ${escapeHtml(tyresText(item.position, "bez pozice"))}</span><b>${tyresNumber(item.currentTread)} mm</b></article>`).join("")}</div>` : `<p class="tyres-empty">${tyresState.loaded ? "Žádná uložená pneumatika nemá dezén na nebo pod hranicí upozornění." : "Čeká se na načtení evidence."}</p>`}
+      </section>
+
+      <section class="tyres-panel" aria-labelledby="tyres-inventory-title">
+        <div class="tyres-panel__head"><div><p class="module-feedback__eyebrow">Evidence</p><h2 id="tyres-inventory-title">Pneumatiky</h2><p>Každá změna se ukládá přes oprávněné KCC API a zapisuje audit.</p></div>${canEdit ? `<button class="primary-action" type="button" data-tyres-add>Nová pneumatika</button>` : ""}</div>
+        ${tyresInventoryForm(user)}
+        ${tyres.length ? `<div class="tyres-inventory-grid">${tyres.map((item) => `
+          <article class="tyres-card">
+            <div class="tyres-card__head"><div><h3>${escapeHtml(`${item.manufacturer} ${item.model}`.trim() || "Pneumatika")}</h3><p>${escapeHtml(tyresText(item.size))} · ${escapeHtml(tyresText(item.type))}</p></div><span class="tyres-state">${escapeHtml(tyresText(item.state))}</span></div>
+            <dl><div><dt>Vozidlo / pozice</dt><dd>${escapeHtml(`${tyresText(item.vehicle)}${item.position ? ` · ${item.position}` : ""}`)}</dd></div><div><dt>Dezén / tlak</dt><dd><span class="tyres-tread tyres-tread--${tyresTreadTone(item.currentTread)}">${tyresNumber(item.currentTread)} mm</span>${item.pressure == null ? "" : ` · ${tyresNumber(item.pressure)} bar`}</dd></div><div><dt>DOT / nájezd</dt><dd>${escapeHtml(tyresText(item.dot))} · ${tyresNumber(item.mileage, 0)} km</dd></div><div><dt>Cena bez DPH</dt><dd>${tyresCurrency(item.priceEx)}</dd></div></dl>
+            ${canEdit ? `<button class="text-action" type="button" data-tyres-edit="${escapeHtml(item.id)}">Upravit</button>` : ""}
+          </article>
+        `).join("")}</div>` : `<p class="tyres-empty">${tyresState.loaded ? "V evidenci zatím není žádná pneumatika." : "Čeká se na načtení evidence."}</p>`}
+      </section>
+
+      <div class="tyres-two-column">
+        <section class="tyres-panel" aria-labelledby="tyres-measurement-title"><div class="tyres-panel__head"><div><p class="module-feedback__eyebrow">Kontrola</p><h2 id="tyres-measurement-title">Nové měření</h2><p>Měření aktualizuje zvolenou osazenou pneumatiku a zůstane v historii.</p></div></div>${tyresMeasurementForm(user)}</section>
+        <section class="tyres-panel" aria-labelledby="tyres-service-title"><div class="tyres-panel__head"><div><p class="module-feedback__eyebrow">Náklady</p><h2 id="tyres-service-title">Servisní záznam</h2><p>Zápis historie a nákladů bez automatické objednávky nebo odesílání.</p></div></div>${tyresServiceForm(user)}</section>
+      </div>
+
+      <div class="tyres-two-column">
+        <section class="tyres-panel" aria-labelledby="tyres-measurements-title"><div class="tyres-panel__head"><div><p class="module-feedback__eyebrow">Historie</p><h2 id="tyres-measurements-title">Poslední měření</h2></div></div>${measurements.length ? `<ol class="tyres-history">${measurements.slice(0, 8).map((item) => `<li><strong>${escapeHtml(item.vehicle)} · ${escapeHtml(item.position)}</strong><span>${tyresNumber(item.tread)} mm${item.pressure == null ? "" : ` · ${tyresNumber(item.pressure)} bar`} · ${tyresDate(item.measuredAt)}</span>${item.note ? `<p>${escapeHtml(item.note)}</p>` : ""}</li>`).join("")}</ol>` : `<p class="tyres-empty">Zatím není uložené žádné měření.</p>`}</section>
+        <section class="tyres-panel" aria-labelledby="tyres-services-title"><div class="tyres-panel__head"><div><p class="module-feedback__eyebrow">Historie</p><h2 id="tyres-services-title">Poslední servis</h2></div></div>${services.length ? `<ol class="tyres-history">${services.slice(0, 8).map((item) => `<li><strong>${escapeHtml(item.type)}${item.vehicle ? ` · ${escapeHtml(item.vehicle)}` : ""}</strong><span>${tyresDate(item.date)} · ${tyresCurrency(Number(item.labor || 0) + Number(item.material || 0) + Number(item.tireCost || 0))}</span>${item.note ? `<p>${escapeHtml(item.note)}</p>` : ""}</li>`).join("")}</ol>` : `<p class="tyres-empty">Zatím není uložený žádný servisní záznam.</p>`}</section>
+      </div>
+
+      <section class="tyres-panel tyres-panel--settings" aria-labelledby="tyres-settings-title"><div class="tyres-panel__head"><div><p class="module-feedback__eyebrow">Nastavení</p><h2 id="tyres-settings-title">Provozní stav a pravidla</h2><p>Oddělený audit, pravidla a automatizace. Neexistující běh se neoznačuje jako aktivní.</p></div></div>${tyresEventLog()}${moduleRulesAutomationPanel({ moduleKey: "tyres", moduleName: "Pneumatiky", user, description: "Pravidla Pneumatik mohou pouze upozornit a doporučit další kontrolu. Neobjednávají servis ani nemění stav pneumatik bez člověka.", cloudNote: "Automatizace nejsou v modulu Pneumatiky zapnuté, dokud nemají konkrétní schválený a auditovaný cloudový běh.", humanDetail: true })}</section>
+    </main>
+  `;
+}
+
+async function loadTyresData(options = {}) {
+  const force = Boolean(options.force);
+  if (!authState.user || tyresState.loading || (!force && tyresState.loaded)) return;
+  tyresState.loading = true;
+  tyresState.error = "";
+  try {
+    const result = await apiJson("/api/tyres");
+    tyresState.data = {
+      summary: result.summary || {},
+      tyres: Array.isArray(result.tyres) ? result.tyres : [],
+      vehicles: Array.isArray(result.vehicles) ? result.vehicles : [],
+      measurements: Array.isArray(result.measurements) ? result.measurements : [],
+      services: Array.isArray(result.services) ? result.services : [],
+      audit: Array.isArray(result.audit) ? result.audit : [],
+      latestImport: result.latestImport && typeof result.latestImport === "object" ? result.latestImport : null
+    };
+    tyresState.apiStatus = result.apiStatus || "ready";
+    tyresState.loaded = true;
+  } catch (error) {
+    tyresState.apiStatus = error.payload?.apiStatus || "waiting";
+    tyresState.error = error.payload?.error || "Evidenci Pneumatik se teď nepodařilo načíst.";
+  } finally {
+    tyresState.loading = false;
+  }
+  if (options.renderAfter !== false && normalizePath(window.location.pathname) === "/pneumatiky") render();
+}
+
+function ensureTyresData() {
+  void loadTyresData();
+}
+
+async function submitTyresTyreForm(form) {
+  if (tyresState.saving) return false;
+  tyresState.saving = true;
+  tyresState.error = "";
+  tyresState.message = "";
+  render();
+  try {
+    const values = tyresDraftFields(form);
+    const tyreId = values.tyreId;
+    await apiJson(tyreId ? `/api/tyres/${encodeURIComponent(tyreId)}` : "/api/tyres", {
+      method: tyreId ? "PATCH" : "POST",
+      body: JSON.stringify(values)
+    });
+    tyresState.editingId = "";
+    tyresState.message = tyreId ? "Pneumatika byla uložena." : "Pneumatika byla přidána do evidence.";
+    tyresState.loaded = false;
+    await loadTyresData({ force: true, renderAfter: false });
+    render();
+    return true;
+  } catch (error) {
+    tyresState.error = error.payload?.error || "Pneumatiku se nepodařilo uložit.";
+    render();
+    return false;
+  } finally {
+    tyresState.saving = false;
+    render();
+  }
+}
+
+async function submitTyresMeasurementForm(form) {
+  if (tyresState.saving) return false;
+  tyresState.saving = true;
+  tyresState.error = "";
+  tyresState.message = "";
+  render();
+  try {
+    await apiJson("/api/tyres/measurements", { method: "POST", body: JSON.stringify(tyresDraftFields(form)) });
+    tyresState.message = "Měření bylo uloženo do historie i na kartu pneumatiky.";
+    tyresState.loaded = false;
+    await loadTyresData({ force: true, renderAfter: false });
+    render();
+    return true;
+  } catch (error) {
+    tyresState.error = error.payload?.error || "Měření se nepodařilo uložit.";
+    render();
+    return false;
+  } finally {
+    tyresState.saving = false;
+    render();
+  }
+}
+
+async function submitTyresServiceForm(form) {
+  if (tyresState.saving) return false;
+  tyresState.saving = true;
+  tyresState.error = "";
+  tyresState.message = "";
+  render();
+  try {
+    await apiJson("/api/tyres/services", { method: "POST", body: JSON.stringify(tyresDraftFields(form)) });
+    tyresState.message = "Servisní záznam byl uložen.";
+    tyresState.loaded = false;
+    await loadTyresData({ force: true, renderAfter: false });
+    render();
+    return true;
+  } catch (error) {
+    tyresState.error = error.payload?.error || "Servisní záznam se nepodařilo uložit.";
+    render();
+    return false;
+  } finally {
+    tyresState.saving = false;
+    render();
+  }
+}
+
 function modulePage(moduleItem, user, isDashboard = false) {
   if (moduleItem.id === "absence") {
     return absenceModulePage(moduleItem, user, isDashboard);
@@ -38624,6 +39070,10 @@ function modulePage(moduleItem, user, isDashboard = false) {
 
   if (moduleItem.id === "fleet") {
     return fleetModulePage(moduleItem, user, { isDashboard });
+  }
+
+  if (moduleItem.id === "tyres") {
+    return tyresModulePage(moduleItem, user);
   }
 
   if (moduleItem.id === "vehicle-tracking") {
@@ -38658,20 +39108,10 @@ function modulePage(moduleItem, user, isDashboard = false) {
     return selfRepairPage(moduleItem, user);
   }
 
-  const isTyres = moduleItem.id === "tyres";
   const title = isDashboard ? moduleItem.pageTitle : moduleItem.title;
-  const description = isTyres && !isDashboard
-    ? "Hotový modul evidence pneumatik."
-    : moduleItem.description;
+  const description = moduleItem.description;
   const dashboardLink = !isDashboard && moduleItem.dashboardRoute
     ? `<a class="secondary-link" href="${routeHref(moduleItem.dashboardRoute)}" data-link>Dashboard modulu</a>`
-    : "";
-  const tyresLink = isTyres && !isDashboard
-    ? `
-        <a class="primary-link" href="${TYRES_MODULE_URL}" target="_blank" rel="noopener noreferrer">
-          Otevřít modul Pneumatiky
-        </a>
-      `
     : "";
   const usersPanel = moduleItem.id === "users" && !isDashboard ? usersManagementSection() : "";
   const settingsPanel = moduleItem.id === "settings" && !isDashboard ? settingsManagementSection(user) : "";
@@ -38702,7 +39142,6 @@ function modulePage(moduleItem, user, isDashboard = false) {
             <strong>${escapeHtml(moduleStatusLabel(moduleItem))}</strong>
           </div>
           <div class="module-actions">
-            ${tyresLink}
             ${dashboardLink}
           </div>
         </div>
@@ -49746,6 +50185,14 @@ async function logout() {
   resetSystemCheckState();
   resetCommunicationInfrastructureState();
   resetDataBoxState();
+  tyresState.loaded = false;
+  tyresState.loading = false;
+  tyresState.saving = false;
+  tyresState.apiStatus = "waiting";
+  tyresState.data = { summary: {}, tyres: [], vehicles: [], measurements: [], services: [], audit: [], latestImport: null };
+  tyresState.editingId = "";
+  tyresState.message = "";
+  tyresState.error = "";
   receivablesState.dashboard = null;
   receivablesState.dashboardLoaded = false;
   receivablesState.dashboardLoading = false;
@@ -50103,6 +50550,9 @@ function renderAuthenticatedApp(user) {
     if (moduleItem.id === "fleet") {
       loadFleetVehicles();
       void loadFleetFuelAnalytics();
+    }
+    if (moduleItem.id === "tyres") {
+      ensureTyresData();
     }
     if (moduleItem.id === "driver-reports") {
       ensureDriverReportsData();
@@ -52512,6 +52962,15 @@ async function saveAccessDirtyChanges() {
   return false;
 }
 
+async function saveTyresDirtyChanges() {
+  const target = currentTyresDirtyTarget();
+  if (!target?.form) return true;
+  if (target.form.matches("[data-tyres-tyre-form]")) return submitTyresTyreForm(target.form);
+  if (target.form.matches("[data-tyres-measurement-form]")) return submitTyresMeasurementForm(target.form);
+  if (target.form.matches("[data-tyres-service-form]")) return submitTyresServiceForm(target.form);
+  return false;
+}
+
 async function saveDirtyChanges() {
   const accessTarget = currentAccessDirtyTarget();
 
@@ -52541,6 +53000,12 @@ async function saveDirtyChanges() {
 
   if (selfRepairReportTarget?.isDirty) {
     return submitSelfRepairReport(selfRepairReportTarget.form);
+  }
+
+  const tyresTarget = currentTyresDirtyTarget();
+
+  if (tyresTarget?.isDirty) {
+    return saveTyresDirtyChanges();
   }
 
   const employeeTarget = currentEmployeeCardDirtyTarget();
@@ -52598,6 +53063,16 @@ function discardDirtyChanges() {
   if (selfRepairReportTarget?.isDirty) {
     selfRepairReportState.draft = { ...selfRepairReportState.baseline };
     selfRepairReportState.error = "";
+    render();
+    return;
+  }
+
+  const tyresTarget = currentTyresDirtyTarget();
+
+  if (tyresTarget?.isDirty) {
+    tyresState.editingId = "";
+    tyresState.message = "Neuložené změny Pneumatik byly zahozeny.";
+    tyresState.error = "";
     render();
     return;
   }
@@ -52777,6 +53252,27 @@ function changeAccessUserRole(select) {
 }
 
 document.addEventListener("submit", async (event) => {
+  const tyresTyreForm = event.target.closest("[data-tyres-tyre-form]");
+  if (tyresTyreForm) {
+    event.preventDefault();
+    await submitTyresTyreForm(tyresTyreForm);
+    return;
+  }
+
+  const tyresMeasurementForm = event.target.closest("[data-tyres-measurement-form]");
+  if (tyresMeasurementForm) {
+    event.preventDefault();
+    await submitTyresMeasurementForm(tyresMeasurementForm);
+    return;
+  }
+
+  const tyresServiceForm = event.target.closest("[data-tyres-service-form]");
+  if (tyresServiceForm) {
+    event.preventDefault();
+    await submitTyresServiceForm(tyresServiceForm);
+    return;
+  }
+
   const collectionDailyDriverRouteConfirmationForm = event.target.closest("[data-collection-driver-route-confirmation-form]");
   if (collectionDailyDriverRouteConfirmationForm) {
     event.preventDefault();
@@ -53477,6 +53973,14 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  const tyresMeasurementTyre = event.target.closest("[data-tyres-measurement-tyre]");
+  if (tyresMeasurementTyre) {
+    const form = tyresMeasurementTyre.closest("[data-tyres-measurement-form]");
+    const vehicle = tyresMeasurementTyre.selectedOptions?.[0]?.dataset?.tyresVehicle || "";
+    if (form?.elements?.vehicle && vehicle) form.elements.vehicle.value = vehicle;
+    return;
+  }
+
   const collectionRouteIncidentChannel = event.target.closest("[data-collection-route-incident-contact-form] input[name='channel']");
   if (collectionRouteIncidentChannel) {
     const form = collectionRouteIncidentChannel.closest("[data-collection-route-incident-contact-form]");
@@ -53834,6 +54338,45 @@ collectionDailyDriverColorSchemeMedia?.addEventListener?.("change", () => {
 });
 
 document.addEventListener("click", async (event) => {
+  const tyresRefresh = event.target.closest("[data-tyres-refresh]");
+  if (tyresRefresh) {
+    event.preventDefault();
+    await loadTyresData({ force: true });
+    return;
+  }
+
+  const tyresEdit = event.target.closest("[data-tyres-edit]");
+  if (tyresEdit) {
+    event.preventDefault();
+    tyresState.editingId = tyresEdit.dataset.tyresEdit || "";
+    tyresState.message = "";
+    tyresState.error = "";
+    render();
+    requestAnimationFrame(() => document.querySelector("[data-tyres-tyre-form] input[name='manufacturer']")?.focus());
+    return;
+  }
+
+  const tyresAdd = event.target.closest("[data-tyres-add]");
+  if (tyresAdd) {
+    event.preventDefault();
+    tyresState.editingId = "";
+    tyresState.message = "";
+    tyresState.error = "";
+    render();
+    requestAnimationFrame(() => document.querySelector("[data-tyres-tyre-form] input[name='manufacturer']")?.focus());
+    return;
+  }
+
+  const tyresEditCancel = event.target.closest("[data-tyres-edit-cancel]");
+  if (tyresEditCancel) {
+    event.preventDefault();
+    tyresState.editingId = "";
+    tyresState.message = "Úprava pneumatiky byla zrušena.";
+    tyresState.error = "";
+    render();
+    return;
+  }
+
   if (event.target.closest("[data-collection-routes-test-tablet-dialog]")) {
     unlockCollectionRoutesSarlotaAudio();
   }
