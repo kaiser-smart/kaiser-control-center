@@ -11065,6 +11065,8 @@ function fleetVistosVehiclePreviewStats(preview) {
     ["Náhled řádků", summary.previewRows || 0],
     ["SPZ", summary.withRegistrationPlate || 0],
     ["GPS", summary.withGps || 0],
+    ["HERE profil", summary.hereReady || 0],
+    ["GPS depa", summary.withHomeDepotGps || 0],
     ["Ke kontrole", summary.needsReview || 0]
   ];
 
@@ -11083,6 +11085,7 @@ function fleetVistosVehiclePreviewStats(preview) {
 
 function fleetVistosVehiclePreviewDiagnostics(preview) {
   const diagnostics = preview?.diagnostics || {};
+  const technical = diagnostics.vehicleTechnicalFields || {};
   const issueRows = (preview?.issues || []).map((issue) => `
     <tr>
       <td>${escapeHtml(issue.code)}</td>
@@ -11101,6 +11104,15 @@ function fleetVistosVehiclePreviewDiagnostics(preview) {
           <div><dt>Vrácené řádky</dt><dd>${escapeHtml(diagnostics.returnedRows || 0)}</dd></div>
           <div><dt>Zdroj pravdy</dt><dd>Vozový park je master evidence vozidel.</dd></div>
         </dl>
+      </section>
+      <section>
+        <h3>HERE technická pole</h3>
+        <dl class="fleet-import-policy-list">
+          <div><dt>Schéma Vistos</dt><dd>${technical.ok ? "potvrzené" : "čeká na ověření"}</dd></div>
+          <div><dt>Nalezená pole</dt><dd>${escapeHtml(String((technical.matched || []).length))}</dd></div>
+          <div><dt>Chybějící pole</dt><dd>${escapeHtml(String((technical.missing || []).length))}</dd></div>
+        </dl>
+        ${technical.missing?.length ? `<p class="module-feedback__notice">${escapeHtml(`Nečtou se naslepo: ${technical.missing.join(", ")}`)}</p>` : ""}
       </section>
       <section>
         <h3>Problémy náhledu</h3>
@@ -11127,6 +11139,7 @@ function fleetVistosVehiclePreviewTable(preview) {
       <td>${escapeHtml(vehicle.category || vehicle.categoryId || "-")}</td>
       <td>${escapeHtml(vehicle.status || vehicle.statusId || "-")}</td>
       <td>${escapeHtml(vehicle.gps ? "validní" : "bez GPS")}</td>
+      <td>${escapeHtml(vehicle.hereNavigation?.status === "ready" ? "připraven" : "čeká na údaje")}</td>
       <td>${escapeHtml(vehicle.mappingStatus || "-")}</td>
     </tr>
   `).join("");
@@ -11152,6 +11165,7 @@ function fleetVistosVehiclePreviewTable(preview) {
             <th>Kategorie</th>
             <th>Stav</th>
             <th>GPS</th>
+            <th>HERE</th>
             <th>Mapování</th>
           </tr>
         </thead>
@@ -11921,6 +11935,79 @@ function fleetTermsDetail(vehicle = {}) {
           <small>${escapeHtml(missingLabel ? `Nezobrazuji prázdné řádky: ${missingLabel}${missingMore ? ` a další ${missingMore}` : ""}.` : "")}</small>
         </div>
       ` : ""}
+    </article>
+  `;
+}
+
+function fleetHereMetric(value, unit = "") {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return "není uvedeno";
+  return `${number.toLocaleString("cs-CZ", { maximumFractionDigits: 2 })}${unit ? ` ${unit}` : ""}`;
+}
+
+function fleetHereEnumLabel(value = {}) {
+  return fleetVehicleDisplayValue(value?.caption || value?.id, "není uvedeno");
+}
+
+function fleetHereProfileDetail(vehicle = {}) {
+  const technical = vehicle.technicalProfile && typeof vehicle.technicalProfile === "object" ? vehicle.technicalProfile : {};
+  const profile = vehicle.hereNavigation && typeof vehicle.hereNavigation === "object" ? vehicle.hereNavigation : {};
+  const depot = vehicle.homeDepot && typeof vehicle.homeDepot === "object" ? vehicle.homeDepot : {};
+  const ready = profile.status === "ready";
+  const groupLoads = Object.entries(technical.axleGroupLoadsKg || {})
+    .map(([key, value]) => [key === "single" ? "Jednoduchá" : key === "tandem" ? "Tandem" : "Tridem", fleetHereMetric(value, "kg")])
+    .filter(([, value]) => value !== "není uvedeno");
+  const depotAddress = [
+    depot?.address?.street,
+    depot?.address?.postalCode,
+    depot?.address?.city,
+    depot?.address?.country?.caption
+  ].filter(Boolean).join(", ");
+  const equipment = technical?.additionalEquipment?.captions || [];
+  const containers = technical?.supportedContainerSizes?.captions || [];
+  const blockers = Array.isArray(profile.blockers) ? profile.blockers : [];
+
+  return `
+    <article class="fleet-detail-card">
+      <div class="fleet-card-head">
+        <div>
+          <h3>Navigační profil HERE</h3>
+          <p>Read-only technické údaje z Vistos Vehicle. Do Vistosu ani tras se zde nic nezapisuje.</p>
+        </div>
+        <span class="employee-card-status employee-card-status--${ready ? "ready" : "waiting"}">${ready ? "technika připravena" : "čeká na podklady"}</span>
+      </div>
+      ${technical.source ? `
+        <dl class="fleet-human-list">
+          <div><dt>Prázdná hmotnost</dt><dd>${escapeHtml(fleetHereMetric(technical.emptyWeightKg, "kg"))}</dd></div>
+          <div><dt>Nejvyšší povolená hmotnost</dt><dd>${escapeHtml(fleetHereMetric(technical.maxPermittedWeightKg, "kg"))}</dd></div>
+          <div><dt>Nosnost</dt><dd>${escapeHtml(fleetHereMetric(technical.payloadKg, "kg"))}</dd></div>
+          <div><dt>Rozměry</dt><dd>${escapeHtml([
+            fleetHereMetric(technical.lengthMeters, "m"),
+            fleetHereMetric(technical.widthMeters, "m"),
+            fleetHereMetric(technical.heightMeters, "m")
+          ].join(" × "))}</dd></div>
+          <div><dt>Počet / konfigurace náprav</dt><dd>${escapeHtml(`${fleetHereEnumLabel(technical.axleCount)}${technical.axleCountOther ? ` (${technical.axleCountOther})` : ""} · ${fleetHereEnumLabel(technical.axleConfiguration)}`)}</dd></div>
+          <div><dt>Zatížení náprav</dt><dd>${escapeHtml(groupLoads.length ? groupLoads.map(([label, value]) => `${label}: ${value}`).join(" · ") : technical.maxSingleAxleLoadRaw || "není uvedeno")}</dd></div>
+          <div><dt>Typ / přívěsy</dt><dd>${escapeHtml(`${fleetHereEnumLabel(technical.vehicleType)} · ${fleetHereEnumLabel(technical.trailerCount)}`)}</dd></div>
+          <div><dt>Palivo / EURO / nástavba</dt><dd>${escapeHtml(`${fleetHereEnumLabel(technical.fuelType)} · ${fleetHereEnumLabel(technical.euroEmissionStandard)} · ${fleetHereEnumLabel(technical.bodyType)}`)}</dd></div>
+          <div><dt>Využitelný objem nástavby</dt><dd>${escapeHtml(fleetHereMetric(technical.usableBodyVolumeM3, "m³"))}</dd></div>
+          <div><dt>Domovské depo</dt><dd>${escapeHtml(depot.gps ? `${depot.gps.lat.toFixed(6)}, ${depot.gps.lng.toFixed(6)}` : "GPS depa není potvrzené")}${depotAddress ? `<small>${escapeHtml(depotAddress)}</small>` : ""}</dd></div>
+        </dl>
+        ${equipment.length || containers.length ? `
+          <div class="fleet-term-missing">
+            ${equipment.length ? `<strong>Vybavení</strong><div class="fleet-missing-term-chips">${equipment.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` : ""}
+            ${containers.length ? `<strong>Podporované nádoby</strong><div class="fleet-missing-term-chips">${containers.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` : ""}
+          </div>
+        ` : ""}
+        <p class="module-feedback__notice">Aktuální hmotnost pro HERE se dopočítává až z prázdné hmotnosti a plánovaného nákladu; nosnost se jako aktuální hmotnost nepoužívá.</p>
+        ${blockers.length ? `<div class="fleet-term-missing"><strong>Blokuje HERE</strong><small>${escapeHtml(blockers.join("; "))}</small></div>` : ""}
+        ${depot.warning ? `<p class="module-feedback__notice">${escapeHtml(depot.warning)}</p>` : ""}
+      ` : `
+        <div class="fleet-empty-state fleet-empty-state--calm">
+          <strong>Technická pole z Vistosu zatím nejsou načtena</strong>
+          <span>Read-only profil se zobrazí, až Vistos potvrdí schéma Vehicle a vrátí technické údaje.</span>
+        </div>
+      `}
     </article>
   `;
 }
@@ -13779,6 +13866,7 @@ function fleetDetailSection(vehicleId = "", activeId = "detail") {
           ${fleetDriverReportsDetail(vehicle)}
           ${fleetTrackingDetail(vehicle)}
           ${fleetTcarsDetailCard(vehicle)}
+          ${fleetHereProfileDetail(vehicle)}
           ${fleetTermsDetail(vehicle)}
           ${fleetServiceDetail(vehicle)}
           ${fleetDocumentsDetail(vehicle)}
@@ -22570,6 +22658,7 @@ function collectionRouteHerePilotPanel() {
   const pending = collectionRoutesPilotState.hereOptimizationPending;
   const blockers = Array.isArray(readiness?.blockers) ? readiness.blockers : [];
   const warnings = Array.isArray(readiness?.warnings) ? readiness.warnings : [];
+  const technicalProfiles = Array.isArray(readiness?.vehicleTechnicalProfiles) ? readiness.vehicleTechnicalProfiles : [];
   const availableWasteTypes = Array.isArray(readiness?.availableWasteTypes) && readiness.availableWasteTypes.length
     ? readiness.availableWasteTypes
     : ["SKO", "PAPIR", "PLAST", "BIO", "SKLO"];
@@ -22600,8 +22689,14 @@ function collectionRouteHerePilotPanel() {
         <div class="collection-route-here__facts">
           <article><span>Komodita</span><strong>${escapeHtml(readiness.wasteLabel || readiness.wasteType)}</strong></article>
           <article><span>Stanoviště</span><strong>${escapeHtml(readiness.eligibleCount || 0)}</strong></article>
-          <article><span>Truck profil</span><strong>Česká republika</strong><small>výška, šířka a hmotnost musí být potvrzené</small></article>
+          <article><span>Truck profil</span><strong>${escapeHtml(readiness.vehicleTechnicalSource === "vistos-vehicle" ? "Vistos Vehicle" : "TEST nastavení")}</strong><small>${escapeHtml(technicalProfiles.length ? `${technicalProfiles.filter((item) => item.status === "ready").length}/${technicalProfiles.length} vozů má úplný profil` : "výška, šířka a hmotnost musí být potvrzené")}</small></article>
           <article><span>Dopad</span><strong>Jen TEST audit</strong><small>bez uložené provozní trasy a zpráv</small></article>
+        </div>
+      ` : ""}
+      ${technicalProfiles.length ? `
+        <div class="collection-route-here__blockers">
+          <strong>Vazba vozidel na Vistos</strong>
+          <ul>${technicalProfiles.map((item) => `<li>${escapeHtml(`Vůz ${item.code}: ${item.status === "ready" ? "technika připravena" : "čeká na údaje"} · ${item.match === "vistos-id" ? "Vistos ID" : item.match === "registration-plate" ? "SPZ" : "bez bezpečného párování"}${item.homeDepotStatus === "ready" ? " · GPS depa potvrzené" : " · GPS depa chybí"}`)}</li>`).join("")}</ul>
         </div>
       ` : ""}
       ${blockers.length ? `
