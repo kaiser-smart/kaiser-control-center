@@ -1403,7 +1403,7 @@ const collectionRoutesPilotState = {
   sourceDriverRunKey: "",
   sourceDriverEventPending: "",
   sourceDriverSoundsEnabled: true,
-  sourceDriverDisplayMode: "auto",
+  sourceDriverDisplayMode: "night",
   sourceDriverSettingsOpen: false,
   sourceRouteView: "print",
   mantraExpanded: false,
@@ -1502,7 +1502,7 @@ const collectionRoutesPilotState = {
   myDailyRouteReportPhotos: [],
   myDailyRouteReportPreviewUrls: [],
   myDailyRouteReportError: "",
-  myDailyRouteDisplayMode: "auto",
+  myDailyRouteDisplayMode: "night",
   myDailyRouteSoundsEnabled: true,
   myDailyRouteDumpDestinationId: "",
   myDailyRouteSarlotaEnabled: false,
@@ -21265,8 +21265,8 @@ function collectionRoutesSourceDriverReadonlyButton(label, action, tone = "defau
 }
 
 function collectionRoutesSourceDriverDisplayMode() {
-  const mode = String(collectionRoutesPilotState.sourceDriverDisplayMode || "auto");
-  return Object.hasOwn(COLLECTION_DAILY_DRIVER_DISPLAY_MODES, mode) ? mode : "auto";
+  const mode = String(collectionRoutesPilotState.sourceDriverDisplayMode || "night");
+  return Object.hasOwn(COLLECTION_DAILY_DRIVER_DISPLAY_MODES, mode) ? mode : "night";
 }
 
 function collectionRoutesSourceDriverResolvedDisplayMode() {
@@ -24921,8 +24921,8 @@ function collectionDailyDriverLatestOperation(detail, action) {
 const collectionDailyDriverColorSchemeMedia = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
 
 function collectionDailyDriverDisplayMode() {
-  const mode = String(collectionRoutesPilotState.myDailyRouteDisplayMode || "auto");
-  return Object.hasOwn(COLLECTION_DAILY_DRIVER_DISPLAY_MODES, mode) ? mode : "auto";
+  const mode = String(collectionRoutesPilotState.myDailyRouteDisplayMode || "night");
+  return Object.hasOwn(COLLECTION_DAILY_DRIVER_DISPLAY_MODES, mode) ? mode : "night";
 }
 
 function collectionDailyDriverResolvedDisplayMode() {

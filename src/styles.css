@@ -45961,11 +45961,21 @@ body.collection-driver-kiosk-active #app {
   color: #f3f6fa;
 }
 
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-choice-grid button {
+  border-color: #75bd25;
+  border-width: 4px;
+  box-shadow: inset 0 0 0 1px rgba(117, 189, 37, 0.42);
+}
+
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-choice-grid button.is-selected,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-display-settings__modes button.is-selected,
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-sound-setting.is-selected {
   border-color: #75bd25;
   background: #303030;
+}
+
+.collection-daily-driver-page.is-theme-night .collection-daily-driver-choice-grid button.is-selected {
+  box-shadow: inset 0 0 0 3px #75bd25, 0 0 0 2px rgba(117, 189, 37, 0.28);
 }
 
 .collection-daily-driver-page.is-theme-night .collection-daily-driver-display-settings__modes small,

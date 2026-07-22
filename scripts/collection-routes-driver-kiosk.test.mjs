@@ -295,9 +295,10 @@ assert.ok(
   appSource.includes("function collectionRoutesSourceDriverSettingsPanel()")
     && appSource.includes("data-collection-routes-source-driver-display-mode")
     && appSource.includes("data-collection-routes-driver-sound-toggle")
-    && appSource.includes("sourceDriverDisplayMode: \"auto\"")
+    && appSource.includes("sourceDriverDisplayMode: \"night\"")
+    && appSource.includes("myDailyRouteDisplayMode: \"night\"")
     && appSource.includes("sourceDriverSettingsOpen: false"),
-  "Zdrojový náhled musí zpřístupnit stejné nastavení displeje a zvuku jako kiosk."
+  "Zdrojový náhled i skutečný kiosk musí mít noční režim jako výchozí a zpřístupnit stejné nastavení displeje a zvuku."
 );
 for (const marker of [
   ".collection-daily-driver-page--source-preview",
@@ -326,6 +327,11 @@ assert.ok(
     && nightThemeSource.includes(".collection-daily-driver-actions {")
     && nightThemeSource.includes("background: #252525;"),
   "Noční režim musí změnit i horní lištu a pracovní sloupec z modré na tmavě šedou."
+);
+assert.ok(
+  nightThemeSource.includes(".collection-daily-driver-choice-grid button {\n  border-color: #75bd25;\n  border-width: 4px;")
+    && nightThemeSource.includes(".collection-daily-driver-choice-grid button.is-selected {\n  box-shadow: inset 0 0 0 3px #75bd25"),
+  "Volby v nočních modálních oknech musí mít souvislou linku #75bd25 kolem celé volby a ještě silnější vybraný stav."
 );
 for (const legacyBlue of ["#090f19", "#111a28", "#182334", "#253044", "#142b4a", "#263247", "#202c3e", "#273347"]) {
   assert.ok(!nightThemeSource.includes(legacyBlue), `Noční režim stále obsahuje modrý odstín: ${legacyBlue}`);

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.672"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.673"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Řidičský tablet: akcent na každé volbě v nočních oknech",
+    text: "Noční režim je výchozí. Volby hlášení, výsypu a dalších řidičských kroků mají souvislou linku #75bd25 kolem celé plochy; vybraná volba je silnější. Plochy zůstávají tmavě šedé a funkce, API i data se nemění."
+  },
   {
     title: "Řidičský tablet: tmavě šedý režim s jedním akcentem",
     text: "Noční režim tabletu je nyní neutrálně tmavě šedý bez zelených ploch. Jediným zeleným akcentem je #75bd25; žluté hlášení, kontrast, zvuk i všechny pracovní funkce zůstávají stejné."
