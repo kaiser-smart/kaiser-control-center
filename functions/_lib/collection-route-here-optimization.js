@@ -1,5 +1,6 @@
 import { previewCollectionDailyRoute } from "./collection-daily-routes-store.js";
 import { hereOAuthConfiguration, requestHereOAuthToken } from "./here-oauth.js";
+import { createFleetVistosVehiclePreview } from "./fleet-vistos-vehicle-preview.js";
 
 const TEST_DB_BINDING = "COLLECTION_ROUTES_TEST_DB";
 const HERE_PROVIDER = "here-tour-planning";
@@ -148,6 +149,126 @@ function configuredVehicles(config) {
   return Array.isArray(config?.vehicles) ? config.vehicles : [];
 }
 
+function normalizedRegistration(value) {
+  return cleanString(value).toUpperCase().replace(/[^A-Z0-9]+/g, "");
+}
+
+function usesVistosVehicleTechnicalData(config) {
+  return cleanString(config?.vehicleTechnicalSource).toLowerCase() === "vistos-vehicle";
+}
+
+function axleGroupLoads(truck = {}) {
+  const source = truck?.weightPerAxleGroup && typeof truck.weightPerAxleGroup === "object"
+    ? truck.weightPerAxleGroup
+    : {};
+  return Object.fromEntries(Object.entries(source)
+    .map(([key, value]) => [key, Math.round(positiveNumber(value))])
+    .filter(([, value]) => value > 0));
+}
+
+function hasAxleLimit(truck = {}) {
+  return positiveNumber(truck?.weightPerAxleKg) > 0 || Object.keys(axleGroupLoads(truck)).length > 0;
+}
+
+function configuredVistosVehicle(configuredVehicle, previewVehicles = []) {
+  const requestedVistosId = cleanString(configuredVehicle?.vistosVehicleId);
+  if (requestedVistosId) {
+    const byId = previewVehicles.find((vehicle) => cleanString(vehicle?.vistosVehicleId) === requestedVistosId);
+    if (byId) return { vehicle: byId, match: "vistos-id" };
+  }
+  const registration = normalizedRegistration(configuredVehicle?.registration);
+  const byRegistration = registration
+    ? previewVehicles.find((vehicle) => normalizedRegistration(vehicle?.registrationPlate) === registration)
+    : null;
+  return byRegistration ? { vehicle: byRegistration, match: "registration-plate" } : { vehicle: null, match: "" };
+}
+
+function vistosTruckForRoute(vehicle, configuredVehicle, wasteType) {
+  const technical = vehicle?.technicalProfile || {};
+  const navigation = vehicle?.hereNavigation || {};
+  const capacityKg = Math.round(positiveNumber(configuredVehicle?.capacitiesTons?.[wasteType]) * 1000);
+  const emptyWeightKg = Math.round(positiveNumber(technical.emptyWeightKg));
+  const grossWeightKg = Math.round(positiveNumber(technical.maxPermittedWeightKg));
+  const plannedCurrentWeightKg = Math.min(grossWeightKg, emptyWeightKg + capacityKg);
+  return {
+    heightCm: Math.round(positiveNumber(technical?.dimensionsCm?.height)),
+    widthCm: Math.round(positiveNumber(technical?.dimensionsCm?.width)),
+    lengthCm: Math.round(positiveNumber(technical?.dimensionsCm?.length)),
+    emptyWeightKg,
+    grossWeightKg,
+    payloadCapacityKg: Math.round(positiveNumber(technical.payloadKg)),
+    // Konzervativní horní hranice plánovaného nákladu, ne prostá nosnost.
+    currentWeightKg: plannedCurrentWeightKg,
+    weightPerAxleKg: Math.round(positiveNumber(technical.maxSingleAxleLoadKg)) || null,
+    weightPerAxleGroup: axleGroupLoads(navigation?.options || {})
+  };
+}
+
+function resolveVistosVehicleTechnicalConfiguration(config = {}, preview = {}, wasteType = "") {
+  const previewVehicles = Array.isArray(preview?.vehicles) ? preview.vehicles : [];
+  const usesVistos = usesVistosVehicleTechnicalData(config);
+  if (!usesVistos) {
+    return {
+      config,
+      source: "test-settings",
+      profiles: [],
+      blockers: []
+    };
+  }
+
+  const blockers = [];
+  const profiles = [];
+  if (preview?.apiStatus !== "ready") {
+    blockers.push("Technický profil Vistos Vehicle se nepodařilo načíst pro HERE TEST.");
+  }
+  const vehicles = configuredVehicles(config).map((configuredVehicle) => {
+    const code = cleanString(configuredVehicle?.code).toUpperCase() || "?";
+    const matched = configuredVistosVehicle(configuredVehicle, previewVehicles);
+    const vehicle = matched.vehicle;
+    const navigation = vehicle?.hereNavigation || {};
+    const technicalBlockers = Array.isArray(navigation.blockers) ? navigation.blockers : [];
+    const homeDepotGps = vehicle?.homeDepot?.gps || null;
+
+    profiles.push({
+      code,
+      registration: cleanString(configuredVehicle?.registration),
+      vistosVehicleId: cleanString(vehicle?.vistosVehicleId),
+      match: matched.match || "unmatched",
+      status: navigation.status || "missing",
+      blockers: technicalBlockers,
+      homeDepotStatus: vehicle?.homeDepot?.status || "missing"
+    });
+
+    if (!vehicle) {
+      blockers.push(`Vůz ${code}: ve Vistos Vehicle nebyl bezpečně spárován.`);
+      return configuredVehicle;
+    }
+    if (navigation.status !== "ready") {
+      blockers.push(`Vůz ${code}: technický profil z Vistosu není připraven${technicalBlockers.length ? ` (${technicalBlockers.join(", ")})` : ""}.`);
+      return configuredVehicle;
+    }
+    if (config?.useVistosHomeDepot === true && !validCoordinate(homeDepotGps?.lat, homeDepotGps?.lng)) {
+      blockers.push(`Vůz ${code}: chybí potvrzené GPS domovského depa z Vistosu.`);
+    }
+    return {
+      ...configuredVehicle,
+      vistosVehicleId: cleanString(vehicle.vistosVehicleId),
+      truck: vistosTruckForRoute(vehicle, configuredVehicle, wasteType),
+      homeDepotGps: validCoordinate(homeDepotGps?.lat, homeDepotGps?.lng) ? homeDepotGps : null,
+      technicalDataQuality: "vistos-read-only",
+      technicalDataSource: "Vistos Vehicle",
+      hereTechnicalProfileLoadedAt: cleanString(preview?.loadedAt)
+    };
+  });
+
+  return {
+    config: { ...config, vehicles },
+    source: "vistos-vehicle",
+    profiles,
+    blockers
+  };
+}
+
 function dumpSiteForWaste(config, wasteType) {
   return (Array.isArray(config?.dumpSites) ? config.dumpSites : []).find((site) => (
     (Array.isArray(site?.wasteTypes) ? site.wasteTypes : [])
@@ -162,7 +283,7 @@ function configurationBlockers(settings, wasteType) {
   if (!["ready", "test-estimate"].includes(settings.status)) {
     blockers.push("Provozní konfigurace HERE v TEST D1 zatím není potvrzená.");
   }
-  if (!validCoordinate(config?.depot?.latitude, config?.depot?.longitude)) {
+  if (config?.useVistosHomeDepot !== true && !validCoordinate(config?.depot?.latitude, config?.depot?.longitude)) {
     blockers.push("Chybí potvrzené souřadnice výjezdového depa.");
   }
   if (!/^\d{2}:\d{2}$/.test(cleanString(config?.shift?.start)) || !/^\d{2}:\d{2}$/.test(cleanString(config?.shift?.end))) {
@@ -184,10 +305,26 @@ function configurationBlockers(settings, wasteType) {
     if (!positiveNumber(vehicle?.capacitiesTons?.[wasteType])) {
       blockers.push(`Vůz ${code}: chybí kapacita pro ${WASTE_LABELS[wasteType] || wasteType}.`);
     }
-    const missingTruckFields = ["heightCm", "widthCm", "lengthCm", "grossWeightKg", "currentWeightKg", "weightPerAxleKg"]
+    const missingTruckFields = ["heightCm", "widthCm", "lengthCm", "grossWeightKg", "currentWeightKg"]
       .filter((field) => !positiveNumber(vehicle?.truck?.[field]));
     if (missingTruckFields.length) {
       blockers.push(`Vůz ${code}: chybí rozměry nebo hmotnosti pro bezpečný truck routing.`);
+    }
+    if (!hasAxleLimit(vehicle?.truck)) {
+      blockers.push(`Vůz ${code}: chybí potvrzené zatížení nápravy nebo skupiny náprav.`);
+    }
+    if (usesVistosVehicleTechnicalData(config)) {
+      const emptyWeightKg = positiveNumber(vehicle?.truck?.emptyWeightKg);
+      const grossWeightKg = positiveNumber(vehicle?.truck?.grossWeightKg);
+      const payloadCapacityKg = positiveNumber(vehicle?.truck?.payloadCapacityKg);
+      if (!emptyWeightKg || !grossWeightKg || !payloadCapacityKg) {
+        blockers.push(`Vůz ${code}: z Vistosu chybí prázdná hmotnost nebo nosnost.`);
+      } else if (Math.abs((grossWeightKg - emptyWeightKg) - payloadCapacityKg) > 2) {
+        blockers.push(`Vůz ${code}: nejvyšší hmotnost, prázdná hmotnost a nosnost z Vistosu si neodpovídají.`);
+      }
+      if (config?.useVistosHomeDepot === true && !validCoordinate(vehicle?.homeDepotGps?.lat, vehicle?.homeDepotGps?.lng)) {
+        blockers.push(`Vůz ${code}: chybí GPS domovského depa z Vistosu.`);
+      }
     }
   }
   return blockers;
@@ -283,7 +420,7 @@ export async function getCollectionRouteHereReadiness(env, user, input = {}) {
   }
   const db = database(env, true);
   try {
-    const [settings, preview] = await Promise.all([
+    const [storedSettings, preview] = await Promise.all([
       loadSettings(db),
       previewCollectionDailyRoute(env, user, {
         scope: HERE_SCOPE,
@@ -292,6 +429,28 @@ export async function getCollectionRouteHereReadiness(env, user, input = {}) {
         sourceBatchId: input.sourceBatchId
       })
     ]);
+    let technicalPreview = null;
+    let technicalResolution = {
+      config: storedSettings.config,
+      source: "test-settings",
+      profiles: [],
+      blockers: []
+    };
+    if (usesVistosVehicleTechnicalData(storedSettings.config)) {
+      try {
+        technicalPreview = await createFleetVistosVehiclePreview(env);
+        technicalResolution = resolveVistosVehicleTechnicalConfiguration(storedSettings.config, technicalPreview, wasteType);
+      } catch (error) {
+        technicalResolution = {
+          config: storedSettings.config,
+          source: "vistos-vehicle",
+          profiles: [],
+          blockers: ["Technický profil Vistos Vehicle se teď nepodařilo bezpečně načíst pro HERE TEST."]
+        };
+        console.error("collection_route_here.vistos_vehicle_technical_failed", { message: cleanString(error?.message) });
+      }
+    }
+    const settings = { ...storedSettings, config: technicalResolution.config };
     const allWasteTypes = [...new Set((preview.eligibleRows || []).map((stop) => normalizeWasteType(stop.wasteType)).filter(Boolean))];
     const stops = (preview.eligibleRows || [])
       .filter((stop) => normalizeWasteType(stop.wasteType) === wasteType)
@@ -299,6 +458,7 @@ export async function getCollectionRouteHereReadiness(env, user, input = {}) {
     const oauth = hereOAuthConfiguration(env);
     const blockers = [
       ...configurationBlockers(settings, wasteType),
+      ...technicalResolution.blockers,
       ...stopBlockers(stops, wasteType)
     ];
     if (!oauth.configured) blockers.push("Chybí bezpečně uložené serverové HERE OAuth přístupy.");
@@ -323,6 +483,9 @@ export async function getCollectionRouteHereReadiness(env, user, input = {}) {
       availableWasteTypes: allWasteTypes,
       configurationStatus: settings.status,
       configurationUpdatedAt: settings.updatedAt,
+      vehicleTechnicalSource: technicalResolution.source,
+      vehicleTechnicalProfiles: technicalResolution.profiles,
+      vehicleTechnicalLoadedAt: cleanString(technicalPreview?.loadedAt),
       oauthConfigured: oauth.configured,
       blockers: [...new Set(blockers)],
       warnings: [...new Set(configurationWarnings(settings, wasteType))],
@@ -360,6 +523,7 @@ function localDateTime(routeDate, time, timezone) {
 
 function hereProfile(vehicle) {
   const truck = vehicle.truck || {};
+  const groupLoads = axleGroupLoads(truck);
   return {
     name: `kaiser_truck_${cleanString(vehicle.code).toLowerCase()}`,
     type: "truck",
@@ -370,7 +534,9 @@ function hereProfile(vehicle) {
       length: Math.round(positiveNumber(truck.lengthCm)),
       grossWeight: Math.round(positiveNumber(truck.grossWeightKg)),
       currentWeight: Math.round(positiveNumber(truck.currentWeightKg)),
-      weightPerAxle: Math.round(positiveNumber(truck.weightPerAxleKg))
+      ...(Object.keys(groupLoads).length
+        ? { weightPerAxleGroup: groupLoads }
+        : { weightPerAxle: Math.round(positiveNumber(truck.weightPerAxleKg)) })
     }
   };
 }
@@ -386,7 +552,7 @@ export function buildCollectionRouteHereProblem(readiness) {
   const config = readiness._settings?.config || {};
   const dumpSite = dumpSiteForWaste(config, readiness.wasteType);
   const timezone = cleanString(config.timezone) || "Europe/Prague";
-  const depotLocation = { lat: Number(config.depot.latitude), lng: Number(config.depot.longitude) };
+  const depotLocation = { lat: Number(config?.depot?.latitude), lng: Number(config?.depot?.longitude) };
   const dumpLocation = { lat: Number(dumpSite.latitude), lng: Number(dumpSite.longitude) };
   const shiftStart = localDateTime(readiness.routeDate, config.shift.start, timezone);
   const shiftEnd = localDateTime(readiness.routeDate, config.shift.end, timezone);
@@ -402,7 +568,12 @@ export function buildCollectionRouteHereProblem(readiness) {
           profile: `kaiser_truck_${code.toLowerCase()}`,
           costs: { fixed: 5, distance: 0.001, time: 0.005 },
           shifts: [{
-            start: { time: shiftStart, location: depotLocation },
+            start: {
+              time: shiftStart,
+              location: config?.useVistosHomeDepot === true && validCoordinate(vehicle?.homeDepotGps?.lat, vehicle?.homeDepotGps?.lng)
+                ? { lat: Number(vehicle.homeDepotGps.lat), lng: Number(vehicle.homeDepotGps.lng) }
+                : depotLocation
+            },
             end: { time: shiftEnd, location: dumpLocation },
             reloads: [{
               location: dumpLocation,
@@ -613,7 +784,10 @@ export async function startCollectionRouteHereRun(env, user, input = {}, options
         wasteLabel: readiness.wasteLabel,
         oneWasteTypePerRun: true,
         routeEndsAtDumpSite: true,
-        providerCalls: 1
+        providerCalls: 1,
+        vehicleTechnicalSource: readiness.vehicleTechnicalSource,
+        vehicleTechnicalProfiles: readiness.vehicleTechnicalProfiles,
+        vehicleTechnicalLoadedAt: readiness.vehicleTechnicalLoadedAt
       }),
       person.id, person.name, timestamp, timestamp
     ).run();
@@ -785,8 +959,11 @@ export const __test = {
   MAX_STOPS,
   SERVICE_SECONDS,
   WEIGHT_KG,
+  axleGroupLoads,
   configurationBlockers,
+  hereProfile,
   normalizedSolution,
   normalizeWasteType,
+  resolveVistosVehicleTechnicalConfiguration,
   timezoneOffset
 };

@@ -511,6 +511,9 @@ function fleetVehicleFromVistos(vehicle = {}, tcarsVehicle = null) {
   const name = cleanString(vehicle.name || registrationPlate || vistosVehicleId);
   const id = vistosVehicleId ? `vistos-${vistosVehicleId}` : `vistos-${normalizedPlate(registrationPlate || name)}`;
   const tcarsId = cleanString(tcarsVehicle?.tcarsVehicleId);
+  const technicalProfile = vehicle.technicalProfile && typeof vehicle.technicalProfile === "object" ? vehicle.technicalProfile : {};
+  const hereNavigation = vehicle.hereNavigation && typeof vehicle.hereNavigation === "object" ? vehicle.hereNavigation : {};
+  const homeDepot = vehicle.homeDepot && typeof vehicle.homeDepot === "object" ? vehicle.homeDepot : {};
 
   return {
     id,
@@ -523,9 +526,9 @@ function fleetVehicleFromVistos(vehicle = {}, tcarsVehicle = null) {
     model: name,
     vin: cleanString(vehicle.vinMasked || tcarsVehicle?.vin),
     year: "",
-    fuelType: "",
-    euroNorm: "",
-    bodyType: "",
+    fuelType: cleanString(technicalProfile?.fuelType?.caption),
+    euroNorm: cleanString(technicalProfile?.euroEmissionStandard?.caption),
+    bodyType: cleanString(technicalProfile?.bodyType?.caption),
     department: "",
     assignedDriverId: "",
     assignedDriverName: cleanString(vehicle.driver),
@@ -545,6 +548,9 @@ function fleetVehicleFromVistos(vehicle = {}, tcarsVehicle = null) {
     lastServiceDate: cleanString(vehicle.lastServiceDate),
     nextServiceDate: cleanString(vehicle.nextServiceDate),
     vistosTermSources: vehicle.termSources && typeof vehicle.termSources === "object" ? vehicle.termSources : {},
+    technicalProfile,
+    hereNavigation,
+    homeDepot,
     openDefects: null,
     tcarsVehicleId: tcarsId,
     tcarsUnitId: cleanString(tcarsVehicle?.tcarsUnitId),
