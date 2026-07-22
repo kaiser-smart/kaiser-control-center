@@ -2125,6 +2125,10 @@ function isCollectionRoutesPath(pathname = window.location.pathname) {
   return normalizePath(pathname).startsWith(COLLECTION_ROUTES_ROUTE);
 }
 
+function isDriverReportsPath(pathname = window.location.pathname) {
+  return normalizePath(pathname) === DRIVER_REPORT_ROUTE;
+}
+
 function routeHref(route) {
   if (route === "/") {
     return `${basePath || ""}/`;
@@ -3937,6 +3941,7 @@ function renderAiAssistantLayer() {
   if (
     !user
     || !isUserActive(user)
+    || isDriverReportsPath()
     || (dataBoxPlusTriagePreviewActive(user) && normalizePath(window.location.pathname) === DATA_BOX_PLUS_ROUTE)
   ) {
     return "";
@@ -35850,17 +35855,17 @@ function driverReportCreateForm(user, options = {}) {
   const disabled = driverReportsState.saving || !driverReportCanCreate();
   const submitDisabled = !driverReportCanSubmitCreateForm();
   const draft = driverReportsState.draft;
-  const mobileMode = options.mobile === true;
+  const compactMode = options.compact === true;
   return `
     <form class="driver-report-form driver-report-form--pitstop" data-driver-report-form>
-      <div class="driver-report-pitstop-banner" aria-hidden="true">
-        <span>Pitstop</span>
-        <strong>SPZ → hlášení → odeslat</strong>
+      <div class="driver-report-pitstop-banner">
+        <span>Nové servisní hlášení</span>
+        <strong>Vyber vozidlo, popiš problém a odešli</strong>
       </div>
 
       <div class="driver-report-quick-fields">
         <label class="driver-report-license-field">
-          <span>Potvrďte SPZ vozidla</span>
+          <span>1. SPZ vozidla</span>
           <input name="licensePlate" value="${escapeHtml(draft.licensePlate)}" placeholder="Např. 4B2 1234" autocapitalize="characters" autocomplete="off" required ${disabled ? "disabled" : ""}>
           <div class="driver-report-plate-feedback" data-driver-report-plate-feedback>
             ${driverReportPlateValidationHtml()}
@@ -35868,20 +35873,18 @@ function driverReportCreateForm(user, options = {}) {
           ${driverReportPlateOverrideForm()}
         </label>
         <label>
-          <span>Co je potřeba na vozidle řešit</span>
+          <span>2. Popis problému</span>
           <textarea name="defectDescription" rows="4" placeholder="Například výměna stěračů, pneumatik, oleje, závada, poškození nebo jiná servisní potřeba." required ${disabled ? "disabled" : ""}>${escapeHtml(draft.defectDescription)}</textarea>
         </label>
       </div>
 
-      <div class="driver-report-pitstop-steps" aria-label="Rychlý postup hlášení">
+      <div class="driver-report-pitstop-steps" aria-label="Postup vytvoření hlášení">
         <span>1 SPZ</span>
-        <span>2 popis / fotka</span>
-        <span>3 servis</span>
+        <span>2 popis závady</span>
+        <span>3 odeslat</span>
       </div>
 
-      ${mobileMode ? `
-        <p class="driver-report-form-note driver-report-form-note--photo">Fotku nebo podklad může řidič doplnit po odeslání podle pokynu Šarloty nebo dispečera.</p>
-      ` : `
+      ${compactMode ? "" : `
         <details class="driver-report-more">
           <summary>Doplnit vozidlo, VIN a řidiče</summary>
           <div class="driver-report-form__grid">
@@ -35923,7 +35926,7 @@ function driverReportCreateForm(user, options = {}) {
           <span>Po uložení spustit ověření na pozadí</span>
         </label>
       `}
-      <p class="driver-report-form-note">Stisknutím tlačítka potvrzujete SPZ. Hlášení se uloží hned; díly, ceny a případné předání Patrikovi běží až potom.</p>
+      <p class="driver-report-form-note">Po ověření SPZ se hlášení uloží přímo do servisní fronty. Tím se nic neobjedná ani neodešle mimo systém.</p>
       <button class="primary-action driver-report-pitstop-submit" type="submit" data-driver-report-submit ${submitDisabled ? "disabled" : ""}>
         ${driverReportsState.saving ? "Odesílám..." : "Odeslat hlášení"}
       </button>
@@ -36224,34 +36227,17 @@ function driverReportsSummaryCards(items) {
   `;
 }
 
-function driverReportDesktopEntryCard() {
-  const mobileUrl = `${window.location.origin}${routeHref(DRIVER_REPORT_ROUTE)}#nove-hlaseni`;
+function driverReportCreateEntry(user) {
   return `
-    <section class="driver-report-mobile-card" aria-label="Mobilní vstup pro řidiče">
-      <div>
-        <h2>Nové hlášení je pro mobil řidiče</h2>
-        <p>Řidič zadá SPZ, popis problému a fotku. Servisní fronta a náhradní díly zůstávají jen v pracovním pohledu.</p>
+    <section class="driver-report-click-entry" id="nove-hlaseni" aria-labelledby="driver-report-create-title">
+      <div class="driver-report-click-entry__head">
+        <div>
+          <span>Ruční zadání</span>
+          <h2 id="driver-report-create-title">Nové hlášení z vozidla</h2>
+          <p>Vyplň jen SPZ a stručný popis. Vozidlo se ověří proti Vozovému parku ještě před odesláním.</p>
+        </div>
       </div>
-      <div class="driver-report-mobile-card__actions">
-        <a class="secondary-link" href="${escapeHtml(routeHref(DRIVER_REPORT_ROUTE))}#nove-hlaseni" data-link>Otevřít mobilní formulář</a>
-        <button class="secondary-link" type="button" data-driver-report-copy-mobile-link="${escapeHtml(mobileUrl)}">Zkopírovat odkaz</button>
-      </div>
-      <div class="driver-report-qr-placeholder" aria-label="QR kód pro řidiče">
-        <span>QR</span>
-        <small>mobilní formulář</small>
-      </div>
-    </section>
-  `;
-}
-
-function driverReportMobileEntry(user) {
-  return `
-    <section class="driver-report-mobile-entry" id="nove-hlaseni" aria-labelledby="driver-report-mobile-title">
-      <div class="driver-report-panel__head">
-        <h2 id="driver-report-mobile-title">Nové hlášení</h2>
-        <span>Mobilní vstup</span>
-      </div>
-      ${driverReportCreateForm(user, { mobile: true })}
+      ${driverReportCreateForm(user, { compact: true })}
     </section>
   `;
 }
@@ -36461,12 +36447,11 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
 
       ${driverReportsState.activeTab === "settings" ? "" : driverReportsSummaryCards(items)}
 
-      ${driverReportsState.activeTab === "settings" ? "" : driverReportMobileEntry(user)}
+      ${driverReportsState.activeTab === "settings" ? "" : driverReportCreateEntry(user)}
 
       <section class="driver-report-desktop-workspace" aria-label="Pracovní fronta Hlášení řidičů">
         ${driverReportTabs(items)}
         ${driverReportsState.activeTab === "settings" ? driverReportsSettingsSection() : `
-          ${driverReportDesktopEntryCard()}
           ${driverReportFilters(items)}
           <section class="driver-report-queue-panel" aria-labelledby="driver-report-queue-title">
             <div class="driver-report-queue-head">
@@ -36738,17 +36723,6 @@ function setDriverReportTab(tab) {
 
 function closeDriverReportDetail() {
   driverReportsState.selected = null;
-  render();
-}
-
-async function copyDriverReportMobileLink(link) {
-  try {
-    await navigator.clipboard.writeText(link);
-    driverReportsState.message = "Odkaz na mobilní formulář je zkopírovaný.";
-    driverReportsState.error = "";
-  } catch {
-    driverReportsState.error = "Odkaz se nepodařilo zkopírovat. Zkopíruj ho prosím ručně z adresního řádku.";
-  }
   render();
 }
 
@@ -51036,6 +51010,9 @@ function renderAuthenticatedApp(user) {
     renderAuthenticatedApp(user);
     return;
   }
+  if (isDriverReportsPath(path) && (aiAssistantState.chatOpen || isAiVoiceSessionActive() || aiAssistantState.isListening)) {
+    closeAiAssistant({ renderAfter: false });
+  }
   const triagePreviewRoute = dataBoxPlusTriagePreviewActive(user) && path === DATA_BOX_PLUS_ROUTE;
   syncDataBoxPlusTriageAssistantBoundary(path, user);
   const userPrimaryRoutes = new Map(visibleModules(user).map((moduleItem) => [moduleItem.route, moduleItem]));
@@ -56724,13 +56701,6 @@ document.addEventListener("click", async (event) => {
   if (driverReportCloseDetail) {
     event.preventDefault();
     closeDriverReportDetail();
-    return;
-  }
-
-  const driverReportCopyMobileLink = event.target.closest("[data-driver-report-copy-mobile-link]");
-  if (driverReportCopyMobileLink) {
-    event.preventDefault();
-    await copyDriverReportMobileLink(driverReportCopyMobileLink.dataset.driverReportCopyMobileLink || window.location.href);
     return;
   }
 
