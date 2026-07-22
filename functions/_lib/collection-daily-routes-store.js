@@ -735,7 +735,7 @@ async function loadStopRow(db, runId, stopId) {
 async function detailFromRow(db, runRow) {
   const [stopsResult, eventsResult] = await Promise.all([
     db.prepare(`SELECT * FROM collection_daily_route_stops WHERE run_id = ? ORDER BY route_order ASC`).bind(runRow.id).all(),
-    db.prepare(`SELECT * FROM collection_daily_route_events WHERE run_id = ? ORDER BY created_at DESC LIMIT 500`).bind(runRow.id).all()
+    db.prepare(`SELECT * FROM collection_daily_route_events WHERE run_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 500`).bind(runRow.id).all()
   ]);
   const stops = (stopsResult.results || []).map(rowToStop);
   const events = (eventsResult.results || []).map(rowToEvent);

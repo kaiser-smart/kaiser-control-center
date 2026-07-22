@@ -86,6 +86,12 @@ for (const marker of [
   "Hlas: ElevenLabs Šarlota · systémové čtení vypnuto",
   "data-collection-routes-test-gps-voice",
   "data-collection-routes-test-gps-save",
+  "PŘESTÁVKA BĚŽÍ",
+  "data-collection-daily-driver-break-open",
+  "data-collection-daily-driver-break-start",
+  "data-collection-daily-driver-break-end",
+  "data-collection-driver-break-elapsed",
+  "syncCollectionRoutesDriverBreakRuntime",
   "prepareCollectionRouteGpsCapture",
   "prepareCollectionRoutesTestGpsFromSarlota",
   "vehicleSelectionRequired: false",
@@ -222,6 +228,8 @@ for (const marker of [
   ".collection-routes-test-gps__confirm",
   ".collection-routes-test-incidents",
   ".collection-routes-test-incidents__buttons",
+  ".collection-daily-driver-break-confirm",
+  ".collection-daily-driver-break-active",
   ".collection-routes-test-incident-modal",
   ".collection-routes-test-incident-camera",
   ".collection-routes-test-incident-submit",
@@ -232,6 +240,22 @@ for (const marker of [
 ]) {
   assert.ok(styleSource.includes(marker), `Styly TEST rozhraní postrádají: ${marker}`);
 }
+
+const dailyDriverPageStart = appSource.indexOf("function collectionDailyRouteDriverPage");
+const dailyDriverPageEnd = appSource.indexOf("function collectionRoutesSourceRoutesSection", dailyDriverPageStart);
+const dailyDriverPageSource = appSource.slice(dailyDriverPageStart, dailyDriverPageEnd);
+assert.ok(
+  dailyDriverPageSource.includes("breakActive ? collectionDailyRouteBreakActivePanel") &&
+    dailyDriverPageSource.includes("Zahájit přestávku") &&
+    dailyDriverPageSource.includes("collectionDailyRouteBreakConfirmPanel"),
+  "Aktivní přestávka musí nahradit pracovní tok a zahájení musí mít samostatné potvrzení."
+);
+assert.ok(
+  appSource.includes('event?.eventType === "break" && ["start", "end"].includes(event?.payload?.phase)') &&
+    appSource.includes('payload: { phase: "start" }') &&
+    appSource.includes('phase: "end"'),
+  "Stav přestávky se musí obnovovat z auditních eventů start/end."
+);
 
 for (const marker of [
   "KSO Svozový autopilot – provozní mantra",

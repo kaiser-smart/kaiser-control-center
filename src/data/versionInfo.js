@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Tablet řidiče: nepřehlédnutelná přestávka",
+    text: "Zahájená přestávka překryje pracovní akce výrazným stavem PŘESTÁVKA BĚŽÍ, ukazuje čas zahájení i živou délku a skončí až velkým vědomým tlačítkem. Začátek a konec zůstávají v auditu, takže se aktivní přestávka obnoví i po znovunačtení tabletu."
+  },
+  {
     title: "Datové schránky: interní read-only třídění",
     text: "Radimův interní pilot nahrazuje chatový autopilot třemi srozumitelnými frontami K vyřízení, Předané a Hotové nad aktuálními daty. Pilot pouze čte existující chráněné API, nic neodesílá ani nemění a ostatním uživatelům ponechává dosavadní rozhraní."
   },

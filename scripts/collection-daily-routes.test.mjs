@@ -314,11 +314,27 @@ await assert.rejects(
   (error) => error.code === "collection_daily_route_stops_pending"
 );
 
-await recordCollectionDailyRouteStopEvent(env, driver, created.run.id, created.stops[0].id, {
+const breakStarted = await recordCollectionDailyRouteStopEvent(env, driver, created.run.id, created.stops[0].id, {
   action: "break",
-  note: "Pauza 15 minut",
-  idempotencyKey: "break-route-1"
+  note: "Přestávka zahájena.",
+  payload: { phase: "start" },
+  idempotencyKey: "break-route-start-1"
 });
+assert.equal(breakStarted.events[0].eventType, "break");
+assert.equal(breakStarted.events[0].payload.phase, "start");
+const breakAfterRefresh = await getMyCollectionDailyRoute(env, driver);
+assert.equal(breakAfterRefresh.events[0].payload.phase, "start");
+const breakEnded = await recordCollectionDailyRouteStopEvent(env, driver, created.run.id, created.stops[0].id, {
+  action: "break",
+  note: "Přestávka ukončena po 15 min.",
+  payload: {
+    phase: "end",
+    startedAt: breakStarted.events[0].createdAt,
+    durationSeconds: 900
+  },
+  idempotencyKey: "break-route-end-1"
+});
+assert.equal(breakEnded.events[0].payload.phase, "end");
 const done = await recordCollectionDailyRouteStopEvent(env, driver, created.run.id, created.stops[0].id, {
   action: "done",
   idempotencyKey: "done-stop-1"

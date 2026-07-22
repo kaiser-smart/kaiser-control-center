@@ -41573,6 +41573,172 @@ body:has(.ds-plus-page) {
   cursor: pointer;
 }
 
+.collection-daily-driver-secondary-actions .collection-daily-driver-break-open {
+  min-height: 64px;
+  border-width: 2px;
+  border-color: #d89a13;
+  background: #fff4cf;
+  color: #674300;
+}
+
+.collection-daily-driver-break-confirm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.7fr);
+  gap: 14px;
+  align-items: stretch;
+  padding: 18px;
+  border: 3px solid #e0a018;
+  border-radius: 14px;
+  background: #fff7dc;
+  box-shadow: 0 16px 38px rgba(126, 82, 0, 0.16);
+}
+
+.collection-daily-driver-break-confirm > div {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.collection-daily-driver-break-confirm > div:last-child {
+  grid-template-columns: minmax(100px, 0.7fr) minmax(150px, 1fr);
+}
+
+.collection-daily-driver-break-confirm span {
+  color: #755000;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.collection-daily-driver-break-confirm strong {
+  color: #3c2a00;
+  font-size: 1.24rem;
+}
+
+.collection-daily-driver-break-confirm p {
+  margin: 0;
+  color: #674d13;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.collection-daily-driver-break-confirm button {
+  min-height: 68px;
+  padding: 12px;
+  border: 2px solid rgba(88, 60, 0, 0.28);
+  border-radius: 11px;
+  background: #fff;
+  color: #3c2a00;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.collection-daily-driver-break-confirm [data-collection-daily-driver-break-start] {
+  border-color: #3c2a00;
+  background: #f5b51b;
+}
+
+.collection-daily-driver-break-active {
+  position: fixed;
+  inset: 0;
+  z-index: 2400;
+  display: grid;
+  width: 100vw;
+  min-height: 100vh;
+  min-height: 100dvh;
+  gap: 20px;
+  place-items: center;
+  align-content: center;
+  padding: clamp(24px, 5vw, 54px);
+  overflow: hidden;
+  border: 5px solid #f5b51b;
+  border-radius: 0;
+  background:
+    radial-gradient(circle at 50% 10%, rgba(245, 181, 27, 0.24), transparent 38%),
+    linear-gradient(150deg, #211900, #080a08 66%);
+  color: #fff;
+  box-shadow: 0 24px 60px rgba(50, 34, 0, 0.34), inset 0 0 0 2px rgba(255, 231, 166, 0.22);
+  text-align: center;
+}
+
+.collection-daily-driver-break-active__icon {
+  display: grid;
+  width: 96px;
+  height: 96px;
+  place-items: center;
+  border: 4px solid #ffe19a;
+  border-radius: 50%;
+  background: #f5b51b;
+  color: #211900;
+  font-size: 3.2rem;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 0 0 10px rgba(245, 181, 27, 0.13);
+}
+
+.collection-daily-driver-break-active > div {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  min-width: 0;
+}
+
+.collection-daily-driver-break-active > div > span {
+  color: #ffd468;
+  font-size: clamp(1.15rem, 2.6vw, 1.8rem);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.collection-daily-driver-break-active > div > strong {
+  color: #fff;
+  font-size: clamp(4rem, 11vw, 8.2rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 0.95;
+  text-shadow: 0 4px 22px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+
+.collection-daily-driver-break-active p {
+  max-width: 680px;
+  margin: 8px 0 0;
+  color: #fff3cf;
+  font-size: clamp(1rem, 2vw, 1.3rem);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.collection-daily-driver-break-active button {
+  width: min(100%, 620px);
+  min-height: 104px;
+  padding: 18px 24px;
+  border: 4px solid #fff0bc;
+  border-radius: 16px;
+  background: #f5b51b;
+  color: #211900;
+  font: inherit;
+  font-size: clamp(1.2rem, 3vw, 1.75rem);
+  font-weight: 950;
+  letter-spacing: 0.025em;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
+  cursor: pointer;
+}
+
+.collection-daily-driver-break-active small {
+  max-width: 620px;
+  color: #d8cda9;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.collection-daily-driver-break-confirm button:disabled,
+.collection-daily-driver-break-active button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
 .collection-daily-driver-complete {
   display: grid;
   gap: 8px;
@@ -41679,6 +41845,15 @@ body:has(.ds-plus-page) {
 
   .collection-routes-test-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .collection-daily-driver-break-confirm {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-daily-driver-break-active {
+    min-height: 100vh;
+    min-height: 100dvh;
   }
 }
 
@@ -41897,6 +42072,37 @@ body:has(.ds-plus-page) {
 
   .collection-daily-driver-current {
     padding: 15px;
+  }
+
+  .collection-daily-driver-secondary-actions,
+  .collection-daily-driver-break-confirm > div:last-child {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-daily-driver-break-confirm {
+    padding: 14px;
+  }
+
+  .collection-daily-driver-break-active {
+    min-height: 100vh;
+    min-height: 100dvh;
+    gap: 16px;
+    padding: 22px 14px;
+    border-width: 4px;
+  }
+
+  .collection-daily-driver-break-active__icon {
+    width: 76px;
+    height: 76px;
+    font-size: 2.45rem;
+  }
+
+  .collection-daily-driver-break-active > div > strong {
+    font-size: clamp(3.4rem, 15vw, 5.7rem);
+  }
+
+  .collection-daily-driver-break-active button {
+    min-height: 92px;
   }
 
   .collection-routes-test-gps__sarlota {
