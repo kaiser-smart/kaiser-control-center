@@ -329,9 +329,9 @@ assert.ok(
   "Noční režim musí změnit i horní lištu a pracovní sloupec z modré na tmavě šedou."
 );
 assert.ok(
-  nightThemeSource.includes(".collection-daily-driver-choice-grid button {\n  border-color: #75bd25;\n  border-width: 4px;")
-    && nightThemeSource.includes(".collection-daily-driver-choice-grid button.is-selected {\n  box-shadow: inset 0 0 0 3px #75bd25"),
-  "Volby v nočních modálních oknech musí mít souvislou linku #75bd25 kolem celé volby a ještě silnější vybraný stav."
+  nightThemeSource.includes(".collection-daily-driver-choice-grid button {\n  border-color: #75bd25;\n  border-width: 2px;")
+    && nightThemeSource.includes(".collection-daily-driver-choice-grid button.is-selected {\n  border-width: 3px;"),
+  "Volby v nočních modálních oknech musí mít jemnou souvislou linku #75bd25 kolem celé volby a mírně silnější vybraný stav."
 );
 for (const legacyBlue of ["#090f19", "#111a28", "#182334", "#253044", "#142b4a", "#263247", "#202c3e", "#273347"]) {
   assert.ok(!nightThemeSource.includes(legacyBlue), `Noční režim stále obsahuje modrý odstín: ${legacyBlue}`);

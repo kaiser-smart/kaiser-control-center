@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.674"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.675"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Řidičský tablet: jemnější linka voleb",
+    text: "Zelený obvod pracovních voleb je nyní jemný 2 px; vybraná volba používá mírně silnější 3 px stav. Noční režim zůstává výchozí a funkce, API i data se nemění."
+  },
   {
     title: "Řidičský tablet: akcent na každé volbě v nočních oknech",
     text: "Noční režim je výchozí. Volby hlášení, výsypu a dalších řidičských kroků mají souvislou linku #75bd25 kolem celé plochy; vybraná volba je silnější. Plochy zůstávají tmavě šedé a funkce, API i data se nemění."
