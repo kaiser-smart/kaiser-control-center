@@ -29891,21 +29891,24 @@ function dataBoxPlusTriageAttachments(message) {
     <section class="ds-plus-detail-section">
       <h3>Přílohy</h3>
       <div class="ds-plus-attachments">
-        ${attachments.length ? attachments.map((attachment) => `
+        ${attachments.length ? attachments.map((attachment) => {
+          const previewLabel = dataBoxPlusAttachmentPreviewLabel(attachment);
+          return `
           <article class="ds-plus-attachment ds-plus-triage-attachment ds-plus-attachment--${escapeHtml(dataBoxPlusTone(attachment.storageStatus))}">
-            <button class="ds-plus-triage-attachment__main" type="button" ${attachment.openUrl ? `data-ds-plus-open-url="${escapeHtml(attachment.openUrl)}"` : "disabled"}>
+            <div class="ds-plus-triage-attachment__main">
               <strong>${escapeHtml(attachment.fileName || "Příloha")}</strong>
               <span>${escapeHtml([attachment.mimeType, attachment.size].filter(Boolean).join(" · ") || "Typ a velikost nejsou uvedené")}</span>
               <small>${escapeHtml([attachment.storageStatus, attachment.textExtractionStatus].filter(Boolean).join(" · ") || "Stav přílohy není uvedený")}</small>
-              <em>${attachment.openUrl ? "Otevřít náhled" : "Náhled není dostupný"}</em>
-            </button>
+            </div>
             <div class="ds-plus-triage-attachment__actions">
+              <button class="primary-action ds-plus-attachment-preview" type="button" ${attachment.openUrl ? `data-ds-plus-open-url="${escapeHtml(attachment.openUrl)}"` : "disabled"}>${escapeHtml(previewLabel)}</button>
               <button class="secondary-link" type="button" ${attachment.downloadUrl ? `data-ds-plus-open-url="${escapeHtml(attachment.downloadUrl)}"` : "disabled"}>Stáhnout</button>
             </div>
             ${attachment.errorReason ? `<p class="ds-plus-attachment-error">Přílohu se nepodařilo načíst.</p><details><summary>Zobrazit technický důvod</summary><p>${escapeHtml(attachment.errorReason)}</p></details>` : ""}
             ${attachment.extractedText ? `<details><summary>Zobrazit načtený text</summary><p>${escapeHtml(attachment.extractedText)}</p></details>` : ""}
           </article>
-        `).join("") : `<p class="ds-plus-empty">U zprávy nejsou dostupné žádné načtené přílohy.</p>`}
+        `;
+        }).join("") : `<p class="ds-plus-empty">U zprávy nejsou dostupné žádné načtené přílohy.</p>`}
       </div>
       ${attachments.length ? `<button class="secondary-link" type="button" data-ds-plus-download-all="${escapeHtml(message.id)}">Stáhnout všechny přílohy</button>` : ""}
     </section>
@@ -30554,6 +30557,14 @@ function dataBoxPlusTechnicalInfo(message) {
   `;
 }
 
+function dataBoxPlusAttachmentPreviewLabel(attachment = {}) {
+  const mimeType = String(attachment.mimeType || "").trim().toLowerCase().split(";", 1)[0];
+  const fileName = String(attachment.fileName || "").trim().toLowerCase();
+  return mimeType === "application/pdf" || fileName.endsWith(".pdf")
+    ? "Otevřít náhled"
+    : "Otevřít přílohu";
+}
+
 function dataBoxPlusAttachments(message) {
   const attachments = Array.isArray(message.attachments) ? message.attachments : [];
   return `
@@ -30567,7 +30578,7 @@ function dataBoxPlusAttachments(message) {
               <span>${escapeHtml(attachment.mimeType)} · ${escapeHtml(attachment.size)}</span>
             </div>
             <div class="ds-plus-attachment__actions">
-              ${dataBoxPlusActionButton({ label: "Otevřít přílohu", variant: "primary-action", attrs: attachment.openUrl ? `data-ds-plus-open-url="${escapeHtml(attachment.openUrl)}"` : `data-ds-plus-pilot-action="Otevřít přílohu"` })}
+              ${dataBoxPlusActionButton({ label: dataBoxPlusAttachmentPreviewLabel(attachment), variant: "primary-action ds-plus-attachment-preview", attrs: attachment.openUrl ? `data-ds-plus-open-url="${escapeHtml(attachment.openUrl)}"` : `data-ds-plus-pilot-action="${escapeHtml(dataBoxPlusAttachmentPreviewLabel(attachment))}"` })}
               ${dataBoxPlusActionButton({ label: "Stáhnout přílohu", attrs: attachment.downloadUrl ? `data-ds-plus-open-url="${escapeHtml(attachment.downloadUrl)}"` : `data-ds-plus-pilot-action="Stáhnout přílohu"` })}
               ${dataBoxPlusActionButton({ label: "Znovu načíst přílohu", attrs: `data-ds-plus-pilot-action="Znovu načíst přílohu"` })}
             </div>

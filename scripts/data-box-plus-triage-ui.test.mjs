@@ -21,6 +21,14 @@ const loaderSource = appSource.slice(
   appSource.indexOf("async function loadDataBoxPlusData(options = {})"),
   appSource.indexOf("function ensureDataBoxPlusData()")
 );
+const attachmentPreviewLabelSource = appSource.slice(
+  appSource.indexOf("function dataBoxPlusAttachmentPreviewLabel(attachment = {})"),
+  appSource.indexOf("function dataBoxPlusAttachments(message)")
+);
+const attachmentPreviewLabel = new Function(`
+  ${attachmentPreviewLabelSource}
+  return dataBoxPlusAttachmentPreviewLabel;
+`)();
 
 assert.doesNotMatch(runtimeConfigSource, /dataBoxPlusTriagePreview/);
 assert.doesNotMatch(buildSource, /DATA_BOX_PLUS_TRIAGE_PREVIEW|dataBoxPlusTriagePreview/);
@@ -70,7 +78,9 @@ assert.match(triageRenderSource, /dataBoxPlusComposeOverlay\(\)/);
 assert.doesNotMatch(triageRenderSource, /↻ Načíst zprávy|data-ds-plus-service-sync/);
 assert.match(triageRenderSource, /tabindex="-1" data-ds-plus-triage-close/);
 assert.match(triageRenderSource, /data-ds-plus-triage-close-button/);
-assert.match(triageRenderSource, /Otevřít náhled/);
+assert.match(triageRenderSource, /dataBoxPlusAttachmentPreviewLabel\(attachment\)/);
+assert.match(triageRenderSource, /class="primary-action ds-plus-attachment-preview"/);
+assert.doesNotMatch(triageRenderSource, /ds-plus-triage-attachment__main" type="button"/);
 assert.match(triageRenderSource, /Stáhnout/);
 assert.match(triageRenderSource, /Stáhnout všechny přílohy/);
 assert.match(triageRenderSource, /ds-plus-triage-row--history/);
@@ -93,6 +103,10 @@ assert.match(appSource, /event\.key === "Tab" && dataBoxPlusState\.triageSelecte
 assert.match(appSource, /\.ds-plus-triage-detail\[role='dialog'\]/);
 assert.doesNotMatch(triageClickSource, /apiJson\(|method:\s*"POST"|confirmDataBoxPlusRecommendation|runDataBoxPlusInstruction/);
 assert.match(loaderSource, /dataBoxPlusWorkingInboxActive\(\)[\s\S]*readDataBoxPlusTriageSnapshot\(apiJson\)/);
+assert.equal(attachmentPreviewLabel({ mimeType: "application/pdf", fileName: "dokument" }), "Otevřít náhled");
+assert.equal(attachmentPreviewLabel({ mimeType: "application/octet-stream", fileName: "SMLOUVA.PDF" }), "Otevřít náhled");
+assert.equal(attachmentPreviewLabel({ mimeType: "image/png", fileName: "foto.png" }), "Otevřít přílohu");
+assert.match(appSource, /variant: "primary-action ds-plus-attachment-preview"/);
 assert.match(triageModuleSource, /requestJson\("\/api\/data-box-plus\/status", \{ method: "GET" \}\)/);
 assert.match(triageModuleSource, /requestJson\("\/api\/data-box-plus\/messages\?limit=150", \{ method: "GET" \}\)/);
 assert.match(triageModuleSource, /requestJson\("\/api\/data-box-plus\/drafts\?status=all", \{ method: "GET" \}\)/);
@@ -105,6 +119,7 @@ assert.match(stylesSource, /\.ds-plus-triage-filters\s*\{/);
 assert.match(stylesSource, /\.ds-plus-triage-bulk\s*\{/);
 assert.match(stylesSource, /\.ds-plus-triage-detail-overlay\s*\{[\s\S]*justify-content: flex-end/);
 assert.match(stylesSource, /\.ds-plus-triage-detail__footer\s*\{[\s\S]*position: sticky/);
+assert.match(stylesSource, /\.ds-plus-attachment-preview\s*\{[\s\S]*min-height: 40px/);
 assert.match(stylesSource, /@media \(max-width: 768px\)[\s\S]*\.ds-plus-triage-row/);
 assert.match(stylesSource, /@media \(max-width: 520px\)[\s\S]*\.ds-plus-triage-mailboxes/);
 assert.match(stylesSource, /body:has\(\.ds-plus-triage-production\) \.ai-assistant-layer[\s\S]*display: none !important/);

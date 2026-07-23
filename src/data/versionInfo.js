@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.696"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.697"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky: viditelný náhled PDF příloh",
+    text: "Každá PDF příloha má v detailu zprávy samostatné výrazné tlačítko Otevřít náhled. Tlačítko zůstává dobře viditelné na desktopu, tabletu i mobilu a nesplývá s názvem souboru."
+  },
   {
     title: "Datové schránky: rychlé inkrementální načítání",
     text: "Hodinový cloudový běh znovu nestahuje přílohy, které už mají potvrzené uložení v R2. Nedokončený audit se při dalším běhu označí jako selhání místo trvalého stavu Probíhá."

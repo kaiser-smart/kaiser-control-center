@@ -1352,23 +1352,20 @@ body:has(.ds-plus-triage-production) .ai-assistant-layer {
   display: grid;
   min-width: 0;
   gap: 4px;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.ds-plus-triage-attachment__main em {
-  margin-top: 4px;
-  color: #245d36;
-  font-style: normal;
-  font-weight: 900;
 }
 
 .ds-plus-triage-attachment__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   align-self: center;
+  flex-wrap: wrap;
+}
+
+.ds-plus-attachment-preview {
+  min-height: 40px;
+  white-space: nowrap;
+  font-weight: 800;
 }
 
 .ds-plus-compose-error {
@@ -1659,6 +1656,12 @@ body:has(.ds-plus-triage-production) .ai-assistant-layer {
 
   .ds-plus-triage-attachment {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ds-plus-triage-attachment__actions,
+  .ds-plus-triage-attachment__actions button,
+  .ds-plus-attachment-preview {
+    width: 100%;
   }
 
   .ds-plus-compose-review dl {
