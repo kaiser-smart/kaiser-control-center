@@ -1093,6 +1093,34 @@ async function syncAttachments(db, env, account, mailboxId, message, messageId) 
     return { status: "Dostupná", downloaded: 0, problem: false, extractedText: "" };
   }
 
+  const storedRows = await db
+    .prepare(`
+      SELECT storage_key, storage_status, extracted_text
+      FROM data_box_plus_attachments
+      WHERE message_id = ?
+      ORDER BY id
+    `)
+    .bind(messageId)
+    .all();
+  const storedAttachments = Array.isArray(storedRows?.results) ? storedRows.results : [];
+  const fullyStored = storedAttachments.length > 0 && storedAttachments.every((attachment) => (
+    cleanString(attachment.storage_key)
+    && cleanString(attachment.storage_status) === "Stažená"
+  ));
+  if (fullyStored) {
+    const extractedText = storedAttachments
+      .map((attachment) => cleanString(attachment.extracted_text))
+      .filter(Boolean)
+      .join("\n\n")
+      .slice(0, 12000);
+    return {
+      status: extractedText ? "Text načtený" : "Stažená",
+      downloaded: 0,
+      problem: false,
+      extractedText
+    };
+  }
+
   try {
     const detail = await fetchDataBoxMessageAttachments(env, account, message);
     let downloaded = 0;
@@ -1306,6 +1334,30 @@ async function createSyncRun(db, startedAt, triggerType, currentUser) {
   return id;
 }
 
+async function closeStaleSyncRuns(db, startedAt) {
+  const startedAtMs = Date.parse(startedAt);
+  if (!Number.isFinite(startedAtMs)) return;
+  const staleBefore = new Date(startedAtMs - 45 * 60 * 1000).toISOString();
+  await db
+    .prepare(`
+      UPDATE data_box_plus_sync_runs
+      SET finished_at = ?,
+          status = 'failed',
+          errors = ?
+      WHERE status = 'running'
+        AND started_at < ?
+    `)
+    .bind(
+      startedAt,
+      JSON.stringify([{
+        code: "data_box_plus_sync_stale",
+        message: "Předchozí synchronizace nedokončila audit v bezpečném časovém limitu."
+      }]),
+      staleBefore
+    )
+    .run();
+}
+
 async function finishSyncRun(db, id, patch) {
   await db
     .prepare(`
@@ -1454,6 +1506,7 @@ export async function runDataBoxPlusSync(env, currentUser = null, options = {}) 
   const db = dataBoxPlusDatabase(env, true);
   const startedAt = new Date().toISOString();
   const triggerType = cleanString(options.triggerType || "background");
+  await closeStaleSyncRuns(db, startedAt);
   const syncRunId = await createSyncRun(db, startedAt, triggerType, currentUser);
   const errors = [];
   let mailboxCount = 0;

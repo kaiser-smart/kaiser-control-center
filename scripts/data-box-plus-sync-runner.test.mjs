@@ -11,6 +11,10 @@ assert.equal(isDataBoxDue(Date.parse("2026-07-23T08:59:59.000Z")), false);
 assert.match(wranglerSource, /crons = \["0 \* \* \* \*"\]/);
 assert.match(storeSource, /intervalMinutes: 60/);
 assert.match(storeSource, /Automatické načítání běží serverově každou celou hodinu/);
+assert.match(storeSource, /const fullyStored = storedAttachments\.length > 0/);
+assert.match(storeSource, /cleanString\(attachment\.storage_key\)/);
+assert.match(storeSource, /data_box_plus_sync_stale/);
+assert.match(storeSource, /45 \* 60 \* 1000/);
 
 const originalFetch = globalThis.fetch;
 const calls = [];
