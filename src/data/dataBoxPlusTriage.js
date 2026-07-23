@@ -14,13 +14,14 @@ export const DATA_BOX_PLUS_TRIAGE_MAILBOXES = [
   { id: "dbp-kaiser-holding", name: "Kaiser holding", company: "Kaiser holding", slot: 7 }
 ];
 
-export const DATA_BOX_PLUS_TRIAGE_DERIVATION_VERSION = "production-triage-v1";
+export const DATA_BOX_PLUS_TRIAGE_DERIVATION_VERSION = "production-workflow-v2";
 
 export async function readDataBoxPlusTriageSnapshot(requestJson) {
   if (typeof requestJson !== "function") throw new TypeError("requestJson must be a function");
-  const [statusPayload, messagesResult] = await Promise.all([
+  const [statusPayload, messagesResult, draftsResult] = await Promise.all([
     requestJson("/api/data-box-plus/status", { method: "GET" }),
-    requestJson("/api/data-box-plus/messages?limit=150", { method: "GET" })
+    requestJson("/api/data-box-plus/messages?limit=150", { method: "GET" }),
+    requestJson("/api/data-box-plus/drafts?status=all", { method: "GET" })
   ]);
   const mailboxes = Array.isArray(statusPayload?.mailboxes) && statusPayload.mailboxes.length
     ? statusPayload.mailboxes
@@ -35,7 +36,8 @@ export async function readDataBoxPlusTriageSnapshot(requestJson) {
     messagesResult,
     { recommendations: [] },
     { rules: [] },
-    { syncRuns: [] }
+    { syncRuns: [] },
+    draftsResult
   ];
 }
 
@@ -267,7 +269,7 @@ export function dataBoxPlusTriageItem(message = {}, options = {}) {
     sourceStatus: String(message.status || ""),
     assignedTo: String(message.assignedTo || ""),
     attachmentStatus: String(message.attachmentStatus || ""),
-    attachmentCount: Array.isArray(message.attachments) ? message.attachments.length : 0,
+    attachmentCount: Number(message.attachmentCount || 0) || (Array.isArray(message.attachments) ? message.attachments.length : 0),
     isUnread: includesAny(normalizeText([message.readStatus, message.status].filter(Boolean).join(" ")), ["neprect", "nova", "new", "unread"]),
     target: dataBoxPlusTriageTarget(message),
     queueId,
@@ -276,8 +278,8 @@ export function dataBoxPlusTriageItem(message = {}, options = {}) {
     microstateLabel: presentation.label,
     actionLabel: presentation.actionLabel,
     tone: presentation.tone,
-    readOnly: true,
-    persisted: false,
+    readOnly: false,
+    persisted: true,
     derivationVersion: DATA_BOX_PLUS_TRIAGE_DERIVATION_VERSION,
     message
   };

@@ -107,11 +107,19 @@ function activeFlag(value, fallback = true) {
 }
 
 function bytesToBase64(bytes) {
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
+  const encoded = [];
+  const chunkSize = 24_576;
+  for (let offset = 0; offset < bytes.byteLength; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, Math.min(offset + chunkSize, bytes.byteLength));
+    let binary = "";
+    for (const byte of chunk) binary += String.fromCharCode(byte);
+    encoded.push(btoa(binary));
   }
-  return btoa(binary);
+  return encoded.join("");
+}
+
+export function dataBoxPlusBytesToBase64ForTest(bytes) {
+  return bytesToBase64(bytes);
 }
 
 function base64ToBytes(value) {
@@ -158,7 +166,7 @@ function sendReadiness(env = {}) {
   const openAi = dataBoxPlusOpenAiStatus(env);
   const emailReady = emailProvider === "sendgrid" && Boolean(emailIdentity.fromEmail && cleanString(env.SENDGRID_API_KEY || env.EMAIL_API_KEY));
   const dataBoxReady = Boolean(
-    cleanString(env.DATA_BOX_REPLY_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT)
+    cleanString(env.DATA_BOX_SEND_MESSAGE_ENDPOINT || env.DATA_BOX_REPLY_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT)
     && cleanString(env.DATA_BOX_REPLY_API_KEY || env.KNF_DATA_BOX_REPLY_API_KEY)
   );
   const smsReady = smsConfig.mode === "live" && smsConfig.twilioConfigured;
@@ -175,8 +183,8 @@ function sendReadiness(env = {}) {
       enabled: dataBoxReady,
       label: dataBoxReady ? "zapnuto" : "čeká na DS bránu",
       text: dataBoxReady
-        ? "Serverová DS brána je dostupná. Potvrzená odpověď na přijatou zprávu se odešle přes backend a zapíše do historie."
-        : "Chybí DATA_BOX_REPLY_ENDPOINT a DATA_BOX_REPLY_API_KEY. Bez nich DSP datovou zprávu neodešle."
+        ? "Serverová DS brána je dostupná. Nová zpráva i potvrzená odpověď se odesílají přes backend s idempotencí a auditem."
+        : "Chybí DATA_BOX_SEND_MESSAGE_ENDPOINT nebo kompatibilní DS endpoint a DATA_BOX_REPLY_API_KEY. Bez nich DSP datovou zprávu neodešle."
     },
     email: {
       enabled: emailReady,
@@ -853,6 +861,41 @@ function rowToActionLog(row) {
   };
 }
 
+function rowToDraftAttachment(row) {
+  if (!row) return null;
+  const sizeBytes = numberValue(row.size_bytes);
+  return {
+    id: cleanString(row.id),
+    draftId: cleanString(row.draft_id),
+    fileName: cleanString(row.file_name),
+    mimeType: cleanString(row.mime_type || "application/octet-stream"),
+    sizeBytes,
+    size: sizeBytes ? `${Math.round(sizeBytes / 1024)} kB` : "0 kB",
+    createdAt: cleanString(row.created_at)
+  };
+}
+
+function rowToDraft(row, attachments = []) {
+  if (!row) return null;
+  return {
+    id: cleanString(row.id),
+    mailboxId: cleanString(row.mailbox_id),
+    ownerUserId: cleanString(row.owner_user_id),
+    recipientBoxId: cleanString(row.recipient_box_id),
+    recipientName: cleanString(row.recipient_name),
+    subject: cleanString(row.subject),
+    body: cleanString(row.body),
+    status: cleanString(row.status || "draft"),
+    idempotencyKey: cleanString(row.idempotency_key),
+    providerMessageId: cleanString(row.provider_message_id),
+    errorMessage: cleanString(row.error_message),
+    createdAt: cleanString(row.created_at),
+    updatedAt: cleanString(row.updated_at),
+    sentAt: cleanString(row.sent_at),
+    attachments: Array.isArray(attachments) ? attachments.filter(Boolean) : []
+  };
+}
+
 function rowToMessage(row, attachments = [], actionLogs = []) {
   if (!row) return null;
   const facts = safeJsonParse(row.facts_json, []);
@@ -884,6 +927,7 @@ function rowToMessage(row, attachments = [], actionLogs = []) {
     summary: cleanString(row.summary),
     summarySource: cleanString(row.summary_source),
     facts,
+    attachmentCount: numberValue(row.attachment_count, Array.isArray(attachments) ? attachments.length : 0),
     attachments,
     history: Array.isArray(actionLogs) ? actionLogs.filter(Boolean) : []
   };
@@ -1888,19 +1932,96 @@ export async function updateDataBoxPlusMailboxPassword(env, mailboxId, currentUs
 }
 
 export async function listDataBoxPlusMessages(env, filters = {}) {
+  const page = await listDataBoxPlusMessagesPage(env, filters);
+  return page.messages;
+}
+
+export async function listDataBoxPlusMessagesPage(env, filters = {}) {
   const db = dataBoxPlusDatabase(env, true);
-  const limit = limitValue(filters.limit);
+  const limit = limitValue(filters.limit, 20, 200);
+  const page = Math.max(1, numberValue(filters.page, 1));
+  const offset = (page - 1) * limit;
+  const where = [];
+  const bindings = [];
+  const add = (sql, value) => {
+    where.push(sql);
+    bindings.push(value);
+  };
+  const mailboxId = cleanString(filters.mailboxId);
+  const direction = cleanString(filters.direction).toLowerCase();
+  const status = cleanString(filters.status);
+  const sender = cleanString(filters.sender);
+  const query = cleanString(filters.query);
+  const dateFrom = cleanString(filters.dateFrom);
+  const dateTo = cleanString(filters.dateTo);
+  const due = cleanString(filters.due).toLowerCase();
+  const attachment = cleanString(filters.attachment).toLowerCase();
+  const archive = cleanString(filters.archive).toLowerCase();
+  const priority = cleanString(filters.priority);
+
+  if (mailboxId) add("m.mailbox_id = ?", mailboxId);
+  if (["received", "sent"].includes(direction)) add("m.direction = ?", direction);
+  if (status && status !== "all") add("m.status = ?", status);
+  if (priority && priority !== "all") add("m.priority = ?", priority);
+  if (sender) add("LOWER(COALESCE(m.sender_name, '')) LIKE ?", `%${sender.toLowerCase()}%`);
+  if (query) {
+    where.push(`(
+      LOWER(COALESCE(m.sender_name, '')) LIKE ?
+      OR LOWER(COALESCE(m.subject, '')) LIKE ?
+      OR LOWER(COALESCE(m.isds_message_id, '')) LIKE ?
+      OR LOWER(COALESCE(m.assigned_to, '')) LIKE ?
+    )`);
+    const needle = `%${query.toLowerCase()}%`;
+    bindings.push(needle, needle, needle, needle);
+  }
+  if (dateFrom) add("DATE(COALESCE(m.delivered_at, m.received_at, m.stored_at)) >= DATE(?)", dateFrom);
+  if (dateTo) add("DATE(COALESCE(m.delivered_at, m.received_at, m.stored_at)) <= DATE(?)", dateTo);
+  if (due === "overdue") where.push("m.due_date <> '' AND DATE(m.due_date) < DATE('now')");
+  if (due === "today") where.push("DATE(m.due_date) = DATE('now')");
+  if (due === "set") where.push("m.due_date <> ''");
+  if (due === "none") where.push("(m.due_date IS NULL OR m.due_date = '')");
+  if (attachment === "yes") where.push("EXISTS (SELECT 1 FROM data_box_plus_attachments a WHERE a.message_id = m.id)");
+  if (attachment === "no") where.push("NOT EXISTS (SELECT 1 FROM data_box_plus_attachments a WHERE a.message_id = m.id)");
+  if (archive === "archived") where.push("m.archive_status = 'archived'");
+  if (archive === "active") where.push("m.archive_status <> 'archived'");
+
+  const sortMap = {
+    date: "COALESCE(m.delivered_at, m.received_at, m.stored_at)",
+    priority: "CASE LOWER(m.priority) WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'vysoká' THEN 1 WHEN 'vysoke' THEN 1 ELSE 2 END",
+    due: "CASE WHEN m.due_date IS NULL OR m.due_date = '' THEN 1 ELSE 0 END, m.due_date",
+    sender: "LOWER(COALESCE(m.sender_name, ''))"
+  };
+  const sortSql = sortMap[cleanString(filters.sort).toLowerCase()] || sortMap.date;
+  const orderSql = cleanString(filters.order).toLowerCase() === "asc" ? "ASC" : "DESC";
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   try {
-    const result = await db
+    const [result, totalRow] = await Promise.all([
+      db
       .prepare(`
-        SELECT *
-        FROM data_box_plus_messages
-        ORDER BY COALESCE(delivered_at, received_at, stored_at) DESC, stored_at DESC
-        LIMIT ?
+        SELECT m.*,
+          (SELECT COUNT(*) FROM data_box_plus_attachments a WHERE a.message_id = m.id) AS attachment_count
+        FROM data_box_plus_messages m
+        ${whereSql}
+        ORDER BY ${sortSql} ${orderSql}, m.stored_at DESC
+        LIMIT ? OFFSET ?
       `)
-      .bind(limit)
-      .all();
-    return (result.results || []).map((row) => rowToMessage(row, []));
+      .bind(...bindings, limit, offset)
+      .all(),
+      db
+        .prepare(`SELECT COUNT(*) AS count FROM data_box_plus_messages m ${whereSql}`)
+        .bind(...bindings)
+        .first()
+    ]);
+    const total = numberValue(totalRow?.count);
+    return {
+      messages: (result.results || []).map((row) => rowToMessage(row, [])),
+      pagination: {
+        page,
+        pageSize: limit,
+        total,
+        pageCount: Math.max(1, Math.ceil(total / limit))
+      }
+    };
   } catch (error) {
     if (error instanceof DataBoxPlusStoreError) throw error;
     throw dbError(error);
@@ -2108,7 +2229,7 @@ export async function sendDataBoxPlusReply(env, messageId, payload = {}, current
     throw new DataBoxPlusStoreError("Chybí přesný text odpovědi přes datovou schránku.", 400, "data_box_plus_ds_body_missing");
   }
 
-  const endpoint = cleanString(env.DATA_BOX_REPLY_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT);
+  const endpoint = cleanString(env.DATA_BOX_SEND_MESSAGE_ENDPOINT || env.DATA_BOX_REPLY_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT);
   const apiKey = cleanString(env.DATA_BOX_REPLY_API_KEY || env.KNF_DATA_BOX_REPLY_API_KEY);
   const actor = actorName(currentUser);
   const actionId = idValue("dbp-action");
@@ -2211,6 +2332,534 @@ export async function sendDataBoxPlusReply(env, messageId, payload = {}, current
     auditWarning: auditWarnings.join(" "),
     notice: `Hotovo. Odpověď byla odeslána do datové schránky ${recipientDataBoxId}.`
   };
+}
+
+async function dataBoxPlusDraftAttachments(db, draftId) {
+  const result = await db
+    .prepare("SELECT * FROM data_box_plus_draft_attachments WHERE draft_id = ? ORDER BY created_at, file_name")
+    .bind(cleanString(draftId))
+    .all();
+  return (result.results || []).map(rowToDraftAttachment);
+}
+
+async function dataBoxPlusDraftRow(db, draftId, currentUser) {
+  const row = await db
+    .prepare("SELECT * FROM data_box_plus_drafts WHERE id = ? AND owner_user_id = ? LIMIT 1")
+    .bind(cleanString(draftId), userId(currentUser))
+    .first();
+  if (!row) {
+    throw new DataBoxPlusStoreError("Koncept nebyl nalezen.", 404, "data_box_plus_draft_not_found");
+  }
+  return row;
+}
+
+async function dataBoxPlusDraft(db, draftId, currentUser) {
+  const row = await dataBoxPlusDraftRow(db, draftId, currentUser);
+  return rowToDraft(row, await dataBoxPlusDraftAttachments(db, row.id));
+}
+
+function dataBoxPlusDraftInput(payload = {}, fallback = {}) {
+  const recipientBoxId = cleanString(payload.recipientBoxId ?? fallback.recipient_box_id).toLowerCase();
+  const subject = cleanString(payload.subject ?? fallback.subject);
+  const body = cleanString(payload.body ?? fallback.body);
+  if (recipientBoxId && !/^[a-z0-9]{7}$/.test(recipientBoxId)) {
+    throw new DataBoxPlusStoreError("ID datové schránky příjemce musí mít 7 znaků.", 400, "data_box_plus_recipient_invalid");
+  }
+  if (subject.length > 255) {
+    throw new DataBoxPlusStoreError("Předmět může mít nejvýše 255 znaků.", 400, "data_box_plus_subject_too_long");
+  }
+  if (body.length > 100000) {
+    throw new DataBoxPlusStoreError("Text zprávy je příliš dlouhý.", 400, "data_box_plus_body_too_long");
+  }
+  return {
+    mailboxId: cleanString(payload.mailboxId ?? fallback.mailbox_id),
+    recipientBoxId,
+    recipientName: cleanString(payload.recipientName ?? fallback.recipient_name).slice(0, 255),
+    subject,
+    body
+  };
+}
+
+export function dataBoxPlusDraftInputForTest(payload = {}, fallback = {}) {
+  return dataBoxPlusDraftInput(payload, fallback);
+}
+
+export async function listDataBoxPlusDrafts(env, currentUser, filters = {}) {
+  const db = dataBoxPlusDatabase(env, true);
+  const owner = userId(currentUser);
+  const mailboxId = cleanString(filters.mailboxId);
+  const status = cleanString(filters.status || "draft");
+  const where = ["owner_user_id = ?"];
+  const bindings = [owner];
+  if (mailboxId) {
+    where.push("mailbox_id = ?");
+    bindings.push(mailboxId);
+  }
+  if (status !== "all") {
+    where.push(status === "open" ? "status IN ('draft', 'failed')" : "status = ?");
+    if (status !== "open") bindings.push(status);
+  }
+  try {
+    const result = await db
+      .prepare(`SELECT * FROM data_box_plus_drafts WHERE ${where.join(" AND ")} ORDER BY updated_at DESC LIMIT 100`)
+      .bind(...bindings)
+      .all();
+    const drafts = [];
+    for (const row of result.results || []) {
+      drafts.push(rowToDraft(row, await dataBoxPlusDraftAttachments(db, row.id)));
+    }
+    return drafts;
+  } catch (error) {
+    if (error instanceof DataBoxPlusStoreError) throw error;
+    throw dbError(error);
+  }
+}
+
+export async function saveDataBoxPlusDraft(env, currentUser, payload = {}) {
+  const db = dataBoxPlusDatabase(env, true);
+  const owner = userId(currentUser);
+  if (!owner) throw new DataBoxPlusStoreError("Chybí identita autora konceptu.", 401, "data_box_plus_draft_owner_missing");
+  const draftId = cleanString(payload.id);
+  try {
+    if (draftId) {
+      const existing = await dataBoxPlusDraftRow(db, draftId, currentUser);
+      if (!["draft", "failed"].includes(cleanString(existing.status))) {
+        throw new DataBoxPlusStoreError("Odeslaný nebo právě odesílaný koncept už nelze změnit.", 409, "data_box_plus_draft_locked");
+      }
+      const input = dataBoxPlusDraftInput(payload, existing);
+      if (!input.mailboxId) throw new DataBoxPlusStoreError("Vyber odesílající schránku.", 400, "data_box_plus_mailbox_missing");
+      const mailbox = await db.prepare("SELECT id FROM data_box_plus_mailboxes WHERE id = ? LIMIT 1").bind(input.mailboxId).first();
+      if (!mailbox) throw new DataBoxPlusStoreError("Odesílající schránka nebyla nalezena.", 404, "data_box_plus_mailbox_not_found");
+      await db.prepare(`
+        UPDATE data_box_plus_drafts
+        SET mailbox_id = ?, recipient_box_id = ?, recipient_name = ?, subject = ?, body = ?,
+            status = 'draft', error_message = NULL, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND owner_user_id = ?
+      `).bind(
+        input.mailboxId,
+        input.recipientBoxId,
+        input.recipientName,
+        input.subject,
+        input.body,
+        draftId,
+        owner
+      ).run();
+      return dataBoxPlusDraft(db, draftId, currentUser);
+    }
+
+    const input = dataBoxPlusDraftInput(payload);
+    if (!input.mailboxId) throw new DataBoxPlusStoreError("Vyber odesílající schránku.", 400, "data_box_plus_mailbox_missing");
+    const mailbox = await db.prepare("SELECT id FROM data_box_plus_mailboxes WHERE id = ? LIMIT 1").bind(input.mailboxId).first();
+    if (!mailbox) throw new DataBoxPlusStoreError("Odesílající schránka nebyla nalezena.", 404, "data_box_plus_mailbox_not_found");
+    const id = idValue("dbp-draft");
+    await db.prepare(`
+      INSERT INTO data_box_plus_drafts (
+        id, mailbox_id, owner_user_id, recipient_box_id, recipient_name, subject, body,
+        status, idempotency_key, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)
+    `).bind(
+      id,
+      input.mailboxId,
+      owner,
+      input.recipientBoxId,
+      input.recipientName,
+      input.subject,
+      input.body,
+      idValue("dbp-send"),
+      new Date().toISOString(),
+      new Date().toISOString()
+    ).run();
+    return dataBoxPlusDraft(db, id, currentUser);
+  } catch (error) {
+    if (error instanceof DataBoxPlusStoreError) throw error;
+    throw dbError(error);
+  }
+}
+
+export async function deleteDataBoxPlusDraft(env, draftId, currentUser) {
+  const db = dataBoxPlusDatabase(env, true);
+  const bucket = dataBoxPlusDocumentsBucket(env);
+  const row = await dataBoxPlusDraftRow(db, draftId, currentUser);
+  if (!["draft", "failed"].includes(cleanString(row.status))) {
+    throw new DataBoxPlusStoreError("Tento koncept už nelze smazat.", 409, "data_box_plus_draft_locked");
+  }
+  const attachments = await db
+    .prepare("SELECT storage_key FROM data_box_plus_draft_attachments WHERE draft_id = ?")
+    .bind(row.id)
+    .all();
+  if (bucket) {
+    for (const attachment of attachments.results || []) {
+      if (attachment.storage_key) await bucket.delete(attachment.storage_key).catch(() => {});
+    }
+  }
+  await db.prepare("DELETE FROM data_box_plus_draft_attachments WHERE draft_id = ?").bind(row.id).run();
+  await db.prepare("DELETE FROM data_box_plus_drafts WHERE id = ? AND owner_user_id = ?").bind(row.id, userId(currentUser)).run();
+  return { status: "deleted", draftId: row.id };
+}
+
+export async function addDataBoxPlusDraftAttachment(env, draftId, currentUser, file = {}) {
+  const db = dataBoxPlusDatabase(env, true);
+  const bucket = dataBoxPlusDocumentsBucket(env);
+  if (!bucket) throw new DataBoxPlusStoreError("Úložiště příloh není dostupné.", 503, "data_box_plus_storage_missing");
+  const row = await dataBoxPlusDraftRow(db, draftId, currentUser);
+  if (!["draft", "failed"].includes(cleanString(row.status))) {
+    throw new DataBoxPlusStoreError("K tomuto konceptu už nelze přidat přílohu.", 409, "data_box_plus_draft_locked");
+  }
+  const bytes = file.bytes instanceof Uint8Array ? file.bytes : new Uint8Array(file.bytes || []);
+  if (!bytes.byteLength) throw new DataBoxPlusStoreError("Vyber neprázdnou přílohu.", 400, "data_box_plus_attachment_empty");
+  if (bytes.byteLength > 20 * 1024 * 1024) {
+    throw new DataBoxPlusStoreError("Jedna příloha může mít nejvýše 20 MB.", 400, "data_box_plus_attachment_too_large");
+  }
+  const sizeRow = await db
+    .prepare("SELECT COALESCE(SUM(size_bytes), 0) AS size_bytes, COUNT(*) AS count FROM data_box_plus_draft_attachments WHERE draft_id = ?")
+    .bind(row.id)
+    .first();
+  if (numberValue(sizeRow?.count) >= 20 || numberValue(sizeRow?.size_bytes) + bytes.byteLength > 50 * 1024 * 1024) {
+    throw new DataBoxPlusStoreError("Koncept může mít nejvýše 20 příloh a celkem 50 MB.", 400, "data_box_plus_attachments_limit");
+  }
+  const attachmentIdValue = idValue("dbp-draft-attachment");
+  const fileName = safeFilename(file.fileName, "priloha");
+  const storageKey = `data-box-plus/drafts/${encodeURIComponent(userId(currentUser))}/${encodeURIComponent(row.id)}/${encodeURIComponent(attachmentIdValue)}-${encodeURIComponent(fileName)}`;
+  const mimeType = cleanString(file.mimeType || "application/octet-stream");
+  await bucket.put(storageKey, bytes, { httpMetadata: { contentType: mimeType } });
+  try {
+    await db.prepare(`
+      INSERT INTO data_box_plus_draft_attachments (
+        id, draft_id, file_name, mime_type, size_bytes, storage_key, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(attachmentIdValue, row.id, fileName, mimeType, bytes.byteLength, storageKey, new Date().toISOString()).run();
+  } catch (error) {
+    await bucket.delete(storageKey).catch(() => {});
+    throw error;
+  }
+  return dataBoxPlusDraft(db, row.id, currentUser);
+}
+
+export async function deleteDataBoxPlusDraftAttachment(env, draftId, attachmentIdValue, currentUser) {
+  const db = dataBoxPlusDatabase(env, true);
+  const bucket = dataBoxPlusDocumentsBucket(env);
+  const draftRow = await dataBoxPlusDraftRow(db, draftId, currentUser);
+  if (!["draft", "failed"].includes(cleanString(draftRow.status))) {
+    throw new DataBoxPlusStoreError("Přílohu z tohoto konceptu už nelze odebrat.", 409, "data_box_plus_draft_locked");
+  }
+  const row = await db
+    .prepare("SELECT * FROM data_box_plus_draft_attachments WHERE id = ? AND draft_id = ? LIMIT 1")
+    .bind(cleanString(attachmentIdValue), draftRow.id)
+    .first();
+  if (!row) throw new DataBoxPlusStoreError("Příloha konceptu nebyla nalezena.", 404, "data_box_plus_attachment_not_found");
+  if (bucket && row.storage_key) await bucket.delete(row.storage_key).catch(() => {});
+  await db.prepare("DELETE FROM data_box_plus_draft_attachments WHERE id = ? AND draft_id = ?").bind(row.id, draftRow.id).run();
+  return dataBoxPlusDraft(db, draftRow.id, currentUser);
+}
+
+async function dataBoxPlusRequestHash(payload) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(payload)));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export async function sendDataBoxPlusDraft(env, draftId, payload = {}, currentUser = {}) {
+  if (payload.confirmed !== true) {
+    throw new DataBoxPlusStoreError("Odeslání datové zprávy vyžaduje finální potvrzení.", 409, "data_box_plus_ds_confirmation_required");
+  }
+  const readiness = sendReadiness(env);
+  if (!readiness.dataBox.enabled) {
+    throw new DataBoxPlusStoreError(readiness.dataBox.text, 503, "data_box_plus_ds_sender_missing");
+  }
+  const db = dataBoxPlusDatabase(env, true);
+  const bucket = dataBoxPlusDocumentsBucket(env);
+  const row = await dataBoxPlusDraftRow(db, draftId, currentUser);
+  const draft = rowToDraft(row, await dataBoxPlusDraftAttachments(db, row.id));
+  if (draft.status === "sent") {
+    return { status: "sent", duplicate: true, draft, providerMessageId: draft.providerMessageId };
+  }
+  if (["sending", "unknown"].includes(draft.status)) {
+    throw new DataBoxPlusStoreError(
+      draft.status === "unknown"
+        ? "Výsledek předchozího odeslání není potvrzený. Další odeslání je zablokované proti duplicitě."
+        : "Tento koncept se právě odesílá.",
+      409,
+      draft.status === "unknown" ? "data_box_plus_send_result_unknown" : "data_box_plus_send_in_progress"
+    );
+  }
+  if (!draft.recipientBoxId || !draft.subject || !draft.body) {
+    throw new DataBoxPlusStoreError("Doplň příjemce, předmět a text zprávy.", 400, "data_box_plus_draft_incomplete");
+  }
+  const mailbox = await db.prepare("SELECT * FROM data_box_plus_mailboxes WHERE id = ? LIMIT 1").bind(draft.mailboxId).first();
+  if (!mailbox) throw new DataBoxPlusStoreError("Odesílající schránka nebyla nalezena.", 404, "data_box_plus_mailbox_not_found");
+  const providerAttachments = [];
+  for (const attachment of draft.attachments) {
+    if (!bucket) throw new DataBoxPlusStoreError("Úložiště příloh není dostupné.", 503, "data_box_plus_storage_missing");
+    const attachmentRow = await db
+      .prepare("SELECT storage_key FROM data_box_plus_draft_attachments WHERE id = ? AND draft_id = ? LIMIT 1")
+      .bind(attachment.id, draft.id)
+      .first();
+    const object = attachmentRow?.storage_key ? await bucket.get(attachmentRow.storage_key) : null;
+    if (!object) throw new DataBoxPlusStoreError(`Příloha ${attachment.fileName} není dostupná.`, 409, "data_box_plus_attachment_object_missing");
+    providerAttachments.push({
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType,
+      contentBase64: bytesToBase64(new Uint8Array(await object.arrayBuffer()))
+    });
+  }
+  const requestPayload = {
+    sourceMailboxId: draft.mailboxId,
+    sourceMailboxIsdsId: cleanString(mailbox.isds_id),
+    recipientDataBoxId: draft.recipientBoxId,
+    recipientName: draft.recipientName,
+    subject: draft.subject,
+    body: draft.body,
+    attachments: providerAttachments,
+    idempotencyKey: draft.idempotencyKey
+  };
+  const requestHash = await dataBoxPlusRequestHash(requestPayload);
+  const existingJob = await db.prepare("SELECT * FROM data_box_plus_send_jobs WHERE draft_id = ? LIMIT 1").bind(draft.id).first();
+  if (existingJob?.status === "sent") {
+    return { status: "sent", duplicate: true, draft, providerMessageId: cleanString(existingJob.provider_message_id) };
+  }
+  if (existingJob && cleanString(existingJob.request_hash) !== requestHash) {
+    throw new DataBoxPlusStoreError("Obsah konceptu se po přípravě odeslání změnil.", 409, "data_box_plus_send_payload_changed");
+  }
+  const jobId = cleanString(existingJob?.id) || idValue("dbp-send-job");
+  if (!existingJob) {
+    await db.prepare(`
+      INSERT INTO data_box_plus_send_jobs (
+        id, draft_id, idempotency_key, request_hash, status, created_at
+      ) VALUES (?, ?, ?, ?, 'prepared', ?)
+    `).bind(jobId, draft.id, draft.idempotencyKey, requestHash, new Date().toISOString()).run();
+  }
+  await db.prepare("UPDATE data_box_plus_send_jobs SET status = 'sending', started_at = ?, error_message = NULL WHERE id = ?")
+    .bind(new Date().toISOString(), jobId)
+    .run();
+  await db.prepare("UPDATE data_box_plus_drafts SET status = 'sending', error_message = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    .bind(draft.id)
+    .run();
+
+  const endpoint = cleanString(env.DATA_BOX_SEND_MESSAGE_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.DATA_BOX_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT);
+  const apiKey = cleanString(env.DATA_BOX_REPLY_API_KEY || env.KNF_DATA_BOX_REPLY_API_KEY);
+  let response;
+  let result = {};
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": draft.idempotencyKey
+      },
+      body: JSON.stringify(requestPayload)
+    });
+    result = await response.json().catch(() => ({}));
+  } catch (error) {
+    const message = cleanString(error?.message || "DS brána nevrátila výsledek.");
+    await db.prepare("UPDATE data_box_plus_send_jobs SET status = 'unknown', error_message = ?, finished_at = ? WHERE id = ?")
+      .bind(message, new Date().toISOString(), jobId)
+      .run();
+    await db.prepare("UPDATE data_box_plus_drafts SET status = 'unknown', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(message, draft.id)
+      .run();
+    throw new DataBoxPlusStoreError(
+      "DS brána nevrátila potvrzení. Opakované odeslání je zablokované proti duplicitě.",
+      502,
+      "data_box_plus_send_result_unknown"
+    );
+  }
+
+  const sent = Boolean(response.ok && result.success !== false);
+  const providerMessageId = cleanString(result.sentMessageId || result.messageId || result.dmID);
+  if (!sent) {
+    const message = cleanString(result.error || result.message || `HTTP ${response.status}`);
+    await db.prepare("UPDATE data_box_plus_send_jobs SET status = 'failed', response_json = ?, error_message = ?, finished_at = ? WHERE id = ?")
+      .bind(JSON.stringify(result).slice(0, 8000), message, new Date().toISOString(), jobId)
+      .run();
+    await db.prepare("UPDATE data_box_plus_drafts SET status = 'failed', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(message, draft.id)
+      .run();
+    throw new DataBoxPlusStoreError(message || "Datovou zprávu se nepodařilo odeslat.", 502, "data_box_plus_ds_send_failed");
+  }
+
+  const sentAt = new Date().toISOString();
+  await db.prepare("UPDATE data_box_plus_send_jobs SET status = 'sent', provider_message_id = ?, response_json = ?, finished_at = ? WHERE id = ?")
+    .bind(providerMessageId, JSON.stringify(result).slice(0, 8000), sentAt, jobId)
+    .run();
+  await db.prepare(`
+    UPDATE data_box_plus_drafts
+    SET status = 'sent', provider_message_id = ?, sent_at = ?, error_message = NULL, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).bind(providerMessageId, sentAt, draft.id).run();
+
+  const sentMessageId = messageRecordId(draft.mailboxId, "sent", providerMessageId || draft.idempotencyKey);
+  const auditWarnings = [];
+  try {
+    await db.prepare(`
+      INSERT OR IGNORE INTO data_box_plus_messages (
+        id, mailbox_id, isds_message_id, direction, sender_name, sender_box_id, recipient_name,
+        recipient_box_id, subject, delivered_at, received_at, message_type, status, risk_level,
+        priority, due_date, suggested_action, priority_reason, primary_action, assigned_to,
+        archive_status, attachment_status, facts_json, summary, summary_source, summary_loaded,
+        source, stored_at, updated_at
+      ) VALUES (?, ?, ?, 'sent', ?, ?, ?, ?, ?, ?, ?, 'Odeslaná zpráva', 'Odesláno datovou schránkou',
+        'Nízké', 'normal', '', 'Zpráva byla odeslána.', '', 'Detail historie', ?, 'active',
+        ?, '[]', ?, 'user', 1, 'isds-send', ?, ?)
+    `).bind(
+      sentMessageId,
+      draft.mailboxId,
+      providerMessageId || draft.idempotencyKey,
+      cleanString(mailbox.name || mailbox.company),
+      cleanString(mailbox.isds_id),
+      draft.recipientName || draft.recipientBoxId,
+      draft.recipientBoxId,
+      draft.subject,
+      sentAt,
+      sentAt,
+      draft.recipientBoxId,
+      draft.attachments.length ? "Dostupná" : "Bez příloh",
+      draft.body.slice(0, 2000),
+      sentAt,
+      sentAt
+    ).run();
+    for (const attachment of draft.attachments) {
+      const attachmentRow = await db.prepare("SELECT storage_key FROM data_box_plus_draft_attachments WHERE id = ? LIMIT 1").bind(attachment.id).first();
+      await db.prepare(`
+        INSERT OR IGNORE INTO data_box_plus_attachments (
+          id, message_id, file_name, mime_type, size_bytes, storage_key, storage_status,
+          text_extraction_status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, 'Stažená', 'Text se nezpracovává', ?, ?)
+      `).bind(
+        `${sentMessageId}-${attachment.id}`.slice(0, 180),
+        sentMessageId,
+        attachment.fileName,
+        attachment.mimeType,
+        attachment.sizeBytes,
+        cleanString(attachmentRow?.storage_key),
+        sentAt,
+        sentAt
+      ).run();
+    }
+    await db.prepare(`
+      INSERT INTO data_box_plus_action_log (
+        id, message_id, recommendation_id, actor, action_type, action_payload, created_at, result, audit_note
+      ) VALUES (?, ?, NULL, ?, 'Odeslání nové datové zprávy', ?, ?, 'sent', ?)
+    `).bind(
+      idValue("dbp-action"),
+      sentMessageId,
+      actorName(currentUser),
+      JSON.stringify({
+        draftId: draft.id,
+        recipientDataBoxId: draft.recipientBoxId,
+        subject: draft.subject,
+        attachmentCount: draft.attachments.length,
+        idempotencyKey: draft.idempotencyKey
+      }),
+      sentAt,
+      `Nová datová zpráva byla potvrzeně odeslána${providerMessageId ? ` jako ${providerMessageId}` : ""}.`
+    ).run();
+  } catch (error) {
+    auditWarnings.push("Zpráva byla odeslaná, ale lokální evidence není úplná.");
+    console.error("data_box_plus.new_message_audit_failed", { message: error?.message, draftId: draft.id, providerMessageId });
+  }
+  return {
+    apiStatus: "ready",
+    status: "sent",
+    providerMessageId,
+    draft: await dataBoxPlusDraft(db, draft.id, currentUser),
+    auditWarning: auditWarnings.join(" "),
+    notice: `Datová zpráva byla odeslána do schránky ${draft.recipientBoxId}.`
+  };
+}
+
+export async function applyDataBoxPlusBulkAction(env, currentUser, payload = {}) {
+  const db = dataBoxPlusDatabase(env, true);
+  const messageIds = [...new Set((Array.isArray(payload.messageIds) ? payload.messageIds : []).map(cleanString).filter(Boolean))].slice(0, 100);
+  const action = cleanString(payload.action).toLowerCase();
+  if (!messageIds.length) throw new DataBoxPlusStoreError("Vyber alespoň jednu zprávu.", 400, "data_box_plus_bulk_empty");
+  if (!["archive", "handoff", "complete", "due"].includes(action)) {
+    throw new DataBoxPlusStoreError("Tato hromadná akce není podporovaná.", 400, "data_box_plus_bulk_action_invalid");
+  }
+  const assignedTo = cleanString(payload.assignedTo).slice(0, 255);
+  const dueDate = cleanString(payload.dueDate);
+  if (action === "handoff" && !assignedTo) throw new DataBoxPlusStoreError("Doplň, komu zprávy předat.", 400, "data_box_plus_bulk_assignee_missing");
+  if (action === "due" && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+    throw new DataBoxPlusStoreError("Doplň platné datum lhůty.", 400, "data_box_plus_bulk_due_invalid");
+  }
+  const results = [];
+  for (const messageId of messageIds) {
+    try {
+      const row = await db.prepare("SELECT id, mailbox_id FROM data_box_plus_messages WHERE id = ? LIMIT 1").bind(messageId).first();
+      if (!row) throw new DataBoxPlusStoreError("Zpráva nebyla nalezena.", 404, "data_box_plus_message_not_found");
+      if (action === "archive") {
+        await db.prepare("UPDATE data_box_plus_messages SET status = 'Archivováno', archive_status = 'archived', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(messageId).run();
+      } else if (action === "complete") {
+        await db.prepare("UPDATE data_box_plus_messages SET status = 'Vyřešeno', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(messageId).run();
+      } else if (action === "handoff") {
+        await db.prepare("UPDATE data_box_plus_messages SET status = 'Předáno', assigned_to = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(assignedTo, messageId).run();
+      } else {
+        await db.prepare("UPDATE data_box_plus_messages SET due_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(dueDate, messageId).run();
+      }
+      await db.prepare(`
+        INSERT INTO data_box_plus_action_log (
+          id, message_id, recommendation_id, actor, action_type, action_payload, created_at, result, audit_note
+        ) VALUES (?, ?, NULL, ?, 'Hromadná akce', ?, ?, 'done', ?)
+      `).bind(
+        idValue("dbp-action"),
+        messageId,
+        actorName(currentUser),
+        JSON.stringify({ action, assignedTo, dueDate }),
+        new Date().toISOString(),
+        `Hromadná akce ${action} byla provedena a zapsána do historie.`
+      ).run();
+      await updateMailboxCounters(db, cleanString(row.mailbox_id));
+      results.push({ messageId, status: "done" });
+    } catch (error) {
+      results.push({ messageId, status: "failed", error: cleanString(error?.message || "Akce selhala.") });
+    }
+  }
+  return {
+    status: results.every((item) => item.status === "done") ? "done" : "partial",
+    results,
+    succeeded: results.filter((item) => item.status === "done").length,
+    failed: results.filter((item) => item.status === "failed").length
+  };
+}
+
+export async function getDataBoxPlusAttachmentArchiveFiles(env, messageIds = []) {
+  const db = dataBoxPlusDatabase(env, true);
+  const bucket = dataBoxPlusDocumentsBucket(env);
+  if (!bucket) throw new DataBoxPlusStoreError("Úložiště příloh není dostupné.", 503, "data_box_plus_storage_missing");
+  const ids = [...new Set((Array.isArray(messageIds) ? messageIds : []).map(cleanString).filter(Boolean))].slice(0, 50);
+  if (!ids.length) throw new DataBoxPlusStoreError("Vyber zprávu s přílohami.", 400, "data_box_plus_archive_empty");
+  const placeholders = ids.map(() => "?").join(", ");
+  const result = await db.prepare(`
+    SELECT a.*, m.subject
+    FROM data_box_plus_attachments a
+    JOIN data_box_plus_messages m ON m.id = a.message_id
+    WHERE a.message_id IN (${placeholders}) AND a.storage_key IS NOT NULL AND a.storage_key <> ''
+    ORDER BY m.delivered_at DESC, a.file_name
+  `).bind(...ids).all();
+  if (!(result.results || []).length) {
+    throw new DataBoxPlusStoreError("Vybrané zprávy nemají uložené přílohy.", 404, "data_box_plus_archive_no_files");
+  }
+  if ((result.results || []).length > 100) {
+    throw new DataBoxPlusStoreError("Najednou lze stáhnout nejvýše 100 příloh.", 400, "data_box_plus_archive_too_many");
+  }
+  const files = [];
+  let totalBytes = 0;
+  const usedNames = new Map();
+  for (const row of result.results || []) {
+    const object = await bucket.get(row.storage_key);
+    if (!object) continue;
+    const bytes = new Uint8Array(await object.arrayBuffer());
+    totalBytes += bytes.byteLength;
+    if (totalBytes > 100 * 1024 * 1024) {
+      throw new DataBoxPlusStoreError("ZIP může mít nejvýše 100 MB.", 400, "data_box_plus_archive_too_large");
+    }
+    const baseName = safeFilename(`${cleanString(row.subject).slice(0, 60)} - ${row.file_name}`, "priloha");
+    const duplicateIndex = numberValue(usedNames.get(baseName), 0);
+    usedNames.set(baseName, duplicateIndex + 1);
+    const fileName = duplicateIndex ? `${baseName}-${duplicateIndex + 1}` : baseName;
+    files.push({ fileName, bytes });
+  }
+  if (!files.length) throw new DataBoxPlusStoreError("Soubory příloh nebyly v úložišti nalezeny.", 404, "data_box_plus_archive_objects_missing");
+  return files;
 }
 
 export async function listDataBoxPlusRecommendations(env, filters = {}) {

@@ -78,7 +78,10 @@ assert.match(styles, /\.ds-plus-ai-prompt textarea\s*\{/);
 
 assert.match(composeSource, /data-ds-plus-compose-recipient/);
 assert.match(composeSource, /data-ds-plus-compose-form/);
-assert.match(appSource, /Návrh nové datové zprávy je připravený v tomto okně/);
+assert.match(appSource, /Koncept se průběžně ukládá do ostré aplikace/);
+assert.match(appSource, /Potvrdit a odeslat/);
+assert.match(appSource, /data-ds-plus-compose-attachment/);
+assert.match(appSource, /\/api\/data-box-plus\/drafts/);
 assert.match(styles, /\.ds-plus-command-pagination\s*\{/);
 assert.match(styles, /\.ds-plus-compose-footer\s*\{/);
 

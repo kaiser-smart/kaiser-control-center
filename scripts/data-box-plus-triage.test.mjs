@@ -67,19 +67,22 @@ assert.deepEqual(
 const readCalls = [];
 const requestSpy = async (path, options) => {
   readCalls.push({ path, options });
-  return path.endsWith("/status") ? { apiStatus: "ready", mailboxes: [] } : { messages: [] };
+  if (path.endsWith("/status")) return { apiStatus: "ready", mailboxes: [] };
+  if (path.includes("/drafts")) return { drafts: [] };
+  return { messages: [] };
 };
 const readResults = await readDataBoxPlusTriageSnapshot(requestSpy);
-assert.equal(readResults.length, 5);
+assert.equal(readResults.length, 6);
 assert.deepEqual(readCalls, [
   { path: "/api/data-box-plus/status", options: { method: "GET" } },
-  { path: "/api/data-box-plus/messages?limit=150", options: { method: "GET" } }
+  { path: "/api/data-box-plus/messages?limit=150", options: { method: "GET" } },
+  { path: "/api/data-box-plus/drafts?status=all", options: { method: "GET" } }
 ]);
 assert.deepEqual(readResults[0], {
   apiStatus: "ready",
   mailboxes: DATA_BOX_PLUS_TRIAGE_MAILBOXES
 });
-assert.deepEqual(readResults.slice(2), [{ recommendations: [] }, { rules: [] }, { syncRuns: [] }]);
+assert.deepEqual(readResults.slice(2), [{ recommendations: [] }, { rules: [] }, { syncRuns: [] }, { drafts: [] }]);
 
 readCalls.length = 0;
 await readDataBoxPlusTriageDetail(requestSpy, "message / 1");
@@ -103,8 +106,8 @@ assert.equal(dataBoxPlusTriageQueueId(subjectInjection), "todo");
 const item = dataBoxPlusTriageItem(message({ recommendedAction: "Předat účetní." }), { mailbox, today: TODAY });
 assert.equal(item.target, "Předat účetní");
 assert.equal(item.microstate, "suggested_route");
-assert.equal(item.readOnly, true);
-assert.equal(item.persisted, false);
+assert.equal(item.readOnly, false);
+assert.equal(item.persisted, true);
 
 const messages = [
   message({ id: "todo", status: "Nová" }),
@@ -152,7 +155,7 @@ assert.doesNotMatch(triageSource, /localStorage|sessionStorage|indexedDB/i);
 assert.match(triageSource, /requestJson\("\/api\/data-box-plus\/status", \{ method: "GET" \}\)/);
 assert.match(messagesEndpointSource, /listDataBoxPlusMessages/);
 assert.doesNotMatch(messagesEndpointSource, /ensureDataBoxPlusMailboxes|\.run\(/);
-assert.match(listMessagesStoreSource, /SELECT \*\s+FROM data_box_plus_messages/);
+assert.match(listMessagesStoreSource, /SELECT m\.\*[\s\S]*FROM data_box_plus_messages m/);
 assert.doesNotMatch(listMessagesStoreSource, /ensureDataBoxPlusMailboxes|\.run\(/);
 assert.match(detailStoreSource, /SELECT \* FROM data_box_plus_messages WHERE id = \?/);
 assert.doesNotMatch(detailStoreSource, /ensureDataBoxPlusMailboxes|\.run\(/);

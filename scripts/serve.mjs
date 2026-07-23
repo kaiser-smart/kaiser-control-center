@@ -280,6 +280,7 @@ const mockDriverTabletAudioClaims = new Set();
 let mockDataBoxSyncRuns = [];
 let mockDataBoxActions = [];
 let mockDataBoxPlusPendingAction = null;
+let mockDataBoxPlusDrafts = [];
 let mockDataBoxPlusMessage = {
   id: "mock-data-box-plus-message",
   mailboxId: "mock-data-box-plus-mailbox",
@@ -7999,7 +8000,13 @@ async function handleApi(request, response) {
         newCount: mockDataBoxPlusMessage.status === "Nová" ? 1 : 0,
         unresolvedCount: ["Archivováno", "Vyřešeno"].includes(mockDataBoxPlusMessage.status) ? 0 : 1
       },
-      sendReadiness: { ready: false },
+      sendReadiness: {
+        dataBox: {
+          enabled: false,
+          label: "lokální server bez DS brány",
+          text: "Lokální server skutečné zprávy do ISDS neodesílá."
+        }
+      },
       learning: { confirmedDecisions: mockDataBoxPlusMessage.history.length, learnedPatterns: 0 }
     });
     return true;
@@ -8016,6 +8023,92 @@ async function handleApi(request, response) {
       return true;
     }
     sendJson(response, 200, { apiStatus: "ready", messages: [mockDataBoxPlusMessage] });
+    return true;
+  }
+
+  if (url.pathname === "/api/data-box-plus/drafts" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    sendJson(response, 200, { apiStatus: "ready", drafts: mockDataBoxPlusDrafts });
+    return true;
+  }
+
+  if (url.pathname === "/api/data-box-plus/drafts" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    if (!canManageMockDataBox(user)) {
+      sendJson(response, 403, { error: "Nemate opravneni ulozit koncept." });
+      return true;
+    }
+    const body = await readJsonBody(request);
+    const now = new Date().toISOString();
+    const draft = {
+      id: `mock-draft-${randomUUID()}`,
+      mailboxId: body.mailboxId || "mock-data-box-plus-mailbox",
+      ownerUserId: user.id,
+      recipientBoxId: body.recipientBoxId || "",
+      recipientName: "",
+      subject: body.subject || "",
+      body: body.body || "",
+      status: "draft",
+      idempotencyKey: `mock-send-${randomUUID()}`,
+      createdAt: now,
+      updatedAt: now,
+      attachments: []
+    };
+    mockDataBoxPlusDrafts = [draft, ...mockDataBoxPlusDrafts];
+    sendJson(response, 201, { apiStatus: "ready", draft });
+    return true;
+  }
+
+  const dataBoxPlusDraftMatch = /^\/api\/data-box-plus\/drafts\/([^/]+)$/.exec(url.pathname);
+  if (dataBoxPlusDraftMatch && request.method === "PATCH") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    const id = decodeURIComponent(dataBoxPlusDraftMatch[1]);
+    const current = mockDataBoxPlusDrafts.find((draft) => draft.id === id);
+    if (!current) {
+      sendJson(response, 404, { error: "Koncept nebyl nalezen." });
+      return true;
+    }
+    const body = await readJsonBody(request);
+    const draft = {
+      ...current,
+      mailboxId: body.mailboxId || current.mailboxId,
+      recipientBoxId: body.recipientBoxId ?? current.recipientBoxId,
+      subject: body.subject ?? current.subject,
+      body: body.body ?? current.body,
+      updatedAt: new Date().toISOString()
+    };
+    mockDataBoxPlusDrafts = mockDataBoxPlusDrafts.map((item) => item.id === id ? draft : item);
+    sendJson(response, 200, { apiStatus: "ready", draft });
+    return true;
+  }
+
+  if (dataBoxPlusDraftMatch && request.method === "DELETE") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Neprihlaseno." });
+      return true;
+    }
+    const id = decodeURIComponent(dataBoxPlusDraftMatch[1]);
+    mockDataBoxPlusDrafts = mockDataBoxPlusDrafts.filter((draft) => draft.id !== id);
+    sendJson(response, 200, { apiStatus: "ready", status: "deleted", draftId: id });
+    return true;
+  }
+
+  const dataBoxPlusDraftSendMatch = /^\/api\/data-box-plus\/drafts\/([^/]+)\/send$/.exec(url.pathname);
+  if (dataBoxPlusDraftSendMatch && request.method === "POST") {
+    sendJson(response, 503, { error: "Lokální server nemá ostrou DS bránu.", code: "data_box_plus_ds_sender_missing" });
     return true;
   }
 
