@@ -2044,6 +2044,85 @@ export async function updateDataBoxPlusMailboxPassword(env, mailboxId, currentUs
   }
 }
 
+export async function testDataBoxPlusMailboxConnection(env, mailboxId, currentUser = null) {
+  const db = dataBoxPlusDatabase(env, true);
+  await ensureDataBoxPlusMailboxes(env);
+  const mailbox = await mailboxRowByIdOrSlot(db, mailboxId);
+  if (!mailbox?.id) {
+    throw new DataBoxPlusStoreError("Schránka nebyla nalezena.", 404, "data_box_plus_mailbox_not_found");
+  }
+
+  const account = await dataBoxPlusSendingAccount(env, mailbox);
+  if (!account?.configured) {
+    throw new DataBoxPlusStoreError(
+      "Schránka nemá kompletní aktivní login a heslo.",
+      409,
+      "data_box_plus_mailbox_credentials_missing"
+    );
+  }
+
+  try {
+    const result = await fetchDataBoxMessageMetadata(env, {
+      ...account,
+      limit: 1,
+      lookbackDays: 7
+    });
+    const receivedCount = numberValue(result.receivedCount);
+    const sentCount = numberValue(result.sentCount);
+    const message = `Připojení k ISDS je ověřené. Test načetl ${receivedCount} přijatých a ${sentCount} odeslaných obálek.`;
+    await db
+      .prepare(`
+        UPDATE data_box_plus_mailboxes
+        SET connection_status = 'ready',
+            last_sync_status = 'waiting',
+            last_sync_message = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `)
+      .bind(message, mailbox.id)
+      .run();
+    await writeMailboxAudit(db, currentUser, "Otestovat připojení DSP", {
+      mailboxId: mailbox.id,
+      slot: numberValue(mailbox.slot),
+      success: true,
+      receivedCount,
+      sentCount
+    });
+    return {
+      apiStatus: "ready",
+      status: "success",
+      mailboxId: mailbox.id,
+      receivedCount,
+      sentCount,
+      message
+    };
+  } catch (error) {
+    const message = cleanString(error?.message || "Připojení k ISDS se nepodařilo ověřit.");
+    await db
+      .prepare(`
+        UPDATE data_box_plus_mailboxes
+        SET connection_status = 'error',
+            last_sync_status = 'failed',
+            last_sync_message = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `)
+      .bind(message, mailbox.id)
+      .run();
+    await writeMailboxAudit(db, currentUser, "Otestovat připojení DSP", {
+      mailboxId: mailbox.id,
+      slot: numberValue(mailbox.slot),
+      success: false,
+      errorCode: cleanString(error?.code || "data_box_plus_mailbox_connection_failed")
+    });
+    throw new DataBoxPlusStoreError(
+      message,
+      502,
+      cleanString(error?.code || "data_box_plus_mailbox_connection_failed")
+    );
+  }
+}
+
 export async function listDataBoxPlusMessages(env, filters = {}) {
   const page = await listDataBoxPlusMessagesPage(env, filters);
   return page.messages;

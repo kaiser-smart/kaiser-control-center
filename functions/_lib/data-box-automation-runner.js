@@ -57,7 +57,12 @@ function containsAny(haystack, needles = []) {
   return !active.length || active.some((needle) => normalized.includes(needle));
 }
 
-function messageMatchesRule(message, rule) {
+export function dataBoxAutomationReceivedMessage(message = {}) {
+  return cleanString(message.direction || "received").toLowerCase() !== "sent";
+}
+
+export function messageMatchesRule(message, rule) {
+  if (!dataBoxAutomationReceivedMessage(message)) return false;
   const conditions = parseJson(rule.conditions, {});
   const sender = searchText([message.senderName, message.senderBoxId]);
   const text = searchText([
@@ -81,7 +86,7 @@ function messageMatchesRule(message, rule) {
     && containsAny(text, conditions.anyText || conditions.textContains || conditions.subjectContains);
 }
 
-function normalizeAction(rule) {
+export function normalizeAction(rule) {
   const actions = parseJson(rule.actions, {});
   const type = cleanString(actions.type || actions.action || "ARCHIVE").toUpperCase();
   const recipients = Array.isArray(actions.recipients)
@@ -90,7 +95,24 @@ function normalizeAction(rule) {
       ? [cleanString(actions.recipient)]
       : [];
 
-  return { type, recipients };
+  return {
+    type,
+    recipients,
+    allowAutomaticArchive: actions.allowAutomaticArchive === true
+      && cleanString(actions.safetyClassification).toLowerCase() === "informational"
+  };
+}
+
+export function dataBoxAutomationDedupeKey(actionType, messageId, recipient = "") {
+  const type = cleanString(actionType).toLowerCase();
+  const id = cleanString(messageId);
+  if (type === "email") {
+    return `data-box:email:${id}:${cleanString(recipient).toLowerCase()}`;
+  }
+  if (type === "archive") {
+    return `data-box:archive:${id}`;
+  }
+  return `data-box:${type || "action"}:${id}:${cleanString(recipient).toLowerCase()}`;
 }
 
 async function insertAutomationRun(db, run) {
@@ -218,33 +240,82 @@ async function updateRuleRunState(db, rule, state) {
 }
 
 async function runMatchedAction(env, rule, action, message, options) {
+  if (!dataBoxAutomationReceivedMessage(message)) {
+    return { status: "skipped", message: "Odeslaná datová zpráva je pouze historie. Automatizace ji nezpracovala." };
+  }
+
   if (action.type === "ARCHIVE") {
-    if (options.mode === "live" && options.confirmed === true) {
+    if (cleanString(message.status).toLowerCase() === "archived") {
+      return { status: "skipped", message: "Zpráva už je archivovaná." };
+    }
+    if (options.mode === "live" && options.confirmed === true && action.allowAutomaticArchive) {
       await archiveDataBoxMessage(env, message.id, { confirmed: true }, options.currentUser);
       return { status: "archived", message: "Archivováno." };
     }
-    return { status: "dry_run", message: "Shoda pro archivaci. Ostrá archivace neprovedena." };
+    if (options.mode === "live" && options.confirmed === true) {
+      const prepared = await prepareDataBoxAction(env, message, "archive", {
+        recipient: "",
+        subject: message.subject,
+        bodyPreview: `Pravidlo ${rule.title}: archivace čeká na ruční potvrzení.`,
+        dedupeKey: dataBoxAutomationDedupeKey("archive", message.id),
+        result: {
+          ruleId: rule.id,
+          requiresConfirmation: true,
+          safetyReason: "Automatická archivace není pro pravidlo výslovně povolená jako čistě informační."
+        }
+      }, options.currentUser);
+      return {
+        status: "requires_confirmation",
+        message: prepared.wasCreated
+          ? "Archivace byla připravena k ručnímu potvrzení."
+          : "Archivace už čeká na ruční potvrzení nebo byla dříve zpracovaná."
+      };
+    }
+    return {
+      status: "dry_run",
+      message: action.allowAutomaticArchive
+        ? "Shoda pro bezpečnou informační archivaci. Dry-run nic nezměnil."
+        : "Shoda pro archivaci. Archivace vyžaduje ruční potvrzení."
+    };
   }
 
   if (action.type === "SEND_EMAIL") {
     const recipients = action.recipients.length ? action.recipients : [""];
-    let prepared = 0;
+    let preparedCount = 0;
+    let pendingCount = 0;
+    let completedCount = 0;
     for (const recipient of recipients) {
-      const dedupeKey = `data-box:rule:${rule.id}:${message.id}:email:${recipient}`;
+      const dedupeKey = dataBoxAutomationDedupeKey("email", message.id, recipient);
       if (options.mode === "live" && options.confirmed === true && recipient) {
-        await prepareDataBoxAction(env, message, "email", {
+        const prepared = await prepareDataBoxAction(env, message, "email", {
           recipient,
           subject: message.subject,
           bodyPreview: `Pravidlo ${rule.title}: připraveno k ručnímu potvrzení e-mailu.`,
           dedupeKey,
           result: { ruleId: rule.id, requiresConfirmation: true }
         }, options.currentUser);
-        prepared += 1;
+        if (prepared.wasCreated) {
+          preparedCount += 1;
+        } else if (["sent", "archived"].includes(cleanString(prepared.status).toLowerCase())) {
+          completedCount += 1;
+        } else {
+          pendingCount += 1;
+        }
       }
     }
-    return options.mode === "live" && options.confirmed === true
-      ? { status: "requires_confirmation", message: `Připraveno ${prepared} e-mailových akcí k ručnímu potvrzení.` }
-      : { status: "dry_run", message: "Shoda pro e-mail. E-mail neodeslán." };
+    if (options.mode !== "live" || options.confirmed !== true) {
+      return { status: "dry_run", message: "Shoda pro e-mail. E-mail nebyl odeslán ani připraven." };
+    }
+    if (preparedCount || pendingCount) {
+      return {
+        status: "requires_confirmation",
+        message: `Nově připraveno ${preparedCount}, už čeká ${pendingCount}, dříve dokončeno ${completedCount}. Žádný e-mail nebyl automaticky odeslán.`
+      };
+    }
+    return {
+      status: "skipped",
+      message: `Nově připraveno 0, dříve dokončeno ${completedCount}. Žádný e-mail nebyl automaticky odeslán.`
+    };
   }
 
   return { status: "skipped", message: `Nepodporovaný typ akce ${action.type}.` };
@@ -262,11 +333,17 @@ async function runSingleRule(env, db, rule, messages, options) {
 
   const finishedAt = new Date().toISOString();
   const failedCount = results.filter((item) => item.status === "failed").length;
+  const confirmationCount = results.filter((item) => item.status === "requires_confirmation").length;
+  const processedCount = results.filter((item) => ["archived", "processed"].includes(item.status)).length;
   const status = failedCount
     ? "partial_error"
-    : options.mode === "live" && options.confirmed === true
-      ? "processed"
-      : "dry_run";
+    : confirmationCount
+      ? "requires_confirmation"
+      : options.mode === "live" && options.confirmed === true && processedCount
+        ? "processed"
+        : options.mode === "live" && options.confirmed === true
+          ? "skipped"
+          : "dry_run";
   const message = matches.length
     ? `${matches.length} shod. ${results.map((item) => item.message).filter(Boolean).join(" ")}`
     : "Bez shod.";
@@ -327,7 +404,7 @@ export async function runDataBoxAutomation(env, options = {}) {
   try {
     rules = (await listModuleRules(env, MODULE_KEY))
       .filter((rule) => rule.status === "active" && rule.isAutomation);
-    const messages = await listDataBoxMessages(env, { limit: 100 });
+    const messages = await listDataBoxMessages(env, { limit: 100, direction: "received" });
     results = [];
 
     for (const rule of rules) {
@@ -340,12 +417,13 @@ export async function runDataBoxAutomation(env, options = {}) {
     }
 
     const matches = results.reduce((sum, item) => sum + Number(item.matches || 0), 0);
+    const waitingConfirmations = results.filter((item) => item.status === "requires_confirmation").length;
     if (!rules.length) {
       status = "skipped";
       message = "V cloud DB nejsou aktivní DS automatizace.";
     } else if (mode === "live" && confirmed) {
-      status = "processed";
-      message = `DS runner zpracoval ${rules.length} pravidel, ${matches} shod. E-maily jsou připravené k ručnímu potvrzení.`;
+      status = waitingConfirmations ? "requires_confirmation" : "processed";
+      message = `DS runner zpracoval ${rules.length} pravidel, ${matches} shod. ${waitingConfirmations} pravidel má akce čekající na ruční potvrzení. Automatické odesílání e-mailů a DS odpovědí je vypnuté.`;
     } else {
       status = "dry_run";
       message = `DS runner ověřil ${rules.length} pravidel, ${matches} shod. Ostré akce neprovedeny.`;

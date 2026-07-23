@@ -487,10 +487,13 @@ export async function prepareDataBoxAction(env, message, actionType, input = {},
   const dedupeKey = cleanString(input.dedupeKey);
   const existing = await existingActionByDedupe(db, dedupeKey);
   if (existing) {
-    return existing;
+    return {
+      ...existing,
+      wasCreated: false
+    };
   }
 
-  return insertAction(db, {
+  const action = await insertAction(db, {
     messageId: message.id,
     dataBoxId: message.dataBoxId,
     actionType,
@@ -502,6 +505,10 @@ export async function prepareDataBoxAction(env, message, actionType, input = {},
     userId: cleanString(currentUser?.id),
     result: input.result
   });
+  return {
+    ...action,
+    wasCreated: true
+  };
 }
 
 export async function confirmDataBoxAction(env, actionId, payload = {}, currentUser = {}) {

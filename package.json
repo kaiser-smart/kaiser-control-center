@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.697",
+  "version": "0.1.698",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,7 +21,7 @@
     "test:vehicle-tracking": "node scripts/tcars-vehicle-detail.test.mjs && node scripts/tcars-pairing-audit.test.mjs && node scripts/vehicle-tracking-maps-config.test.mjs && node scripts/vehicle-tracking-history.test.mjs && node scripts/vehicle-tracking-analytics.test.mjs && node scripts/fleet-trip-job-pairing.test.mjs && node scripts/vehicle-tracking-preferences.test.mjs",
     "test:fleet-vistos": "node scripts/fleet-vistos-here-profile.test.mjs",
     "test:receivables": "node scripts/receivables-engines.test.mjs && node scripts/receivables-rating-store.test.mjs && node scripts/receivables-navigation.test.mjs && node scripts/receivables-invoice-sync-runner.test.mjs && node scripts/receivables-incremental-ledger-diff.test.mjs && node scripts/receivables-payment-reconciliation.test.mjs && node scripts/receivables-kb-payment-sync.test.mjs && node scripts/receivables-kb-production-onboarding.test.mjs",
-    "test:data-box-plus": "node scripts/data-box-plus-chat-context.test.mjs && node scripts/data-box-plus-chat-tools.test.mjs && node scripts/data-box-plus-openai.test.mjs && node scripts/data-box-plus-confirmation.test.mjs && node scripts/data-box-plus-instruction-flow.test.mjs && node scripts/data-box-plus-chat-ui.test.mjs && node scripts/data-box-plus-command-center.test.mjs && node scripts/data-box-plus-triage.test.mjs && node scripts/data-box-plus-triage-ui.test.mjs && node scripts/data-box-plus-compose-save-race.test.mjs && node scripts/data-box-plus-workflows.test.mjs && node scripts/data-box-plus-sync-runner.test.mjs",
+    "test:data-box-plus": "node scripts/data-box-plus-chat-context.test.mjs && node scripts/data-box-plus-chat-tools.test.mjs && node scripts/data-box-plus-openai.test.mjs && node scripts/data-box-plus-confirmation.test.mjs && node scripts/data-box-plus-instruction-flow.test.mjs && node scripts/data-box-plus-chat-ui.test.mjs && node scripts/data-box-plus-command-center.test.mjs && node scripts/data-box-plus-triage.test.mjs && node scripts/data-box-plus-triage-ui.test.mjs && node scripts/data-box-plus-compose-save-race.test.mjs && node scripts/data-box-plus-workflows.test.mjs && node scripts/data-box-plus-sync-runner.test.mjs && node scripts/data-box-automation-runner.test.mjs && node scripts/data-box-plus-operational-contract.test.mjs",
     "test:customer-messaging": "node scripts/customer-messaging.test.mjs",
     "test:rcs-consent": "node scripts/rcs-consent.test.mjs",
     "test:build-assets": "node scripts/version-module-imports.test.mjs && node scripts/build.mjs",

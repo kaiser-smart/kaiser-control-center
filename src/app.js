@@ -58,6 +58,8 @@ import {
   dataBoxPlusResolveConfirmationEntries,
   dataBoxPlusResolvePendingChatEntries
 } from "./data/dataBoxPlusChat.js";
+import { DATA_BOX_PLUS_MANTRA } from "./data/dataBoxPlusMantra.js?v=1.0";
+import { DATA_BOX_PLUS_OPERATIONAL_CONTRACT } from "./data/dataBoxPlusOperationalContract.js";
 import {
   receivablesActiveTab,
   receivablesHashTargetId
@@ -1736,6 +1738,8 @@ const dataBoxPlusState = {
   error: "",
   lastLoadedAt: 0,
   mailboxSaving: false,
+  mailboxTestingId: "",
+  accessSettingsOpen: false,
   mailboxes: [],
   messages: [],
   drafts: [],
@@ -9134,6 +9138,8 @@ function moduleAutomationRunnerRunStatusLabel(status) {
   const labels = {
     running: "Běží",
     success: "OK",
+    processed: "Zpracováno",
+    requires_confirmation: "Čeká na potvrzení",
     dry_run: "Dry-run",
     skipped: "Přeskočeno",
     partial_error: "Částečná chyba",
@@ -29995,14 +30001,19 @@ function dataBoxPlusTriagePage(moduleItem, user) {
             : "Přijaté, odeslané a archivované zprávy na jednom místě."}</p>
         </div>
         <div class="ds-plus-triage-header__actions">
-          <button class="primary-action" type="button" data-ds-plus-compose-open>＋ Nová datová zpráva</button>
+          <div class="ds-plus-triage-header__buttons">
+            ${dataBoxPlusCanManageAccess(user) ? `<button class="secondary-action" type="button" data-ds-plus-access-open>Správa přístupů</button>` : ""}
+            <button class="primary-action" type="button" data-ds-plus-compose-open>＋ Nová datová zpráva</button>
+          </div>
           <small>${escapeHtml(dataBoxPlusState.sendReadiness?.dataBox?.enabled ? "Odesílání přes ISDS je připravené." : "Odesílající schránka čeká na aktivní přístup ISDS.")}</small>
         </div>
       </section>
       ${dataBoxPlusTriageStatusNotice()}
       ${dataBoxPlusTriageInbox()}
       ${dataBoxPlusTriageDetailOverlay()}
+      ${dataBoxPlusReplyOverlay()}
       ${dataBoxPlusComposeOverlay()}
+      ${dataBoxPlusAccessSettingsOverlay(user)}
     </main>
   `;
 }
@@ -30169,6 +30180,7 @@ function dataBoxPlusMailboxPasswordForm(mailbox) {
 
 function dataBoxPlusMailboxCard(mailbox) {
   const syncText = mailbox.lastSync ? formatDateTime(mailbox.lastSync) : "zatím neproběhlo";
+  const testing = dataBoxPlusState.mailboxTestingId === mailbox.id;
   const lastProblem = mailbox.lastSyncStatus === "failed" && mailbox.lastSyncMessage
     ? `<p class="ds-plus-mailbox-warning">${escapeHtml(mailbox.lastSyncMessage)}</p>`
     : "";
@@ -30192,6 +30204,9 @@ function dataBoxPlusMailboxCard(mailbox) {
       </dl>
       ${lastProblem}
       <div class="ds-plus-mailbox-actions">
+        <button class="secondary-action" type="button" data-ds-plus-mailbox-test="${escapeHtml(mailbox.id)}" ${testing || dataBoxPlusState.mailboxSaving ? "disabled" : ""}>
+          ${testing ? "Ověřuji připojení…" : "Otestovat připojení"}
+        </button>
         <details>
           <summary>Upravit schránku</summary>
           ${dataBoxPlusMailboxEditForm(mailbox)}
@@ -30223,6 +30238,59 @@ function dataBoxPlusMailboxCreateForm(mailboxes = []) {
         ${dataBoxPlusHelp("Přidat schránku", "Schránka se uloží do DSP. Login a heslo se uloží jen na serveru, šifrovaně. Nic se neodešle mimo systém a změna se zapíše do historie.")}
       </form>
     </details>
+  `;
+}
+
+function dataBoxPlusCanManageAccess(user = currentUser()) {
+  return hasPermission(user, DATA_BOX_PLUS_MODULE_KEY, "manage") || isFullAccessRole(user);
+}
+
+function dataBoxPlusAccessSettingsOverlay(user) {
+  if (!dataBoxPlusState.accessSettingsOpen || !dataBoxPlusCanManageAccess(user)) return "";
+  const mailboxes = dataBoxPlusMailboxes();
+  return `
+    <div class="ds-plus-detail-overlay ds-plus-access-overlay" role="presentation">
+      <button class="ds-plus-detail-backdrop" type="button" tabindex="-1" data-ds-plus-access-close aria-label="Zavřít správu přístupů"></button>
+      <section class="ds-plus-detail ds-plus-access-dialog" role="dialog" aria-modal="true" aria-labelledby="ds-plus-access-title">
+        <div class="ds-plus-detail__head">
+          <div>
+            <span>Jen pro oprávněné správce</span>
+            <h2 id="ds-plus-access-title">Přístupy datových schránek</h2>
+          </div>
+          <button class="secondary-link" type="button" data-ds-plus-access-close>Zavřít</button>
+        </div>
+        <div class="ds-plus-detail__body">
+          ${dataBoxPlusState.notice ? `<p class="ds-plus-notice" role="status">${escapeHtml(dataBoxPlusState.notice)}</p>` : ""}
+          <section class="ds-plus-detail-section ds-plus-access-intro">
+            <h3>Bezpečné serverové uložení</h3>
+            <p>Login a heslo se ukládají šifrovaně do DSP vaultu. Heslo se po uložení nikdy nezobrazí ani nevrátí do prohlížeče. Každá změna se zapíše do auditu.</p>
+            <p>Otestování pouze ověří přihlášení k ISDS a nic neodešle.</p>
+          </section>
+          <section class="ds-plus-detail-section">
+            <div class="ds-plus-access-section-head">
+              <div>
+                <h3>Napojené schránky</h3>
+                <p>${escapeHtml(`${mailboxes.length} z ${DATA_BOX_PLUS_OPERATIONAL_CONTRACT.mailboxCount} evidovaných schránek`)}</p>
+              </div>
+              <button class="secondary-action" type="button" data-ds-plus-import-credentials ${dataBoxPlusState.mailboxSaving ? "disabled" : ""}>
+                ${dataBoxPlusState.mailboxSaving ? "Přebírám přístupy…" : "Převzít ze starého uložení"}
+              </button>
+            </div>
+            ${dataBoxPlusMailboxCreateForm(mailboxes)}
+            <div class="ds-plus-mailbox-list">
+              ${mailboxes.length ? mailboxes.map(dataBoxPlusMailboxCard).join("") : `<p class="ds-plus-empty">Žádná schránka zatím není evidovaná.</p>`}
+            </div>
+          </section>
+          <details class="ds-plus-detail-section ds-plus-access-contract">
+            <summary>Provozní pravidla modulu</summary>
+            <div>
+              <strong>${escapeHtml(DATA_BOX_PLUS_MANTRA.title)} · v${escapeHtml(DATA_BOX_PLUS_MANTRA.version)}</strong>
+              <p>${escapeHtml(DATA_BOX_PLUS_MANTRA.summary)}</p>
+            </div>
+          </details>
+        </div>
+      </section>
+    </div>
   `;
 }
 
@@ -30287,7 +30355,7 @@ function dataBoxPlusEventLogBlock() {
       "Automatizace v cloudu",
       cloudSync.isRunning ? "běží" : (cloudSync.latestCloud ? "částečně ověřeno" : "čeká na ověření"),
       cloudSync.isRunning
-        ? `Poslední cloudové načtení: ${cloudSync.lastLabel}. Další běh je po 30 minutách.`
+        ? `Poslední cloudové načtení: ${cloudSync.lastLabel}. Další běh je v následující celou hodinu.`
         : (cloudSync.latestCloud
           ? `Poslední cloudové načtení: ${cloudSync.lastLabel}. Čekám na čerstvý úspěšný běh.`
           : "Zatím není doložený cloudový běh načítání.")
@@ -30314,7 +30382,9 @@ function dataBoxPlusEventLogBlock() {
     moduleEventLogStatus(
       "E-mail",
       readiness.email?.enabled ? "ověřeno" : "vypnuto",
-      readiness.email?.text || "Chybí serverový mail provider. E-mail se z DSP neodesílá."
+      readiness.email?.enabled
+        ? "Serverový SendGrid je připravený. Pravidla mohou e-mail pouze připravit; odešle se až po kontrole adresáta, předmětu a příloh a po kliknutí člověka na potvrzení."
+        : (readiness.email?.text || "Chybí serverový mail provider. E-mail se z DSP neodesílá.")
     ),
     moduleEventLogStatus(
       "SMS",
@@ -30337,11 +30407,12 @@ function dataBoxPlusEventLogBlock() {
     statuses,
     inactiveItems: [
       readiness.dataBox?.enabled ? "Nová samostatná datová zpráva bez kontextu přijaté zprávy." : "Odesílání datových zpráv z DSP.",
-      readiness.email?.enabled ? "Odeslání e-mailu bez jasného adresáta." : "E-mail z DSP.",
+      readiness.email?.enabled ? "Automatické odeslání e-mailu bez ručního potvrzení." : "E-mail z DSP.",
       readiness.sms?.enabled ? "Automatické odeslání SMS bez schváleného scénáře." : "SMS z DSP."
     ],
     pilotItems: [
       "Chatový pokyn úkon přesně shrne. Po jednorázovém potvrzení ho provede backend a až úspěšný výsledek zapíše jako hotový.",
+      "Cloudová pravidla mohou připravit e-mail nebo rizikovou archivaci, ale sama je neprovedou. Automatická archivace je povolená jen výslovně pro čistě informační pravidlo.",
       "Autopilot se učí pouze z potvrzených akcí, které skutečně úspěšně proběhly.",
       "Pokud cloudový běh není čerstvý, automatizace není označená jako běžící."
     ],
@@ -34687,7 +34758,9 @@ function systemCheckAutomationItems(data) {
     },
     {
       label: "Runner běží / poslední běh",
-      status: latestRunner ? (String(latestRunner.status || "").toLowerCase() === "completed" ? "OK" : "WARNING") : "WARNING",
+      status: latestRunner
+        ? (["completed", "processed", "requires_confirmation"].includes(String(latestRunner.status || "").toLowerCase()) ? "OK" : "WARNING")
+        : "WARNING",
       detail: latestRunner ? `${latestRunner.status || "-"} · ${formatDateTime(latestRunner.startedAt)}` : "DS runner zatím nemá zapsaný běh."
     },
     {
@@ -42296,6 +42369,28 @@ async function saveDataBoxPlusMailboxPasswordForm(form) {
     dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Heslo se nepodařilo změnit.");
   } finally {
     dataBoxPlusState.mailboxSaving = false;
+    render();
+  }
+}
+
+async function testDataBoxPlusMailboxConnection(mailboxIdValue) {
+  const mailboxId = String(mailboxIdValue || "").trim();
+  if (!mailboxId || dataBoxPlusState.mailboxTestingId) return;
+  dataBoxPlusState.mailboxTestingId = mailboxId;
+  dataBoxPlusState.notice = "Ověřuji přihlášení k ISDS. Nic se neodesílá.";
+  render();
+  try {
+    const result = await apiJson(`/api/data-box-plus/mailboxes/${encodeURIComponent(mailboxId)}/test`, {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+    dataBoxPlusState.notice = result.message || "Připojení k ISDS je ověřené.";
+    await loadDataBoxPlusData({ force: true, renderAfter: false });
+  } catch (error) {
+    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Připojení k ISDS se nepodařilo ověřit.");
+    await loadDataBoxPlusData({ force: true, renderAfter: false });
+  } finally {
+    dataBoxPlusState.mailboxTestingId = "";
     render();
   }
 }
@@ -56874,12 +56969,39 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const dataBoxPlusAccessOpen = event.target.closest("[data-ds-plus-access-open]");
+  if (dataBoxPlusAccessOpen) {
+    event.preventDefault();
+    if (!dataBoxPlusCanManageAccess()) return;
+    dataBoxPlusState.accessSettingsOpen = true;
+    dataBoxPlusState.notice = "";
+    render();
+    return;
+  }
+
+  const dataBoxPlusAccessClose = event.target.closest("[data-ds-plus-access-close]");
+  if (dataBoxPlusAccessClose) {
+    event.preventDefault();
+    dataBoxPlusState.accessSettingsOpen = false;
+    dataBoxPlusState.notice = "";
+    render();
+    return;
+  }
+
+  const dataBoxPlusMailboxTest = event.target.closest("[data-ds-plus-mailbox-test]");
+  if (dataBoxPlusMailboxTest) {
+    event.preventDefault();
+    await testDataBoxPlusMailboxConnection(dataBoxPlusMailboxTest.dataset.dsPlusMailboxTest || "");
+    return;
+  }
+
   const dataBoxPlusReply = event.target.closest("[data-ds-plus-reply]");
   if (dataBoxPlusReply) {
     event.preventDefault();
     dataBoxPlusState.replyDraftMessageId = dataBoxPlusReply.dataset.dsPlusReply || "";
     dataBoxPlusState.notice = "Odpověď je otevřená jako návrh. Bez potvrzení se nic neodešle.";
     render();
+    restoreDataBoxPlusInputFocus(`[data-ds-plus-reply-text="${CSS.escape(dataBoxPlusState.replyDraftMessageId)}"]`);
     return;
   }
 
@@ -59213,6 +59335,19 @@ document.addEventListener("keydown", (event) => {
   if (dataBoxPlusInstructionInput && event.key === "Enter" && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
     dataBoxPlusInstructionInput.closest("form")?.requestSubmit();
+    return;
+  }
+  if (event.key === "Escape" && dataBoxPlusState.replyDraftMessageId) {
+    event.preventDefault();
+    dataBoxPlusState.replyDraftMessageId = "";
+    render();
+    return;
+  }
+  if (event.key === "Escape" && dataBoxPlusState.accessSettingsOpen) {
+    event.preventDefault();
+    dataBoxPlusState.accessSettingsOpen = false;
+    dataBoxPlusState.notice = "";
+    render();
     return;
   }
   if (event.key === "Tab" && dataBoxPlusState.triageSelectedMessageId) {

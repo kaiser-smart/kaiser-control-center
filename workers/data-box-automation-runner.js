@@ -19,8 +19,10 @@ export default {
         dryRunCount: summary.dryRunCount,
         skippedCount: summary.skippedCount,
         failedCount: summary.failedCount,
-        emailSending: "requires_user_confirmation",
-        dataBoxSending: "disabled_without_confirmed_knf_endpoint"
+        emailSending: "manual_confirmation_only",
+        dataBoxSending: "manual_confirmation_only",
+        sentMessageAiProcessing: "disabled",
+        automaticArchive: "explicit_informational_allowlist_only"
       });
     })());
   },
@@ -31,9 +33,11 @@ export default {
       runner: "data-box-cloud-runner",
       mode: "live",
       cron: "*/30 * * * *",
-      emailSending: "requires_user_confirmation",
-      dataBoxSending: "only via confirmed backend endpoint",
-      message: "DS cloud runner vyhodnocuje pravidla. E-maily připravuje k ručnímu potvrzení."
+      emailSending: "manual_confirmation_only",
+      dataBoxSending: "manual_confirmation_only",
+      sentMessageAiProcessing: "disabled",
+      automaticArchive: "explicit_informational_allowlist_only",
+      message: "DS cloud runner vyhodnocuje pouze přijaté zprávy. E-maily a DS odpovědi připravuje k ručnímu potvrzení; sám je neodesílá."
     });
   }
 };
