@@ -1,4 +1,5 @@
-DELETE FROM data_box_plus_recommendations
+UPDATE data_box_plus_recommendations
+SET status = 'closed_sent_history', updated_at = CURRENT_TIMESTAMP
 WHERE message_id IN (
   SELECT id
   FROM data_box_plus_messages
