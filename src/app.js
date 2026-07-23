@@ -1764,7 +1764,10 @@ const dataBoxPlusState = {
   composeUploading: false,
   composeError: "",
   replyDraftMessageId: "",
-  replyDraftTexts: {}
+  replyDraftTexts: {},
+  replyDraftSaving: false,
+  replyDraftUploading: false,
+  replyDraftError: ""
 };
 const dataBoxPlusHomeState = {
   loaded: false,
@@ -1778,6 +1781,8 @@ let dataBoxSearchRenderTimer = null;
 let dataBoxPlusCountdownTimer = null;
 let dataBoxPlusDraftSaveTimer = null;
 let dataBoxPlusDraftSavePromise = null;
+let dataBoxPlusReplySaveTimer = null;
+let dataBoxPlusReplySavePromise = null;
 let dataBoxPlusTriageRenderTimer = null;
 const quickAbsenceState = {
   step: "type",
@@ -30683,6 +30688,10 @@ function dataBoxPlusAttachments(message) {
 function dataBoxPlusReplyOverlay() {
   const message = dataBoxPlusMessageById(dataBoxPlusState.replyDraftMessageId);
   if (!message) return "";
+  const draft = dataBoxPlusReplyDraft(message.id);
+  const attachments = Array.isArray(draft?.attachments) ? draft.attachments : [];
+  const locked = ["sending", "unknown"].includes(String(draft?.status || ""));
+  const busy = dataBoxPlusState.replyDraftSaving || dataBoxPlusState.replyDraftUploading || locked;
   const mailbox = dataBoxPlusMailbox(message);
   const recipientName = message.senderName || "Odesílatel původní zprávy";
   const recipientBoxId = message.senderBoxId || "ID schránky zatím není načtené";
@@ -30735,19 +30744,67 @@ function dataBoxPlusReplyOverlay() {
             </div>
             <label>
               <span>Text odpovědi</span>
-              <textarea rows="7" placeholder="Napiš odpověď..." data-ds-plus-reply-text="${escapeHtml(message.id)}">${escapeHtml(dataBoxPlusState.replyDraftTexts[message.id] || "")}</textarea>
+              <textarea rows="7" maxlength="100000" placeholder="Napiš odpověď..." data-ds-plus-reply-text="${escapeHtml(message.id)}" ${locked ? "disabled" : ""}>${escapeHtml(dataBoxPlusState.replyDraftTexts[message.id] ?? draft?.body ?? "")}</textarea>
             </label>
+            <section class="ds-plus-reply-attachments" aria-label="Přílohy odpovědi">
+              <div class="ds-plus-reply-attachments__head">
+                <div>
+                  <h3>Přílohy odpovědi</h3>
+                  <p>Přilož jednu nebo více příloh. Maximálně 20 souborů a 20 MB celkem.</p>
+                </div>
+                <label class="primary-action ds-plus-reply-file">
+                  <span>${dataBoxPlusState.replyDraftUploading ? "Nahrávám…" : "＋ Přidat přílohu"}</span>
+                  <input type="file" multiple data-ds-plus-reply-attachment="${escapeHtml(message.id)}" ${draft?.id && !busy ? "" : "disabled"} />
+                </label>
+              </div>
+              ${attachments.length ? `
+                <ul class="ds-plus-reply-attachment-list">
+                  ${attachments.map((attachment) => {
+                    const fileUrl = `/api/data-box-plus/drafts/${encodeURIComponent(draft.id)}/attachments/${encodeURIComponent(attachment.id)}`;
+                    return `
+                      <li>
+                        <div>
+                          <strong>${escapeHtml(attachment.fileName)}</strong>
+                          <span>${escapeHtml(attachment.size || "")}</span>
+                        </div>
+                        <div class="ds-plus-reply-attachment-actions">
+                          <button class="primary-action ds-plus-attachment-preview" type="button" data-ds-plus-open-url="${escapeHtml(fileUrl)}">${escapeHtml(dataBoxPlusAttachmentPreviewLabel(attachment))}</button>
+                          <button class="secondary-link" type="button" data-ds-plus-reply-remove-attachment="${escapeHtml(attachment.id)}" ${busy ? "disabled" : ""}>Odebrat</button>
+                        </div>
+                      </li>
+                    `;
+                  }).join("")}
+                </ul>
+              ` : `<p class="ds-plus-reply-attachment-empty">K odpovědi zatím není přiložený žádný soubor.</p>`}
+              <p class="ds-plus-reply-save-state" role="status">${escapeHtml(
+                dataBoxPlusState.replyDraftUploading
+                  ? "Příloha se bezpečně ukládá…"
+                  : dataBoxPlusState.replyDraftSaving
+                    ? "Ukládám odpověď…"
+                    : draft?.updatedAt
+                      ? `Koncept uložen ${formatDateTime(draft.updatedAt)}`
+                      : "Připravuji bezpečný koncept odpovědi…"
+              )}</p>
+              ${dataBoxPlusState.replyDraftError ? `<p class="ds-plus-compose-error" role="alert">${escapeHtml(dataBoxPlusState.replyDraftError)}</p>` : ""}
+              ${locked ? `<p class="ds-plus-compose-error" role="alert">${escapeHtml(
+                draft.status === "unknown"
+                  ? "Výsledek předchozího odeslání není potvrzený. Další pokus je zablokovaný proti duplicitě."
+                  : "Tato odpověď se právě odesílá. Další pokus je zablokovaný."
+              )}</p>` : ""}
+            </section>
           </section>
           <section class="ds-plus-detail-section ds-plus-reply-check">
             <h3>Kontrola před odesláním</h3>
             <dl>
               <div><dt>Odesílatel</dt><dd>${escapeHtml(senderName)}</dd></div>
               <div><dt>Příjemce</dt><dd>${escapeHtml(recipientName)}</dd></div>
+              <div><dt>Předmět</dt><dd>${escapeHtml(draft?.subject || (String(message.subject || "").toLowerCase().startsWith("re:") ? message.subject : `Re: ${message.subject || "Datová zpráva"}`))}</dd></div>
+              <div><dt>Přílohy</dt><dd>${escapeHtml(attachments.length)}</dd></div>
               <div><dt>Stav</dt><dd>Rozpracovaná odpověď</dd></div>
               <div><dt>Odeslání mimo systém</dt><dd>Jen přes hotový serverový scénář</dd></div>
             </dl>
             <div class="ds-plus-detail-actions">
-              <button class="primary-action" type="button" data-ds-plus-reply-send="${escapeHtml(message.id)}" ${dataBoxPlusState.sendReadiness?.dataBox?.enabled ? "" : "disabled"}>
+              <button class="primary-action" type="button" data-ds-plus-reply-send="${escapeHtml(message.id)}" ${dataBoxPlusState.sendReadiness?.dataBox?.enabled && draft?.id && !busy ? "" : "disabled"}>
                 Potvrdit a odeslat odpověď
               </button>
               <button class="secondary-link" type="button" data-ds-plus-reply-close>Zrušit</button>
@@ -42237,33 +42294,211 @@ async function sendDataBoxPlusComposeDraft() {
   }
 }
 
+function dataBoxPlusReplyDraft(messageId) {
+  const id = String(messageId || "").trim();
+  if (!id) return null;
+  return dataBoxPlusState.drafts.find((draft) => (
+    draft.replyToMessageId === id && ["draft", "failed", "sending", "unknown"].includes(String(draft.status || "draft"))
+  )) || null;
+}
+
+function applyDataBoxPlusReplyDraft(draft = {}) {
+  if (!draft?.id) return;
+  const index = dataBoxPlusState.drafts.findIndex((item) => item.id === draft.id);
+  dataBoxPlusState.drafts = index >= 0
+    ? [...dataBoxPlusState.drafts.slice(0, index), draft, ...dataBoxPlusState.drafts.slice(index + 1)]
+    : [draft, ...dataBoxPlusState.drafts];
+  if (draft.replyToMessageId && dataBoxPlusState.replyDraftTexts[draft.replyToMessageId] === undefined) {
+    dataBoxPlusState.replyDraftTexts[draft.replyToMessageId] = draft.body || "";
+  }
+}
+
+function dataBoxPlusReplyDraftPayload(message) {
+  const subject = String(message?.subject || "");
+  return {
+    mailboxId: message?.mailboxId || "",
+    replyToMessageId: message?.id || "",
+    recipientBoxId: message?.senderBoxId || "",
+    recipientName: message?.senderName || "",
+    subject: subject.toLowerCase().startsWith("re:") ? subject : `Re: ${subject || "Datová zpráva"}`,
+    body: String(dataBoxPlusState.replyDraftTexts[message?.id] || "")
+  };
+}
+
+async function saveDataBoxPlusReplyDraft(messageId, options = {}) {
+  const message = dataBoxPlusMessageById(messageId);
+  if (!message) return null;
+  if (dataBoxPlusReplySavePromise) return dataBoxPlusReplySavePromise;
+  const currentDraft = dataBoxPlusReplyDraft(message.id);
+  if (["sending", "unknown"].includes(String(currentDraft?.status || ""))) return currentDraft;
+  dataBoxPlusState.replyDraftSaving = true;
+  dataBoxPlusState.replyDraftError = "";
+  if (!options.quiet) render();
+  const activeSave = (async () => {
+    try {
+      const result = await apiJson(
+        currentDraft?.id
+          ? `/api/data-box-plus/drafts/${encodeURIComponent(currentDraft.id)}`
+          : "/api/data-box-plus/drafts",
+        {
+          method: currentDraft?.id ? "PATCH" : "POST",
+          body: JSON.stringify(dataBoxPlusReplyDraftPayload(message))
+        }
+      );
+      applyDataBoxPlusReplyDraft(result.draft);
+      return result.draft;
+    } catch (error) {
+      dataBoxPlusState.replyDraftError = dataBoxPlusHumanError(
+        error.payload?.error || error.message || "Koncept odpovědi se nepodařilo uložit."
+      );
+      return null;
+    } finally {
+      dataBoxPlusState.replyDraftSaving = false;
+      if (dataBoxPlusReplySavePromise === activeSave) dataBoxPlusReplySavePromise = null;
+      if (!options.quiet) render();
+    }
+  })();
+  dataBoxPlusReplySavePromise = activeSave;
+  return activeSave;
+}
+
+async function flushDataBoxPlusReplyDraftSave(messageId) {
+  if (dataBoxPlusReplySaveTimer) {
+    window.clearTimeout(dataBoxPlusReplySaveTimer);
+    dataBoxPlusReplySaveTimer = null;
+  }
+  if (dataBoxPlusReplySavePromise) await dataBoxPlusReplySavePromise;
+  return saveDataBoxPlusReplyDraft(messageId, { quiet: true });
+}
+
+function scheduleDataBoxPlusReplyDraftSave(messageId) {
+  if (dataBoxPlusReplySaveTimer) window.clearTimeout(dataBoxPlusReplySaveTimer);
+  dataBoxPlusReplySaveTimer = window.setTimeout(async () => {
+    dataBoxPlusReplySaveTimer = null;
+    await saveDataBoxPlusReplyDraft(messageId, { quiet: true });
+    render();
+  }, 700);
+}
+
+async function openDataBoxPlusReply(messageId) {
+  const message = dataBoxPlusMessageById(messageId);
+  if (!message) return;
+  const existingDraft = dataBoxPlusReplyDraft(message.id);
+  dataBoxPlusState.replyDraftMessageId = message.id;
+  dataBoxPlusState.replyDraftError = "";
+  if (dataBoxPlusState.replyDraftTexts[message.id] === undefined) {
+    dataBoxPlusState.replyDraftTexts[message.id] = existingDraft?.body || "";
+  }
+  render();
+  const draft = existingDraft || await saveDataBoxPlusReplyDraft(message.id);
+  if (draft?.id) dataBoxPlusState.notice = "Odpověď je uložená jako koncept. Bez potvrzení se nic neodešle.";
+  render();
+  restoreDataBoxPlusInputFocus(`[data-ds-plus-reply-text="${CSS.escape(message.id)}"]`);
+}
+
+async function uploadDataBoxPlusReplyAttachments(messageId, files) {
+  const selectedFiles = Array.from(files || []).filter(Boolean);
+  if (!selectedFiles.length || dataBoxPlusState.replyDraftUploading) return;
+  const draft = await flushDataBoxPlusReplyDraftSave(messageId);
+  if (!draft?.id) {
+    render();
+    return;
+  }
+  dataBoxPlusState.replyDraftUploading = true;
+  dataBoxPlusState.replyDraftError = "";
+  render();
+  try {
+    for (const file of selectedFiles) {
+      const form = new FormData();
+      form.append("file", file, file.name);
+      const result = await apiJson(`/api/data-box-plus/drafts/${encodeURIComponent(draft.id)}/attachments`, {
+        method: "POST",
+        body: form
+      });
+      applyDataBoxPlusReplyDraft(result.draft);
+    }
+  } catch (error) {
+    dataBoxPlusState.replyDraftError = dataBoxPlusHumanError(
+      error.payload?.error || error.message || "Přílohu se nepodařilo uložit."
+    );
+  } finally {
+    dataBoxPlusState.replyDraftUploading = false;
+    render();
+  }
+}
+
+async function removeDataBoxPlusReplyAttachment(messageId, attachmentId) {
+  const draft = dataBoxPlusReplyDraft(messageId);
+  if (!draft?.id || !attachmentId) return;
+  dataBoxPlusState.replyDraftError = "";
+  try {
+    const result = await apiJson(
+      `/api/data-box-plus/drafts/${encodeURIComponent(draft.id)}/attachments/${encodeURIComponent(attachmentId)}`,
+      { method: "DELETE" }
+    );
+    applyDataBoxPlusReplyDraft(result.draft);
+  } catch (error) {
+    dataBoxPlusState.replyDraftError = dataBoxPlusHumanError(
+      error.payload?.error || error.message || "Přílohu se nepodařilo odebrat."
+    );
+  }
+  render();
+}
+
+async function closeDataBoxPlusReply() {
+  const messageId = dataBoxPlusState.replyDraftMessageId;
+  if (messageId) await flushDataBoxPlusReplyDraftSave(messageId);
+  dataBoxPlusState.replyDraftMessageId = "";
+  dataBoxPlusState.replyDraftError = "";
+  render();
+}
+
 async function sendDataBoxPlusReplyFromOverlay(messageId) {
   const message = dataBoxPlusMessageById(messageId);
   const body = String(dataBoxPlusState.replyDraftTexts[messageId] || "").trim();
   if (!message || !body) {
-    dataBoxPlusState.notice = "Doplň text odpovědi.";
+    dataBoxPlusState.replyDraftError = "Doplň text odpovědi.";
     render();
     return;
   }
-  if (!window.confirm(`Opravdu odeslat odpověď do datové schránky ${message.senderBoxId}?`)) return;
+  const draft = await flushDataBoxPlusReplyDraftSave(messageId);
+  if (!draft?.id) {
+    dataBoxPlusState.replyDraftError ||= "Koncept odpovědi se před odesláním nepodařilo bezpečně uložit.";
+    render();
+    return;
+  }
+  if (["sending", "unknown"].includes(String(draft.status || ""))) {
+    dataBoxPlusState.replyDraftError = draft.status === "unknown"
+      ? "Výsledek předchozího odeslání není potvrzený. Další pokus je zablokovaný proti duplicitě."
+      : "Tato odpověď se právě odesílá.";
+    render();
+    return;
+  }
+  const attachmentCount = Array.isArray(draft.attachments) ? draft.attachments.length : 0;
+  if (!window.confirm(
+    `Opravdu odeslat odpověď do datové schránky ${message.senderBoxId} včetně ${attachmentCount} ${attachmentCount === 1 ? "přílohy" : "příloh"}? Tuto akci nelze vzít zpět.`
+  )) return;
+  dataBoxPlusState.replyDraftSaving = true;
+  dataBoxPlusState.replyDraftError = "";
+  render();
   try {
-    const result = await apiJson(`/api/data-box-plus/messages/${encodeURIComponent(messageId)}/reply`, {
+    const result = await apiJson(`/api/data-box-plus/drafts/${encodeURIComponent(draft.id)}/send`, {
       method: "POST",
-      body: JSON.stringify({
-        confirmed: true,
-        recipientDataBoxId: message.senderBoxId,
-        subject: String(message.subject || "").toLowerCase().startsWith("re:") ? message.subject : `Re: ${message.subject || "Datová zpráva"}`,
-        body
-      })
+      body: JSON.stringify({ confirmed: true })
     });
+    applyDataBoxPlusReplyDraft(result.draft);
     dataBoxPlusState.notice = result.notice || "Odpověď byla odeslána.";
     dataBoxPlusState.replyDraftMessageId = "";
     delete dataBoxPlusState.replyDraftTexts[messageId];
     await loadDataBoxPlusData({ force: true, renderAfter: false });
   } catch (error) {
-    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Odpověď se nepodařilo odeslat.");
+    dataBoxPlusState.replyDraftError = dataBoxPlusHumanError(
+      error.payload?.error || error.message || "Odpověď se nepodařilo odeslat."
+    );
+  } finally {
+    dataBoxPlusState.replyDraftSaving = false;
+    render();
   }
-  render();
 }
 
 async function runDataBoxPlusBulkAction(action) {
@@ -55805,7 +56040,10 @@ document.addEventListener("input", (event) => {
 
   const dataBoxPlusReplyText = event.target.closest("[data-ds-plus-reply-text]");
   if (dataBoxPlusReplyText) {
-    dataBoxPlusState.replyDraftTexts[dataBoxPlusReplyText.dataset.dsPlusReplyText || ""] = dataBoxPlusReplyText.value || "";
+    const messageId = dataBoxPlusReplyText.dataset.dsPlusReplyText || "";
+    dataBoxPlusState.replyDraftTexts[messageId] = dataBoxPlusReplyText.value || "";
+    dataBoxPlusState.replyDraftError = "";
+    scheduleDataBoxPlusReplyDraftSave(messageId);
     return;
   }
 
@@ -55967,6 +56205,15 @@ document.addEventListener("change", async (event) => {
   const dataBoxPlusComposeAttachment = event.target.closest("[data-ds-plus-compose-attachment]");
   if (dataBoxPlusComposeAttachment) {
     await uploadDataBoxPlusComposeAttachment(dataBoxPlusComposeAttachment.files?.[0]);
+    return;
+  }
+
+  const dataBoxPlusReplyAttachment = event.target.closest("[data-ds-plus-reply-attachment]");
+  if (dataBoxPlusReplyAttachment) {
+    await uploadDataBoxPlusReplyAttachments(
+      dataBoxPlusReplyAttachment.dataset.dsPlusReplyAttachment || "",
+      dataBoxPlusReplyAttachment.files
+    );
     return;
   }
 
@@ -57015,10 +57262,7 @@ document.addEventListener("click", async (event) => {
   const dataBoxPlusReply = event.target.closest("[data-ds-plus-reply]");
   if (dataBoxPlusReply) {
     event.preventDefault();
-    dataBoxPlusState.replyDraftMessageId = dataBoxPlusReply.dataset.dsPlusReply || "";
-    dataBoxPlusState.notice = "Odpověď je otevřená jako návrh. Bez potvrzení se nic neodešle.";
-    render();
-    restoreDataBoxPlusInputFocus(`[data-ds-plus-reply-text="${CSS.escape(dataBoxPlusState.replyDraftMessageId)}"]`);
+    await openDataBoxPlusReply(dataBoxPlusReply.dataset.dsPlusReply || "");
     return;
   }
 
@@ -57032,8 +57276,17 @@ document.addEventListener("click", async (event) => {
   const dataBoxPlusReplyClose = event.target.closest("[data-ds-plus-reply-close]");
   if (dataBoxPlusReplyClose) {
     event.preventDefault();
-    dataBoxPlusState.replyDraftMessageId = "";
-    render();
+    await closeDataBoxPlusReply();
+    return;
+  }
+
+  const dataBoxPlusReplyRemoveAttachment = event.target.closest("[data-ds-plus-reply-remove-attachment]");
+  if (dataBoxPlusReplyRemoveAttachment) {
+    event.preventDefault();
+    await removeDataBoxPlusReplyAttachment(
+      dataBoxPlusState.replyDraftMessageId,
+      dataBoxPlusReplyRemoveAttachment.dataset.dsPlusReplyRemoveAttachment || ""
+    );
     return;
   }
 
@@ -59356,8 +59609,7 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "Escape" && dataBoxPlusState.replyDraftMessageId) {
     event.preventDefault();
-    dataBoxPlusState.replyDraftMessageId = "";
-    render();
+    void closeDataBoxPlusReply();
     return;
   }
   if (event.key === "Escape" && dataBoxPlusState.accessSettingsOpen) {

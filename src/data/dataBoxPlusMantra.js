@@ -1,11 +1,11 @@
 export const DATA_BOX_PLUS_MANTRA = Object.freeze({
-  version: "1.1",
-  updatedAt: "23. 7. 2026 20:30",
-  updatedAtIso: "2026-07-23T20:30:00+02:00",
+  version: "1.2",
+  updatedAt: "24. 7. 2026 00:07",
+  updatedAtIso: "2026-07-24T00:07:08+02:00",
   updatedBy: "Codex",
   status: "Ostrý pracovní modul",
   title: "Datové schránky – provozní mantra",
-  lastChange: "Vlastní úplný archiv KSO pro všechny současné i budoucí schránky",
+  lastChange: "Přílohy v odpovědi přes trvalý koncept a společný bezpečný send tok",
   summary: "Datové schránky jsou ostrý pracovní inbox všech současných i budoucích firemních schránek bez pevného počtu. Přijaté zprávy se automaticky načítají z ISDS každou celou hodinu a mohou vstupovat do pracovního třídění, doporučení AI a auditovaných interních akcí. Každá schránka se automaticky zapojí do vlastního archivu KSO: historický backfill je obnovitelný a podepsaná zpráva i doručenka se ukládají jako ZFO v R2 s kontrolním SHA-256 otiskem. Odeslané datové zprávy jsou pouze neměnná historie; AI, doporučení ani automatizace se nad nimi nespouštějí. E-mail, odpověď přes ISDS ani nová datová zpráva se nikdy neodešlou automaticky: systém je smí připravit, ale člověk musí zkontrolovat adresáta, předmět, text a přílohy a samostatně fyzicky potvrdit odeslání. Placený Datový trezor se nesmí automaticky rušit a lze jej zrušit až po samostatném potvrzení úplnosti migrace. Přístupy se ukládají pouze šifrovaně na serveru v DSP vaultu nebo v Cloudflare secrets; frontend heslo nikdy nečte ani nezobrazuje.",
   rules: Object.freeze([
     "Kanonická trasa modulu je /datove-schranky-plus.",
@@ -25,6 +25,7 @@ export const DATA_BOX_PLUS_MANTRA = Object.freeze({
     "Hesla se nikdy nezobrazují, nevracejí z API ani neukládají v prohlížeči.",
     "PDF příloha má vždy viditelné Otevřít náhled; všechny přílohy lze jednotlivě i hromadně stáhnout.",
     "Hlavní akce Odpovědět zůstává viditelná bez rolování a otevře skutečný editor.",
+    "Odpověď podporuje jednu i více příloh uložených v trvalém konceptu; PDF lze před odesláním otevřít a přílohu odebrat.",
     "Technická diagnostika, confidence a raw serverové údaje nepatří do běžného pracovního pohledu."
   ])
 });

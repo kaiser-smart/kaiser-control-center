@@ -933,6 +933,7 @@ function rowToDraft(row, attachments = []) {
   return {
     id: cleanString(row.id),
     mailboxId: cleanString(row.mailbox_id),
+    replyToMessageId: cleanString(row.reply_to_message_id),
     ownerUserId: cleanString(row.owner_user_id),
     recipientBoxId: cleanString(row.recipient_box_id),
     recipientName: cleanString(row.recipient_name),
@@ -2975,6 +2976,7 @@ function dataBoxPlusDraftInput(payload = {}, fallback = {}) {
   }
   return {
     mailboxId: cleanString(payload.mailboxId ?? fallback.mailbox_id),
+    replyToMessageId: cleanString(payload.replyToMessageId ?? fallback.reply_to_message_id),
     recipientBoxId,
     recipientName: cleanString(payload.recipientName ?? fallback.recipient_name).slice(0, 255),
     subject,
@@ -3029,6 +3031,7 @@ export async function saveDataBoxPlusDraft(env, currentUser, payload = {}) {
         throw new DataBoxPlusStoreError("Odeslaný nebo právě odesílaný koncept už nelze změnit.", 409, "data_box_plus_draft_locked");
       }
       const input = dataBoxPlusDraftInput(payload, existing);
+      input.replyToMessageId = cleanString(existing.reply_to_message_id);
       if (!input.mailboxId) throw new DataBoxPlusStoreError("Vyber odesílající schránku.", 400, "data_box_plus_mailbox_missing");
       const mailbox = await db.prepare("SELECT id FROM data_box_plus_mailboxes WHERE id = ? LIMIT 1").bind(input.mailboxId).first();
       if (!mailbox) throw new DataBoxPlusStoreError("Odesílající schránka nebyla nalezena.", 404, "data_box_plus_mailbox_not_found");
@@ -3053,15 +3056,59 @@ export async function saveDataBoxPlusDraft(env, currentUser, payload = {}) {
     if (!input.mailboxId) throw new DataBoxPlusStoreError("Vyber odesílající schránku.", 400, "data_box_plus_mailbox_missing");
     const mailbox = await db.prepare("SELECT id FROM data_box_plus_mailboxes WHERE id = ? LIMIT 1").bind(input.mailboxId).first();
     if (!mailbox) throw new DataBoxPlusStoreError("Odesílající schránka nebyla nalezena.", 404, "data_box_plus_mailbox_not_found");
+    if (input.replyToMessageId) {
+      const sourceMessage = await db
+        .prepare("SELECT id, mailbox_id, direction FROM data_box_plus_messages WHERE id = ? LIMIT 1")
+        .bind(input.replyToMessageId)
+        .first();
+      if (!sourceMessage) {
+        throw new DataBoxPlusStoreError("Původní datová zpráva nebyla nalezena.", 404, "data_box_plus_reply_source_not_found");
+      }
+      if (cleanString(sourceMessage.direction) !== "received") {
+        throw new DataBoxPlusStoreError("Odpověď lze připravit pouze k přijaté zprávě.", 409, "data_box_plus_reply_source_not_received");
+      }
+      if (cleanString(sourceMessage.mailbox_id) !== input.mailboxId) {
+        throw new DataBoxPlusStoreError("Odpověď musí být odeslána ze schránky původní zprávy.", 409, "data_box_plus_reply_mailbox_mismatch");
+      }
+      const existingReply = await db.prepare(`
+        SELECT *
+        FROM data_box_plus_drafts
+        WHERE owner_user_id = ?
+          AND reply_to_message_id = ?
+          AND status IN ('draft', 'failed', 'sending', 'unknown')
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `).bind(owner, input.replyToMessageId).first();
+      if (existingReply) {
+        if (["sending", "unknown"].includes(cleanString(existingReply.status))) {
+          return dataBoxPlusDraft(db, existingReply.id, currentUser);
+        }
+        await db.prepare(`
+          UPDATE data_box_plus_drafts
+          SET recipient_box_id = ?, recipient_name = ?, subject = ?, body = ?,
+              status = 'draft', error_message = NULL, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND owner_user_id = ?
+        `).bind(
+          input.recipientBoxId,
+          input.recipientName,
+          input.subject,
+          input.body,
+          existingReply.id,
+          owner
+        ).run();
+        return dataBoxPlusDraft(db, existingReply.id, currentUser);
+      }
+    }
     const id = idValue("dbp-draft");
     await db.prepare(`
       INSERT INTO data_box_plus_drafts (
-        id, mailbox_id, owner_user_id, recipient_box_id, recipient_name, subject, body,
+        id, mailbox_id, reply_to_message_id, owner_user_id, recipient_box_id, recipient_name, subject, body,
         status, idempotency_key, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)
     `).bind(
       id,
       input.mailboxId,
+      input.replyToMessageId || null,
       owner,
       input.recipientBoxId,
       input.recipientName,
@@ -3155,6 +3202,35 @@ export async function deleteDataBoxPlusDraftAttachment(env, draftId, attachmentI
   return dataBoxPlusDraft(db, draftRow.id, currentUser);
 }
 
+export async function getDataBoxPlusDraftAttachmentFile(env, draftId, attachmentIdValue, currentUser) {
+  const db = dataBoxPlusDatabase(env, true);
+  const bucket = dataBoxPlusDocumentsBucket(env);
+  if (!bucket) throw new DataBoxPlusStoreError("Úložiště příloh není dostupné.", 503, "data_box_plus_storage_missing");
+  const draftRow = await dataBoxPlusDraftRow(db, draftId, currentUser);
+  const row = await db
+    .prepare("SELECT * FROM data_box_plus_draft_attachments WHERE id = ? AND draft_id = ? LIMIT 1")
+    .bind(cleanString(attachmentIdValue), draftRow.id)
+    .first();
+  const attachment = rowToDraftAttachment(row);
+  if (!attachment?.id) {
+    throw new DataBoxPlusStoreError("Příloha konceptu nebyla nalezena.", 404, "data_box_plus_attachment_not_found");
+  }
+  const storageKey = cleanString(row.storage_key);
+  const object = storageKey ? await bucket.get(storageKey) : null;
+  if (!object) {
+    throw new DataBoxPlusStoreError("Soubor přílohy nebyl v úložišti nalezen.", 404, "data_box_plus_attachment_object_missing");
+  }
+  return {
+    attachment,
+    body: object.body,
+    headers: {
+      "Content-Type": cleanString(row.mime_type) || object.httpMetadata?.contentType || "application/octet-stream",
+      "Content-Disposition": `inline; filename="${safeFilename(row.file_name).replace(/"/g, "")}"`,
+      "Cache-Control": "private, no-store"
+    }
+  };
+}
+
 async function dataBoxPlusRequestHash(payload) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(payload)));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -3186,6 +3262,7 @@ export async function sendDataBoxPlusDraft(env, draftId, payload = {}, currentUs
   const requestDescriptor = {
     hashVersion: 2,
     sourceMailboxId: draft.mailboxId,
+    replyToMessageId: draft.replyToMessageId,
     recipientDataBoxId: draft.recipientBoxId,
     recipientName: draft.recipientName,
     subject: draft.subject,
@@ -3314,6 +3391,7 @@ export async function sendDataBoxPlusDraft(env, draftId, payload = {}, currentUs
   const requestPayload = {
     sourceMailboxId: draft.mailboxId,
     sourceMailboxIsdsId: cleanString(mailbox.isds_id),
+    originalMessageId: draft.replyToMessageId,
     recipientDataBoxId: draft.recipientBoxId,
     recipientName: draft.recipientName,
     subject: draft.subject,
@@ -3505,21 +3583,35 @@ export async function sendDataBoxPlusDraft(env, draftId, payload = {}, currentUs
     await db.prepare(`
       INSERT INTO data_box_plus_action_log (
         id, message_id, recommendation_id, actor, action_type, action_payload, created_at, result, audit_note
-      ) VALUES (?, ?, NULL, ?, 'Odeslání nové datové zprávy', ?, ?, 'sent', ?)
+      ) VALUES (?, ?, NULL, ?, ?, ?, ?, 'sent', ?)
     `).bind(
       idValue("dbp-action"),
-      sentMessageId,
+      draft.replyToMessageId || sentMessageId,
       actorName(currentUser),
+      draft.replyToMessageId ? "Odeslání odpovědi datovou zprávou" : "Odeslání nové datové zprávy",
       JSON.stringify({
         draftId: draft.id,
+        replyToMessageId: draft.replyToMessageId,
         recipientDataBoxId: draft.recipientBoxId,
         subject: draft.subject,
         attachmentCount: draft.attachments.length,
         idempotencyKey: draft.idempotencyKey
       }),
       sentAt,
-      `Nová datová zpráva byla potvrzeně odeslána${providerMessageId ? ` jako ${providerMessageId}` : ""}.`
+      `${draft.replyToMessageId ? "Odpověď" : "Nová datová zpráva"} byla potvrzeně odeslána${providerMessageId ? ` jako ${providerMessageId}` : ""}.`
     ).run();
+    if (draft.replyToMessageId) {
+      await db.prepare(`
+        UPDATE data_box_plus_messages
+        SET status = 'Odpovězeno datovou schránkou',
+            assigned_to = ?,
+            suggested_action = 'Odpověď byla odeslána přes datovou schránku.',
+            primary_action = 'Detail historie',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND direction = 'received'
+      `).bind(draft.recipientBoxId, draft.replyToMessageId).run();
+      await updateMailboxCounters(db, draft.mailboxId);
+    }
   } catch (error) {
     auditWarnings.push("Zpráva byla odeslaná, ale lokální evidence není úplná.");
     console.error("data_box_plus.new_message_audit_failed", { message: error?.message, draftId: draft.id, providerMessageId });

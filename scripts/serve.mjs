@@ -281,6 +281,7 @@ let mockDataBoxSyncRuns = [];
 let mockDataBoxActions = [];
 let mockDataBoxPlusPendingAction = null;
 let mockDataBoxPlusDrafts = [];
+let mockDataBoxPlusDraftAttachmentFiles = new Map();
 let mockDataBoxPlusMessage = {
   id: "mock-data-box-plus-message",
   mailboxId: "mock-data-box-plus-mailbox",
@@ -8048,12 +8049,23 @@ async function handleApi(request, response) {
     }
     const body = await readJsonBody(request);
     const now = new Date().toISOString();
+    const existingReplyDraft = body.replyToMessageId
+      ? mockDataBoxPlusDrafts.find((item) => (
+        item.replyToMessageId === body.replyToMessageId
+        && ["draft", "failed", "sending", "unknown"].includes(item.status)
+      ))
+      : null;
+    if (existingReplyDraft) {
+      sendJson(response, 200, { apiStatus: "ready", draft: existingReplyDraft });
+      return true;
+    }
     const draft = {
       id: `mock-draft-${randomUUID()}`,
       mailboxId: body.mailboxId || "mock-data-box-plus-mailbox",
+      replyToMessageId: body.replyToMessageId || "",
       ownerUserId: user.id,
       recipientBoxId: body.recipientBoxId || "",
-      recipientName: "",
+      recipientName: body.recipientName || "",
       subject: body.subject || "",
       body: body.body || "",
       status: "draft",
@@ -8085,6 +8097,7 @@ async function handleApi(request, response) {
       ...current,
       mailboxId: body.mailboxId || current.mailboxId,
       recipientBoxId: body.recipientBoxId ?? current.recipientBoxId,
+      recipientName: body.recipientName ?? current.recipientName,
       subject: body.subject ?? current.subject,
       body: body.body ?? current.body,
       updatedAt: new Date().toISOString()
@@ -8101,8 +8114,96 @@ async function handleApi(request, response) {
       return true;
     }
     const id = decodeURIComponent(dataBoxPlusDraftMatch[1]);
+    for (const attachment of mockDataBoxPlusDrafts.find((draft) => draft.id === id)?.attachments || []) {
+      mockDataBoxPlusDraftAttachmentFiles.delete(attachment.id);
+    }
     mockDataBoxPlusDrafts = mockDataBoxPlusDrafts.filter((draft) => draft.id !== id);
     sendJson(response, 200, { apiStatus: "ready", status: "deleted", draftId: id });
+    return true;
+  }
+
+  const dataBoxPlusDraftAttachmentsMatch = /^\/api\/data-box-plus\/drafts\/([^/]+)\/attachments$/.exec(url.pathname);
+  if (dataBoxPlusDraftAttachmentsMatch && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user || !canManageMockDataBox(user)) {
+      sendJson(response, user ? 403 : 401, { error: user ? "Nemáte oprávnění přidat přílohu." : "Nepřihlášeno." });
+      return true;
+    }
+    const draftId = decodeURIComponent(dataBoxPlusDraftAttachmentsMatch[1]);
+    const draft = mockDataBoxPlusDrafts.find((item) => item.id === draftId);
+    if (!draft) {
+      sendJson(response, 404, { error: "Koncept nebyl nalezen." });
+      return true;
+    }
+    const { files } = await readMultipartFormData(request);
+    const file = files.get("file");
+    if (!file?.buffer?.length) {
+      sendJson(response, 400, { error: "Vyber přílohu." });
+      return true;
+    }
+    const totalBytes = draft.attachments.reduce((sum, item) => sum + Number(item.sizeBytes || 0), 0);
+    if (draft.attachments.length >= 20 || totalBytes + file.buffer.length > 20 * 1024 * 1024) {
+      sendJson(response, 400, { error: "Koncept může mít nejvýše 20 příloh a celkem 20 MB." });
+      return true;
+    }
+    const attachment = {
+      id: `mock-draft-attachment-${randomUUID()}`,
+      draftId,
+      fileName: file.name || "priloha",
+      mimeType: file.type || "application/octet-stream",
+      sizeBytes: file.buffer.length,
+      size: `${Math.round(file.buffer.length / 1024)} kB`,
+      createdAt: new Date().toISOString()
+    };
+    draft.attachments = [...draft.attachments, attachment];
+    draft.updatedAt = new Date().toISOString();
+    mockDataBoxPlusDraftAttachmentFiles.set(attachment.id, file);
+    sendJson(response, 201, { apiStatus: "ready", draft });
+    return true;
+  }
+
+  const dataBoxPlusDraftAttachmentMatch = /^\/api\/data-box-plus\/drafts\/([^/]+)\/attachments\/([^/]+)$/.exec(url.pathname);
+  if (dataBoxPlusDraftAttachmentMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user || !canManageMockDataBox(user)) {
+      sendJson(response, user ? 403 : 401, { error: user ? "Nemáte oprávnění otevřít přílohu." : "Nepřihlášeno." });
+      return true;
+    }
+    const draftId = decodeURIComponent(dataBoxPlusDraftAttachmentMatch[1]);
+    const attachmentId = decodeURIComponent(dataBoxPlusDraftAttachmentMatch[2]);
+    const draft = mockDataBoxPlusDrafts.find((item) => item.id === draftId);
+    const attachment = draft?.attachments.find((item) => item.id === attachmentId);
+    const file = attachment ? mockDataBoxPlusDraftAttachmentFiles.get(attachmentId) : null;
+    if (!attachment || !file) {
+      sendJson(response, 404, { error: "Příloha konceptu nebyla nalezena." });
+      return true;
+    }
+    response.writeHead(200, {
+      "Content-Type": attachment.mimeType,
+      "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(attachment.fileName)}`,
+      "Cache-Control": "private, no-store"
+    });
+    response.end(file.buffer);
+    return true;
+  }
+
+  if (dataBoxPlusDraftAttachmentMatch && request.method === "DELETE") {
+    const user = currentDevUser(request);
+    if (!user || !canManageMockDataBox(user)) {
+      sendJson(response, user ? 403 : 401, { error: user ? "Nemáte oprávnění odebrat přílohu." : "Nepřihlášeno." });
+      return true;
+    }
+    const draftId = decodeURIComponent(dataBoxPlusDraftAttachmentMatch[1]);
+    const attachmentId = decodeURIComponent(dataBoxPlusDraftAttachmentMatch[2]);
+    const draft = mockDataBoxPlusDrafts.find((item) => item.id === draftId);
+    if (!draft?.attachments.some((item) => item.id === attachmentId)) {
+      sendJson(response, 404, { error: "Příloha konceptu nebyla nalezena." });
+      return true;
+    }
+    draft.attachments = draft.attachments.filter((item) => item.id !== attachmentId);
+    draft.updatedAt = new Date().toISOString();
+    mockDataBoxPlusDraftAttachmentFiles.delete(attachmentId);
+    sendJson(response, 200, { apiStatus: "ready", draft });
     return true;
   }
 

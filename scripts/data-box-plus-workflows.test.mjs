@@ -16,14 +16,18 @@ import {
 const migration = readFileSync(new URL("../migrations/0055_create_data_box_plus_workflows.sql", import.meta.url), "utf8");
 const sentHistoryMigration = readFileSync(new URL("../migrations/0056_data_box_plus_sent_history_only.sql", import.meta.url), "utf8");
 const sendAuditMigration = readFileSync(new URL("../migrations/0057_extend_data_box_plus_send_job_audit.sql", import.meta.url), "utf8");
+const replyDraftMigration = readFileSync(new URL("../migrations/0059_add_data_box_plus_reply_drafts.sql", import.meta.url), "utf8");
 const store = readFileSync(new URL("../functions/_lib/data-box-plus-store.js", import.meta.url), "utf8");
 const isdsClient = readFileSync(new URL("../functions/_lib/data-box-isds-client.js", import.meta.url), "utf8");
 const app = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const messagesApi = readFileSync(new URL("../functions/api/data-box-plus/messages.js", import.meta.url), "utf8");
 const draftApi = readFileSync(new URL("../functions/api/data-box-plus/drafts/index.js", import.meta.url), "utf8");
 const sendApi = readFileSync(new URL("../functions/api/data-box-plus/drafts/[id]/send.js", import.meta.url), "utf8");
+const draftAttachmentApi = readFileSync(new URL("../functions/api/data-box-plus/drafts/[id]/attachments/[attachmentId].js", import.meta.url), "utf8");
 const bulkApi = readFileSync(new URL("../functions/api/data-box-plus/messages/bulk.js", import.meta.url), "utf8");
 const archiveApi = readFileSync(new URL("../functions/api/data-box-plus/attachments/download-all.js", import.meta.url), "utf8");
+const localServer = readFileSync(new URL("./serve.mjs", import.meta.url), "utf8");
+const replyPdfFixture = readFileSync(new URL("./fixtures/data-box-plus-reply-test.pdf", import.meta.url), "utf8");
 
 assert.match(migration, /CREATE TABLE IF NOT EXISTS data_box_plus_drafts/);
 assert.match(migration, /CREATE TABLE IF NOT EXISTS data_box_plus_draft_attachments/);
@@ -36,6 +40,8 @@ assert.match(sentHistoryMigration, /summary_loaded = 0/);
 assert.match(sendAuditMigration, /ADD COLUMN phase/);
 assert.match(sendAuditMigration, /ADD COLUMN attempt_count/);
 assert.match(sendAuditMigration, /ADD COLUMN last_event_at/);
+assert.match(replyDraftMigration, /ADD COLUMN reply_to_message_id/);
+assert.match(replyDraftMigration, /idx_data_box_plus_drafts_reply/);
 
 const migrationDatabase = new DatabaseSync(":memory:");
 migrationDatabase.exec("CREATE TABLE data_box_plus_mailboxes (id TEXT PRIMARY KEY);");
@@ -57,6 +63,8 @@ migrationDatabase.exec(`
   );
 `);
 migrationDatabase.exec(sendAuditMigration);
+migrationDatabase.exec("CREATE TABLE data_box_plus_messages (id TEXT PRIMARY KEY);");
+migrationDatabase.exec(replyDraftMigration);
 assert.deepEqual(
   migrationDatabase.prepare("PRAGMA table_info(data_box_plus_send_jobs)").all()
     .map((column) => column.name)
@@ -71,6 +79,10 @@ assert.deepEqual(
     last_event_at: "2026-07-23T08:00:00.000Z"
   }
 );
+assert.ok(
+  migrationDatabase.prepare("PRAGMA table_info(data_box_plus_drafts)").all()
+    .some((column) => column.name === "reply_to_message_id")
+);
 migrationDatabase.close();
 
 assert.deepEqual(dataBoxPlusDraftInputForTest({
@@ -80,11 +92,17 @@ assert.deepEqual(dataBoxPlusDraftInputForTest({
   body: "Text"
 }), {
   mailboxId: "mailbox-1",
+  replyToMessageId: "",
   recipientBoxId: "ab12cd3",
   recipientName: "",
   subject: "Předmět",
   body: "Text"
 });
+assert.equal(dataBoxPlusDraftInputForTest({
+  mailboxId: "mailbox-1",
+  replyToMessageId: "message-1",
+  recipientBoxId: "AB12CD3"
+}).replyToMessageId, "message-1");
 assert.throws(
   () => dataBoxPlusDraftInputForTest({ recipientBoxId: "wrong" }),
   (error) => error instanceof DataBoxPlusStoreError && error.code === "data_box_plus_recipient_invalid"
@@ -199,11 +217,24 @@ assert.match(store, /phase = 'completed'/);
 assert.match(store, /attempt_count = COALESCE\(attempt_count, 0\) \+ 1/);
 assert.match(store, /if \(\["sending", "unknown"\]\.includes\(cleanString\(existingJob\?\.status\)\)\)/);
 assert.match(store, /data_box_plus_send_result_unknown/);
+assert.match(store, /replyToMessageId: cleanString\(row\.reply_to_message_id\)/);
+assert.match(store, /reply_to_message_id = \?/);
+assert.match(store, /status IN \('draft', 'failed', 'sending', 'unknown'\)/);
+assert.match(store, /originalMessageId: draft\.replyToMessageId/);
+assert.match(store, /status = 'Odpovězeno datovou schránkou'/);
+assert.match(store, /getDataBoxPlusDraftAttachmentFile/);
 
 for (const source of [draftApi, sendApi, bulkApi]) {
   assert.match(source, /requireUserPermission\(env, request, "data-box-plus", "manage"\)/);
 }
 assert.match(archiveApi, /requireUserPermission\(env, request, "data-box-plus", "view"\)/);
+assert.match(draftAttachmentApi, /onRequestGet/);
+assert.match(draftAttachmentApi, /getDataBoxPlusDraftAttachmentFile/);
+assert.match(localServer, /replyToMessageId: body\.replyToMessageId/);
+assert.match(localServer, /dataBoxPlusDraftAttachmentsMatch/);
+assert.match(localServer, /dataBoxPlusDraftAttachmentMatch/);
+assert.match(localServer, /Content-Disposition": `inline/);
+assert.match(replyPdfFixture, /^%PDF-1\.4/);
 assert.match(messagesApi, /mailboxId:/);
 assert.match(messagesApi, /dateFrom:/);
 assert.match(messagesApi, /attachment:/);
@@ -218,6 +249,20 @@ assert.match(app, /sentHistoryOnly \? "" : `<p class="ds-plus-triage-row__recomm
 assert.match(app, /sentHistoryOnly \? "" : dataBoxPlusSummary\(message\)/);
 assert.match(app, /window\.confirm\(`Opravdu odeslat datovou zprávu/);
 assert.match(app, /flushDataBoxPlusComposeDraftSave/);
+assert.match(app, /data-ds-plus-reply-attachment=/);
+assert.match(app, /data-ds-plus-reply-remove-attachment=/);
+assert.match(app, /multiple data-ds-plus-reply-attachment/);
+assert.match(app, /function dataBoxPlusReplyDraft\(messageId\)/);
+assert.match(app, /flushDataBoxPlusReplyDraftSave/);
+assert.match(app, /draft\.replyToMessageId === id && \["draft", "failed", "sending", "unknown"\]/);
+assert.match(app, /\/api\/data-box-plus\/drafts\/\$\{encodeURIComponent\(draft\.id\)\}\/send/);
+assert.doesNotMatch(
+  app.slice(
+    app.indexOf("async function sendDataBoxPlusReplyFromOverlay"),
+    app.indexOf("async function runDataBoxPlusBulkAction")
+  ),
+  /\/api\/data-box-plus\/messages\/\$\{encodeURIComponent\(messageId\)\}\/reply/
+);
 assert.match(app, /Dokončuji uložení…/);
 assert.doesNotMatch(app, /Odeslání zatím není aktivní/);
 

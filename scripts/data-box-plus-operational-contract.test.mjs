@@ -27,6 +27,9 @@ assert.equal(DATA_BOX_PLUS_OPERATIONAL_CONTRACT.externalSending.dataBoxReplyAuto
 assert.equal(DATA_BOX_PLUS_OPERATIONAL_CONTRACT.externalSending.physicalConfirmationRequired, true);
 assert.equal(DATA_BOX_PLUS_OPERATIONAL_CONTRACT.credentials.frontendMayReadPassword, false);
 assert.equal(DATA_BOX_PLUS_OPERATIONAL_CONTRACT.ui.replyActionAlwaysVisible, true);
+assert.equal(DATA_BOX_PLUS_OPERATIONAL_CONTRACT.ui.replyAttachmentUploadRequired, true);
+assert.equal(DATA_BOX_PLUS_OPERATIONAL_CONTRACT.ui.replyAttachmentPreviewRequired, true);
+assert.equal(DATA_BOX_PLUS_OPERATIONAL_CONTRACT.ui.replyUsesPersistentDraft, true);
 assert.equal(DATA_BOX_PLUS_OPERATIONAL_CONTRACT.ui.pdfPreviewButtonRequired, true);
 
 assert.match(appSource, /dataBoxPlusAccessSettingsOverlay\(user\)/);

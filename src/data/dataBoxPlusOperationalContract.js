@@ -72,6 +72,9 @@ export const DATA_BOX_PLUS_OPERATIONAL_CONTRACT = Object.freeze({
   }),
   ui: Object.freeze({
     replyActionAlwaysVisible: true,
+    replyAttachmentUploadRequired: true,
+    replyAttachmentPreviewRequired: true,
+    replyUsesPersistentDraft: true,
     detailDesktop: "right-panel",
     detailMobile: "full-screen",
     pdfPreviewButtonRequired: true,

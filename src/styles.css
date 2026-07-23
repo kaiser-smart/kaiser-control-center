@@ -39152,6 +39152,91 @@ body:has(.ds-plus-page) {
   gap: 10px;
 }
 
+.ds-plus-reply-attachments__head,
+.ds-plus-reply-attachment-list li,
+.ds-plus-reply-attachment-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ds-plus-reply-attachments__head {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.ds-plus-reply-attachments__head h3,
+.ds-plus-reply-attachments__head p,
+.ds-plus-reply-attachment-empty,
+.ds-plus-reply-save-state {
+  margin: 0;
+}
+
+.ds-plus-reply-file {
+  position: relative;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.ds-plus-reply-file input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ds-plus-reply-file:has(input:focus-visible) {
+  outline: 3px solid rgba(117, 189, 37, 0.35);
+  outline-offset: 3px;
+}
+
+.ds-plus-reply-file:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ds-plus-reply-attachment-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ds-plus-reply-attachment-list li {
+  justify-content: space-between;
+  min-width: 0;
+  border: 1px solid #dce7d8;
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.ds-plus-reply-attachment-list li > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ds-plus-reply-attachment-list strong {
+  overflow-wrap: anywhere;
+}
+
+.ds-plus-reply-attachment-list span,
+.ds-plus-reply-save-state,
+.ds-plus-reply-attachment-empty {
+  color: #526052;
+  font-size: 0.86rem;
+}
+
+.ds-plus-reply-attachment-actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
 .ds-plus-reply-check {
   display: grid;
   gap: 12px;
@@ -39318,6 +39403,19 @@ body:has(.ds-plus-page) {
     font-size: clamp(1.55rem, 9vw, 2rem);
     line-height: 1.08;
     overflow-wrap: anywhere;
+  }
+
+  .ds-plus-reply-attachments__head,
+  .ds-plus-reply-attachment-list li,
+  .ds-plus-reply-attachment-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ds-plus-reply-file,
+  .ds-plus-reply-attachment-actions button {
+    width: 100%;
+    justify-content: center;
   }
 
   .ds-plus-header p,
