@@ -109,11 +109,26 @@ assert.equal(item.microstate, "suggested_route");
 assert.equal(item.readOnly, false);
 assert.equal(item.persisted, true);
 
+const sentHistoryItem = dataBoxPlusTriageItem(message({
+  direction: "sent",
+  recipientName: "Ministerstvo",
+  recipientBoxId: "kr7cdry",
+  status: "Nová",
+  recommendedAction: "Toto se nesmí zobrazit"
+}), { mailbox, today: TODAY });
+assert.equal(sentHistoryItem.readOnly, true);
+assert.equal(sentHistoryItem.recipientName, "Ministerstvo");
+assert.equal(sentHistoryItem.target, "");
+assert.equal(sentHistoryItem.microstateLabel, "Odesláno");
+assert.equal(sentHistoryItem.laneLabel, "Historie");
+assert.equal(sentHistoryItem.isUnread, false);
+
 const messages = [
   message({ id: "todo", status: "Nová" }),
   message({ id: "handed", assignedTo: "Účetní" }),
   message({ id: "done", status: "Archivováno" }),
   message({ id: "sent", direction: "sent", status: "Nová" }),
+  message({ id: "sent-done", direction: "sent", status: "Archivováno" }),
   message({ id: "other-mailbox", mailboxId: "mailbox-2", status: "Nová" })
 ];
 
@@ -132,7 +147,7 @@ assert.deepEqual(
 );
 assert.deepEqual(
   dataBoxPlusTriageItems(messages, [mailbox], { mailboxId: mailbox.id, folder: "sent", today: TODAY }).map(({ id }) => id),
-  ["sent"]
+  ["sent", "sent-done"]
 );
 assert.deepEqual(
   dataBoxPlusTriageItems(messages, [mailbox], { mailboxId: mailbox.id, folder: "archive", today: TODAY }).map(({ id }) => id),

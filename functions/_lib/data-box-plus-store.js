@@ -1,9 +1,11 @@
 import {
+  DataBoxIsdsError,
   dataBoxIsdsAccountFromCredentials,
   dataBoxIsdsAccountConfigs,
   dataBoxIsdsStatus,
   fetchDataBoxMessageAttachments,
-  fetchDataBoxMessageMetadata
+  fetchDataBoxMessageMetadata,
+  sendDataBoxIsdsMessage
 } from "./data-box-isds-client.js";
 import { communicationEmailIdentity } from "./communication-store.js";
 import {
@@ -165,10 +167,12 @@ function sendReadiness(env = {}) {
   const smsConfig = customerMessagingStatus(env);
   const openAi = dataBoxPlusOpenAiStatus(env);
   const emailReady = emailProvider === "sendgrid" && Boolean(emailIdentity.fromEmail && cleanString(env.SENDGRID_API_KEY || env.EMAIL_API_KEY));
-  const dataBoxReady = Boolean(
+  const gatewayReady = Boolean(
     cleanString(env.DATA_BOX_SEND_MESSAGE_ENDPOINT || env.DATA_BOX_REPLY_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT)
     && cleanString(env.DATA_BOX_REPLY_API_KEY || env.KNF_DATA_BOX_REPLY_API_KEY)
   );
+  const directIsdsReady = dataBoxIsdsStatus(env).configured;
+  const dataBoxReady = directIsdsReady || gatewayReady;
   const smsReady = smsConfig.mode === "live" && smsConfig.twilioConfigured;
 
   return {
@@ -181,10 +185,13 @@ function sendReadiness(env = {}) {
     },
     dataBox: {
       enabled: dataBoxReady,
-      label: dataBoxReady ? "zapnuto" : "čeká na DS bránu",
-      text: dataBoxReady
-        ? "Serverová DS brána je dostupná. Nová zpráva i potvrzená odpověď se odesílají přes backend s idempotencí a auditem."
-        : "Chybí DATA_BOX_SEND_MESSAGE_ENDPOINT nebo kompatibilní DS endpoint a DATA_BOX_REPLY_API_KEY. Bez nich DSP datovou zprávu neodešle."
+      mode: directIsdsReady ? "direct-isds" : gatewayReady ? "gateway" : "unavailable",
+      label: dataBoxReady ? "připojeno k ISDS" : "čeká na přístup ISDS",
+      text: directIsdsReady
+        ? "Odesílání je připravené přímo přes přihlášené produkční schránky ISDS."
+        : gatewayReady
+          ? "Odesílání je připravené přes kompatibilní serverovou DS bránu."
+          : "Chybí aktivní přístup k odesílající datové schránce ISDS."
     },
     email: {
       enabled: emailReady,
@@ -752,6 +759,25 @@ async function dataBoxPlusAccountConfigs(env) {
     .sort((a, b) => numberValue(a.slot) - numberValue(b.slot));
 }
 
+async function dataBoxPlusSendingAccount(env, mailbox = {}) {
+  const mailboxId = cleanString(mailbox.id || mailbox.mailboxId || mailbox.mailbox_id);
+  const slot = numberValue(mailbox.slot);
+  const accounts = await dataBoxPlusAccountConfigs(env);
+  return accounts.find((account) => cleanString(account.id) === mailboxId)
+    || accounts.find((account) => slot && numberValue(account.slot) === slot)
+    || null;
+}
+
+function ensureReceivedDataBoxPlusMessage(message = {}) {
+  if (normalizeDirection(message.direction) === "sent") {
+    throw new DataBoxPlusStoreError(
+      "Odeslané datové zprávy jsou pouze historie. AI ani pracovní akce se nad nimi nespouštějí.",
+      409,
+      "data_box_plus_sent_history_only"
+    );
+  }
+}
+
 function mailboxPayload(body = {}, fallback = {}) {
   const slot = numberValue(body.slot ?? fallback.slot);
   if (!slot || slot < 1 || slot > EXPECTED_MAILBOX_COUNT) {
@@ -906,6 +932,7 @@ function rowToMessage(row, attachments = [], actionLogs = []) {
     direction: cleanString(row.direction || "received"),
     senderName: cleanString(row.sender_name) || "Datová schránka",
     senderBoxId: cleanString(row.sender_box_id),
+    recipientName: cleanString(row.recipient_name),
     recipientBoxId: cleanString(row.recipient_box_id),
     subject: cleanString(row.subject) || "Datová zpráva",
     deliveredAt: cleanString(row.delivered_at || row.received_at),
@@ -1048,6 +1075,7 @@ async function updateMailboxCounters(db, mailboxId) {
         SUM(CASE WHEN status IN ('Chybí vozidlo', 'Chybí příloha', 'Nelze provést') OR attachment_status LIKE 'Nepodařilo%' THEN 1 ELSE 0 END) AS problem_count
       FROM data_box_plus_messages
       WHERE mailbox_id = ?
+        AND direction <> 'sent'
     `)
     .bind(mailboxId)
     .first();
@@ -1257,6 +1285,7 @@ async function upsertMessage(db, env, account, mailbox, message) {
     .first();
   const targetMessageId = existing?.id || messageId;
 
+  const sentHistoryOnly = direction === "sent";
   if (!existing?.id) {
     await db
       .prepare(`
@@ -1279,19 +1308,69 @@ async function upsertMessage(db, env, account, mailbox, message) {
         cleanString(message.subject),
         cleanString(message.deliveredAt),
         cleanString(message.acceptedAt || message.deliveredAt),
-        "Oznámení ISDS",
-        "Nové",
-        "Střední",
+        sentHistoryOnly ? "Odeslaná zpráva" : "Oznámení ISDS",
+        sentHistoryOnly ? "Odesláno" : "Nové",
+        sentHistoryOnly ? "" : "Střední",
         "normal",
-        "Otevřít zprávu a ručně určit, zda jde o potvrzení, účetní/mzdovou agendu, nebo zprávu k archivaci.",
-        "Nová datová zpráva čeká na první rozhodnutí.",
-        "Otevřít zprávu",
+        sentHistoryOnly ? "" : "Otevřít zprávu a ručně určit, zda jde o potvrzení, účetní/mzdovou agendu, nebo zprávu k archivaci.",
+        sentHistoryOnly ? "" : "Nová datová zpráva čeká na první rozhodnutí.",
+        sentHistoryOnly ? "Otevřít" : "Otevřít zprávu",
         message?.hasAttachments ? "Text zatím nenačten" : "Dostupná"
       )
       .run();
   }
 
   const attachmentState = await syncAttachments(db, env, account, mailboxId, message, messageId);
+  if (sentHistoryOnly) {
+    await db
+      .prepare(`
+        UPDATE data_box_plus_messages
+        SET
+          mailbox_id = ?,
+          isds_message_id = ?,
+          direction = 'sent',
+          sender_name = ?,
+          sender_box_id = ?,
+          recipient_name = ?,
+          recipient_box_id = ?,
+          subject = ?,
+          delivered_at = ?,
+          received_at = ?,
+          message_type = 'Odeslaná zpráva',
+          status = 'Odesláno',
+          risk_level = '',
+          priority = 'normal',
+          due_date = '',
+          suggested_action = '',
+          priority_reason = '',
+          primary_action = 'Otevřít',
+          assigned_to = '',
+          archive_status = 'active',
+          attachment_status = ?,
+          facts_json = '[]',
+          summary = '',
+          summary_source = '',
+          summary_loaded = 0,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `)
+      .bind(
+        mailboxId,
+        isdsMessageId,
+        cleanString(message.senderName),
+        cleanString(message.senderBoxId),
+        cleanString(message.recipientName),
+        cleanString(message.recipientBoxId),
+        cleanString(message.subject),
+        cleanString(message.deliveredAt),
+        cleanString(message.acceptedAt || message.deliveredAt),
+        attachmentState.status,
+        targetMessageId
+      )
+      .run();
+    await db.prepare("DELETE FROM data_box_plus_recommendations WHERE message_id = ?").bind(targetMessageId).run();
+    return { state: existing?.id ? "updated" : "created", attachmentsDownloaded: attachmentState.downloaded };
+  }
   const classification = classifyMessage(message, attachmentState);
   const facts = classification.facts || [];
   const summaryLoaded = Boolean(attachmentState.extractedText);
@@ -1482,10 +1561,20 @@ export async function getDataBoxPlusStatus(env) {
       .prepare("SELECT * FROM data_box_plus_sync_runs ORDER BY started_at DESC LIMIT 1")
       .first();
     const waitingRow = await db
-      .prepare("SELECT COUNT(*) AS count FROM data_box_plus_recommendations WHERE status = 'waiting'")
+      .prepare(`
+        SELECT COUNT(*) AS count
+        FROM data_box_plus_recommendations r
+        JOIN data_box_plus_messages m ON m.id = r.message_id
+        WHERE r.status = 'waiting' AND m.direction <> 'sent'
+      `)
       .first();
     const confirmedRow = await db
-      .prepare("SELECT COUNT(*) AS count FROM data_box_plus_recommendations WHERE status = 'confirmed'")
+      .prepare(`
+        SELECT COUNT(*) AS count
+        FROM data_box_plus_recommendations r
+        JOIN data_box_plus_messages m ON m.id = r.message_id
+        WHERE r.status = 'confirmed' AND m.direction <> 'sent'
+      `)
       .first();
     const learnedPatternsRow = await db
       .prepare("SELECT COUNT(*) AS count FROM data_box_plus_rules WHERE type = 'Učící vzor'")
@@ -1498,6 +1587,7 @@ export async function getDataBoxPlusStatus(env) {
         SELECT COUNT(*) AS count
         FROM data_box_plus_messages
         WHERE archive_status <> 'archived'
+          AND direction <> 'sent'
           AND status IN ('Nové', 'Potřebuje pokyn', 'Potřebuje upřesnit', 'Potřebuje adresáta', 'Chybí vozidlo', 'Chybí příloha', 'Nelze provést')
       `)
       .first();
@@ -1506,6 +1596,7 @@ export async function getDataBoxPlusStatus(env) {
         SELECT COUNT(*) AS count
         FROM data_box_plus_messages
         WHERE archive_status <> 'archived'
+          AND direction <> 'sent'
           AND status NOT IN ('Archivováno', 'Archivované', 'Vyřešeno', 'Odesláno e-mailem')
       `)
       .first();
@@ -1527,7 +1618,24 @@ export async function getDataBoxPlusStatus(env) {
         pendingPatterns: numberValue(pendingPatternsRow?.count),
         strongAreas: ["Faktury", "Registr smluv", "ČSSZ"]
       },
-      sendReadiness: sendReadiness(env),
+      sendReadiness: (() => {
+        const readiness = sendReadiness(env);
+        const directMailboxReady = mailboxRows.some((row) => {
+          const fallback = fallbackMap.get(numberValue(row.slot));
+          return Boolean(rowToMailbox(row, fallback)?.hasCredentials);
+        });
+        return directMailboxReady
+          ? {
+              ...readiness,
+              dataBox: {
+                enabled: true,
+                mode: "direct-isds",
+                label: "připojeno k ISDS",
+                text: "Odesílání je připravené přímo přes přihlášené produkční schránky ISDS."
+              }
+            }
+          : readiness;
+      })(),
       aiPrompt: {
         source: "server",
         editable: false,
@@ -1963,16 +2071,17 @@ export async function listDataBoxPlusMessagesPage(env, filters = {}) {
   if (["received", "sent"].includes(direction)) add("m.direction = ?", direction);
   if (status && status !== "all") add("m.status = ?", status);
   if (priority && priority !== "all") add("m.priority = ?", priority);
-  if (sender) add("LOWER(COALESCE(m.sender_name, '')) LIKE ?", `%${sender.toLowerCase()}%`);
+  if (sender) add("LOWER(COALESCE(CASE WHEN m.direction = 'sent' THEN m.recipient_name ELSE m.sender_name END, '')) LIKE ?", `%${sender.toLowerCase()}%`);
   if (query) {
     where.push(`(
       LOWER(COALESCE(m.sender_name, '')) LIKE ?
+      OR LOWER(COALESCE(m.recipient_name, '')) LIKE ?
       OR LOWER(COALESCE(m.subject, '')) LIKE ?
       OR LOWER(COALESCE(m.isds_message_id, '')) LIKE ?
       OR LOWER(COALESCE(m.assigned_to, '')) LIKE ?
     )`);
     const needle = `%${query.toLowerCase()}%`;
-    bindings.push(needle, needle, needle, needle);
+    bindings.push(needle, needle, needle, needle, needle);
   }
   if (dateFrom) add("DATE(COALESCE(m.delivered_at, m.received_at, m.stored_at)) >= DATE(?)", dateFrom);
   if (dateTo) add("DATE(COALESCE(m.delivered_at, m.received_at, m.stored_at)) <= DATE(?)", dateTo);
@@ -2096,6 +2205,7 @@ export async function sendDataBoxPlusMessageEmail(env, messageId, payload = {}, 
   }
 
   const message = await getDataBoxPlusMessage(env, id);
+  ensureReceivedDataBoxPlusMessage(message);
   const mailbox = await db
     .prepare("SELECT * FROM data_box_plus_mailboxes WHERE id = ? LIMIT 1")
     .bind(cleanString(message.mailboxId))
@@ -2208,10 +2318,6 @@ export async function sendDataBoxPlusMessageEmail(env, messageId, payload = {}, 
 }
 
 export async function sendDataBoxPlusReply(env, messageId, payload = {}, currentUser = {}) {
-  const readiness = sendReadiness(env);
-  if (!readiness.dataBox.enabled) {
-    throw new DataBoxPlusStoreError(readiness.dataBox.text, 503, "data_box_plus_ds_sender_missing");
-  }
   if (payload.confirmed !== true) {
     throw new DataBoxPlusStoreError("Odeslání datové zprávy vyžaduje finální potvrzení.", 409, "data_box_plus_ds_confirmation_required");
   }
@@ -2219,6 +2325,18 @@ export async function sendDataBoxPlusReply(env, messageId, payload = {}, current
   const db = dataBoxPlusDatabase(env, true);
   const id = cleanString(messageId);
   const message = await getDataBoxPlusMessage(env, id);
+  ensureReceivedDataBoxPlusMessage(message);
+  const mailbox = await db.prepare("SELECT * FROM data_box_plus_mailboxes WHERE id = ? LIMIT 1").bind(message.mailboxId).first();
+  const directAccount = mailbox ? await dataBoxPlusSendingAccount(env, mailbox) : null;
+  const endpoint = cleanString(env.DATA_BOX_SEND_MESSAGE_ENDPOINT || env.DATA_BOX_REPLY_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT);
+  const apiKey = cleanString(env.DATA_BOX_REPLY_API_KEY || env.KNF_DATA_BOX_REPLY_API_KEY);
+  if (!directAccount && !(endpoint && apiKey)) {
+    throw new DataBoxPlusStoreError(
+      "Odesílající schránka nemá aktivní přístup ISDS.",
+      503,
+      "data_box_plus_ds_sender_missing"
+    );
+  }
   const recipientDataBoxId = cleanString(payload.recipientDataBoxId || message.senderBoxId || message.recipientBoxId);
   const body = cleanString(payload.body || payload.text);
   const subject = cleanString(payload.subject || (message.subject.toLowerCase().startsWith("re:") ? message.subject : `Re: ${message.subject}`));
@@ -2229,8 +2347,6 @@ export async function sendDataBoxPlusReply(env, messageId, payload = {}, current
     throw new DataBoxPlusStoreError("Chybí přesný text odpovědi přes datovou schránku.", 400, "data_box_plus_ds_body_missing");
   }
 
-  const endpoint = cleanString(env.DATA_BOX_SEND_MESSAGE_ENDPOINT || env.DATA_BOX_REPLY_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT);
-  const apiKey = cleanString(env.DATA_BOX_REPLY_API_KEY || env.KNF_DATA_BOX_REPLY_API_KEY);
   const actor = actorName(currentUser);
   const actionId = idValue("dbp-action");
   await db.prepare(`
@@ -2246,25 +2362,33 @@ export async function sendDataBoxPlusReply(env, messageId, payload = {}, current
     `${actor} potvrdil odeslání odpovědi do datové schránky ${recipientDataBoxId}.`
   ).run();
 
-  let response;
+  let response = null;
   let result = {};
   try {
-    response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        sourceMailboxId: message.mailboxId,
-        originalMessageId: message.id,
-        originalIsdsMessageId: message.isdsMessageId,
+    if (directAccount) {
+      result = await sendDataBoxIsdsMessage(env, directAccount, {
         recipientDataBoxId,
         subject,
         body
-      })
-    });
-    result = await response.json().catch(() => ({}));
+      });
+    } else {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          sourceMailboxId: message.mailboxId,
+          originalMessageId: message.id,
+          originalIsdsMessageId: message.isdsMessageId,
+          recipientDataBoxId,
+          subject,
+          body
+        })
+      });
+      result = await response.json().catch(() => ({}));
+    }
   } catch (error) {
     try {
       await db.prepare("UPDATE data_box_plus_action_log SET result = 'failed', audit_note = ? WHERE id = ?")
@@ -2273,11 +2397,15 @@ export async function sendDataBoxPlusReply(env, messageId, payload = {}, current
     } catch (auditError) {
       console.error("data_box_plus.ds_reply_audit_failed", { message: auditError.message, actionId });
     }
-    throw new DataBoxPlusStoreError("DS odesílací brána není dostupná.", 502, "data_box_plus_ds_send_failed");
+    throw new DataBoxPlusStoreError(
+      error instanceof DataBoxIsdsError ? error.message : "ISDS odesílací služba není dostupná.",
+      numberValue(error?.status, 502),
+      cleanString(error?.code || "data_box_plus_ds_send_failed")
+    );
   }
 
-  const sent = Boolean(response?.ok && result.success !== false);
-  const providerMessageId = cleanString(result.sentMessageId || result.messageId);
+  const sent = directAccount ? result.success === true : Boolean(response?.ok && result.success !== false);
+  const providerMessageId = cleanString(result.sentMessageId || result.messageId || result.dmID);
   try {
     await db.prepare("UPDATE data_box_plus_action_log SET result = ?, audit_note = ? WHERE id = ?")
       .bind(
@@ -2514,8 +2642,9 @@ export async function addDataBoxPlusDraftAttachment(env, draftId, currentUser, f
     .prepare("SELECT COALESCE(SUM(size_bytes), 0) AS size_bytes, COUNT(*) AS count FROM data_box_plus_draft_attachments WHERE draft_id = ?")
     .bind(row.id)
     .first();
-  if (numberValue(sizeRow?.count) >= 20 || numberValue(sizeRow?.size_bytes) + bytes.byteLength > 50 * 1024 * 1024) {
-    throw new DataBoxPlusStoreError("Koncept může mít nejvýše 20 příloh a celkem 50 MB.", 400, "data_box_plus_attachments_limit");
+  const bodyBytes = new TextEncoder().encode(cleanString(row.body)).byteLength;
+  if (numberValue(sizeRow?.count) >= 20 || bodyBytes + numberValue(sizeRow?.size_bytes) + bytes.byteLength > 20 * 1024 * 1024) {
+    throw new DataBoxPlusStoreError("Koncept může mít nejvýše 20 příloh a celkem 20 MB.", 400, "data_box_plus_attachments_limit");
   }
   const attachmentIdValue = idValue("dbp-draft-attachment");
   const fileName = safeFilename(file.fileName, "priloha");
@@ -2561,10 +2690,6 @@ export async function sendDataBoxPlusDraft(env, draftId, payload = {}, currentUs
   if (payload.confirmed !== true) {
     throw new DataBoxPlusStoreError("Odeslání datové zprávy vyžaduje finální potvrzení.", 409, "data_box_plus_ds_confirmation_required");
   }
-  const readiness = sendReadiness(env);
-  if (!readiness.dataBox.enabled) {
-    throw new DataBoxPlusStoreError(readiness.dataBox.text, 503, "data_box_plus_ds_sender_missing");
-  }
   const db = dataBoxPlusDatabase(env, true);
   const bucket = dataBoxPlusDocumentsBucket(env);
   const row = await dataBoxPlusDraftRow(db, draftId, currentUser);
@@ -2586,6 +2711,25 @@ export async function sendDataBoxPlusDraft(env, draftId, payload = {}, currentUs
   }
   const mailbox = await db.prepare("SELECT * FROM data_box_plus_mailboxes WHERE id = ? LIMIT 1").bind(draft.mailboxId).first();
   if (!mailbox) throw new DataBoxPlusStoreError("Odesílající schránka nebyla nalezena.", 404, "data_box_plus_mailbox_not_found");
+  const directAccount = await dataBoxPlusSendingAccount(env, mailbox);
+  const endpoint = cleanString(env.DATA_BOX_SEND_MESSAGE_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.DATA_BOX_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT);
+  const apiKey = cleanString(env.DATA_BOX_REPLY_API_KEY || env.KNF_DATA_BOX_REPLY_API_KEY);
+  if (!directAccount && !(endpoint && apiKey)) {
+    throw new DataBoxPlusStoreError(
+      "Odesílající schránka nemá aktivní přístup ISDS.",
+      503,
+      "data_box_plus_ds_sender_missing"
+    );
+  }
+  const totalMessageBytes = new TextEncoder().encode(draft.body).byteLength
+    + draft.attachments.reduce((total, attachment) => total + numberValue(attachment.sizeBytes), 0);
+  if (totalMessageBytes > 20 * 1024 * 1024) {
+    throw new DataBoxPlusStoreError(
+      "Datová zpráva včetně textu a příloh může mít nejvýše 20 MB.",
+      400,
+      "data_box_plus_message_too_large"
+    );
+  }
   const providerAttachments = [];
   for (const attachment of draft.attachments) {
     if (!bucket) throw new DataBoxPlusStoreError("Úložiště příloh není dostupné.", 503, "data_box_plus_storage_missing");
@@ -2634,37 +2778,53 @@ export async function sendDataBoxPlusDraft(env, draftId, payload = {}, currentUs
     .bind(draft.id)
     .run();
 
-  const endpoint = cleanString(env.DATA_BOX_SEND_MESSAGE_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.DATA_BOX_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT);
-  const apiKey = cleanString(env.DATA_BOX_REPLY_API_KEY || env.KNF_DATA_BOX_REPLY_API_KEY);
-  let response;
+  let response = null;
   let result = {};
   try {
-    response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "Idempotency-Key": draft.idempotencyKey
-      },
-      body: JSON.stringify(requestPayload)
-    });
-    result = await response.json().catch(() => ({}));
+    if (directAccount) {
+      result = await sendDataBoxIsdsMessage(env, directAccount, {
+        recipientDataBoxId: draft.recipientBoxId,
+        subject: draft.subject,
+        body: draft.body,
+        attachments: providerAttachments
+      });
+    } else {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": draft.idempotencyKey
+        },
+        body: JSON.stringify(requestPayload)
+      });
+      result = await response.json().catch(() => ({}));
+    }
   } catch (error) {
     const message = cleanString(error?.message || "DS brána nevrátila výsledek.");
-    await db.prepare("UPDATE data_box_plus_send_jobs SET status = 'unknown', error_message = ?, finished_at = ? WHERE id = ?")
-      .bind(message, new Date().toISOString(), jobId)
+    const explicitIsdsFailure = error instanceof DataBoxIsdsError;
+    const failureState = explicitIsdsFailure ? "failed" : "unknown";
+    await db.prepare("UPDATE data_box_plus_send_jobs SET status = ?, error_message = ?, finished_at = ? WHERE id = ?")
+      .bind(failureState, message, new Date().toISOString(), jobId)
       .run();
-    await db.prepare("UPDATE data_box_plus_drafts SET status = 'unknown', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-      .bind(message, draft.id)
+    await db.prepare("UPDATE data_box_plus_drafts SET status = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(failureState, message, draft.id)
       .run();
+    if (explicitIsdsFailure) {
+      throw new DataBoxPlusStoreError(
+        message || "ISDS odeslání odmítlo.",
+        numberValue(error.status, 502),
+        cleanString(error.code || "data_box_plus_ds_send_failed")
+      );
+    }
     throw new DataBoxPlusStoreError(
-      "DS brána nevrátila potvrzení. Opakované odeslání je zablokované proti duplicitě.",
+      "ISDS nevrátilo potvrzení. Opakované odeslání je zablokované proti duplicitě.",
       502,
       "data_box_plus_send_result_unknown"
     );
   }
 
-  const sent = Boolean(response.ok && result.success !== false);
+  const sent = directAccount ? result.success === true : Boolean(response?.ok && result.success !== false);
   const providerMessageId = cleanString(result.sentMessageId || result.messageId || result.dmID);
   if (!sent) {
     const message = cleanString(result.error || result.message || `HTTP ${response.status}`);
@@ -2698,8 +2858,8 @@ export async function sendDataBoxPlusDraft(env, draftId, payload = {}, currentUs
         archive_status, attachment_status, facts_json, summary, summary_source, summary_loaded,
         source, stored_at, updated_at
       ) VALUES (?, ?, ?, 'sent', ?, ?, ?, ?, ?, ?, ?, 'Odeslaná zpráva', 'Odesláno datovou schránkou',
-        'Nízké', 'normal', '', 'Zpráva byla odeslána.', '', 'Detail historie', ?, 'active',
-        ?, '[]', ?, 'user', 1, 'isds-send', ?, ?)
+        '', 'normal', '', '', '', 'Otevřít', '', 'active',
+        ?, '[]', '', '', 0, 'isds-send', ?, ?)
     `).bind(
       sentMessageId,
       draft.mailboxId,
@@ -2711,9 +2871,7 @@ export async function sendDataBoxPlusDraft(env, draftId, payload = {}, currentUs
       draft.subject,
       sentAt,
       sentAt,
-      draft.recipientBoxId,
       draft.attachments.length ? "Dostupná" : "Bez příloh",
-      draft.body.slice(0, 2000),
       sentAt,
       sentAt
     ).run();
@@ -2784,8 +2942,9 @@ export async function applyDataBoxPlusBulkAction(env, currentUser, payload = {})
   const results = [];
   for (const messageId of messageIds) {
     try {
-      const row = await db.prepare("SELECT id, mailbox_id FROM data_box_plus_messages WHERE id = ? LIMIT 1").bind(messageId).first();
+      const row = await db.prepare("SELECT id, mailbox_id, direction FROM data_box_plus_messages WHERE id = ? LIMIT 1").bind(messageId).first();
       if (!row) throw new DataBoxPlusStoreError("Zpráva nebyla nalezena.", 404, "data_box_plus_message_not_found");
+      ensureReceivedDataBoxPlusMessage(row);
       if (action === "archive") {
         await db.prepare("UPDATE data_box_plus_messages SET status = 'Archivováno', archive_status = 'archived', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(messageId).run();
       } else if (action === "complete") {
@@ -2866,13 +3025,14 @@ export async function listDataBoxPlusRecommendations(env, filters = {}) {
   const db = dataBoxPlusDatabase(env, true);
   const limit = limitValue(filters.limit, 100);
   const status = cleanString(filters.status || "waiting");
-  const whereSql = status === "all" ? "" : "WHERE status = ?";
+  const whereSql = status === "all" ? "WHERE m.direction <> 'sent'" : "WHERE r.status = ? AND m.direction <> 'sent'";
   const bindings = status === "all" ? [] : [status];
   try {
     const result = await db
       .prepare(`
-        SELECT *
-        FROM data_box_plus_recommendations
+        SELECT r.*
+        FROM data_box_plus_recommendations r
+        JOIN data_box_plus_messages m ON m.id = r.message_id
         ${whereSql}
         ORDER BY created_at DESC
         LIMIT ?
@@ -2913,7 +3073,13 @@ export async function listDataBoxPlusSyncRuns(env, filters = {}) {
 }
 
 async function recommendationById(db, id) {
-  const row = await db.prepare("SELECT * FROM data_box_plus_recommendations WHERE id = ? LIMIT 1").bind(cleanString(id)).first();
+  const row = await db.prepare(`
+    SELECT r.*
+    FROM data_box_plus_recommendations r
+    JOIN data_box_plus_messages m ON m.id = r.message_id
+    WHERE r.id = ? AND m.direction <> 'sent'
+    LIMIT 1
+  `).bind(cleanString(id)).first();
   const recommendation = rowToRecommendation(row);
   if (!recommendation?.id) {
     throw new DataBoxPlusStoreError("Návrh Autopilota nebyl nalezen.", 404, "data_box_plus_recommendation_not_found");
@@ -4789,6 +4955,7 @@ export async function executeDataBoxPlusMessageInstruction(env, messageId, curre
     if (!instruction) throw new DataBoxPlusStoreError("Napište zprávu pro Autopilota.", 400, "data_box_plus_instruction_missing");
     const message = await db.prepare("SELECT * FROM data_box_plus_messages WHERE id = ? LIMIT 1").bind(id).first();
     if (!message?.id) throw new DataBoxPlusStoreError("Zpráva nebyla nalezena.", 404, "data_box_plus_message_not_found");
+    ensureReceivedDataBoxPlusMessage(message);
     const attachments = await db.prepare("SELECT * FROM data_box_plus_attachments WHERE message_id = ? ORDER BY file_name").bind(id).all();
     const actor = actorName(currentUser);
     const pendingConfirmation = await latestDataBoxPlusPendingConfirmation(db, id, actor);
@@ -5217,6 +5384,7 @@ export async function prepareDataBoxPlusMessageInstruction(env, messageId, curre
   try {
     const message = await db.prepare("SELECT * FROM data_box_plus_messages WHERE id = ? LIMIT 1").bind(id).first();
     if (!message?.id) throw new DataBoxPlusStoreError("Zpráva nebyla nalezena.", 404, "data_box_plus_message_not_found");
+    ensureReceivedDataBoxPlusMessage(message);
     const attachments = await db
       .prepare("SELECT * FROM data_box_plus_attachments WHERE message_id = ? ORDER BY file_name")
       .bind(id)
