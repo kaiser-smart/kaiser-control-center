@@ -3,11 +3,14 @@ import { readFileSync } from "node:fs";
 import worker, { isDataBoxDue } from "../workers/data-box-plus-sync-runner.js";
 
 const wranglerSource = readFileSync(new URL("../wrangler.data-box-plus-sync-runner.toml", import.meta.url), "utf8");
+const storeSource = readFileSync(new URL("../functions/_lib/data-box-plus-store.js", import.meta.url), "utf8");
 
 assert.equal(isDataBoxDue(Date.parse("2026-07-23T08:00:00.000Z")), true);
 assert.equal(isDataBoxDue(Date.parse("2026-07-23T08:30:00.000Z")), false);
 assert.equal(isDataBoxDue(Date.parse("2026-07-23T08:59:59.000Z")), false);
 assert.match(wranglerSource, /crons = \["0 \* \* \* \*"\]/);
+assert.match(storeSource, /intervalMinutes: 60/);
+assert.match(storeSource, /Automatické načítání běží serverově každou celou hodinu/);
 
 const originalFetch = globalThis.fetch;
 const calls = [];

@@ -1439,9 +1439,9 @@ export async function getDataBoxPlusStatus(env) {
         text: dataBoxPlusSystemPrompt()
       },
       background: {
-        intervalMinutes: 30,
+        intervalMinutes: 60,
         enabled: cleanString(env.DATA_BOX_PLUS_BACKGROUND_ENABLED || "true") !== "false",
-        note: "Automatické načítání běží serverově každých 30 minut."
+        note: "Automatické načítání běží serverově každou celou hodinu."
       }
     };
   } catch (error) {
