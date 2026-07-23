@@ -1773,6 +1773,7 @@ const dataBoxPlusHomeState = {
 let dataBoxSearchRenderTimer = null;
 let dataBoxPlusCountdownTimer = null;
 let dataBoxPlusDraftSaveTimer = null;
+let dataBoxPlusDraftSavePromise = null;
 let dataBoxPlusTriageRenderTimer = null;
 const quickAbsenceState = {
   step: "type",
@@ -28618,6 +28619,7 @@ function dataBoxPlusComposeOverlay() {
   const attachments = Array.isArray(draft?.attachments) ? draft.attachments : [];
   const readiness = dataBoxPlusState.sendReadiness?.dataBox;
   const sendEnabled = Boolean(selectedMailbox?.hasCredentials || readiness?.mode === "gateway");
+  const sendBusy = dataBoxPlusState.composeSaving || dataBoxPlusState.composeUploading;
   return `
     <div class="ds-plus-detail-overlay" role="presentation">
       <button class="ds-plus-detail-backdrop" type="button" data-ds-plus-compose-close aria-label="Zavřít novou zprávu"></button>
@@ -28649,8 +28651,8 @@ function dataBoxPlusComposeOverlay() {
           </section>
           <div class="ds-plus-compose-footer">
             <button class="secondary-link" type="button" data-ds-plus-compose-edit>Zpět k úpravě</button>
-            <button class="primary-action" type="button" data-ds-plus-compose-send ${sendEnabled && draft?.id ? "" : "disabled"}>
-              Potvrdit a odeslat
+            <button class="primary-action" type="button" data-ds-plus-compose-send ${sendEnabled && draft?.id && !sendBusy ? "" : "disabled"}>
+              ${sendBusy ? "Dokončuji uložení…" : "Potvrdit a odeslat"}
             </button>
           </div>
           ` : `
@@ -42011,29 +42013,47 @@ function applyDataBoxPlusComposeDraft(draft = {}) {
 }
 
 async function saveDataBoxPlusComposeDraft(options = {}) {
-  if (dataBoxPlusState.composeSaving || !dataBoxPlusState.composeMailboxId) return null;
+  if (!dataBoxPlusState.composeMailboxId) return null;
+  if (dataBoxPlusDraftSavePromise) return dataBoxPlusDraftSavePromise;
+  if (dataBoxPlusState.composeSaving) return null;
   dataBoxPlusState.composeSaving = true;
   if (!options.quiet) render();
-  try {
-    const result = await apiJson(
-      dataBoxPlusState.composeDraftId
-        ? `/api/data-box-plus/drafts/${encodeURIComponent(dataBoxPlusState.composeDraftId)}`
-        : "/api/data-box-plus/drafts",
-      {
-        method: dataBoxPlusState.composeDraftId ? "PATCH" : "POST",
-        body: JSON.stringify(dataBoxPlusComposeDraftPayload())
-      }
-    );
-    applyDataBoxPlusComposeDraft(result.draft);
-    dataBoxPlusState.composeError = "";
-    return result.draft;
-  } catch (error) {
-    dataBoxPlusState.composeError = dataBoxPlusHumanError(error.payload?.error || error.message || "Koncept se nepodařilo uložit.");
-    return null;
-  } finally {
-    dataBoxPlusState.composeSaving = false;
-    if (!options.quiet) render();
+  const requestPath = dataBoxPlusState.composeDraftId
+    ? `/api/data-box-plus/drafts/${encodeURIComponent(dataBoxPlusState.composeDraftId)}`
+    : "/api/data-box-plus/drafts";
+  const requestMethod = dataBoxPlusState.composeDraftId ? "PATCH" : "POST";
+  const requestBody = JSON.stringify(dataBoxPlusComposeDraftPayload());
+  const activeSave = (async () => {
+    try {
+      const result = await apiJson(requestPath, {
+        method: requestMethod,
+        body: requestBody
+      });
+      applyDataBoxPlusComposeDraft(result.draft);
+      dataBoxPlusState.composeError = "";
+      return result.draft;
+    } catch (error) {
+      dataBoxPlusState.composeError = dataBoxPlusHumanError(error.payload?.error || error.message || "Koncept se nepodařilo uložit.");
+      return null;
+    } finally {
+      dataBoxPlusState.composeSaving = false;
+      if (dataBoxPlusDraftSavePromise === activeSave) dataBoxPlusDraftSavePromise = null;
+      if (!options.quiet) render();
+    }
+  })();
+  dataBoxPlusDraftSavePromise = activeSave;
+  return activeSave;
+}
+
+async function flushDataBoxPlusComposeDraftSave() {
+  if (dataBoxPlusDraftSaveTimer) {
+    window.clearTimeout(dataBoxPlusDraftSaveTimer);
+    dataBoxPlusDraftSaveTimer = null;
   }
+  if (dataBoxPlusDraftSavePromise) {
+    await dataBoxPlusDraftSavePromise;
+  }
+  return saveDataBoxPlusComposeDraft({ quiet: true });
 }
 
 function scheduleDataBoxPlusComposeDraftSave() {
@@ -42087,8 +42107,9 @@ async function removeDataBoxPlusComposeAttachment(attachmentId) {
 }
 
 async function sendDataBoxPlusComposeDraft() {
-  const draft = await saveDataBoxPlusComposeDraft({ quiet: true });
+  const draft = await flushDataBoxPlusComposeDraftSave();
   if (!draft?.id) {
+    dataBoxPlusState.composeError ||= "Koncept se před odesláním nepodařilo bezpečně uložit.";
     render();
     return;
   }
