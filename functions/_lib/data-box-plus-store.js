@@ -2243,6 +2243,16 @@ export async function saveDataBoxPlusMailbox(env, currentUser = null, body = {})
       )
       .run();
 
+    await db.prepare(`
+      UPDATE data_box_plus_archive_backfills
+      SET status = CASE WHEN status = 'completed' THEN status ELSE 'pending' END,
+          consecutive_errors = 0,
+          last_error_code = NULL,
+          last_error_message = NULL,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE mailbox_id = ?
+    `).bind(targetMailbox.id).run();
+
     await writeMailboxAudit(db, currentUser, credential ? "Upravit schránku DSP" : "Přidat schránku DSP", {
       mailboxId: targetMailbox.id,
       slot: payload.slot,

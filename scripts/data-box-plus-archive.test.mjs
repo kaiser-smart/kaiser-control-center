@@ -75,6 +75,7 @@ assert.doesNotMatch(storeSource, /EXPECTED_MAILBOX_COUNT/);
 assert.match(storeSource, /mailboxScope: "all-current-and-future"/);
 assert.match(storeSource, /SignedArchive/);
 assert.match(storeSource, /sha256/);
+assert.match(storeSource, /UPDATE data_box_plus_archive_backfills[\s\S]*consecutive_errors = 0/);
 assert.match(migrationSource, /data_box_plus_archive_objects/);
 assert.match(migrationSource, /data_box_plus_archive_backfills/);
 assert.match(contractSource, /all-current-and-future-company-mailboxes/);
