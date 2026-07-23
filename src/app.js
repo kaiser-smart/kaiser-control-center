@@ -68,6 +68,17 @@ import {
   collectionDailyRouteVisibleStopCount
 } from "./data/collectionDailyRoutesScale.js";
 import {
+  DRIVER_TABLET_AUDIO_EVENTS,
+  DRIVER_TABLET_AUDIO_VERSION,
+  DRIVER_TABLET_SOUND_MODES,
+  driverTabletRouteSessionId,
+  normalizeDriverTabletSoundMode
+} from "./data/driverTabletAudioContract.js";
+import {
+  DriverTabletAudioManager,
+  DriverTabletIntroController
+} from "./driverTabletAudioManager.js";
+import {
   COLLECTION_ROUTES_DRIVER_KIOSK_ROUTE,
   COLLECTION_ROUTES_DRIVER_SIMULATED_GPS_VALUE,
   COLLECTION_ROUTES_DRIVER_TABLET_DEVICE,
@@ -1561,7 +1572,13 @@ const collectionRoutesPilotState = {
   myDailyRouteReportPreviewUrls: [],
   myDailyRouteReportError: "",
   myDailyRouteDisplayMode: "night",
-  myDailyRouteSoundsEnabled: true,
+  myDailyRouteSoundMode: "standard",
+  myDailyRouteAudioPreferencesLoaded: false,
+  myDailyRouteOnline: typeof navigator === "undefined" ? true : navigator.onLine !== false,
+  myDailyRouteIntroState: "idle",
+  myDailyRouteIntroData: null,
+  myDailyRouteAnimatedStopId: "",
+  myDailyRouteWarningSoundKey: "",
   myDailyRouteDumpDestinationId: "",
   myDailyRouteSarlotaEnabled: false,
   myDailyRouteSarlotaConnecting: false,
@@ -25100,7 +25117,8 @@ function collectionDailyRouteDriverStopList(stops = []) {
       ${stops.map((stop) => {
         const destination = stop.latitude && stop.longitude ? `${stop.latitude},${stop.longitude}` : stop.addressText;
         const navigationHref = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination || "")}&travelmode=driving&dir_action=navigate`;
-        return `<li class="is-${escapeHtml(stop.status)}"><span>${escapeHtml(stop.routeOrder)}</span><div class="collection-daily-driver-stop-list__identity"><strong>${escapeHtml(stop.customerName || "-")}</strong><small>${escapeHtml(stop.stationName || "Stanoviště bez názvu")}</small><p>${escapeHtml(stop.addressText || "Adresa není uvedená")}</p><div><button type="button" data-collection-driver-show-stop="${escapeHtml(stop.id)}">ZOBRAZIT NA MAPĚ</button><a href="${escapeHtml(navigationHref)}" target="_blank" rel="noopener noreferrer">NAVIGOVAT SEM</a></div></div><b>${escapeHtml(collectionDailyDriverStopStatusLabel(stop.status))}</b></li>`;
+        const animated = collectionRoutesPilotState.myDailyRouteAnimatedStopId === stop.id ? "is-state-updated" : "";
+        return `<li class="is-${escapeHtml(stop.status)} ${animated}"><span>${escapeHtml(stop.routeOrder)}</span><div class="collection-daily-driver-stop-list__identity"><strong>${escapeHtml(stop.customerName || "-")}</strong><small>${escapeHtml(stop.stationName || "Stanoviště bez názvu")}</small><p>${escapeHtml(stop.addressText || "Adresa není uvedená")}</p><div><button type="button" data-collection-driver-show-stop="${escapeHtml(stop.id)}">ZOBRAZIT NA MAPĚ</button><a href="${escapeHtml(navigationHref)}" target="_blank" rel="noopener noreferrer">NAVIGOVAT SEM</a></div></div><b>${escapeHtml(collectionDailyDriverStopStatusLabel(stop.status))}</b></li>`;
       }).join("")}
     </ol>
   `;
@@ -25197,41 +25215,103 @@ function collectionDailyDriverResolvedDisplayMode() {
   return collectionDailyDriverColorSchemeMedia?.matches ? "night" : "day";
 }
 
+const driverTabletAudioManager = new DriverTabletAudioManager({
+  mode: "standard",
+  scope: "production",
+  onOperationalLog: (entry) => void logDriverTabletOperationalAudioEvent(entry)
+});
+let driverTabletIntroController = null;
+
+function collectionDailyDriverSoundMode() {
+  return normalizeDriverTabletSoundMode(collectionRoutesPilotState.myDailyRouteSoundMode);
+}
+
 function collectionDailyDriverSoundsEnabled() {
-  return collectionRoutesPilotState.myDailyRouteSoundsEnabled !== false;
+  return collectionDailyDriverSoundMode() !== "off";
 }
 
-function collectionDailyDriverSoundAllowed() {
-  return collectionDailyDriverSoundsEnabled()
-    && !collectionRoutesPilotState.myDailyRouteNavigationActive
-    && !collectionRoutesPilotState.myDailyRouteSarlotaEnabled
-    && !collectionRoutesPilotState.myDailyRouteSarlotaConnecting
-    && !collectionRoutesPilotState.myDailyRouteSarlotaAutoSession
-    && !collectionRoutesPilotState.myDailyRouteSarlotaHologramConversation;
+function collectionDailyDriverAudioSessionPayload() {
+  const run = collectionRoutesPilotState.myDailyRoute?.run || null;
+  if (!run?.id || run.status !== "active") return null;
+  const testSessionId = run.scope === "test" ? collectionRoutesPilotState.adminTabletTestSession?.id || "" : "";
+  const routeSessionId = driverTabletRouteSessionId(run, testSessionId);
+  if (!routeSessionId) return null;
+  return {
+    runId: run.id,
+    scope: run.scope === "test" ? "test" : "production",
+    routeSessionId,
+    testSessionId,
+    introVersion: DRIVER_TABLET_AUDIO_VERSION
+  };
 }
 
-function playCollectionDailyDriverTapSound() {
-  if (!collectionDailyDriverSoundAllowed()) return;
-  withCollectionRoutesDriverAudioContext((context) => {
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    const startAt = context.currentTime;
-    const endAt = startAt + 0.082;
-    oscillator.type = "triangle";
-    oscillator.frequency.setValueAtTime(520, startAt);
-    oscillator.frequency.exponentialRampToValueAtTime(430, endAt);
-    gain.gain.setValueAtTime(0.0001, startAt);
-    gain.gain.exponentialRampToValueAtTime(0.065, startAt + 0.012);
-    gain.gain.exponentialRampToValueAtTime(0.0001, endAt);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(startAt);
-    oscillator.stop(endAt + 0.015);
+function syncDriverTabletAudioManager() {
+  const scope = collectionDailyRouteDriverScope() === "test" ? "test" : "production";
+  driverTabletAudioManager.configure({
+    mode: collectionDailyDriverSoundMode(),
+    scope,
+    allowUnapproved: scope === "test"
   });
+  const busyGroups = [];
+  if (collectionRoutesPilotState.myDailyRouteNavigationActive) busyGroups.push("navigation");
+  if (
+    collectionRoutesPilotState.myDailyRouteSarlotaEnabled
+    || collectionRoutesPilotState.myDailyRouteSarlotaConnecting
+    || collectionRoutesPilotState.myDailyRouteSarlotaAutoSession
+    || collectionRoutesPilotState.myDailyRouteSarlotaHologramConversation
+  ) busyGroups.push("navigation");
+  driverTabletAudioManager.setBusyGroups(busyGroups);
+}
+
+async function playCollectionDailyDriverSound(eventName, options = {}) {
+  syncDriverTabletAudioManager();
+  return driverTabletAudioManager.play(eventName, options);
+}
+
+async function unlockAndPreloadCollectionDailyDriverAudio() {
+  syncDriverTabletAudioManager();
+  const unlocked = await driverTabletAudioManager.unlock();
+  if (unlocked.ok) void driverTabletAudioManager.preload();
+  return unlocked;
+}
+
+function collectionDailyDriverPrimaryAudioTarget(target) {
+  return Boolean(target?.matches?.([
+    "[data-collection-driver-route-confirmation-form] .primary-action",
+    "[data-collection-daily-driver-event='done']",
+    "[data-collection-daily-driver-transition='complete']",
+    "[data-collection-driver-report-form] .primary-action",
+    "[data-collection-driver-operation]",
+    "[data-collection-routes-test-gps-save]"
+  ].join(", ")));
 }
 
 function collectionDailyDriverSettingsSummary() {
-  return `${COLLECTION_DAILY_DRIVER_DISPLAY_MODES[collectionDailyDriverDisplayMode()]} · ZVUK ${collectionDailyDriverSoundsEnabled() ? "ZAP" : "VYP"}`;
+  return `${COLLECTION_DAILY_DRIVER_DISPLAY_MODES[collectionDailyDriverDisplayMode()]} · ${DRIVER_TABLET_SOUND_MODES[collectionDailyDriverSoundMode()].label.toUpperCase()}`;
+}
+
+function collectionDailyDriverStopCountLabel(value) {
+  const count = Math.max(0, Number(value || 0));
+  const noun = count === 1 ? "stanoviště" : count >= 2 && count <= 4 ? "stanoviště" : "stanovišť";
+  return `${count} ${noun}`;
+}
+
+function collectionDailyDriverIntroOverlay() {
+  const state = String(collectionRoutesPilotState.myDailyRouteIntroState || "idle");
+  const data = collectionRoutesPilotState.myDailyRouteIntroData || null;
+  if (!data || ["idle", "completed", "skipped"].includes(state)) return "";
+  return `
+    <section class="collection-daily-driver-intro is-${escapeHtml(state)}" data-collection-driver-intro data-intro-state="${escapeHtml(state)}" role="status" aria-live="polite" aria-label="Trasa připravena">
+      <button type="button" data-collection-driver-intro-skip aria-label="Přeskočit úvod"></button>
+      <div class="collection-daily-driver-intro__brand" aria-hidden="true"><span>kaiser.</span><i></i></div>
+      <div class="collection-daily-driver-intro__summary">
+        <strong>Trasa připravena</strong>
+        <span>${escapeHtml(collectionDailyDriverStopCountLabel(data.stopCount))}</span>
+        <small>${escapeHtml(data.vehicleLabel)}</small>
+      </div>
+      <em>Klepnutím můžeš úvod přeskočit</em>
+    </section>
+  `;
 }
 
 function collectionDailyDriverPanel(detail, currentStop, visibleStops, remainingStops, vehicleLabel) {
@@ -25243,8 +25323,13 @@ function collectionDailyDriverPanel(detail, currentStop, visibleStops, remaining
   const close = `<button type="button" class="collection-daily-driver-modal__close" data-collection-driver-panel-close aria-label="Zavřít">ZAVŘÍT</button>`;
   if (panel === "display-settings") {
     const displayMode = collectionDailyDriverDisplayMode();
-    const soundsEnabled = collectionDailyDriverSoundsEnabled();
-    return `<div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-labelledby="collection-driver-display-title"><section><header><div><span>ŘIDIČSKÝ TABLET</span><h2 id="collection-driver-display-title">Displej a zvuk</h2><p>Velké volby pro práci ve dne, v noci a v rukavicích.</p></div>${close}</header><div class="collection-daily-driver-display-settings"><div class="collection-daily-driver-display-settings__modes" aria-label="Barevný režim">${Object.entries(COLLECTION_DAILY_DRIVER_DISPLAY_MODES).map(([value, label]) => `<button type="button" class="${displayMode === value ? "is-selected" : ""}" data-collection-driver-display-mode="${escapeHtml(value)}" aria-pressed="${displayMode === value ? "true" : "false"}"><span>${escapeHtml(label)}</span><small>${value === "auto" ? "PODLE ANDROIDU" : value === "day" ? "SVĚTLÝ DISPLEJ" : "TMAVÝ DISPLEJ"}</small></button>`).join("")}</div><button type="button" class="collection-daily-driver-sound-setting ${soundsEnabled ? "is-selected" : ""}" data-collection-driver-sound-toggle aria-pressed="${soundsEnabled ? "true" : "false"}"><span>ZVUK TLAČÍTEK</span><strong>${soundsEnabled ? "ZAPNUTÝ" : "VYPNUTÝ"}</strong><small>Krátké tlumené klepnutí · bez melodie a gongu</small></button><p>AUTOMATICKY sleduje denní nebo noční režim Androidu. Nastavení platí do nového načtení tabletu.</p></div></section></div>`;
+    const soundMode = collectionDailyDriverSoundMode();
+    const soundDescriptions = {
+      standard: "INTRO · POTVRZENÍ · UPOZORNĚNÍ",
+      quiet: "BEZ KLIKNUTÍ · TIŠŠÍ DŮLEŽITÉ ZVUKY",
+      off: "BEZ BĚŽNÝCH ZVUKŮ A INTRA"
+    };
+    return `<div class="collection-daily-driver-modal" role="dialog" aria-modal="true" aria-labelledby="collection-driver-display-title"><section><header><div><span>ŘIDIČSKÝ TABLET</span><h2 id="collection-driver-display-title">Displej a zvuk</h2><p>Velké volby pro práci ve dne, v noci a v rukavicích.</p></div>${close}</header><div class="collection-daily-driver-display-settings"><div class="collection-daily-driver-display-settings__modes" aria-label="Barevný režim">${Object.entries(COLLECTION_DAILY_DRIVER_DISPLAY_MODES).map(([value, label]) => `<button type="button" class="${displayMode === value ? "is-selected" : ""}" data-collection-driver-display-mode="${escapeHtml(value)}" aria-pressed="${displayMode === value ? "true" : "false"}"><span>${escapeHtml(label)}</span><small>${value === "auto" ? "PODLE ANDROIDU" : value === "day" ? "SVĚTLÝ DISPLEJ" : "TMAVÝ DISPLEJ"}</small></button>`).join("")}</div><fieldset class="collection-daily-driver-sound-modes"><legend>Zvuky tabletu</legend>${Object.entries(DRIVER_TABLET_SOUND_MODES).map(([value, item]) => `<button type="button" class="collection-daily-driver-sound-setting ${soundMode === value ? "is-selected" : ""}" data-collection-driver-sound-mode="${escapeHtml(value)}" aria-pressed="${soundMode === value ? "true" : "false"}"><span aria-hidden="true">${soundMode === value ? "●" : "○"}</span><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(soundDescriptions[value])}</small></button>`).join("")}</fieldset><p>AUTOMATICKY sleduje denní nebo noční režim Androidu. Zvuková volba je uložená serverově pro tento účet a tablet.</p></div></section></div>`;
   }
   if (panel === "route-confirmation") {
     const memory = collectionRoutesPilotState.myDailyRouteSarlotaMemory || {};
@@ -25423,6 +25508,8 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
   const eventStopId = currentStop?.id || stops[0]?.id || "route";
   const pending = collectionRoutesPilotState.myDailyRoutePending;
   const summary = run?.summary || {};
+  const completedStopCount = Number(summary.doneCount || 0) + Number(summary.problemCount || 0);
+  const routeProgressPercent = stops.length ? Math.max(0, Math.min(100, Math.round((completedStopCount / stops.length) * 100))) : 0;
   const vehicleLabel = run?.vehicleLabel || run?.vehicleRegistration || run?.vehicleCode || "Vozidlo nepřiřazeno";
   const stationaryFieldTest = collectionRoutesIsStationaryFieldTestRun(run);
   const driverRouteLabel = stationaryFieldTest ? "Stacionární tablet · bez jízdy" : vehicleLabel;
@@ -25433,6 +25520,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
   const activeBreak = run?.status === "active" ? collectionDailyDriverLatestOperation(detail, "break") : null;
   return `
     <main class="collection-daily-driver-page is-theme-${escapeHtml(resolvedDisplayMode)} ${testScope ? "is-isolated-test" : ""} ${adminTabletTest ? "is-admin-tablet-test" : ""}" data-collection-daily-driver-kiosk data-collection-driver-current-display-mode="${escapeHtml(displayMode)}" data-collection-driver-resolved-theme="${escapeHtml(resolvedDisplayMode)}" ${moduleThemeStyleAttribute()}>
+      ${collectionDailyDriverIntroOverlay()}
       <header class="collection-daily-driver-kiosk-bar">
         <div class="collection-daily-driver-kiosk-brand">
           <strong>kaiser.</strong>
@@ -25443,6 +25531,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
           <span>${escapeHtml(user.name || user.email || "Řidič")}</span>
           <b>${adminTabletTest ? `Simulace řidiče · správce ${escapeHtml(currentUser()?.email || currentUser()?.name || "")}` : escapeHtml(roleLabel(user.role))}</b>
           <button type="button" data-collection-driver-settings aria-label="Otevřít nastavení displeje a zvuku">${escapeHtml(collectionDailyDriverSettingsSummary())}</button>
+          <span class="collection-daily-driver-connectivity ${collectionRoutesPilotState.myDailyRouteOnline ? "is-online" : "is-offline"}" role="status">${collectionRoutesPilotState.myDailyRouteOnline ? "ONLINE" : "OFFLINE"}</span>
           ${adminTabletTest ? `<button type="button" data-collection-routes-admin-tablet-test-reset>UKONČIT A RESETOVAT TEST</button>` : `<button type="button" data-logout>Odhlásit</button>`}
         </div>
       </header>
@@ -25471,6 +25560,7 @@ function collectionDailyRouteDriverPage(_moduleItem, user) {
               ${collectionDailyRouteStatusBadge(run.status)}
               <button type="button" data-collection-daily-driver-refresh ${collectionRoutesPilotState.myDailyRouteLoading ? "disabled" : ""}>OBNOVIT</button>
             </div>
+            <div class="collection-daily-driver-progress" role="progressbar" aria-label="Průběh trasy" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${escapeHtml(routeProgressPercent)}"><i style="--driver-route-progress:${escapeHtml(routeProgressPercent)}%"></i></div>
           </header>
           ${run.status === "confirmed" ? `<div class="collection-daily-driver-start"><strong>Dnešní trasa je připravená.</strong><span>Potvrdíš ji jedním velkým tlačítkem.</span><button class="primary-action collection-daily-driver-primary" type="button" data-collection-driver-route-confirmation-open ${pending ? "disabled" : ""}>POTVRDIT DNEŠNÍ TRASU</button></div>` : ""}
           ${run.status === "draft" ? `<div class="collection-daily-driver-complete"><strong>Trasa čeká na potvrzení dispečinku.</strong><span>Zatím ji nemůžeš zahájit.</span></div>` : ""}
@@ -27524,6 +27614,50 @@ function collectionRoutesRulesSection(user) {
   });
 }
 
+function collectionRoutesDriverTabletAudioPreview() {
+  const eventLabels = {
+    tablet_intro: "Úvod tabletu",
+    primary_tap: "Primární klepnutí",
+    stop_completed: "Stanoviště hotovo",
+    report_saved: "Hlášení uloženo",
+    warning: "Upozornění",
+    critical_warning: "Kritické upozornění",
+    error: "Chyba",
+    offline: "Přechod offline",
+    online_restored: "Připojení obnoveno",
+    route_completed: "Trasa dokončena"
+  };
+  return `
+    <section class="collection-routes-audio-preview" aria-labelledby="collection-routes-audio-preview-title">
+      <header>
+        <div><span>INTERNÍ ADMINISTRÁTORSKÝ NÁHLED</span><h3 id="collection-routes-audio-preview-title">Zvuková paleta řidičského tabletu</h3><p>Kandidáti vytvoření v ElevenLabs Sound Effects a uložené lokálně. Poslech nic nezapisuje do trasy ani produkčního auditu.</p></div>
+        <b>NENÍ SCHVÁLENO PRO PROVOZ</b>
+      </header>
+      <div class="collection-routes-audio-preview__events">
+        ${Object.entries(DRIVER_TABLET_AUDIO_EVENTS).map(([eventName, config]) => `
+          <article>
+            <div><strong>${escapeHtml(eventLabels[eventName] || eventName)}</strong><code>${escapeHtml(eventName)}</code></div>
+            <div class="collection-routes-audio-preview__candidates">${(config.candidates || [config.asset]).map((asset, index) => `
+              <label class="collection-routes-audio-preview__candidate">
+                <span>VARIANTA ${escapeHtml(String.fromCharCode(65 + index))}</span>
+                <audio
+                  controls
+                  preload="metadata"
+                  src="${escapeHtml(asset)}"
+                  data-collection-routes-audio-native="${escapeHtml(eventName)}"
+                  aria-label="${escapeHtml(`${eventLabels[eventName] || eventName} · varianta ${String.fromCharCode(65 + index)}`)}"
+                ></audio>
+              </label>
+            `).join("")}</div>
+          </article>
+        `).join("")}
+      </div>
+      <p class="collection-routes-audio-preview__status" data-state="native">Přehrávání zajišťuje přímo nativní audio ovladač prohlížeče. Náhled nepoužívá produkční události ani audit.</p>
+      <small>Zdroj: ElevenLabs Sound Effects · 3 varianty každé události · lokální WAV · upravená délka a vyrovnaná hlasitost · žádné vzdálené URL.</small>
+    </section>
+  `;
+}
+
 function collectionRoutesSettingsSection() {
   return `
     <section class="collection-routes-internal" id="collection-routes-settings" aria-labelledby="collection-routes-settings-title">
@@ -27535,6 +27669,7 @@ function collectionRoutesSettingsSection() {
         </div>
         <span class="employee-card-status employee-card-status--waiting">Log událostí</span>
       </div>
+      ${collectionRoutesDriverTabletAudioPreview()}
       ${moduleEventLogForModule({ id: COLLECTION_ROUTES_MODULE_KEY, title: "Trasy svozu", route: COLLECTION_ROUTES_ROUTE, status: "Řízený online pilot" })}
     </section>
   `;
@@ -42846,6 +42981,7 @@ async function loadCollectionRoutesAdminTabletTest(options = {}) {
       applyMyCollectionDailyRoute(result.route);
       collectionRoutesPilotState.myDailyRouteLoaded = true;
       collectionRoutesPilotState.testGpsConfirmations = [];
+      await loadDriverTabletAudioPreferences();
     }
   } catch (error) {
     collectionRoutesPilotState.adminTabletTestError = error.payload?.error || error.message || "TEST tabletu se nepodařilo načíst.";
@@ -42896,6 +43032,7 @@ function closeCollectionRoutesAdminTabletTest() {
 async function startCollectionRoutesAdminTabletTest() {
   const runId = String(collectionRoutesPilotState.adminTabletTestSelectedRunId || "").trim();
   if (!runId || collectionRoutesPilotState.adminTabletTestLoading) return;
+  void unlockAndPreloadCollectionDailyDriverAudio();
   const audioReady = !COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED || await elevenLabsAssistant.unlockVoiceAudio?.();
   clearCollectionRoutesSarlotaIntroResponseWindow();
   collectionRoutesPilotState.adminTabletTestLoading = true;
@@ -42925,6 +43062,7 @@ async function startCollectionRoutesAdminTabletTest() {
     collectionRoutesPilotState.myDailyRouteSarlotaMemoryLoaded = false;
     collectionRoutesPilotState.myDailyRouteSarlotaMemory = null;
     applyMyCollectionDailyRoute(result.route || null, "TEST relace je aktivní. Všechny zápisy míří jen do TEST scope.");
+    await loadDriverTabletAudioPreferences();
     if (COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED && !audioReady) {
       collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Prohlížeč nepovolil automatický zvuk. Klepni na SPUSTIT HOLOGRAFICKOU ŠARLOTU.";
     }
@@ -44040,9 +44178,24 @@ function applyCollectionDailyRouteDetail(detail, message = "") {
 }
 
 function applyMyCollectionDailyRoute(detail, message = "") {
-  const previousRunId = collectionRoutesPilotState.myDailyRoute?.run?.id || "";
+  const previousRun = collectionRoutesPilotState.myDailyRoute?.run || null;
+  const previousRunId = previousRun?.id || "";
   const nextRunId = detail?.run?.id || "";
+  const previousSessionId = driverTabletRouteSessionId(previousRun, collectionRoutesPilotState.adminTabletTestSession?.id || "");
+  const nextSessionId = driverTabletRouteSessionId(detail?.run, collectionRoutesPilotState.adminTabletTestSession?.id || "");
   collectionRoutesPilotState.myDailyRoute = detail || null;
+  if ((previousRun?.scope || "") !== (detail?.run?.scope || "")) {
+    collectionRoutesPilotState.myDailyRouteAudioPreferencesLoaded = false;
+  }
+  if (previousSessionId !== nextSessionId) {
+    driverTabletIntroController?.dispose();
+    driverTabletIntroController = null;
+    window.clearTimeout(collectionDailyDriverStateAnimationTimer);
+    collectionDailyDriverStateAnimationTimer = null;
+    collectionRoutesPilotState.myDailyRouteIntroState = "idle";
+    collectionRoutesPilotState.myDailyRouteIntroData = null;
+    collectionRoutesPilotState.myDailyRouteAnimatedStopId = "";
+  }
   if (previousRunId !== nextRunId) {
     if (collectionRoutesPilotState.myDailyRouteNavigationActive) {
       stopCollectionDailyDriverNavigation({ renderAfter: false });
@@ -44052,9 +44205,123 @@ function applyMyCollectionDailyRoute(detail, message = "") {
     collectionRoutesPilotState.myDailyRouteMapMode = "leg";
     collectionRoutesPilotState.myDailyRouteMapFocusStopId = "";
     collectionRoutesPilotState.myDailyRouteSarlotaAutoAttemptedRunId = "";
+    collectionRoutesPilotState.myDailyRouteWarningSoundKey = "";
     collectionDailyDriverMapRuntime.routeCache.clear();
   }
   if (message) collectionRoutesPilotState.myDailyRouteMessage = message;
+}
+
+let collectionDailyDriverStateAnimationTimer = null;
+
+function animateCollectionDailyDriverStopTransition(stopId) {
+  window.clearTimeout(collectionDailyDriverStateAnimationTimer);
+  collectionRoutesPilotState.myDailyRouteAnimatedStopId = String(stopId || "");
+  collectionDailyDriverStateAnimationTimer = window.setTimeout(() => {
+    collectionRoutesPilotState.myDailyRouteAnimatedStopId = "";
+    if (document.querySelector("[data-collection-daily-driver-kiosk]")) render();
+  }, 720);
+}
+
+async function loadDriverTabletAudioPreferences() {
+  const scope = collectionDailyRouteDriverScope() === "test" ? "test" : "production";
+  try {
+    const result = await apiJson(`/api/collection-routes/driver-tablet/preferences?scope=${encodeURIComponent(scope)}`);
+    collectionRoutesPilotState.myDailyRouteSoundMode = normalizeDriverTabletSoundMode(result.preferences?.soundMode);
+  } catch (error) {
+    console.warn("collection_routes.driver_tablet_preferences_load_failed", String(error?.message || "unknown").slice(0, 100));
+  } finally {
+    collectionRoutesPilotState.myDailyRouteAudioPreferencesLoaded = true;
+    syncDriverTabletAudioManager();
+  }
+}
+
+async function saveDriverTabletAudioPreference(mode) {
+  const previous = collectionDailyDriverSoundMode();
+  const next = normalizeDriverTabletSoundMode(mode);
+  if (previous === next) return;
+  collectionRoutesPilotState.myDailyRouteSoundMode = next;
+  syncDriverTabletAudioManager();
+  render();
+  try {
+    const result = await apiJson("/api/collection-routes/driver-tablet/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({ soundMode: next, scope: collectionDailyRouteDriverScope() })
+    });
+    collectionRoutesPilotState.myDailyRouteSoundMode = normalizeDriverTabletSoundMode(result.preferences?.soundMode);
+    void logDriverTabletOperationalAudioEvent({ eventType: "mode_changed", result: `${previous}_to_${next}` });
+  } catch (error) {
+    collectionRoutesPilotState.myDailyRouteSoundMode = previous;
+    collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Režim zvuků se nepodařilo uložit.";
+    void playCollectionDailyDriverSound("error");
+  } finally {
+    syncDriverTabletAudioManager();
+    render();
+  }
+}
+
+async function logDriverTabletOperationalAudioEvent(entry = {}) {
+  const session = collectionDailyDriverAudioSessionPayload();
+  if (!session) return false;
+  const eventType = String(entry.eventType || "").trim();
+  if (!eventType) return false;
+  try {
+    const unique = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    await apiJson("/api/collection-routes/driver-tablet/audio-events", {
+      method: "POST",
+      body: JSON.stringify({
+        ...session,
+        eventType,
+        soundEvent: entry.soundEvent || "",
+        result: entry.result || "",
+        error: entry.error || "",
+        idempotencyKey: `${session.routeSessionId}:${eventType}:${entry.soundEvent || "none"}:${unique}`
+      })
+    });
+    return true;
+  } catch (error) {
+    console.warn("collection_routes.driver_tablet_audio_log_failed", String(error?.message || "unknown").slice(0, 100));
+    return false;
+  }
+}
+
+async function startCollectionDailyDriverIntro() {
+  const session = collectionDailyDriverAudioSessionPayload();
+  const detail = collectionRoutesPilotState.myDailyRoute;
+  if (!session || !detail?.run || driverTabletIntroController) return false;
+  const skip = collectionDailyDriverSoundMode() === "off";
+  try {
+    const claim = await apiJson("/api/collection-routes/driver-tablet/audio-events", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "claim_intro",
+        ...session,
+        skip,
+        result: skip ? "mode_off" : "claimed"
+      })
+    });
+    if (claim.claimed !== true || skip) return false;
+  } catch (error) {
+    console.warn("collection_routes.driver_tablet_intro_claim_failed", String(error?.message || "unknown").slice(0, 100));
+    return false;
+  }
+  collectionRoutesPilotState.myDailyRouteIntroData = {
+    stopCount: Array.isArray(detail.stops) ? detail.stops.length : Number(detail.run.stopCount || 0),
+    vehicleLabel: detail.run.vehicleLabel || detail.run.vehicleRegistration || detail.run.vehicleCode || "Vozidlo"
+  };
+  driverTabletIntroController = new DriverTabletIntroController({
+    reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true,
+    onStateChange: (state) => {
+      collectionRoutesPilotState.myDailyRouteIntroState = state;
+      render();
+    },
+    onPlay: () => playCollectionDailyDriverSound("tablet_intro"),
+    onComplete: (result) => {
+      if (result === "skipped") void logDriverTabletOperationalAudioEvent({ eventType: "intro_skipped", soundEvent: "tablet_intro", result: "user_skipped" });
+      collectionRoutesPilotState.myDailyRouteIntroData = null;
+      render();
+    }
+  });
+  return driverTabletIntroController.start();
 }
 
 function collectionDailyDriverSarlotaAutoStartRunId() {
@@ -44155,11 +44422,14 @@ async function submitCollectionDailyDriverReport(form) {
     collectionRoutesPilotState.myDailyRouteMapMode = "leg";
     collectionRoutesPilotState.myDailyRouteMapFocusStopId = "";
     applyMyCollectionDailyRoute(result.route || null, "Hlášení bylo uloženo.");
+    animateCollectionDailyDriverStopTransition(stopId);
+    void playCollectionDailyDriverSound("report_saved");
     if (collectionRoutesPilotState.myDailyRouteSarlotaEnabled) {
       void speakCollectionRoutesTestGps("Hlášení bylo uloženo.");
     }
   } catch (error) {
     collectionRoutesPilotState.myDailyRouteReportError = error.payload?.error || error.message || "Hlášení se nepodařilo uložit.";
+    void playCollectionDailyDriverSound("error");
   } finally {
     collectionRoutesPilotState.myDailyRoutePending = "";
     render();
@@ -44262,9 +44532,15 @@ async function finishCollectionRoutesSarlotaIntroResponseWindow(options = {}) {
 
 async function openCollectionDailyDriverRouteConfirmation() {
   if (collectionRoutesPilotState.myDailyRoutePending) return;
+  void unlockAndPreloadCollectionDailyDriverAudio();
   if (COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED) void elevenLabsAssistant.unlockVoiceAudio?.();
   const context = await loadCollectionRoutesSarlotaContext();
   if (!context) return;
+  const warningKey = `${collectionRoutesPilotState.myDailyRoute?.run?.id || ""}:${(context.readiness?.warnings || []).map((item) => item.code || item.message || "warning").join("|")}`;
+  if (context.readiness?.warnings?.length && collectionRoutesPilotState.myDailyRouteWarningSoundKey !== warningKey) {
+    collectionRoutesPilotState.myDailyRouteWarningSoundKey = warningKey;
+    void playCollectionDailyDriverSound("warning");
+  }
   collectionRoutesPilotState.myDailyRoutePanel = "route-confirmation";
   render();
 }
@@ -44272,6 +44548,7 @@ async function openCollectionDailyDriverRouteConfirmation() {
 async function confirmAndStartMyCollectionDailyRoute(form) {
   const run = collectionRoutesPilotState.myDailyRoute?.run;
   if (!run?.id || run.status !== "confirmed" || collectionRoutesPilotState.myDailyRoutePending) return;
+  void unlockAndPreloadCollectionDailyDriverAudio();
   if (COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED) void elevenLabsAssistant.unlockVoiceAudio?.();
   const requestedMemory = COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED && Boolean(form?.elements?.useMemory?.checked);
   const context = await loadCollectionRoutesSarlotaContext();
@@ -44279,6 +44556,7 @@ async function confirmAndStartMyCollectionDailyRoute(form) {
   if (context.readiness?.canStart !== true) {
     const blocker = Array.isArray(context.readiness?.blockers) ? context.readiness.blockers[0] : null;
     collectionRoutesPilotState.myDailyRouteError = blocker?.message || "Dnešní trasu se nepodařilo bezpečně ověřit. Trasa nebyla zahájená.";
+    void playCollectionDailyDriverSound("error");
     render();
     return;
   }
@@ -44916,6 +45194,9 @@ async function loadMyCollectionDailyRoute(options = {}) {
   try {
     const result = await apiJson(`/api/collection-routes/daily-routes/my${collectionDailyRouteDriverScopeQuery()}`);
     applyMyCollectionDailyRoute(result.route || null);
+    if (!collectionRoutesPilotState.myDailyRouteAudioPreferencesLoaded) {
+      await loadDriverTabletAudioPreferences();
+    }
     if (result.route?.run?.scope === "test") {
       await loadCollectionRoutesTestGpsConfirmations(result.route.run.id);
     } else {
@@ -44948,6 +45229,7 @@ async function transitionMyCollectionDailyRoute(action) {
     void elevenLabsAssistant.unlockVoiceAudio?.();
   }
   let startSarlotaAfterTransition = false;
+  let transitionSucceeded = false;
   collectionRoutesPilotState.myDailyRoutePending = action;
   collectionRoutesPilotState.myDailyRouteError = "";
   collectionRoutesPilotState.myDailyRouteMessage = "";
@@ -44967,13 +45249,21 @@ async function transitionMyCollectionDailyRoute(action) {
       result.route || null,
       action === "start" ? "Trasa byla zahájena." : "Trasa byla dokončena."
     );
+    transitionSucceeded = true;
     startSarlotaAfterTransition = COLLECTION_DAILY_DRIVER_SARLOTA_ENABLED && action === "start";
   } catch (error) {
     if (action === "start") elevenLabsAssistant.discardVoiceInput?.();
     collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Stav trasy se nepodařilo uložit.";
+    void playCollectionDailyDriverSound("error");
   } finally {
     collectionRoutesPilotState.myDailyRoutePending = "";
     render();
+  }
+  if (transitionSucceeded && action === "start") {
+    await startCollectionDailyDriverIntro();
+  }
+  if (transitionSucceeded && action === "complete") {
+    void playCollectionDailyDriverSound("route_completed");
   }
   if (startSarlotaAfterTransition) {
     collectionRoutesPilotState.myDailyRouteSarlotaMessage = "Trasa je zahájená. Připravuji úvodní přivítání Šarloty…";
@@ -45063,6 +45353,8 @@ async function recordMyCollectionDailyRouteEvent(action, stopId, input = {}) {
           ? "Přestávka byla zahájena. Ukonči ji velkým tlačítkem na obrazovce."
           : "Přestávka byla ukončena. Můžeš pokračovat v trase."
       }[action] || "Akce byla uložena.");
+    if (action === "done") void playCollectionDailyDriverSound("stop_completed");
+    if (["done", "problem"].includes(action)) animateCollectionDailyDriverStopTransition(stopId);
     if (action === "done" && collectionRoutesPilotState.myDailyRouteSarlotaEnabled) {
       const nextStop = result.route?.stops?.find((stop) => stop.status === "planned");
       void speakCollectionRoutesTestGps(nextStop
@@ -45071,6 +45363,7 @@ async function recordMyCollectionDailyRouteEvent(action, stopId, input = {}) {
     }
   } catch (error) {
     collectionRoutesPilotState.myDailyRouteError = error.payload?.error || error.message || "Akci se nepodařilo uložit.";
+    void playCollectionDailyDriverSound("error");
   } finally {
     collectionRoutesPilotState.myDailyRoutePending = "";
     render();
@@ -55451,21 +55744,21 @@ document.addEventListener("pointerdown", (event) => {
   collectionDailyDriverPressedTarget?.classList.remove("is-pressed");
   collectionDailyDriverPressedTarget = target;
   target.classList.add("is-pressed");
-  if (kiosk.matches("[data-collection-daily-driver-kiosk]") && !target.matches("[data-collection-driver-sound-toggle]")) {
+  if (kiosk.matches("[data-collection-daily-driver-kiosk]") && collectionDailyDriverPrimaryAudioTarget(target)) {
     collectionDailyDriverSoundTarget = target;
-    playCollectionDailyDriverTapSound();
+    void playCollectionDailyDriverSound("primary_tap");
   }
 }, true);
 
 document.addEventListener("click", (event) => {
   const kiosk = event.target.closest?.("[data-collection-daily-driver-kiosk]");
   const target = event.target.closest?.("button:not(:disabled), a[href], label.collection-daily-driver-photo-button");
-  if (!kiosk || !target || !kiosk.contains(target) || target.matches("[data-collection-driver-sound-toggle]")) return;
+  if (!kiosk || !target || !kiosk.contains(target) || !collectionDailyDriverPrimaryAudioTarget(target)) return;
   if (target === collectionDailyDriverSoundTarget) {
     collectionDailyDriverSoundTarget = null;
     return;
   }
-  playCollectionDailyDriverTapSound();
+  void playCollectionDailyDriverSound("primary_tap");
 }, true);
 
 function releaseCollectionDailyDriverPressedTarget() {
@@ -55486,6 +55779,19 @@ collectionDailyDriverColorSchemeMedia?.addEventListener?.("change", () => {
     render();
   }
 });
+
+function handleCollectionDailyDriverConnectivityChange(online) {
+  const previous = collectionRoutesPilotState.myDailyRouteOnline !== false;
+  const next = online === true;
+  collectionRoutesPilotState.myDailyRouteOnline = next;
+  if (!document.querySelector("[data-collection-daily-driver-kiosk]")) return;
+  if (previous && !next) void playCollectionDailyDriverSound("offline");
+  if (!previous && next) void playCollectionDailyDriverSound("online_restored");
+  render();
+}
+
+window.addEventListener("offline", () => handleCollectionDailyDriverConnectivityChange(false));
+window.addEventListener("online", () => handleCollectionDailyDriverConnectivityChange(true));
 
 document.addEventListener("click", async (event) => {
   const tyresTabButton = event.target.closest("[data-tyres-tab]");
@@ -56691,14 +56997,10 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
-  const collectionDailyDriverSoundToggle = event.target.closest("[data-collection-driver-sound-toggle]");
-  if (collectionDailyDriverSoundToggle) {
+  const collectionDailyDriverSoundModeButton = event.target.closest("[data-collection-driver-sound-mode]");
+  if (collectionDailyDriverSoundModeButton) {
     event.preventDefault();
-    const wasEnabled = collectionDailyDriverSoundsEnabled();
-    if (wasEnabled) playCollectionDailyDriverTapSound();
-    collectionRoutesPilotState.myDailyRouteSoundsEnabled = !wasEnabled;
-    if (!wasEnabled) playCollectionDailyDriverTapSound();
-    render();
+    await saveDriverTabletAudioPreference(collectionDailyDriverSoundModeButton.dataset.collectionDriverSoundMode || "standard");
     return;
   }
 
@@ -56706,6 +57008,14 @@ document.addEventListener("click", async (event) => {
   if (collectionDailyDriverRouteConfirmationOpen) {
     event.preventDefault();
     if (!collectionDailyDriverRouteConfirmationOpen.disabled) await openCollectionDailyDriverRouteConfirmation();
+    return;
+  }
+
+  const collectionDailyDriverIntroSkip = event.target.closest("[data-collection-driver-intro-skip]");
+  if (collectionDailyDriverIntroSkip) {
+    event.preventDefault();
+    driverTabletAudioManager.stop();
+    driverTabletIntroController?.skip();
     return;
   }
 

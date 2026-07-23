@@ -275,6 +275,8 @@ let mockCollectionRouteSourceRows = [];
 const mockCollectionDailyRouteReportPhotos = new Map();
 const mockCollectionDailyRouteGpsConfirmations = new Map();
 const mockSarlotaUserMemory = new Map();
+const mockDriverTabletAudioPreferences = new Map();
+const mockDriverTabletAudioClaims = new Set();
 let mockDataBoxSyncRuns = [];
 let mockDataBoxActions = [];
 let mockDataBoxPlusPendingAction = null;
@@ -358,6 +360,10 @@ const contentTypes = new Map([
   [".js", "text/javascript; charset=utf-8"],
   [".ts", "text/javascript; charset=utf-8"],
   [".json", "application/json; charset=utf-8"],
+  [".wav", "audio/wav"],
+  [".mp3", "audio/mpeg"],
+  [".m4a", "audio/mp4"],
+  [".ogg", "audio/ogg"],
   [".mp4", "video/mp4"],
   [".png", "image/png"],
   [".webp", "image/webp"],
@@ -5484,6 +5490,58 @@ async function handleApi(request, response) {
     return true;
   }
 
+  if (url.pathname === "/api/collection-routes/driver-tablet/preferences" && ["GET", "PATCH"].includes(request.method)) {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "collection-routes", "view")) {
+      sendJson(response, 403, { error: "K tomu nemáš oprávnění." });
+      return true;
+    }
+    const input = request.method === "PATCH" ? await readJsonBody(request) : {};
+    const scope = (request.method === "PATCH" ? input.scope : url.searchParams.get("scope")) === "test" ? "test" : "production";
+    const key = `${scope}:${user.id}:blackview-active-7`;
+    if (request.method === "PATCH") {
+      const requested = String(input.soundMode || "standard");
+      mockDriverTabletAudioPreferences.set(key, ["standard", "quiet", "off"].includes(requested) ? requested : "standard");
+    }
+    sendJson(response, 200, {
+      preferences: {
+        soundMode: mockDriverTabletAudioPreferences.get(key) || "standard",
+        deviceId: "blackview-active-7",
+        scope,
+        updatedAt: new Date().toISOString()
+      }
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/collection-routes/driver-tablet/audio-events" && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    const input = await readJsonBody(request);
+    const scope = input.scope === "test" ? "test" : "production";
+    const route = ensureMockCollectionDailyRouteForDriver(user, { scope });
+    if (route.run.id !== String(input.runId || "") || route.run.status !== "active") {
+      sendJson(response, 409, { error: "Audio relace nepatří zahájené trase." });
+      return true;
+    }
+    if (input.action === "claim_intro") {
+      const key = `${scope}:${input.routeSessionId}:${route.run.driverUserId}:v${input.introVersion || "1"}`;
+      const claimed = !mockDriverTabletAudioClaims.has(key);
+      if (claimed) mockDriverTabletAudioClaims.add(key);
+      sendJson(response, 200, { claimed, skipped: claimed && input.skip === true, routeSessionId: input.routeSessionId, introVersion: input.introVersion || "1" });
+      return true;
+    }
+    sendJson(response, 200, { logged: true, scope, eventType: String(input.eventType || "") });
+    return true;
+  }
+
   if (url.pathname === "/api/collection-routes/test-gps-confirmations" && ["GET", "POST"].includes(request.method)) {
     const user = currentDevUser(request);
     if (!user) {
@@ -5646,6 +5704,7 @@ async function handleApi(request, response) {
     const beforeStatus = route.run.status;
     if (action === "start" && route.run.status === "confirmed") {
       route.run.status = "active";
+      route.run.startedAt = new Date().toISOString();
     } else if (action === "complete" && route.run.status === "active") {
       route.run.status = "completed";
     } else if (action === "reopen" && route.run.status === "completed") {

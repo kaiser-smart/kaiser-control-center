@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.687"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.688"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Řidičský tablet: schválená zvuková sada A",
+    text: "Řidičský tablet používá administrátorem schválenou sadu A z ElevenLabs Sound Effects jako lokální produkční aktiva bez vzdálených URL. Centrální audio systém řídí intro, potvrzení, upozornění, priority, režimy Standardní, Tiché a Vypnuto, offline cache a pravdivé přehrání až po potvrzeném stavu; hlasová Šarlota zůstává nedotčená."
+  },
   {
     title: "Vozový park: popisky technických číselníků Vistosu",
     text: "ID typu vozidla, přívěsů, paliva, EURO, nástavby, náprav, vybavení a nádob se převádějí podle oficiálního Vehicle EnumerationList. Pokud Vistos vrátí vlastní Caption, má stále přednost; žádná provozní hodnota se neodhaduje ani nezapisuje."

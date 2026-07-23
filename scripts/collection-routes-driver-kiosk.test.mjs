@@ -266,20 +266,15 @@ assert.match(
 );
 
 assert.ok(
-  appSource.includes("function playCollectionDailyDriverTapSound()")
-    && appSource.includes("function withCollectionRoutesDriverAudioContext(onReady)")
-    && appSource.includes("data-collection-driver-sound-toggle")
+  appSource.includes("new DriverTabletAudioManager")
+    && appSource.includes("function playCollectionDailyDriverSound(eventName")
+    && appSource.includes("data-collection-driver-sound-mode")
     && appSource.includes("data-collection-driver-display-mode")
-    && appSource.includes('oscillator.type = "triangle"')
-    && appSource.includes("context.resume().then(scheduleWhenRunning)")
-    && appSource.includes('if (context.state !== "running") return false;')
-    && appSource.includes("oscillator.frequency.setValueAtTime(520")
-    && appSource.includes("endAt = startAt + 0.082")
-    && appSource.includes("gain.gain.exponentialRampToValueAtTime(0.065")
+    && appSource.includes('playCollectionDailyDriverSound("primary_tap")')
+    && appSource.includes("collectionDailyDriverPrimaryAudioTarget")
     && appSource.includes("collectionDailyDriverSoundTarget")
-    && !appSource.slice(appSource.indexOf("function playCollectionDailyDriverTapSound()"), appSource.indexOf("function collectionDailyDriverSettingsSummary()"))
-      .includes("forEach"),
-  "Zvuk tlačítka musí po odemčení prohlížeče zahrát jeden krátký, slyšitelný tlumený tón bez zvonkohry."
+    && appSource.includes("unlockAndPreloadCollectionDailyDriverAudio"),
+  "Skutečný kiosk musí používat centrální sémantický audio manager a ozvučit jen primární fyzické akce."
 );
 
 const audioHelperStart = appSource.indexOf("let collectionRoutesDriverAudioContext = null;");
