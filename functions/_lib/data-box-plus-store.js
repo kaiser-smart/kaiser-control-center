@@ -1368,7 +1368,11 @@ async function upsertMessage(db, env, account, mailbox, message) {
         targetMessageId
       )
       .run();
-    await db.prepare("DELETE FROM data_box_plus_recommendations WHERE message_id = ?").bind(targetMessageId).run();
+    await db.prepare(`
+      UPDATE data_box_plus_recommendations
+      SET status = 'closed_sent_history', updated_at = CURRENT_TIMESTAMP
+      WHERE message_id = ?
+    `).bind(targetMessageId).run();
     return { state: existing?.id ? "updated" : "created", attachmentsDownloaded: attachmentState.downloaded };
   }
   const classification = classifyMessage(message, attachmentState);

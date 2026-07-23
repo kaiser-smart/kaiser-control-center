@@ -25,7 +25,8 @@ assert.match(migration, /CREATE TABLE IF NOT EXISTS data_box_plus_drafts/);
 assert.match(migration, /CREATE TABLE IF NOT EXISTS data_box_plus_draft_attachments/);
 assert.match(migration, /CREATE TABLE IF NOT EXISTS data_box_plus_send_jobs/);
 assert.match(migration, /UNIQUE INDEX IF NOT EXISTS idx_data_box_plus_send_jobs_idempotency/);
-assert.match(sentHistoryMigration, /DELETE FROM data_box_plus_recommendations/);
+assert.match(sentHistoryMigration, /UPDATE data_box_plus_recommendations/);
+assert.match(sentHistoryMigration, /status = 'closed_sent_history'/);
 assert.match(sentHistoryMigration, /WHERE direction = 'sent'/);
 assert.match(sentHistoryMigration, /summary_loaded = 0/);
 
@@ -110,7 +111,7 @@ assert.match(store, /20 \* 1024 \* 1024/);
 assert.match(store, /100 \* 1024 \* 1024/);
 assert.match(store, /sendDataBoxIsdsMessage/);
 assert.match(store, /data_box_plus_sent_history_only/);
-assert.match(store, /DELETE FROM data_box_plus_recommendations WHERE message_id = \?/);
+assert.match(store, /status = 'closed_sent_history'/);
 
 for (const source of [draftApi, sendApi, bulkApi]) {
   assert.match(source, /requireUserPermission\(env, request, "data-box-plus", "manage"\)/);
