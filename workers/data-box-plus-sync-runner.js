@@ -2,8 +2,8 @@ function appBaseUrl(env) {
   return String(env.APP_BASE_URL || "https://smart-odpady.ai").replace(/\/+$/, "");
 }
 
-function isDataBoxDue(scheduledTime) {
-  return new Date(scheduledTime).getUTCMinutes() % 30 === 0;
+export function isDataBoxDue(scheduledTime) {
+  return new Date(scheduledTime).getUTCMinutes() === 0;
 }
 
 async function postInternal(env, path, token, body = undefined) {
@@ -54,8 +54,8 @@ export default {
   async fetch() {
     return Response.json({
       status: "ready",
-      dataBoxPlusIntervalMinutes: 30,
-      message: "Datové schránky Plus se načítají každých 30 minut. GPS historie má vlastní oddělený cloudový Worker. Rizikové akce čekají na potvrzení."
+      dataBoxPlusIntervalMinutes: 60,
+      message: "Datové schránky Plus se načítají automaticky každou celou hodinu. GPS historie má vlastní oddělený cloudový Worker."
     });
   }
 };

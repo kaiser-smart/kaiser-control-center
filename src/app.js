@@ -307,7 +307,6 @@ import {
   dataBoxPlusTriageCounts,
   dataBoxPlusTriageItem,
   dataBoxPlusTriageItems,
-  dataBoxPlusTriagePreviewEnabled,
   readDataBoxPlusTriageDetail,
   readDataBoxPlusTriageSnapshot
 } from "./data/dataBoxPlusTriage.js";
@@ -482,19 +481,15 @@ const HOME_MODULE_SECTIONS = [
 ];
 const DATA_BOX_PLUS_MODULE_KEY = "data-box-plus";
 const DATA_BOX_PLUS_ROUTE = "/datove-schranky-plus";
-function dataBoxPlusTriagePreviewActive(user = authState.user ? currentUser() : null) {
-  return dataBoxPlusTriagePreviewEnabled(
-    runtimeConfig.dataBoxPlusTriagePreview,
-    window.location.hostname,
-    user?.id
-  );
+function dataBoxPlusWorkingInboxActive() {
+  return true;
 }
 const DATA_BOX_PLUS_TABS = [
   { id: "messages", label: "Zprávy" },
   { id: "autopilot", label: "Autopilot" },
   { id: "settings", label: "Nastavení" }
 ];
-const DATA_BOX_PLUS_SYNC_INTERVAL_MS = 30 * 60 * 1000;
+const DATA_BOX_PLUS_SYNC_INTERVAL_MS = 60 * 60 * 1000;
 const DATA_BOX_PLUS_MODEL_FLAG = {
   label: "Model: ostrý DSP",
   detail: "Oddělený backend, jednorázové potvrzení a audit. Úspěch se zobrazí až po skutečném provedení."
@@ -3449,8 +3444,8 @@ function suspendAiAssistantForDataBoxPlusTriage() {
 }
 
 function syncDataBoxPlusTriageAssistantBoundary(path, user = authState.user ? currentUser() : null) {
-  const triagePreviewActive = dataBoxPlusTriagePreviewActive(user) && path === DATA_BOX_PLUS_ROUTE;
-  if (triagePreviewActive) {
+  const workingInboxActive = dataBoxPlusWorkingInboxActive(user) && path === DATA_BOX_PLUS_ROUTE;
+  if (workingInboxActive) {
     if (sarlotaOpenQuery().trim().toLowerCase() === SARLOTA_OPEN_QUERY_VALUE) {
       const url = new URL(window.location.href);
       url.searchParams.delete("open");
@@ -3972,7 +3967,7 @@ function renderAiAssistantLayer() {
     !user
     || !isUserActive(user)
     || isDriverReportsPath()
-    || (dataBoxPlusTriagePreviewActive(user) && normalizePath(window.location.pathname) === DATA_BOX_PLUS_ROUTE)
+    || (dataBoxPlusWorkingInboxActive(user) && normalizePath(window.location.pathname) === DATA_BOX_PLUS_ROUTE)
   ) {
     return "";
   }
@@ -29479,8 +29474,8 @@ function dataBoxPlusTriageStatusNotice() {
   }
   return `
     <div class="ds-plus-status-note ds-plus-triage-mode-note ${details.length ? "ds-plus-status-note--warning" : ""}" role="status">
-      <strong>Testovací režim</strong>
-      <span>Změny se zatím neodesílají do ISDS.${details.length ? ` ${escapeHtml(details.join(" "))}` : ""}</span>
+      <strong>Automatické načítání</strong>
+      <span>Zprávy se z ISDS načítají automaticky každou celou hodinu.${details.length ? ` ${escapeHtml(details.join(" "))}` : ""}</span>
     </div>
   `;
 }
@@ -29655,9 +29650,9 @@ function dataBoxPlusTriageInbox() {
             ${mailboxes.map((mailbox) => `<option value="${escapeHtml(mailbox.id)}" ${mailbox.id === selectedMailbox.id ? "selected" : ""}>${escapeHtml(mailbox.name || mailbox.company || "Datová schránka")}</option>`).join("")}
           </select>
           <h2 class="sr-only" id="ds-plus-triage-inbox-title">${escapeHtml(selectedMailbox.name || selectedMailbox.company || "Datová schránka")}</h2>
-          <p>${escapeHtml(dataBoxPlusTriageSyncLabel(selectedMailbox))} · ${escapeHtml(connection.label)}</p>
+          <p>${escapeHtml(dataBoxPlusTriageSyncLabel(selectedMailbox))} · ${escapeHtml(connection.label)} · Automaticky každou hodinu</p>
         </div>
-        <button class="secondary-link" type="button" data-ds-plus-service-sync ${dataBoxPlusState.syncLoading ? "disabled" : ""}>${dataBoxPlusState.syncLoading ? "Načítám…" : "↻ Načíst zprávy"}</button>
+        <span class="ds-plus-state-pill">Automaticky každou hodinu</span>
       </div>
       ${dataBoxPlusTriageFolderNav(dataBoxPlusMessages(), selectedMailbox.id)}
       ${receivedFolder ? dataBoxPlusTriageQueueNav(counts) : ""}
@@ -29799,7 +29794,7 @@ function dataBoxPlusTriagePage(moduleItem, user) {
   const selectedMailbox = dataBoxPlusTriageMailboxOptions().find((mailbox) => mailbox.id === dataBoxPlusState.triageMailboxId) || null;
   const connection = selectedMailbox ? dataBoxPlusTriageConnection(selectedMailbox) : null;
   return `
-    <main class="app-shell module-page module-theme-scope ds-plus-page ds-plus-triage-preview" ${moduleThemeStyleAttribute()}>
+    <main class="app-shell module-page module-theme-scope ds-plus-page ds-plus-triage-production" ${moduleThemeStyleAttribute()}>
       ${userBar(user)}
       <nav class="topbar" aria-label="Navigace">
         <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
@@ -29815,7 +29810,7 @@ function dataBoxPlusTriagePage(moduleItem, user) {
         </div>
         <div class="ds-plus-triage-header__actions">
           <button class="primary-action" type="button" data-ds-plus-compose-open>＋ Nová datová zpráva</button>
-          <small>Připraví pouze návrh.</small>
+          <small>Odeslání zatím není aktivní.</small>
         </div>
       </section>
       ${dataBoxPlusTriageStatusNotice()}
@@ -30267,8 +30262,7 @@ function dataBoxPlusSettingsPanel() {
         <summary>Zobrazit diagnostiku</summary>
         <div>
           <p>Poslední načtení: ${escapeHtml(dataBoxPlusState.syncRuns?.[0]?.startedAt ? formatDateTime(dataBoxPlusState.syncRuns[0].startedAt) : "zatím neproběhlo")}.</p>
-          <p>Servisní ruční načtení je jen pro správce. Běžný uživatel má počítat s automatickým provozem.</p>
-          ${dataBoxPlusActionButton({ label: "Servisně načíst teď", attrs: `data-ds-plus-service-sync` })}
+          <p>Zprávy se načítají automaticky každou celou hodinu. Ruční načítání není v aplikaci dostupné.</p>
         </div>
       </details>
     </section>
@@ -30584,7 +30578,7 @@ function dataBoxPlusActivePanel() {
 }
 
 function dataBoxPlusPage(moduleItem, user) {
-  if (dataBoxPlusTriagePreviewActive(user)) {
+  if (dataBoxPlusWorkingInboxActive(user)) {
     return dataBoxPlusTriagePage(moduleItem, user);
   }
   return `
@@ -31284,8 +31278,8 @@ function dataBoxAutoSyncInfo() {
   return `
     <section class="data-box-side-card data-box-side-card--sync">
       <span>Automatické načítání</span>
-      <strong>Read-only plán: každých 30 minut</strong>
-      <small>Stav vychází z logu synchronizace. Tato obrazovka nespouští cron ani žádné odesílání.</small>
+      <strong>Cloudové načítání každou celou hodinu</strong>
+      <small>Stav vychází z logu synchronizace. Načítání běží bez otevřené aplikace a tato obrazovka nespouští žádné odesílání.</small>
     </section>
   `;
 }
@@ -31323,7 +31317,7 @@ function dataBoxStatusAndSyncCard(connection, selectedAccount, context, directio
       ${dataBoxErrorNotice(connection)}
       <dl class="data-box-side-status">
         <div><dt>Poslední synchronizace</dt><dd>${escapeHtml(dataBoxLastSyncLabel())}</dd></div>
-        <div><dt>Plán načítání</dt><dd>Read-only každých 30 minut</dd></div>
+        <div><dt>Plán načítání</dt><dd>Automaticky každou celou hodinu</dd></div>
         <div><dt>Schránka</dt><dd>${escapeHtml(selectedAccount ? selectedAccount.label : context.title)}</dd></div>
         ${dataBoxAiSortingInfo(direction)}
         ${dataBoxVaultInfo(metrics)}
@@ -34373,7 +34367,7 @@ function dataBoxRulesAutomation(user) {
     moduleName: "Datová schránka",
     user,
     description: "Pravidla pro třídění, upozornění a práci se zprávami.",
-    cloudNote: "DS pravidla jsou v cloud DB. Cloud runner je připravený pro běh každých 30 minut; e-maily vyžadují ruční potvrzení."
+    cloudNote: "DS pravidla jsou v cloud DB. Cloud runner načítá zprávy každou celou hodinu; e-maily vyžadují ruční potvrzení."
   });
 }
 
@@ -41496,7 +41490,7 @@ async function loadDataBoxPlusHomeStatus(options = {}) {
   dataBoxPlusHomeState.loading = true;
   dataBoxPlusHomeState.error = "";
   try {
-    if (dataBoxPlusTriagePreviewActive()) {
+    if (dataBoxPlusWorkingInboxActive()) {
       const [statusResult, messagesResult] = await readDataBoxPlusTriageSnapshot(apiJson);
       const messages = Array.isArray(messagesResult.messages) ? messagesResult.messages : [];
       const mailboxes = Array.isArray(statusResult.mailboxes) ? statusResult.mailboxes : [];
@@ -41535,7 +41529,7 @@ async function loadDataBoxPlusData(options = {}) {
   dataBoxPlusState.loading = true;
   dataBoxPlusState.error = "";
   try {
-    const [statusResult, messagesResult, recommendationsResult, rulesResult, syncRunsResult] = dataBoxPlusTriagePreviewActive()
+    const [statusResult, messagesResult, recommendationsResult, rulesResult, syncRunsResult] = dataBoxPlusWorkingInboxActive()
       ? await readDataBoxPlusTriageSnapshot(apiJson)
       : await Promise.all([
         apiJson("/api/data-box-plus/status"),
@@ -41575,7 +41569,7 @@ async function loadDataBoxPlusMessageDetail(messageId) {
   const id = String(messageId || "");
   if (!id) return;
   try {
-    const result = dataBoxPlusTriagePreviewActive()
+    const result = dataBoxPlusWorkingInboxActive()
       ? await readDataBoxPlusTriageDetail(apiJson, id)
       : await apiJson(`/api/data-box-plus/messages/${encodeURIComponent(id)}`);
     if (result.message?.id) {
@@ -41777,18 +41771,6 @@ async function rejectDataBoxPlusRecommendation(recommendationId) {
     await loadDataBoxPlusData({ force: true, renderAfter: false });
   } catch (error) {
     dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Rozhodnutí nepoužít návrh se nepodařilo uložit.");
-  }
-}
-
-async function runDataBoxPlusServiceSync() {
-  try {
-    dataBoxPlusState.notice = "Servisní načtení běží na pozadí.";
-    render();
-    await apiJson("/api/data-box-plus/sync", { method: "POST", body: JSON.stringify({}) });
-    dataBoxPlusState.notice = "Servisní načtení doběhlo. Běžný provoz dál počítá s automatickým načítáním.";
-    await loadDataBoxPlusData({ force: true, renderAfter: false });
-  } catch (error) {
-    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Servisní načtení se nepodařilo spustit.");
   }
 }
 
@@ -51703,7 +51685,7 @@ function renderAuthenticatedApp(user) {
   if (isDriverReportsPath(path) && (aiAssistantState.chatOpen || isAiVoiceSessionActive() || aiAssistantState.isListening)) {
     closeAiAssistant({ renderAfter: false });
   }
-  const triagePreviewRoute = dataBoxPlusTriagePreviewActive(user) && path === DATA_BOX_PLUS_ROUTE;
+  const workingInboxRoute = dataBoxPlusWorkingInboxActive(user) && path === DATA_BOX_PLUS_ROUTE;
   syncDataBoxPlusTriageAssistantBoundary(path, user);
   const userPrimaryRoutes = new Map(visibleModules(user).map((moduleItem) => [moduleItem.route, moduleItem]));
   if (
@@ -51723,7 +51705,7 @@ function renderAuthenticatedApp(user) {
     }
   }
   const userDashboardRoutes = new Map(visibleDashboardRoutes(user).map((moduleItem) => [moduleItem.route, moduleItem]));
-  const sarlotaDeepLink = triagePreviewRoute ? false : prepareSarlotaDeepLinkPanel();
+  const sarlotaDeepLink = workingInboxRoute ? false : prepareSarlotaDeepLinkPanel();
 
   if (hasPermission(user, "feedback", "view")) {
     loadModuleFeedback({ render: true });
@@ -56352,14 +56334,6 @@ document.addEventListener("click", async (event) => {
     event.preventDefault();
     const id = dataBoxPlusDismiss.dataset.dsPlusDismiss || "";
     await rejectDataBoxPlusRecommendation(id);
-    render();
-    return;
-  }
-
-  const dataBoxPlusServiceSync = event.target.closest("[data-ds-plus-service-sync]");
-  if (dataBoxPlusServiceSync) {
-    event.preventDefault();
-    await runDataBoxPlusServiceSync();
     render();
     return;
   }

@@ -14,22 +14,7 @@ export const DATA_BOX_PLUS_TRIAGE_MAILBOXES = [
   { id: "dbp-kaiser-holding", name: "Kaiser holding", company: "Kaiser holding", slot: 7 }
 ];
 
-export const DATA_BOX_PLUS_TRIAGE_DERIVATION_VERSION = "local-triage-v1";
-
-const DATA_BOX_PLUS_TRIAGE_LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
-const DATA_BOX_PLUS_TRIAGE_PRODUCTION_HOSTS = new Set(["smart-odpady.ai", "www.smart-odpady.ai"]);
-const DATA_BOX_PLUS_TRIAGE_PREVIEW_USER_IDS = new Set(["radim-oplustil"]);
-
-export function dataBoxPlusTriagePreviewEnabled(runtimeValue, hostname, userId = "") {
-  if (runtimeValue !== true) return false;
-
-  const normalizedHostname = String(hostname || "").trim().toLocaleLowerCase("en-US");
-  if (DATA_BOX_PLUS_TRIAGE_LOCAL_HOSTS.has(normalizedHostname)) return true;
-  if (!DATA_BOX_PLUS_TRIAGE_PRODUCTION_HOSTS.has(normalizedHostname)) return false;
-
-  const normalizedUserId = String(userId || "").trim().toLocaleLowerCase("en-US");
-  return DATA_BOX_PLUS_TRIAGE_PREVIEW_USER_IDS.has(normalizedUserId);
-}
+export const DATA_BOX_PLUS_TRIAGE_DERIVATION_VERSION = "production-triage-v1";
 
 export async function readDataBoxPlusTriageSnapshot(requestJson) {
   if (typeof requestJson !== "function") throw new TypeError("requestJson must be a function");

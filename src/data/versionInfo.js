@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.690"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.691"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky: ostrý inbox a hodinové načítání",
+    text: "Pracovní inbox je standardní produkční pohled pro všechny oprávněné uživatele. Zprávy a přílohy se z ISDS načítají automaticky cloudovým Workerem každou celou hodinu; ruční načítání a pilotní označení byly z pracovního UI odstraněny."
+  },
   {
     title: "Datové schránky: pracovní inbox s jasnými akcemi",
     text: "Datové schránky mají jednotné otevření zpráv, skutečný stav připojení a posledního načtení, základní složky Přijaté, Odeslané, Koncepty a Archiv, kompaktní řádky a pravý detailní panel. Přílohy lze z detailu otevřít nebo jednotlivě stáhnout; nová zpráva pravdivě připravuje pouze návrh bez odeslání do ISDS."

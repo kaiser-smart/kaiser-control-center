@@ -7,7 +7,6 @@ import {
   dataBoxPlusTriageItem,
   dataBoxPlusTriageItems,
   dataBoxPlusTriagePresentation,
-  dataBoxPlusTriagePreviewEnabled,
   dataBoxPlusTriageQueueId,
   readDataBoxPlusTriageDetail,
   readDataBoxPlusTriageSnapshot
@@ -64,20 +63,6 @@ assert.deepEqual(
     tone: "waiting"
   }
 );
-
-assert.equal(dataBoxPlusTriagePreviewEnabled(true, "localhost"), true);
-assert.equal(dataBoxPlusTriagePreviewEnabled(true, "127.0.0.1"), true);
-assert.equal(dataBoxPlusTriagePreviewEnabled(true, "::1"), true);
-assert.equal(dataBoxPlusTriagePreviewEnabled(false, "localhost"), false);
-assert.equal(dataBoxPlusTriagePreviewEnabled(true, "smart-odpady.ai", "radim-oplustil"), true);
-assert.equal(dataBoxPlusTriagePreviewEnabled(true, "SMART-ODPADY.AI", " RADIM-OPLUSTIL "), true);
-assert.equal(dataBoxPlusTriagePreviewEnabled(true, "www.smart-odpady.ai", "radim-oplustil"), true);
-assert.equal(dataBoxPlusTriagePreviewEnabled(true, "smart-odpady.ai"), false);
-assert.equal(dataBoxPlusTriagePreviewEnabled(true, "smart-odpady.ai", "martin"), false);
-assert.equal(dataBoxPlusTriagePreviewEnabled(false, "smart-odpady.ai", "radim-oplustil"), false);
-assert.equal(dataBoxPlusTriagePreviewEnabled(true, "kaiser-control-center.pages.dev", "radim-oplustil"), false);
-assert.equal(dataBoxPlusTriagePreviewEnabled(true, "preview.kaiser-control-center.pages.dev", "radim-oplustil"), false);
-assert.equal(dataBoxPlusTriagePreviewEnabled(true, "evil.example", "radim-oplustil"), false);
 
 const readCalls = [];
 const requestSpy = async (path, options) => {

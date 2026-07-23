@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 
 const PROJECT_NAME = "kaiser-control-center-legacy";
 const REQUIRED_BRANCH = "main";
-const DATA_BOX_PLUS_TRIAGE_PREVIEW = "true";
 const PROTECTED_COMMITS = [
   {
     sha: "16074246",
@@ -137,8 +136,8 @@ function assertBuiltMeta(head, version) {
   if (!versionInfoSource.includes(`./buildMeta.js?v=${version}`)) {
     fail(`versionInfo.js nema vnoreny cache-buster ${version} pro buildMeta.`);
   }
-  if (!runtimeConfigSource.includes('"dataBoxPlusTriagePreview": true')) {
-    fail("produkční runtime nemá zapnutý interní read-only pilot Datových schránek Plus.");
+  if (runtimeConfigSource.includes("dataBoxPlusTriagePreview")) {
+    fail("produkční runtime stále obsahuje starý pilotní přepínač Datových schránek Plus.");
   }
 }
 
@@ -174,13 +173,13 @@ runVisible("node", ["scripts/customer-messaging.test.mjs"]);
 runVisible("node", ["scripts/rcs-consent.test.mjs"]);
 runVisible("node", ["scripts/data-box-plus-triage.test.mjs"]);
 runVisible("node", ["scripts/data-box-plus-triage-ui.test.mjs"]);
+runVisible("node", ["scripts/data-box-plus-sync-runner.test.mjs"]);
 runVisible("node", ["scripts/build.mjs"], {
   env: {
     ...process.env,
     VITE_APP_BRANCH: REQUIRED_BRANCH,
     VITE_APP_COMMIT: head,
-    VITE_BACKUP_DATE: backupDate,
-    DATA_BOX_PLUS_TRIAGE_PREVIEW
+    VITE_BACKUP_DATE: backupDate
   }
 });
 assertBuiltMeta(head, version);

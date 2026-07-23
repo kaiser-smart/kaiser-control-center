@@ -795,8 +795,8 @@ body:has(.tyres-editor-dialog) .tyres-mm { display: none; }
   .tyres-vehicle-map { transform: scale(.72); margin-bottom: -92px; }
 }
 
-/* Datové schránky Plus: lokální read-only triage pilot. */
-.ds-plus-triage-preview {
+/* Datové schránky Plus: produkční pracovní inbox. */
+.ds-plus-triage-production {
   --ds-triage-border: #dfe6dc;
   --ds-triage-text: #202821;
   --ds-triage-muted: #5d695e;
@@ -805,13 +805,13 @@ body:has(.tyres-editor-dialog) .tyres-mm { display: none; }
   font-family: "Quicksand", Arial, sans-serif;
 }
 
-body:has(.ds-plus-triage-preview) .ai-assistant-layer {
+body:has(.ds-plus-triage-production) .ai-assistant-layer {
   display: none !important;
 }
 
-.ds-plus-triage-preview .ds-plus-header,
-.ds-plus-triage-preview .ds-plus-status-note,
-.ds-plus-triage-preview .ds-plus-workspace {
+.ds-plus-triage-production .ds-plus-header,
+.ds-plus-triage-production .ds-plus-status-note,
+.ds-plus-triage-production .ds-plus-workspace {
   border-radius: 12px;
   box-shadow: 0 10px 26px rgba(35, 45, 38, 0.05);
 }
