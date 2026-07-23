@@ -53,8 +53,8 @@ const archive = await fetchDataBoxMessageSignedArchive({}, account, {
   isdsMessageId: "9001",
   direction: "sent"
 }, {
-  fetchImpl: async (_url, options) => {
-    signedCalls.push(options.body);
+  fetchImpl: async (url, options) => {
+    signedCalls.push({ url, body: options.body });
     const delivery = options.body.includes("GetSignedDeliveryInfo");
     return new Response(`<Envelope><Body><dmStatusCode>0000</dmStatusCode><dmSignature>${
       delivery ? toBase64(deliveryBytes) : toBase64(messageBytes)
@@ -63,8 +63,10 @@ const archive = await fetchDataBoxMessageSignedArchive({}, account, {
 });
 assert.equal(new TextDecoder().decode(archive.messageZfo), "signed-message-zfo");
 assert.equal(new TextDecoder().decode(archive.deliveryZfo), "signed-delivery-zfo");
-assert.match(signedCalls[0], /SignedSentMessageDownload/);
-assert.match(signedCalls[1], /GetSignedDeliveryInfo/);
+assert.match(signedCalls[0].body, /SignedSentMessageDownload/);
+assert.match(signedCalls[0].url, /\/DS\/dz$/);
+assert.match(signedCalls[1].body, /GetSignedDeliveryInfo/);
+assert.match(signedCalls[1].url, /\/DS\/dx$/);
 
 const storeSource = readFileSync(new URL("../functions/_lib/data-box-plus-store.js", import.meta.url), "utf8");
 const migrationSource = readFileSync(new URL("../migrations/0058_create_data_box_plus_owned_archive.sql", import.meta.url), "utf8");

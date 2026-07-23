@@ -650,12 +650,12 @@ export async function fetchDataBoxMessageAttachments(env = {}, account = null, m
   throw finalError;
 }
 
-async function fetchSignedObject(config, operation, messageId, fetchImpl = fetch) {
+async function fetchSignedObject(config, operation, messageId, endpointUrl, fetchImpl = fetch) {
   const xml = await soapRequest(
     config,
     operation,
     messageDownloadRequestXml(messageId),
-    config.messageEndpointUrl,
+    endpointUrl,
     fetchImpl
   );
   const signatureBase64 = tagValue(xml, "dmSignature").replace(/\s+/g, "");
@@ -683,9 +683,16 @@ export async function fetchDataBoxMessageSignedArchive(env = {}, account = null,
     config,
     direction === "sent" ? "SignedSentMessageDownload" : "SignedMessageDownload",
     messageId,
+    config.messageEndpointUrl,
     fetchImpl
   );
-  const deliveryObject = await fetchSignedObject(config, "GetSignedDeliveryInfo", messageId, fetchImpl);
+  const deliveryObject = await fetchSignedObject(
+    config,
+    "GetSignedDeliveryInfo",
+    messageId,
+    config.infoEndpointUrl,
+    fetchImpl
+  );
   return {
     fetchedAt: new Date().toISOString(),
     messageId,
