@@ -5,6 +5,8 @@ import {
   dataBoxIsdsStatus,
   fetchDataBoxMessageAttachments,
   fetchDataBoxMessageMetadata,
+  fetchDataBoxMessageMetadataPage,
+  fetchDataBoxMessageSignedArchive,
   sendDataBoxIsdsMessage
 } from "./data-box-isds-client.js";
 import { communicationEmailIdentity } from "./communication-store.js";
@@ -24,7 +26,11 @@ import { buildDataBoxPlusChatContext } from "./data-box-plus-chat-context.js";
 import { loadFleetVehiclesWithAssignments } from "./fleet-vehicles-store.js";
 
 const DATA_BOX_PLUS_SEND_TIMEOUT_MS = 25000;
-const EXPECTED_MAILBOX_COUNT = 7;
+const LEGACY_BOOTSTRAP_MAILBOX_COUNT = 7;
+const MAX_MAILBOX_SLOT = 9999;
+const ARCHIVE_RANGE_FROM = "2009-01-01T00:00:00.000Z";
+const ARCHIVE_PAGE_LIMIT = 3;
+const ARCHIVE_JOBS_PER_RUN = 3;
 const DEFAULT_LIMIT = 100;
 const MAILBOX_IDS = [
   "dbp-kaiser-servis",
@@ -602,7 +608,18 @@ function rowToMailbox(row, fallbackAccount = null) {
     credentialSource,
     credentialUpdatedAt: cleanString(row.credential_updated_at),
     credentialRotatedAt: cleanString(row.last_rotated_at),
-    credentialActive: credentialId ? credentialActive : fallbackConfigured
+    credentialActive: credentialId ? credentialActive : fallbackConfigured,
+    archive: {
+      totalMessages: numberValue(row.archive_total_messages),
+      verifiedMessages: numberValue(row.archive_verified_messages),
+      errorMessages: numberValue(row.archive_error_messages),
+      oldestMessageAt: cleanString(row.archive_oldest_message_at),
+      jobsTotal: numberValue(row.archive_jobs_total),
+      jobsCompleted: numberValue(row.archive_jobs_completed),
+      jobsFailed: numberValue(row.archive_jobs_failed),
+      discoveredMessages: numberValue(row.archive_discovered_messages),
+      archivedMessages: numberValue(row.archive_job_archived_messages)
+    }
   };
 }
 
@@ -629,7 +646,16 @@ async function mailboxRowsWithCredentials(db) {
           c.active AS credential_active,
           c.updated_at AS credential_updated_at,
           c.last_rotated_at,
-          c.source AS credential_source
+          c.source AS credential_source,
+          (SELECT COUNT(*) FROM data_box_plus_messages am WHERE am.mailbox_id = m.id) AS archive_total_messages,
+          (SELECT COUNT(*) FROM data_box_plus_archive_objects ao WHERE ao.mailbox_id = m.id AND ao.status = 'verified') AS archive_verified_messages,
+          (SELECT COUNT(*) FROM data_box_plus_archive_objects ao WHERE ao.mailbox_id = m.id AND ao.status = 'error') AS archive_error_messages,
+          (SELECT MIN(COALESCE(am.delivered_at, am.received_at, am.stored_at)) FROM data_box_plus_messages am WHERE am.mailbox_id = m.id) AS archive_oldest_message_at,
+          (SELECT COUNT(*) FROM data_box_plus_archive_backfills ab WHERE ab.mailbox_id = m.id) AS archive_jobs_total,
+          (SELECT COUNT(*) FROM data_box_plus_archive_backfills ab WHERE ab.mailbox_id = m.id AND ab.status = 'completed') AS archive_jobs_completed,
+          (SELECT COUNT(*) FROM data_box_plus_archive_backfills ab WHERE ab.mailbox_id = m.id AND ab.status = 'failed') AS archive_jobs_failed,
+          (SELECT COALESCE(SUM(ab.messages_discovered), 0) FROM data_box_plus_archive_backfills ab WHERE ab.mailbox_id = m.id) AS archive_discovered_messages,
+          (SELECT COALESCE(SUM(ab.messages_archived), 0) FROM data_box_plus_archive_backfills ab WHERE ab.mailbox_id = m.id) AS archive_job_archived_messages
         FROM data_box_plus_mailboxes m
         LEFT JOIN data_box_plus_credentials c ON c.mailbox_id = m.id
         LEFT JOIN data_boxes source_box ON source_box.id = CASE
@@ -723,14 +749,14 @@ async function sourceDataBoxMap(db) {
 
 async function dataBoxPlusAccountConfigs(env) {
   const db = dataBoxPlusDatabase(env, true);
-  const fallbackAccounts = dataBoxIsdsAccountConfigs(env).slice(0, EXPECTED_MAILBOX_COUNT);
+  const fallbackAccounts = dataBoxIsdsAccountConfigs(env);
   const rows = await credentialRows(db);
   const accounts = [];
   const usedSlots = new Set();
 
   for (const row of rows) {
     const slot = numberValue(row.slot || row.mailbox_slot);
-    if (!slot || slot > EXPECTED_MAILBOX_COUNT) continue;
+    if (!slot || slot > MAX_MAILBOX_SLOT) continue;
     const username = await decryptCredential(env, row.username_ciphertext);
     const password = await decryptCredential(env, row.password_ciphertext);
     const account = dataBoxIsdsAccountFromCredentials(env, {
@@ -756,7 +782,7 @@ async function dataBoxPlusAccountConfigs(env) {
   }
 
   return accounts
-    .filter((account) => numberValue(account.slot) >= 1 && numberValue(account.slot) <= EXPECTED_MAILBOX_COUNT)
+    .filter((account) => numberValue(account.slot) >= 1 && numberValue(account.slot) <= MAX_MAILBOX_SLOT)
     .sort((a, b) => numberValue(a.slot) - numberValue(b.slot));
 }
 
@@ -781,8 +807,8 @@ function ensureReceivedDataBoxPlusMessage(message = {}) {
 
 function mailboxPayload(body = {}, fallback = {}) {
   const slot = numberValue(body.slot ?? fallback.slot);
-  if (!slot || slot < 1 || slot > EXPECTED_MAILBOX_COUNT) {
-    throw new DataBoxPlusStoreError("Vyber slot schránky 1 až 7.", 400, "data_box_plus_mailbox_slot_invalid");
+  if (!slot || slot < 1 || slot > MAX_MAILBOX_SLOT) {
+    throw new DataBoxPlusStoreError("Slot schránky musí být kladné celé číslo.", 400, "data_box_plus_mailbox_slot_invalid");
   }
 
   const name = cleanString(body.name ?? fallback.name);
@@ -1321,7 +1347,23 @@ async function upsertMessage(db, env, account, mailbox, message) {
       .run();
   }
 
-  const attachmentState = await syncAttachments(db, env, account, mailboxId, message, messageId);
+  const waitsForDelivery = direction === "received"
+    && cleanString(message.isdsState) === "1"
+    && !cleanString(message.acceptedAt);
+  const attachmentState = waitsForDelivery
+    ? { status: "Čeká na doručení", downloaded: 0, problem: false, extractedText: "" }
+    : await syncAttachments(db, env, account, mailboxId, message, messageId);
+  await queueDataBoxPlusArchiveObject(db, mailboxId, targetMessageId, isdsMessageId, direction);
+  if (waitsForDelivery) {
+    await db.prepare(`
+      UPDATE data_box_plus_archive_objects
+      SET status = 'awaiting_delivery',
+          error_code = 'data_box_plus_archive_waiting_for_delivery',
+          error_message = 'Zpráva zatím není doručená. Archiv ji nesmí otevřením doručit za uživatele.',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE mailbox_id = ? AND isds_message_id = ? AND direction = 'received'
+    `).bind(mailboxId, isdsMessageId).run();
+  }
   if (sentHistoryOnly) {
     await db
       .prepare(`
@@ -1450,6 +1492,343 @@ async function upsertMessage(db, env, account, mailbox, message) {
   return { state: existing?.id ? "updated" : "created", attachmentsDownloaded: attachmentState.downloaded };
 }
 
+async function sha256Hex(bytes) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function queueDataBoxPlusArchiveObject(db, mailboxId, messageId, isdsMessageId, direction) {
+  const archiveId = `${cleanString(mailboxId)}-${normalizeDirection(direction)}-${cleanString(isdsMessageId)}`;
+  await db
+    .prepare(`
+      INSERT INTO data_box_plus_archive_objects (
+        id, mailbox_id, message_id, isds_message_id, direction, status
+      )
+      VALUES (?, ?, ?, ?, ?, 'pending')
+      ON CONFLICT(mailbox_id, isds_message_id, direction) DO UPDATE SET
+        message_id = excluded.message_id,
+        status = CASE
+          WHEN data_box_plus_archive_objects.status = 'awaiting_delivery' THEN 'pending'
+          ELSE data_box_plus_archive_objects.status
+        END,
+        updated_at = CURRENT_TIMESTAMP
+    `)
+    .bind(archiveId, mailboxId, messageId, isdsMessageId, normalizeDirection(direction))
+    .run();
+}
+
+async function putImmutableArchiveObject(bucket, key, bytes, sha256, contentType) {
+  if (!bucket) {
+    throw new DataBoxPlusStoreError(
+      "Archivní R2 úložiště SMART_ODPADY_DOCUMENTS není dostupné.",
+      503,
+      "data_box_plus_archive_bucket_missing"
+    );
+  }
+  const existing = await bucket.head(key);
+  const existingHash = cleanString(existing?.customMetadata?.sha256);
+  if (existing && existingHash === sha256) {
+    return { key, stored: false };
+  }
+  const targetKey = existing ? key.replace(/\.zfo$/i, `.${sha256}.zfo`) : key;
+  const version = await bucket.head(targetKey);
+  if (!version) {
+    await bucket.put(targetKey, bytes, {
+      httpMetadata: { contentType },
+      customMetadata: { sha256 }
+    });
+  } else if (cleanString(version.customMetadata?.sha256) !== sha256) {
+    throw new DataBoxPlusStoreError(
+      "Archivní objekt na stejné adrese má jiný kontrolní otisk.",
+      409,
+      "data_box_plus_archive_hash_conflict"
+    );
+  }
+  return { key: targetKey, stored: !version };
+}
+
+async function archiveDataBoxPlusMessage(db, env, account, mailbox, message) {
+  const direction = normalizeDirection(message.direction);
+  const isdsMessageId = cleanString(message.isdsMessageId);
+  const messageId = messageRecordId(mailbox.id, direction, isdsMessageId);
+  if (
+    direction === "received"
+    && cleanString(message.isdsState) === "1"
+    && !cleanString(message.acceptedAt)
+  ) {
+    await queueDataBoxPlusArchiveObject(db, mailbox.id, messageId, isdsMessageId, direction);
+    await db.prepare(`
+      UPDATE data_box_plus_archive_objects
+      SET status = 'awaiting_delivery',
+          error_code = 'data_box_plus_archive_waiting_for_delivery',
+          error_message = 'Zpráva zatím není doručená. Archiv ji nesmí otevřením doručit za uživatele.',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE mailbox_id = ? AND isds_message_id = ? AND direction = ?
+    `).bind(mailbox.id, isdsMessageId, direction).run();
+    return { archived: false, verified: false, deferred: true };
+  }
+  const existing = await db
+    .prepare(`
+      SELECT status, verified_at
+      FROM data_box_plus_archive_objects
+      WHERE mailbox_id = ? AND isds_message_id = ? AND direction = ?
+      LIMIT 1
+    `)
+    .bind(mailbox.id, isdsMessageId, direction)
+    .first();
+  if (cleanString(existing?.status) === "verified" && cleanString(existing?.verified_at)) {
+    return { archived: false, verified: true };
+  }
+
+  await queueDataBoxPlusArchiveObject(db, mailbox.id, messageId, isdsMessageId, direction);
+  try {
+    const signed = await fetchDataBoxMessageSignedArchive(env, account, message);
+    const messageHash = await sha256Hex(signed.messageZfo);
+    const deliveryHash = await sha256Hex(signed.deliveryZfo);
+    const prefix = `data-box-plus/archive/${mailbox.id}/${direction}/${isdsMessageId}`;
+    const bucket = dataBoxPlusDocumentsBucket(env);
+    const messageStored = await putImmutableArchiveObject(
+      bucket,
+      `${prefix}/message.zfo`,
+      signed.messageZfo,
+      messageHash,
+      "application/vnd.software602.filler.form-xml-zip"
+    );
+    const deliveryStored = await putImmutableArchiveObject(
+      bucket,
+      `${prefix}/delivery.zfo`,
+      signed.deliveryZfo,
+      deliveryHash,
+      "application/vnd.software602.filler.form-xml-zip"
+    );
+    const archivedAt = new Date().toISOString();
+    await db
+      .prepare(`
+        UPDATE data_box_plus_archive_objects
+        SET message_storage_key = ?, message_sha256 = ?, message_size_bytes = ?,
+            delivery_storage_key = ?, delivery_sha256 = ?, delivery_size_bytes = ?,
+            status = 'verified', error_code = NULL, error_message = NULL,
+            archived_at = COALESCE(archived_at, ?), verified_at = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE mailbox_id = ? AND isds_message_id = ? AND direction = ?
+      `)
+      .bind(
+        messageStored.key,
+        messageHash,
+        signed.messageZfo.byteLength,
+        deliveryStored.key,
+        deliveryHash,
+        signed.deliveryZfo.byteLength,
+        archivedAt,
+        archivedAt,
+        mailbox.id,
+        isdsMessageId,
+        direction
+      )
+      .run();
+    return { archived: true, verified: true };
+  } catch (error) {
+    await db
+      .prepare(`
+        UPDATE data_box_plus_archive_objects
+        SET status = 'error', error_code = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE mailbox_id = ? AND isds_message_id = ? AND direction = ?
+      `)
+      .bind(
+        cleanString(error?.code || "data_box_plus_archive_failed"),
+        cleanString(error?.message || "Podepsaný archiv zprávy se nepodařilo uložit.").slice(0, 500),
+        mailbox.id,
+        isdsMessageId,
+        direction
+      )
+      .run();
+    throw error;
+  }
+}
+
+async function ensureDataBoxPlusArchiveBackfills(db, env, accounts, rangeTo = new Date().toISOString()) {
+  let created = 0;
+  for (const account of accounts) {
+    const mailbox = await ensureMailbox(db, account);
+    for (const direction of ["received", "sent"]) {
+      const existing = await db
+        .prepare(`
+          SELECT id FROM data_box_plus_archive_backfills
+          WHERE mailbox_id = ? AND direction = ?
+          LIMIT 1
+        `)
+        .bind(mailbox.id, direction)
+        .first();
+      if (existing?.id) continue;
+      await db
+        .prepare(`
+          INSERT INTO data_box_plus_archive_backfills (
+            id, mailbox_id, direction, range_from, range_to, next_offset, page_limit, status
+          )
+          VALUES (?, ?, ?, ?, ?, 1, ?, 'pending')
+        `)
+        .bind(
+          idValue("dbp-archive-backfill"),
+          mailbox.id,
+          direction,
+          ARCHIVE_RANGE_FROM,
+          rangeTo,
+          ARCHIVE_PAGE_LIMIT
+        )
+        .run();
+      created += 1;
+    }
+  }
+  return created;
+}
+
+async function archivePendingObjects(db, env, accounts, limit = ARCHIVE_PAGE_LIMIT) {
+  const result = await db
+    .prepare(`
+      SELECT a.*, m.slot
+      FROM data_box_plus_archive_objects a
+      JOIN data_box_plus_mailboxes m ON m.id = a.mailbox_id
+      WHERE a.status IN ('pending', 'error')
+      ORDER BY CASE WHEN a.status = 'pending' THEN 0 ELSE 1 END, a.updated_at ASC
+      LIMIT ?
+    `)
+    .bind(limit)
+    .all();
+  let archived = 0;
+  const errors = [];
+  for (const row of result.results || []) {
+    const account = accounts.find((item) => cleanString(item.id) === cleanString(row.mailbox_id))
+      || accounts.find((item) => numberValue(item.slot) === numberValue(row.slot));
+    if (!account) continue;
+    try {
+      const outcome = await archiveDataBoxPlusMessage(db, env, account, { id: row.mailbox_id }, {
+        isdsMessageId: row.isds_message_id,
+        direction: row.direction
+      });
+      if (outcome.archived) archived += 1;
+    } catch (error) {
+      errors.push({
+        mailboxId: row.mailbox_id,
+        messageId: row.isds_message_id,
+        code: cleanString(error?.code || "data_box_plus_archive_failed"),
+        message: cleanString(error?.message || "Archivace zprávy selhala.")
+      });
+    }
+  }
+  return { archived, errors };
+}
+
+export async function runDataBoxPlusArchiveBatch(env, currentUser = null, options = {}) {
+  const db = dataBoxPlusDatabase(env, true);
+  const accounts = await dataBoxPlusAccountConfigs(env);
+  await ensureDataBoxPlusMailboxes(env);
+  const jobsCreated = await ensureDataBoxPlusArchiveBackfills(db, env, accounts);
+  const pending = await archivePendingObjects(db, env, accounts);
+  const jobsResult = await db
+    .prepare(`
+      SELECT *
+      FROM data_box_plus_archive_backfills
+      WHERE status IN ('pending', 'running', 'failed')
+        AND consecutive_errors < 5
+      ORDER BY CASE WHEN status = 'running' THEN 0 WHEN status = 'pending' THEN 1 ELSE 2 END,
+               updated_at ASC
+      LIMIT ?
+    `)
+    .bind(limitValue(options.jobsPerRun, ARCHIVE_JOBS_PER_RUN, 10))
+    .all();
+  const errors = [...pending.errors];
+  let messagesDiscovered = 0;
+  let messagesArchived = pending.archived;
+  let jobsCompleted = 0;
+
+  for (const job of jobsResult.results || []) {
+    const mailbox = await db
+      .prepare("SELECT * FROM data_box_plus_mailboxes WHERE id = ? LIMIT 1")
+      .bind(job.mailbox_id)
+      .first();
+    const account = accounts.find((item) => cleanString(item.id) === cleanString(job.mailbox_id))
+      || accounts.find((item) => numberValue(item.slot) === numberValue(mailbox?.slot));
+    if (!account) continue;
+    const startedAt = cleanString(job.started_at) || new Date().toISOString();
+    await db.prepare(`
+      UPDATE data_box_plus_archive_backfills
+      SET status = 'running', started_at = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(startedAt, job.id).run();
+    try {
+      const page = await fetchDataBoxMessageMetadataPage(env, account, {
+        direction: job.direction,
+        fromTime: job.range_from,
+        toTime: job.range_to,
+        offset: numberValue(job.next_offset, 1),
+        limit: limitValue(job.page_limit, ARCHIVE_PAGE_LIMIT, 100)
+      });
+      let archivedOnPage = 0;
+      for (const message of page.messages) {
+        const upserted = await upsertMessage(db, env, account, rowToMailbox(mailbox), message);
+        const outcome = await archiveDataBoxPlusMessage(db, env, account, rowToMailbox(mailbox), message);
+        if (outcome.archived) archivedOnPage += 1;
+        void upserted;
+      }
+      const completed = !page.hasMore;
+      await db.prepare(`
+        UPDATE data_box_plus_archive_backfills
+        SET next_offset = ?, status = ?, messages_discovered = messages_discovered + ?,
+            messages_archived = messages_archived + ?, consecutive_errors = 0,
+            last_error_code = NULL, last_error_message = NULL,
+            finished_at = CASE WHEN ? = 1 THEN ? ELSE NULL END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(
+        page.nextOffset,
+        completed ? "completed" : "running",
+        page.messages.length,
+        archivedOnPage,
+        completed ? 1 : 0,
+        completed ? new Date().toISOString() : null,
+        job.id
+      ).run();
+      messagesDiscovered += page.messages.length;
+      messagesArchived += archivedOnPage;
+      if (completed) jobsCompleted += 1;
+      await updateMailboxCounters(db, mailbox.id);
+    } catch (error) {
+      errors.push({
+        jobId: job.id,
+        mailboxId: job.mailbox_id,
+        direction: job.direction,
+        code: cleanString(error?.code || "data_box_plus_archive_backfill_failed"),
+        message: cleanString(error?.message || "Historický archiv se nepodařilo doplnit.")
+      });
+      await db.prepare(`
+        UPDATE data_box_plus_archive_backfills
+        SET status = 'failed', error_count = error_count + 1,
+            consecutive_errors = consecutive_errors + 1,
+            last_error_code = ?, last_error_message = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(
+        cleanString(error?.code || "data_box_plus_archive_backfill_failed"),
+        cleanString(error?.message || "Historický archiv se nepodařilo doplnit.").slice(0, 500),
+        job.id
+      ).run();
+    }
+  }
+
+  return {
+    apiStatus: "ready",
+    mailboxScope: "all-current-and-future",
+    jobsCreated,
+    jobsProcessed: (jobsResult.results || []).length,
+    jobsCompleted,
+    messagesDiscovered,
+    messagesArchived,
+    errors,
+    triggeredBy: actorName(currentUser),
+    message: errors.length
+      ? "Vlastní archiv pokračuje; část položek čeká na bezpečné opakování."
+      : "Vlastní archiv zpracoval další obnovitelnou dávku."
+  };
+}
+
 async function createSyncRun(db, startedAt, triggerType, currentUser) {
   const id = idValue("dbp-sync");
   await db
@@ -1521,7 +1900,7 @@ export async function ensureDataBoxPlusMailboxes(env) {
     }))
     : [];
 
-  for (let slot = 1; slot <= EXPECTED_MAILBOX_COUNT; slot += 1) {
+  for (let slot = 1; slot <= LEGACY_BOOTSTRAP_MAILBOX_COUNT; slot += 1) {
     const sourceBox = sourceBoxes.get(sourceDataBoxIdForSlot(slot));
     const account = accounts.find((item) => item.slot === slot) || {
       slot,
@@ -1607,7 +1986,8 @@ export async function getDataBoxPlusStatus(env) {
       .first();
     return {
       apiStatus: "ready",
-      expectedMailboxes: EXPECTED_MAILBOX_COUNT,
+      expectedMailboxes: mailboxRows.length,
+      mailboxScope: "all-current-and-future",
       mailboxes: mailboxRows.map((row) => rowToMailbox(row, fallbackMap.get(numberValue(row.slot)))),
       isds: dataBoxIsdsStatus(env),
       latestSyncRun: rowToSyncRun(syncRow),
@@ -1889,11 +2269,11 @@ export async function importDataBoxPlusCredentialsFromDataBox(env, currentUser =
   try {
     await ensureDataBoxPlusMailboxes(env);
     const sourceBoxes = await sourceDataBoxMap(db);
-    const accounts = dataBoxIsdsAccountConfigs(env).slice(0, EXPECTED_MAILBOX_COUNT);
+    const accounts = dataBoxIsdsAccountConfigs(env);
     const imported = [];
     const skipped = [];
 
-    for (let slot = 1; slot <= EXPECTED_MAILBOX_COUNT; slot += 1) {
+    for (let slot = 1; slot <= LEGACY_BOOTSTRAP_MAILBOX_COUNT; slot += 1) {
       const sourceBox = sourceBoxes.get(sourceDataBoxIdForSlot(slot));
       const account = accounts.find((item) => numberValue(item.slot) === slot);
       if (!account?.configured || !cleanString(account.username) || !cleanString(account.password)) {

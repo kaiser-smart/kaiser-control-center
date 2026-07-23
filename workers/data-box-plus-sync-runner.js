@@ -6,6 +6,10 @@ export function isDataBoxDue(scheduledTime) {
   return new Date(scheduledTime).getUTCMinutes() === 0;
 }
 
+export function isArchiveDue(scheduledTime) {
+  return new Date(scheduledTime).getUTCMinutes() % 5 === 0;
+}
+
 async function postInternal(env, path, token, body = undefined) {
   return fetch(`${appBaseUrl(env)}${path}`, {
     method: "POST",
@@ -38,6 +42,26 @@ async function syncDataBoxPlus(env, token, scheduledAt) {
   });
 }
 
+async function archiveDataBoxPlus(env, token, scheduledAt) {
+  const response = await postInternal(env, "/api/data-box-plus/internal-archive", token, { scheduledAt });
+  const summary = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error("data_box_plus_archive.failed", {
+      status: response.status,
+      error: summary.error || "Archiv Datových schránek Plus se nepodařilo doplnit."
+    });
+    return;
+  }
+  console.log("data_box_plus_archive.completed", {
+    jobsCreated: summary.jobsCreated,
+    jobsProcessed: summary.jobsProcessed,
+    jobsCompleted: summary.jobsCompleted,
+    messagesDiscovered: summary.messagesDiscovered,
+    messagesArchived: summary.messagesArchived,
+    errors: summary.errors?.length || 0
+  });
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     const token = String(env.DATA_BOX_PLUS_SYNC_TOKEN || "").trim();
@@ -49,13 +73,18 @@ export default {
     if (isDataBoxDue(controller.scheduledTime)) {
       ctx.waitUntil(syncDataBoxPlus(env, token, scheduledAt));
     }
+    if (isArchiveDue(controller.scheduledTime)) {
+      ctx.waitUntil(archiveDataBoxPlus(env, token, scheduledAt));
+    }
   },
 
   async fetch() {
     return Response.json({
       status: "ready",
       dataBoxPlusIntervalMinutes: 60,
-      message: "Datové schránky Plus se načítají automaticky každou celou hodinu. GPS historie má vlastní oddělený cloudový Worker."
+      archiveBatchIntervalMinutes: 5,
+      mailboxScope: "all-current-and-future",
+      message: "Nové zprávy se načítají každou hodinu a vlastní archiv KSO doplňuje obnovitelné dávky každých pět minut pro všechny současné i budoucí schránky."
     });
   }
 };

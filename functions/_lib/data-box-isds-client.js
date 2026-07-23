@@ -6,7 +6,7 @@ const ISDS_NAMESPACE = "http://isds.czechpoint.cz/v20";
 const ISDS_TIMEOUT_MS = 25000;
 const DEFAULT_LIMIT = 50;
 const DEFAULT_LOOKBACK_DAYS = 30;
-const MAX_ISDS_ACCOUNTS = 7;
+const LEGACY_SECRET_ACCOUNT_SLOTS = 7;
 const PRIMARY_DATA_BOX_ID = "kaiser-primary";
 
 export class DataBoxIsdsError extends Error {
@@ -187,7 +187,7 @@ function publicAccountStatus(config) {
 
 function allAccountConfigs(env = {}) {
   const accounts = [];
-  for (let slot = 1; slot <= MAX_ISDS_ACCOUNTS; slot += 1) {
+  for (let slot = 1; slot <= LEGACY_SECRET_ACCOUNT_SLOTS; slot += 1) {
     const config = accountConfig(env, slot);
     if (shouldExposeAccount(env, slot, config)) {
       accounts.push(config);
@@ -211,7 +211,8 @@ export function dataBoxIsdsStatus(env = {}) {
     configured: configuredAccounts.length > 0,
     configuredAccounts: configuredAccounts.length,
     accountCount: accounts.length,
-    maxAccounts: MAX_ISDS_ACCOUNTS,
+    maxAccounts: null,
+    legacySecretAccountSlots: LEGACY_SECRET_ACCOUNT_SLOTS,
     mode: modeFromEnv(env),
     baseUrl,
     infoEndpointUrl: `${baseUrl}${ISDS_INFO_PATH}`,
@@ -318,18 +319,22 @@ function soapEnvelope(operation, innerXml) {
 </soapenv:Envelope>`;
 }
 
-function messageListRequestXml(direction, config) {
+function messageListRequestXml(direction, config, options = {}) {
   const unitTag = direction === "sent" ? "dmSenderOrgUnitNum" : "dmRecipientOrgUnitNum";
   const now = new Date();
   const from = new Date(now.getTime() - config.lookbackDays * 24 * 60 * 60 * 1000);
+  const fromTime = normalizedDate(options.fromTime) || from.toISOString();
+  const toTime = normalizedDate(options.toTime) || now.toISOString();
+  const offset = positiveInteger(options.offset, 1, 1_000_000_000);
+  const limit = positiveInteger(options.limit, config.limit, 100);
 
   return `
-    <v20:dmFromTime>${xmlEscape(from.toISOString())}</v20:dmFromTime>
-    <v20:dmToTime>${xmlEscape(now.toISOString())}</v20:dmToTime>
+    <v20:dmFromTime>${xmlEscape(fromTime)}</v20:dmFromTime>
+    <v20:dmToTime>${xmlEscape(toTime)}</v20:dmToTime>
     ${nilTag(unitTag)}
     <v20:dmStatusFilter></v20:dmStatusFilter>
-    <v20:dmOffset>1</v20:dmOffset>
-    <v20:dmLimit>${config.limit}</v20:dmLimit>
+    <v20:dmOffset>${offset}</v20:dmOffset>
+    <v20:dmLimit>${limit}</v20:dmLimit>
   `;
 }
 
@@ -508,12 +513,41 @@ function parseMessageRecord(block, direction) {
   };
 }
 
-async function fetchMessageList(config, direction) {
+async function fetchMessageList(config, direction, options = {}) {
   const operation = direction === "sent" ? "GetListOfSentMessages" : "GetListOfReceivedMessages";
-  const xml = await soapRequest(config, operation, messageListRequestXml(direction, config));
+  const xml = await soapRequest(
+    config,
+    operation,
+    messageListRequestXml(direction, config, options),
+    config.infoEndpointUrl,
+    options.fetchImpl || fetch
+  );
   return tagBlocks(xml, "dmRecord")
     .map((block) => parseMessageRecord(block, direction))
     .filter((message) => message.isdsMessageId);
+}
+
+export async function fetchDataBoxMessageMetadataPage(env = {}, account = null, options = {}) {
+  const config = account || isdsConfig(env);
+  ensureIsdsConfig(config);
+  const direction = cleanString(options.direction).toLowerCase() === "sent" ? "sent" : "received";
+  const offset = positiveInteger(options.offset, 1, 1_000_000_000);
+  const limit = positiveInteger(options.limit, config.limit, 100);
+  const messages = await fetchMessageList(config, direction, {
+    ...options,
+    offset,
+    limit
+  });
+  return {
+    fetchedAt: new Date().toISOString(),
+    direction,
+    offset,
+    limit,
+    nextOffset: offset + messages.length,
+    hasMore: messages.length === limit,
+    messages,
+    config: publicAccountStatus(config)
+  };
 }
 
 function base64ToBytes(value) {
@@ -614,6 +648,54 @@ export async function fetchDataBoxMessageAttachments(env = {}, account = null, m
   const finalError = lastError || new DataBoxIsdsError("ISDS detail zpravy se nepodarilo nacist.", 502, "data_box_isds_message_download_failed");
   finalError.operationErrors = operationErrors;
   throw finalError;
+}
+
+async function fetchSignedObject(config, operation, messageId, fetchImpl = fetch) {
+  const xml = await soapRequest(
+    config,
+    operation,
+    messageDownloadRequestXml(messageId),
+    config.messageEndpointUrl,
+    fetchImpl
+  );
+  const signatureBase64 = tagValue(xml, "dmSignature").replace(/\s+/g, "");
+  const bytes = base64ToBytes(signatureBase64);
+  if (!bytes.byteLength) {
+    throw new DataBoxIsdsError(
+      `ISDS operace ${operation} nevrátila podepsaný objekt.`,
+      502,
+      "data_box_isds_signed_object_missing"
+    );
+  }
+  return { operation, bytes };
+}
+
+export async function fetchDataBoxMessageSignedArchive(env = {}, account = null, message = {}, options = {}) {
+  const config = account || isdsConfig(env);
+  ensureIsdsConfig(config);
+  const messageId = cleanString(message.isdsMessageId || message.dmID || message.id);
+  if (!messageId) {
+    throw new DataBoxIsdsError("Chybí ISDS ID zprávy pro archivaci.", 400, "data_box_isds_message_id_missing");
+  }
+  const direction = cleanString(message.direction).toLowerCase() === "sent" ? "sent" : "received";
+  const fetchImpl = options.fetchImpl || fetch;
+  const messageObject = await fetchSignedObject(
+    config,
+    direction === "sent" ? "SignedSentMessageDownload" : "SignedMessageDownload",
+    messageId,
+    fetchImpl
+  );
+  const deliveryObject = await fetchSignedObject(config, "GetSignedDeliveryInfo", messageId, fetchImpl);
+  return {
+    fetchedAt: new Date().toISOString(),
+    messageId,
+    direction,
+    messageOperation: messageObject.operation,
+    deliveryOperation: deliveryObject.operation,
+    messageZfo: messageObject.bytes,
+    deliveryZfo: deliveryObject.bytes,
+    config: publicAccountStatus(config)
+  };
 }
 
 export async function fetchDataBoxMessageMetadata(env = {}, account = null) {

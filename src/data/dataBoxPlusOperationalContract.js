@@ -3,10 +3,14 @@ export const DATA_BOX_PLUS_OPERATIONAL_CONTRACT = Object.freeze({
   sourceOfTruth: "DATA_BOX_PLUS_MANTRA",
   route: "/datove-schranky-plus",
   mode: "production",
-  mailboxCount: 7,
+  mailboxCount: null,
+  mailboxScope: "all-current-and-future-company-mailboxes",
   storage: Object.freeze({
     operationalDatabase: "SMART_ODPADY_DB",
     attachmentBucket: "SMART_ODPADY_DOCUMENTS",
+    signedMessageArchive: "immutable-zfo-in-r2-with-sha256",
+    signedDeliveryArchive: "immutable-zfo-in-r2-with-sha256",
+    archiveCheckpointStore: "SMART_ODPADY_DB",
     credentialStore: "encrypted-dsp-vault-or-cloudflare-secrets",
     browserStorageAllowed: false
   }),
@@ -17,6 +21,16 @@ export const DATA_BOX_PLUS_OPERATIONAL_CONTRACT = Object.freeze({
     requiresOpenBrowser: false,
     auditRequired: true,
     lastRunRequired: true
+  }),
+  archive: Object.freeze({
+    owner: "KSO",
+    fullHistoryBackfill: true,
+    resumable: true,
+    batchIntervalMinutes: 5,
+    newMailboxAutoEnrollment: true,
+    appliesToAllCurrentAndFutureMailboxes: true,
+    paidDataVaultCancellationAutomatic: false,
+    completenessRequiredBeforeCancellation: true
   }),
   messageDirections: Object.freeze({
     received: Object.freeze({

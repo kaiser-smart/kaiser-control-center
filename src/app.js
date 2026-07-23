@@ -30146,7 +30146,9 @@ function dataBoxPlusMailboxValue(value, fallback = "nedoplněno") {
 }
 
 function dataBoxPlusMailboxSlotOptions(selectedSlot = 1) {
-  return Array.from({ length: 7 }, (_, index) => {
+  const existingSlots = dataBoxPlusMailboxes().map((mailbox) => Number(mailbox.slot) || 0);
+  const highestSlot = Math.max(1, Number(selectedSlot) || 1, ...existingSlots);
+  return Array.from({ length: highestSlot + 1 }, (_, index) => {
     const slot = index + 1;
     return `<option value="${slot}" ${Number(selectedSlot) === slot ? "selected" : ""}>Slot ${slot}</option>`;
   }).join("");
@@ -30184,6 +30186,13 @@ function dataBoxPlusMailboxCard(mailbox) {
   const lastProblem = mailbox.lastSyncStatus === "failed" && mailbox.lastSyncMessage
     ? `<p class="ds-plus-mailbox-warning">${escapeHtml(mailbox.lastSyncMessage)}</p>`
     : "";
+  const archive = mailbox.archive || {};
+  const archiveComplete = Number(archive.jobsTotal || 0) > 0
+    && Number(archive.jobsCompleted || 0) === Number(archive.jobsTotal || 0)
+    && Number(archive.errorMessages || 0) === 0;
+  const archiveText = archiveComplete
+    ? `Kompletní · ${Number(archive.verifiedMessages || 0)} ověřených ZFO`
+    : `Probíhá · ${Number(archive.verifiedMessages || 0)} z ${Number(archive.totalMessages || 0)} zpráv ověřeno`;
   return `
     <article class="ds-plus-mailbox-card">
       <div class="ds-plus-mailbox-card__head">
@@ -30201,7 +30210,12 @@ function dataBoxPlusMailboxCard(mailbox) {
         <div><dt>Zdroj přístupu</dt><dd>${escapeHtml(dataBoxPlusMailboxValue(mailbox.credentialSource, "zatím není uložený"))}</dd></div>
         <div><dt>Poslední načtení</dt><dd>${escapeHtml(syncText)}</dd></div>
         <div><dt>Zprávy</dt><dd>${escapeHtml(`${mailbox.newCount || 0} nových / ${mailbox.dueCount || 0} k vyřízení / ${mailbox.problemCount || 0} problém`)}</dd></div>
+        <div><dt>Archiv KSO</dt><dd>${escapeHtml(archiveText)}</dd></div>
+        <div><dt>Nejstarší uložená</dt><dd>${escapeHtml(archive.oldestMessageAt ? formatDateTime(archive.oldestMessageAt) : "čeká na první backfill")}</dd></div>
       </dl>
+      ${Number(archive.errorMessages || 0) || Number(archive.jobsFailed || 0)
+        ? `<p class="ds-plus-mailbox-warning">Archiv čeká na bezpečné opakování: ${escapeHtml(Number(archive.errorMessages || 0))} zpráv, ${escapeHtml(Number(archive.jobsFailed || 0))} dávek.</p>`
+        : ""}
       ${lastProblem}
       <div class="ds-plus-mailbox-actions">
         <button class="secondary-action" type="button" data-ds-plus-mailbox-test="${escapeHtml(mailbox.id)}" ${testing || dataBoxPlusState.mailboxSaving ? "disabled" : ""}>
@@ -30222,7 +30236,9 @@ function dataBoxPlusMailboxCard(mailbox) {
 
 function dataBoxPlusMailboxCreateForm(mailboxes = []) {
   const usedSlots = new Set(mailboxes.map((mailbox) => Number(mailbox.slot)));
-  const nextSlot = Array.from({ length: 7 }, (_, index) => index + 1).find((slot) => !usedSlots.has(slot)) || 7;
+  const highestSlot = Math.max(0, ...usedSlots);
+  const nextSlot = Array.from({ length: highestSlot + 1 }, (_, index) => index + 1)
+    .find((slot) => !usedSlots.has(slot)) || highestSlot + 1;
   return `
     <details class="ds-plus-mailbox-create">
       <summary>Přidat schránku</summary>
@@ -30235,7 +30251,7 @@ function dataBoxPlusMailboxCreateForm(mailboxes = []) {
         <label><span>Heslo</span><input name="password" type="password" autocomplete="new-password" required /></label>
         <label class="ds-plus-checkbox"><input type="checkbox" name="active" checked /> <span>Aktivní pro automatické načítání</span></label>
         <button class="primary-action" type="submit">Přidat schránku</button>
-        ${dataBoxPlusHelp("Přidat schránku", "Schránka se uloží do DSP. Login a heslo se uloží jen na serveru, šifrovaně. Nic se neodešle mimo systém a změna se zapíše do historie.")}
+        ${dataBoxPlusHelp("Přidat schránku", "Schránka se uloží do DSP. Login a heslo se uloží jen na serveru, šifrovaně. Do pěti minut se automaticky založí úplný historický backfill a následně pokračuje hodinová archivace. Nic se neodešle mimo systém.")}
       </form>
     </details>
   `;
@@ -30270,7 +30286,7 @@ function dataBoxPlusAccessSettingsOverlay(user) {
             <div class="ds-plus-access-section-head">
               <div>
                 <h3>Napojené schránky</h3>
-                <p>${escapeHtml(`${mailboxes.length} z ${DATA_BOX_PLUS_OPERATIONAL_CONTRACT.mailboxCount} evidovaných schránek`)}</p>
+                <p>${escapeHtml(`${mailboxes.length} evidovaných schránek · bez pevného limitu`)}</p>
               </div>
               <button class="secondary-action" type="button" data-ds-plus-import-credentials ${dataBoxPlusState.mailboxSaving ? "disabled" : ""}>
                 ${dataBoxPlusState.mailboxSaving ? "Přebírám přístupy…" : "Převzít ze starého uložení"}
@@ -30324,7 +30340,8 @@ function dataBoxPlusEventLogBlock() {
   const mailboxProblems = mailboxes.reduce((sum, mailbox) => sum + (Number(mailbox.problemCount || 0) || 0), 0);
   const messages = dataBoxPlusMessages();
   const messageProblems = messages.filter((message) => dataBoxPlusSearchText([message.status, message.attachmentStatus, message.riskLevel]).includes("problem")).length;
-  const allCoreChecksOk = cloudSync.isRunning && activeMailboxes === 7 && !mailboxProblems && !messageProblems;
+  const configuredMailboxes = mailboxes.filter((mailbox) => mailbox.hasCredentials && mailbox.credentialActive !== false).length;
+  const allCoreChecksOk = cloudSync.isRunning && activeMailboxes === configuredMailboxes && !mailboxProblems && !messageProblems;
   const historyEvents = messages
     .flatMap((message) => (Array.isArray(message.history) ? message.history : []).map((event) => ({
       createdAt: event.createdAt || message.updatedAt || message.receivedAt || message.deliveredAt,
@@ -30393,9 +30410,9 @@ function dataBoxPlusEventLogBlock() {
     ),
     moduleEventLogStatus(
       "Napojené schránky",
-      activeMailboxes === 7 ? "ověřeno" : "částečně ověřeno",
-      activeMailboxes === 7
-        ? "Všech 7 schránek je v DSP vedených jako aktivní."
+      activeMailboxes === configuredMailboxes ? "ověřeno" : "částečně ověřeno",
+      activeMailboxes === configuredMailboxes
+        ? `Všech ${configuredMailboxes} připojených schránek je v DSP vedených jako aktivní; nové schránky se přidávají bez pevného limitu.`
         : "Některá schránka čeká na přístup nebo ověření."
     )
   ];

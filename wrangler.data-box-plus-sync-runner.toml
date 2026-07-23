@@ -17,4 +17,4 @@ binding = "SMART_ODPADY_DOCUMENTS"
 bucket_name = "smart-odpady-documents"
 
 [triggers]
-crons = ["0 * * * *"]
+crons = ["*/5 * * * *"]
