@@ -147,6 +147,70 @@ export async function requestReceivablesKbAccessToken(env = {}, options = {}) {
   };
 }
 
+export async function exchangeReceivablesKbAuthorizationCode(env = {}, authorizationCode, options = {}) {
+  const code = clean(authorizationCode);
+  const environment = clean(env.KB_ADAA_ENVIRONMENT).toLowerCase();
+  const required = [
+    "KB_ADAA_OAUTH_API_KEY",
+    "KB_ADAA_CLIENT_ID",
+    "KB_ADAA_CLIENT_SECRET"
+  ];
+  const missingEnv = required.filter((key) => !clean(env?.[key]));
+  if (environment !== "production") missingEnv.push("KB_ADAA_ENVIRONMENT");
+  if (!code) {
+    throw new ReceivablesKbApiError(
+      "KB OAuth callback neobsahuje autorizační kód.",
+      400,
+      "receivables_kb_authorization_code_missing"
+    );
+  }
+  if (missingEnv.length) {
+    throw new ReceivablesKbApiError(
+      "KB OAuth registrace není nakonfigurovaná.",
+      503,
+      "receivables_kb_oauth_registration_not_configured",
+      { missingEnv: [...new Set(missingEnv)] }
+    );
+  }
+  const redirectUri = clean(env.KB_ADAA_REDIRECT_URI) || DEFAULT_REDIRECT_URI;
+  const body = new URLSearchParams({
+    redirect_uri: redirectUri,
+    client_id: clean(env.KB_ADAA_CLIENT_ID),
+    client_secret: clean(env.KB_ADAA_CLIENT_SECRET),
+    code,
+    grant_type: "authorization_code"
+  });
+  const payload = await fetchJson(
+    options.fetchImpl || fetch,
+    `${configuredBaseUrl(env)}/oauth2/v3/access_token`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "x-correlation-id": randomCorrelationId(),
+        apiKey: clean(env.KB_ADAA_OAUTH_API_KEY)
+      },
+      body
+    },
+    "oauth_authorization_code"
+  );
+  const refreshToken = clean(payload.refresh_token);
+  if (!refreshToken) {
+    throw new ReceivablesKbApiError(
+      "KB OAuth odpověď neobsahuje refresh token.",
+      502,
+      "receivables_kb_refresh_token_missing"
+    );
+  }
+  return {
+    refreshToken,
+    accessToken: clean(payload.access_token),
+    expiresIn: Number(payload.expires_in) || 0,
+    scope: clean(payload.scope),
+    tokenType: clean(payload.token_type) || "Bearer"
+  };
+}
+
 function apiHeaders(env, accessToken) {
   return {
     Accept: "application/json",
