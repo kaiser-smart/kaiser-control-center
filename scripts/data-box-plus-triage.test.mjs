@@ -82,11 +82,12 @@ assert.equal(dataBoxPlusTriagePreviewEnabled(true, "evil.example", "radim-oplust
 const readCalls = [];
 const requestSpy = async (path, options) => {
   readCalls.push({ path, options });
-  return path.endsWith("/status") ? { mailboxes: [] } : { messages: [] };
+  return path.endsWith("/status") ? { apiStatus: "ready", mailboxes: [] } : { messages: [] };
 };
 const readResults = await readDataBoxPlusTriageSnapshot(requestSpy);
 assert.equal(readResults.length, 5);
 assert.deepEqual(readCalls, [
+  { path: "/api/data-box-plus/status", options: { method: "GET" } },
   { path: "/api/data-box-plus/messages?limit=150", options: { method: "GET" } }
 ]);
 assert.deepEqual(readResults[0], {
@@ -141,6 +142,14 @@ assert.deepEqual(
   dataBoxPlusTriageItems(messages, [mailbox], { mailboxId: mailbox.id, query: "účetní", today: TODAY }).map(({ id }) => id),
   ["handed"]
 );
+assert.deepEqual(
+  dataBoxPlusTriageItems(messages, [mailbox], { mailboxId: mailbox.id, folder: "sent", today: TODAY }).map(({ id }) => id),
+  ["sent"]
+);
+assert.deepEqual(
+  dataBoxPlusTriageItems(messages, [mailbox], { mailboxId: mailbox.id, folder: "archive", today: TODAY }).map(({ id }) => id),
+  ["done"]
+);
 
 const triageSource = readFileSync(new URL("../src/data/dataBoxPlusTriage.js", import.meta.url), "utf8");
 const messagesEndpointSource = readFileSync(new URL("../functions/api/data-box-plus/messages.js", import.meta.url), "utf8");
@@ -155,7 +164,7 @@ const detailStoreSource = storeSource.slice(
 );
 assert.doesNotMatch(triageSource, /Blokováno|blokováno/);
 assert.doesNotMatch(triageSource, /localStorage|sessionStorage|indexedDB/i);
-assert.doesNotMatch(triageSource, /\/api\/data-box-plus\/status/);
+assert.match(triageSource, /requestJson\("\/api\/data-box-plus\/status", \{ method: "GET" \}\)/);
 assert.match(messagesEndpointSource, /listDataBoxPlusMessages/);
 assert.doesNotMatch(messagesEndpointSource, /ensureDataBoxPlusMailboxes|\.run\(/);
 assert.match(listMessagesStoreSource, /SELECT \*\s+FROM data_box_plus_messages/);

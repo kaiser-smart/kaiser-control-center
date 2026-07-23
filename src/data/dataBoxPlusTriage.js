@@ -33,10 +33,17 @@ export function dataBoxPlusTriagePreviewEnabled(runtimeValue, hostname, userId =
 
 export async function readDataBoxPlusTriageSnapshot(requestJson) {
   if (typeof requestJson !== "function") throw new TypeError("requestJson must be a function");
-  const messagesResult = await requestJson("/api/data-box-plus/messages?limit=150", { method: "GET" });
+  const [statusPayload, messagesResult] = await Promise.all([
+    requestJson("/api/data-box-plus/status", { method: "GET" }),
+    requestJson("/api/data-box-plus/messages?limit=150", { method: "GET" })
+  ]);
+  const mailboxes = Array.isArray(statusPayload?.mailboxes) && statusPayload.mailboxes.length
+    ? statusPayload.mailboxes
+    : DATA_BOX_PLUS_TRIAGE_MAILBOXES.map((mailbox) => ({ ...mailbox }));
   const statusResult = {
-    apiStatus: messagesResult?.apiStatus || "ready",
-    mailboxes: DATA_BOX_PLUS_TRIAGE_MAILBOXES.map((mailbox) => ({ ...mailbox }))
+    ...statusPayload,
+    apiStatus: statusPayload?.apiStatus || messagesResult?.apiStatus || "ready",
+    mailboxes
   };
   return [
     statusResult,
@@ -275,6 +282,8 @@ export function dataBoxPlusTriageItem(message = {}, options = {}) {
     sourceStatus: String(message.status || ""),
     assignedTo: String(message.assignedTo || ""),
     attachmentStatus: String(message.attachmentStatus || ""),
+    attachmentCount: Array.isArray(message.attachments) ? message.attachments.length : 0,
+    isUnread: includesAny(normalizeText([message.readStatus, message.status].filter(Boolean).join(" ")), ["neprect", "nova", "new", "unread"]),
     target: dataBoxPlusTriageTarget(message),
     queueId,
     laneLabel: DATA_BOX_PLUS_TRIAGE_QUEUES.find((queue) => queue.id === queueId)?.label || "K vyřízení",
@@ -328,12 +337,15 @@ export function dataBoxPlusTriageItems(messages = [], mailboxes = [], options = 
   const mailboxId = String(options.mailboxId || "");
   const queueId = String(options.queueId || "");
   const query = normalizeText(options.query);
+  const folder = String(options.folder || "received");
   const today = options.today || pragueDay(options.now);
 
   const items = messages
     .filter((message) => {
       const direction = normalizeText(message?.direction);
-      if (direction && direction !== "received") return false;
+      if (folder === "sent" && direction !== "sent") return false;
+      if (folder === "archive" && dataBoxPlusTriageQueueId(message) !== "done") return false;
+      if (folder === "received" && direction && direction !== "received") return false;
       if (mailboxId && String(message?.mailboxId || "") !== mailboxId) return false;
       return true;
     })
@@ -358,7 +370,12 @@ export function dataBoxPlusTriageItems(messages = [], mailboxes = [], options = 
 
 export function dataBoxPlusTriageCounts(messages = [], mailboxes = [], options = {}) {
   const counts = { todo: 0, handed: 0, done: 0 };
-  for (const item of dataBoxPlusTriageItems(messages, mailboxes, { mailboxId: options.mailboxId, today: options.today, now: options.now })) {
+  for (const item of dataBoxPlusTriageItems(messages, mailboxes, {
+    mailboxId: options.mailboxId,
+    folder: options.folder || "received",
+    today: options.today,
+    now: options.now
+  })) {
     counts[item.queueId] += 1;
   }
   return counts;
