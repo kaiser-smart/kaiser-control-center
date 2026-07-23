@@ -23,6 +23,7 @@ import { sendDataBoxForwardNotification } from "./notification-service.js";
 import { buildDataBoxPlusChatContext } from "./data-box-plus-chat-context.js";
 import { loadFleetVehiclesWithAssignments } from "./fleet-vehicles-store.js";
 
+const DATA_BOX_PLUS_SEND_TIMEOUT_MS = 25000;
 const EXPECTED_MAILBOX_COUNT = 7;
 const DEFAULT_LIMIT = 100;
 const MAILBOX_IDS = [
@@ -2713,42 +2714,134 @@ export async function sendDataBoxPlusDraft(env, draftId, payload = {}, currentUs
   if (!draft.recipientBoxId || !draft.subject || !draft.body) {
     throw new DataBoxPlusStoreError("Doplň příjemce, předmět a text zprávy.", 400, "data_box_plus_draft_incomplete");
   }
-  const mailbox = await db.prepare("SELECT * FROM data_box_plus_mailboxes WHERE id = ? LIMIT 1").bind(draft.mailboxId).first();
-  if (!mailbox) throw new DataBoxPlusStoreError("Odesílající schránka nebyla nalezena.", 404, "data_box_plus_mailbox_not_found");
-  const directAccount = await dataBoxPlusSendingAccount(env, mailbox);
-  const endpoint = cleanString(env.DATA_BOX_SEND_MESSAGE_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.DATA_BOX_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT);
-  const apiKey = cleanString(env.DATA_BOX_REPLY_API_KEY || env.KNF_DATA_BOX_REPLY_API_KEY);
-  if (!directAccount && !(endpoint && apiKey)) {
-    throw new DataBoxPlusStoreError(
-      "Odesílající schránka nemá aktivní přístup ISDS.",
-      503,
-      "data_box_plus_ds_sender_missing"
-    );
-  }
-  const totalMessageBytes = new TextEncoder().encode(draft.body).byteLength
-    + draft.attachments.reduce((total, attachment) => total + numberValue(attachment.sizeBytes), 0);
-  if (totalMessageBytes > 20 * 1024 * 1024) {
-    throw new DataBoxPlusStoreError(
-      "Datová zpráva včetně textu a příloh může mít nejvýše 20 MB.",
-      400,
-      "data_box_plus_message_too_large"
-    );
-  }
-  const providerAttachments = [];
-  for (const attachment of draft.attachments) {
-    if (!bucket) throw new DataBoxPlusStoreError("Úložiště příloh není dostupné.", 503, "data_box_plus_storage_missing");
-    const attachmentRow = await db
-      .prepare("SELECT storage_key FROM data_box_plus_draft_attachments WHERE id = ? AND draft_id = ? LIMIT 1")
-      .bind(attachment.id, draft.id)
-      .first();
-    const object = attachmentRow?.storage_key ? await bucket.get(attachmentRow.storage_key) : null;
-    if (!object) throw new DataBoxPlusStoreError(`Příloha ${attachment.fileName} není dostupná.`, 409, "data_box_plus_attachment_object_missing");
-    providerAttachments.push({
+  const requestDescriptor = {
+    hashVersion: 2,
+    sourceMailboxId: draft.mailboxId,
+    recipientDataBoxId: draft.recipientBoxId,
+    recipientName: draft.recipientName,
+    subject: draft.subject,
+    body: draft.body,
+    attachments: draft.attachments.map((attachment) => ({
+      id: attachment.id,
       fileName: attachment.fileName,
       mimeType: attachment.mimeType,
-      contentBase64: bytesToBase64(new Uint8Array(await object.arrayBuffer()))
-    });
+      sizeBytes: attachment.sizeBytes
+    })),
+    idempotencyKey: draft.idempotencyKey
+  };
+  const requestHash = await dataBoxPlusRequestHash(requestDescriptor);
+  const existingJob = await db.prepare("SELECT * FROM data_box_plus_send_jobs WHERE draft_id = ? LIMIT 1").bind(draft.id).first();
+  if (existingJob?.status === "sent") {
+    return { status: "sent", duplicate: true, draft, providerMessageId: cleanString(existingJob.provider_message_id) };
   }
+  if (["sending", "unknown"].includes(cleanString(existingJob?.status))) {
+    throw new DataBoxPlusStoreError(
+      cleanString(existingJob.status) === "unknown"
+        ? "Výsledek předchozího odeslání není potvrzený. Další odeslání je zablokované proti duplicitě."
+        : "Tento koncept už má rozpracované odeslání. Další pokus je zablokovaný.",
+      409,
+      cleanString(existingJob.status) === "unknown" ? "data_box_plus_send_result_unknown" : "data_box_plus_send_in_progress"
+    );
+  }
+  if (existingJob && cleanString(existingJob.request_hash) !== requestHash) {
+    throw new DataBoxPlusStoreError("Obsah konceptu se po přípravě odeslání změnil.", 409, "data_box_plus_send_payload_changed");
+  }
+  const jobId = cleanString(existingJob?.id) || idValue("dbp-send-job");
+  const preparationStartedAt = new Date().toISOString();
+  if (!existingJob) {
+    await db.prepare(`
+      INSERT INTO data_box_plus_send_jobs (
+        id, draft_id, idempotency_key, request_hash, status, phase, attempt_count,
+        created_at, last_event_at
+      ) VALUES (?, ?, ?, ?, 'prepared', 'validating', 1, ?, ?)
+    `).bind(jobId, draft.id, draft.idempotencyKey, requestHash, preparationStartedAt, preparationStartedAt).run();
+  } else {
+    await db.prepare(`
+      UPDATE data_box_plus_send_jobs
+      SET status = 'prepared',
+          phase = 'validating',
+          attempt_count = COALESCE(attempt_count, 0) + 1,
+          response_json = NULL,
+          error_message = NULL,
+          started_at = NULL,
+          finished_at = NULL,
+          last_event_at = ?
+      WHERE id = ?
+    `).bind(preparationStartedAt, jobId).run();
+  }
+
+  let mailbox;
+  let directAccount;
+  let endpoint = "";
+  let apiKey = "";
+  const providerAttachments = [];
+  try {
+    mailbox = await db.prepare("SELECT * FROM data_box_plus_mailboxes WHERE id = ? LIMIT 1").bind(draft.mailboxId).first();
+    if (!mailbox) throw new DataBoxPlusStoreError("Odesílající schránka nebyla nalezena.", 404, "data_box_plus_mailbox_not_found");
+    directAccount = await dataBoxPlusSendingAccount(env, mailbox);
+    endpoint = cleanString(env.DATA_BOX_SEND_MESSAGE_ENDPOINT || env.DATA_BOX_SEND_REPLY_ENDPOINT || env.DATA_BOX_REPLY_ENDPOINT || env.KNF_DATA_BOX_REPLY_ENDPOINT);
+    apiKey = cleanString(env.DATA_BOX_REPLY_API_KEY || env.KNF_DATA_BOX_REPLY_API_KEY);
+    if (!directAccount && !(endpoint && apiKey)) {
+      throw new DataBoxPlusStoreError(
+        "Odesílající schránka nemá aktivní přístup ISDS.",
+        503,
+        "data_box_plus_ds_sender_missing"
+      );
+    }
+    const totalMessageBytes = new TextEncoder().encode(draft.body).byteLength
+      + draft.attachments.reduce((total, attachment) => total + numberValue(attachment.sizeBytes), 0);
+    if (totalMessageBytes > 20 * 1024 * 1024) {
+      throw new DataBoxPlusStoreError(
+        "Datová zpráva včetně textu a příloh může mít nejvýše 20 MB.",
+        400,
+        "data_box_plus_message_too_large"
+      );
+    }
+    await db.prepare(`
+      UPDATE data_box_plus_send_jobs
+      SET phase = 'loading_attachments', last_event_at = ?
+      WHERE id = ?
+    `).bind(new Date().toISOString(), jobId).run();
+    for (const attachment of draft.attachments) {
+      if (!bucket) throw new DataBoxPlusStoreError("Úložiště příloh není dostupné.", 503, "data_box_plus_storage_missing");
+      const attachmentRow = await db
+        .prepare("SELECT storage_key FROM data_box_plus_draft_attachments WHERE id = ? AND draft_id = ? LIMIT 1")
+        .bind(attachment.id, draft.id)
+        .first();
+      const object = attachmentRow?.storage_key ? await bucket.get(attachmentRow.storage_key) : null;
+      if (!object) throw new DataBoxPlusStoreError(`Příloha ${attachment.fileName} není dostupná.`, 409, "data_box_plus_attachment_object_missing");
+      providerAttachments.push({
+        fileName: attachment.fileName,
+        mimeType: attachment.mimeType,
+        contentBase64: bytesToBase64(new Uint8Array(await object.arrayBuffer()))
+      });
+    }
+  } catch (error) {
+    const message = cleanString(error?.message || "Příprava datové zprávy selhala.");
+    const finishedAt = new Date().toISOString();
+    await db.prepare(`
+      UPDATE data_box_plus_send_jobs
+      SET status = 'failed',
+          phase = 'preparation_failed',
+          response_json = ?,
+          error_message = ?,
+          finished_at = ?,
+          last_event_at = ?
+      WHERE id = ?
+    `).bind(
+      JSON.stringify({ phase: "preparation_failed", code: cleanString(error?.code) }).slice(0, 8000),
+      message,
+      finishedAt,
+      finishedAt,
+      jobId
+    ).run();
+    await db.prepare("UPDATE data_box_plus_drafts SET status = 'failed', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(message, draft.id)
+      .run();
+    if (error instanceof DataBoxPlusStoreError) throw error;
+    throw new DataBoxPlusStoreError(message, numberValue(error?.status, 500), cleanString(error?.code || "data_box_plus_send_preparation_failed"));
+  }
+
   const requestPayload = {
     sourceMailboxId: draft.mailboxId,
     sourceMailboxIsdsId: cleanString(mailbox.isds_id),
@@ -2759,25 +2852,16 @@ export async function sendDataBoxPlusDraft(env, draftId, payload = {}, currentUs
     attachments: providerAttachments,
     idempotencyKey: draft.idempotencyKey
   };
-  const requestHash = await dataBoxPlusRequestHash(requestPayload);
-  const existingJob = await db.prepare("SELECT * FROM data_box_plus_send_jobs WHERE draft_id = ? LIMIT 1").bind(draft.id).first();
-  if (existingJob?.status === "sent") {
-    return { status: "sent", duplicate: true, draft, providerMessageId: cleanString(existingJob.provider_message_id) };
-  }
-  if (existingJob && cleanString(existingJob.request_hash) !== requestHash) {
-    throw new DataBoxPlusStoreError("Obsah konceptu se po přípravě odeslání změnil.", 409, "data_box_plus_send_payload_changed");
-  }
-  const jobId = cleanString(existingJob?.id) || idValue("dbp-send-job");
-  if (!existingJob) {
-    await db.prepare(`
-      INSERT INTO data_box_plus_send_jobs (
-        id, draft_id, idempotency_key, request_hash, status, created_at
-      ) VALUES (?, ?, ?, ?, 'prepared', ?)
-    `).bind(jobId, draft.id, draft.idempotencyKey, requestHash, new Date().toISOString()).run();
-  }
-  await db.prepare("UPDATE data_box_plus_send_jobs SET status = 'sending', started_at = ?, error_message = NULL WHERE id = ?")
-    .bind(new Date().toISOString(), jobId)
-    .run();
+  const sendingStartedAt = new Date().toISOString();
+  await db.prepare(`
+    UPDATE data_box_plus_send_jobs
+    SET status = 'sending',
+        phase = 'calling_isds',
+        started_at = ?,
+        error_message = NULL,
+        last_event_at = ?
+    WHERE id = ?
+  `).bind(sendingStartedAt, sendingStartedAt, jobId).run();
   await db.prepare("UPDATE data_box_plus_drafts SET status = 'sending', error_message = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
     .bind(draft.id)
     .run();
@@ -2793,23 +2877,48 @@ export async function sendDataBoxPlusDraft(env, draftId, payload = {}, currentUs
         attachments: providerAttachments
       });
     } else {
-      response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-          "Idempotency-Key": draft.idempotencyKey
-        },
-        body: JSON.stringify(requestPayload)
-      });
-      result = await response.json().catch(() => ({}));
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), DATA_BOX_PLUS_SEND_TIMEOUT_MS);
+      try {
+        response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "Idempotency-Key": draft.idempotencyKey
+          },
+          body: JSON.stringify(requestPayload),
+          signal: controller.signal
+        });
+        result = await response.json().catch(() => ({}));
+      } finally {
+        clearTimeout(timeout);
+      }
     }
   } catch (error) {
     const message = cleanString(error?.message || "DS brána nevrátila výsledek.");
     const explicitIsdsFailure = error instanceof DataBoxIsdsError;
     const failureState = explicitIsdsFailure ? "failed" : "unknown";
-    await db.prepare("UPDATE data_box_plus_send_jobs SET status = ?, error_message = ?, finished_at = ? WHERE id = ?")
-      .bind(failureState, message, new Date().toISOString(), jobId)
+    const finishedAt = new Date().toISOString();
+    await db.prepare(`
+      UPDATE data_box_plus_send_jobs
+      SET status = ?,
+          phase = ?,
+          response_json = ?,
+          error_message = ?,
+          finished_at = ?,
+          last_event_at = ?
+      WHERE id = ?
+    `)
+      .bind(
+        failureState,
+        explicitIsdsFailure ? "isds_rejected" : "unknown",
+        JSON.stringify({ phase: explicitIsdsFailure ? "isds_rejected" : "unknown", code: cleanString(error?.code) }).slice(0, 8000),
+        message,
+        finishedAt,
+        finishedAt,
+        jobId
+      )
       .run();
     await db.prepare("UPDATE data_box_plus_drafts SET status = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
       .bind(failureState, message, draft.id)
@@ -2830,10 +2939,28 @@ export async function sendDataBoxPlusDraft(env, draftId, payload = {}, currentUs
 
   const sent = directAccount ? result.success === true : Boolean(response?.ok && result.success !== false);
   const providerMessageId = cleanString(result.sentMessageId || result.messageId || result.dmID);
+  const responseReceivedAt = new Date().toISOString();
+  await db.prepare(`
+    UPDATE data_box_plus_send_jobs
+    SET phase = 'response_received',
+        provider_message_id = ?,
+        response_json = ?,
+        last_event_at = ?
+    WHERE id = ?
+  `).bind(providerMessageId, JSON.stringify(result).slice(0, 8000), responseReceivedAt, jobId).run();
   if (!sent) {
-    const message = cleanString(result.error || result.message || `HTTP ${response.status}`);
-    await db.prepare("UPDATE data_box_plus_send_jobs SET status = 'failed', response_json = ?, error_message = ?, finished_at = ? WHERE id = ?")
-      .bind(JSON.stringify(result).slice(0, 8000), message, new Date().toISOString(), jobId)
+    const message = cleanString(result.error || result.message || `HTTP ${response?.status || 502}`);
+    await db.prepare(`
+      UPDATE data_box_plus_send_jobs
+      SET status = 'failed',
+          phase = 'provider_rejected',
+          response_json = ?,
+          error_message = ?,
+          finished_at = ?,
+          last_event_at = ?
+      WHERE id = ?
+    `)
+      .bind(JSON.stringify(result).slice(0, 8000), message, responseReceivedAt, responseReceivedAt, jobId)
       .run();
     await db.prepare("UPDATE data_box_plus_drafts SET status = 'failed', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
       .bind(message, draft.id)
@@ -2842,8 +2969,17 @@ export async function sendDataBoxPlusDraft(env, draftId, payload = {}, currentUs
   }
 
   const sentAt = new Date().toISOString();
-  await db.prepare("UPDATE data_box_plus_send_jobs SET status = 'sent', provider_message_id = ?, response_json = ?, finished_at = ? WHERE id = ?")
-    .bind(providerMessageId, JSON.stringify(result).slice(0, 8000), sentAt, jobId)
+  await db.prepare(`
+    UPDATE data_box_plus_send_jobs
+    SET status = 'sent',
+        phase = 'completed',
+        provider_message_id = ?,
+        response_json = ?,
+        finished_at = ?,
+        last_event_at = ?
+    WHERE id = ?
+  `)
+    .bind(providerMessageId, JSON.stringify(result).slice(0, 8000), sentAt, sentAt, jobId)
     .run();
   await db.prepare(`
     UPDATE data_box_plus_drafts

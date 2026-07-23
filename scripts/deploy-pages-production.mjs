@@ -173,6 +173,8 @@ runVisible("node", ["scripts/customer-messaging.test.mjs"]);
 runVisible("node", ["scripts/rcs-consent.test.mjs"]);
 runVisible("node", ["scripts/data-box-plus-triage.test.mjs"]);
 runVisible("node", ["scripts/data-box-plus-triage-ui.test.mjs"]);
+runVisible("node", ["scripts/data-box-plus-compose-save-race.test.mjs"]);
+runVisible("node", ["scripts/data-box-plus-workflows.test.mjs"]);
 runVisible("node", ["scripts/data-box-plus-sync-runner.test.mjs"]);
 runVisible("node", ["scripts/build.mjs"], {
   env: {
