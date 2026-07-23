@@ -123,7 +123,7 @@ assert.match(stylesSource, /\.ds-plus-triage-queues\s*\{/);
 assert.match(stylesSource, /\.ds-plus-triage-row\s*\{/);
 assert.match(stylesSource, /\.ds-plus-triage-filters\s*\{/);
 assert.match(stylesSource, /\.ds-plus-triage-bulk\s*\{/);
-assert.match(stylesSource, /\.ds-plus-triage-detail-overlay\s*\{[\s\S]*justify-content: flex-end/);
+assert.match(stylesSource, /\.ds-plus-detail-overlay\.ds-plus-triage-detail-overlay\s*\{[\s\S]*place-items: stretch end[\s\S]*padding: 0/);
 assert.match(stylesSource, /\.ds-plus-triage-detail__footer\s*\{[\s\S]*position: sticky/);
 assert.match(stylesSource, /\.ds-plus-detail\.ds-plus-triage-detail\s*\{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\) auto[\s\S]*overflow: hidden/);
 assert.match(stylesSource, /\.ds-plus-triage-detail \.ds-plus-detail__body\s*\{[\s\S]*overflow-y: auto/);

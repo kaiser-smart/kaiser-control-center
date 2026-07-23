@@ -1312,9 +1312,8 @@ body:has(.ds-plus-triage-production) .ai-assistant-layer {
   color: #245d36;
 }
 
-.ds-plus-triage-detail-overlay {
-  align-items: stretch;
-  justify-content: flex-end;
+.ds-plus-detail-overlay.ds-plus-triage-detail-overlay {
+  place-items: stretch end;
   padding: 0;
 }
 
