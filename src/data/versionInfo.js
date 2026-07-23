@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.688"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.689"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Pohledávky: zabezpečený produkční OAuth a cloudový KB runner",
+    text: "Produkční registrace KB používá časově omezený a serverem podepsaný OAuth state navázaný na správce, chráněné callbacky, jednorázově šifrované předání refresh tokenu a samostatný interní runner token. Plánovaný worker neposkytuje ani neukládá KB API klíče; každé dvě hodiny volá pevný interní Pages endpoint, kde zůstává D1, audit, deduplikace a bezpečné zpracování pouze příchozích BOOK/CREDIT transakcí. Automatické párování faktur, platební příkazy a zákaznická komunikace zůstávají vypnuté."
+  },
   {
     title: "Řidičský tablet: schválená zvuková sada A",
     text: "Řidičský tablet používá administrátorem schválenou sadu A z ElevenLabs Sound Effects jako lokální produkční aktiva bez vzdálených URL. Centrální audio systém řídí intro, potvrzení, upozornění, priority, režimy Standardní, Tiché a Vypnuto, offline cache a pravdivé přehrání až po potvrzeném stavu; hlasová Šarlota zůstává nedotčená."

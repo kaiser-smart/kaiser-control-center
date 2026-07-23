@@ -1,13 +1,13 @@
+import { RECEIVABLES_KB_PAYMENT_CRON } from "../functions/_lib/receivables-kb-payment-sync.js";
 import {
-  RECEIVABLES_KB_PAYMENT_CRON,
-  receivablesKbPaymentSyncStatus,
-  runReceivablesKbPaymentSyncAutomation
-} from "../functions/_lib/receivables-kb-payment-sync.js";
+  receivablesKbPaymentRunnerStatus,
+  runReceivablesKbPaymentSyncRemote
+} from "../functions/_lib/receivables-kb-payment-runner.js";
 
 export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil((async () => {
-      const result = await runReceivablesKbPaymentSyncAutomation(env, {
+      const result = await runReceivablesKbPaymentSyncRemote(env, {
         scheduledTime: controller.scheduledTime,
         cron: controller.cron,
         triggeredBy: "cloudflare-cron"
@@ -29,14 +29,6 @@ export default {
   },
 
   async fetch(_request, env) {
-    const status = await receivablesKbPaymentSyncStatus(env);
-    return Response.json({
-      ...status,
-      runner: "receivables-kb-payment-runner",
-      cron: RECEIVABLES_KB_PAYMENT_CRON,
-      manualRun: "disabled",
-      createsPaymentOrders: false,
-      customerCommunication: "disabled"
-    });
+    return Response.json(receivablesKbPaymentRunnerStatus(env, RECEIVABLES_KB_PAYMENT_CRON));
   }
 };
