@@ -374,9 +374,9 @@ async function withTimeout(task, timeoutMs = ISDS_TIMEOUT_MS) {
   }
 }
 
-async function soapRequest(config, operation, innerXml, endpointUrl = config.infoEndpointUrl) {
+async function soapRequest(config, operation, innerXml, endpointUrl = config.infoEndpointUrl, fetchImpl = fetch) {
   const body = soapEnvelope(operation, innerXml);
-  const response = await withTimeout((signal) => fetch(endpointUrl, {
+  const response = await withTimeout((signal) => fetchImpl(endpointUrl, {
     method: "POST",
     headers: {
       Authorization: authHeader(config),
@@ -389,6 +389,91 @@ async function soapRequest(config, operation, innerXml, endpointUrl = config.inf
   const text = await response.text();
   assertIsdsStatus(text, response.status);
   return text;
+}
+
+function createMessageFileXml(file, index) {
+  const fileName = cleanString(file.fileName || file.filename || `priloha-${index + 1}`);
+  const mimeType = cleanString(file.mimeType || file.contentType || "application/octet-stream");
+  const contentBase64 = cleanString(file.contentBase64).replace(/\s+/g, "");
+  if (!contentBase64) {
+    throw new DataBoxIsdsError(`Příloha ${fileName} nemá obsah.`, 400, "data_box_isds_attachment_empty");
+  }
+  return `
+        <v20:dmFile dmMimeType="${xmlEscape(mimeType)}" dmFileMetaType="${index === 0 ? "main" : "enclosure"}" dmFileDescr="${xmlEscape(fileName)}">
+          <v20:dmEncodedContent>${contentBase64}</v20:dmEncodedContent>
+        </v20:dmFile>`;
+}
+
+function createMessageRequestXml(message = {}) {
+  const recipientDataBoxId = cleanString(message.recipientDataBoxId).toLowerCase();
+  const subject = cleanString(message.subject);
+  const body = cleanString(message.body);
+  if (!/^[a-z0-9]{7}$/.test(recipientDataBoxId)) {
+    throw new DataBoxIsdsError("ID datové schránky příjemce musí mít 7 znaků.", 400, "data_box_isds_recipient_invalid");
+  }
+  if (!subject || subject.length > 255) {
+    throw new DataBoxIsdsError("Předmět zprávy musí mít 1 až 255 znaků.", 400, "data_box_isds_subject_invalid");
+  }
+  if (!body) {
+    throw new DataBoxIsdsError("Text datové zprávy nesmí být prázdný.", 400, "data_box_isds_body_missing");
+  }
+  const files = [{
+    fileName: "zprava.txt",
+    mimeType: "text/plain",
+    contentBase64: base64Utf8(body)
+  }, ...(Array.isArray(message.attachments) ? message.attachments : [])];
+  return `
+      <v20:dmEnvelope>
+        ${nilTag("dmSenderOrgUnit")}
+        ${nilTag("dmSenderOrgUnitNum")}
+        <v20:dbIDRecipient>${xmlEscape(recipientDataBoxId)}</v20:dbIDRecipient>
+        ${nilTag("dmRecipientOrgUnit")}
+        ${nilTag("dmRecipientOrgUnitNum")}
+        ${nilTag("dmToHands")}
+        <v20:dmAnnotation>${xmlEscape(subject)}</v20:dmAnnotation>
+        ${nilTag("dmRecipientRefNumber")}
+        ${nilTag("dmSenderRefNumber")}
+        ${nilTag("dmRecipientIdent")}
+        ${nilTag("dmSenderIdent")}
+        ${nilTag("dmLegalTitleLaw")}
+        ${nilTag("dmLegalTitleYear")}
+        ${nilTag("dmLegalTitleSect")}
+        ${nilTag("dmLegalTitlePar")}
+        ${nilTag("dmLegalTitlePoint")}
+        ${nilTag("dmPersonalDelivery")}
+        ${nilTag("dmAllowSubstDelivery")}
+      </v20:dmEnvelope>
+      <v20:dmFiles>${files.map(createMessageFileXml).join("")}
+      </v20:dmFiles>`;
+}
+
+export function dataBoxIsdsCreateMessageXmlForTest(message = {}) {
+  return soapEnvelope("CreateMessage", createMessageRequestXml(message));
+}
+
+export async function sendDataBoxIsdsMessage(env = {}, account = null, message = {}, options = {}) {
+  const config = account || isdsConfig(env);
+  ensureIsdsConfig(config);
+  const xml = await soapRequest(
+    config,
+    "CreateMessage",
+    createMessageRequestXml(message),
+    config.messageEndpointUrl,
+    options.fetchImpl || fetch
+  );
+  const messageId = tagValue(xml, "dmID");
+  if (!messageId) {
+    throw new DataBoxIsdsError("ISDS potvrdilo požadavek bez ID odeslané zprávy.", 502, "data_box_isds_send_id_missing");
+  }
+  return {
+    success: true,
+    messageId,
+    sentMessageId: messageId,
+    statusCode: tagValue(xml, "dmStatusCode"),
+    statusMessage: tagValue(xml, "dmStatusMessage"),
+    endpointUrl: config.messageEndpointUrl,
+    config: publicAccountStatus(config)
+  };
 }
 
 function normalizedDate(value) {

@@ -254,6 +254,37 @@ export function dataBoxPlusTriagePresentation(message = {}, options = {}) {
 
 export function dataBoxPlusTriageItem(message = {}, options = {}) {
   const mailbox = options.mailbox || null;
+  const sentHistoryOnly = normalizeText(message.direction) === "sent";
+  if (sentHistoryOnly) {
+    return {
+      id: String(message.id || ""),
+      mailboxId: String(message.mailboxId || ""),
+      mailboxLabel: String(mailbox?.name || mailbox?.company || "Schránka"),
+      senderName: String(message.senderName || "Datová schránka"),
+      recipientName: String(message.recipientName || message.recipientBoxId || "Příjemce"),
+      subject: String(message.subject || "Datová zpráva"),
+      deliveredAt: String(message.deliveredAt || message.receivedAt || ""),
+      dueDate: "",
+      riskLevel: "",
+      priority: "",
+      sourceStatus: String(message.status || "Odesláno"),
+      assignedTo: "",
+      attachmentStatus: String(message.attachmentStatus || ""),
+      attachmentCount: Number(message.attachmentCount || 0) || (Array.isArray(message.attachments) ? message.attachments.length : 0),
+      isUnread: false,
+      target: "",
+      queueId: "done",
+      laneLabel: "Historie",
+      microstate: "sent",
+      microstateLabel: "Odesláno",
+      actionLabel: "Otevřít",
+      tone: "quiet",
+      readOnly: true,
+      persisted: true,
+      derivationVersion: DATA_BOX_PLUS_TRIAGE_DERIVATION_VERSION,
+      message
+    };
+  }
   const queueId = dataBoxPlusTriageQueueId(message);
   const presentation = dataBoxPlusTriagePresentation(message, options);
   return {
@@ -261,6 +292,7 @@ export function dataBoxPlusTriageItem(message = {}, options = {}) {
     mailboxId: String(message.mailboxId || ""),
     mailboxLabel: String(mailbox?.name || mailbox?.company || "Schránka"),
     senderName: String(message.senderName || "Datová schránka"),
+    recipientName: String(message.recipientName || message.recipientBoxId || ""),
     subject: String(message.subject || "Datová zpráva"),
     deliveredAt: String(message.deliveredAt || message.receivedAt || ""),
     dueDate: String(message.dueDate || ""),
@@ -331,7 +363,7 @@ export function dataBoxPlusTriageItems(messages = [], mailboxes = [], options = 
     .filter((message) => {
       const direction = normalizeText(message?.direction);
       if (folder === "sent" && direction !== "sent") return false;
-      if (folder === "archive" && dataBoxPlusTriageQueueId(message) !== "done") return false;
+      if (folder === "archive" && (direction === "sent" || dataBoxPlusTriageQueueId(message) !== "done")) return false;
       if (folder === "received" && direction && direction !== "received") return false;
       if (mailboxId && String(message?.mailboxId || "") !== mailboxId) return false;
       return true;
@@ -342,6 +374,7 @@ export function dataBoxPlusTriageItems(messages = [], mailboxes = [], options = 
       if (!query) return true;
       return normalizeText([
         item.senderName,
+        item.recipientName,
         item.subject,
         item.mailboxLabel,
         item.microstateLabel,

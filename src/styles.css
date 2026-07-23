@@ -1172,6 +1172,10 @@ body:has(.ds-plus-triage-production) .ai-assistant-layer {
   border-left: 4px solid #7f9cc7;
 }
 
+.ds-plus-triage-row--history {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .ds-plus-triage-row--unread {
   border-left: 4px solid var(--ds-triage-green);
   padding-left: 14px;

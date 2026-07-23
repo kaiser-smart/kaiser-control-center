@@ -5,8 +5,14 @@ import {
   dataBoxPlusBytesToBase64ForTest,
   dataBoxPlusDraftInputForTest
 } from "../functions/_lib/data-box-plus-store.js";
+import {
+  dataBoxIsdsAccountFromCredentials,
+  dataBoxIsdsCreateMessageXmlForTest,
+  sendDataBoxIsdsMessage
+} from "../functions/_lib/data-box-isds-client.js";
 
 const migration = readFileSync(new URL("../migrations/0055_create_data_box_plus_workflows.sql", import.meta.url), "utf8");
+const sentHistoryMigration = readFileSync(new URL("../migrations/0056_data_box_plus_sent_history_only.sql", import.meta.url), "utf8");
 const store = readFileSync(new URL("../functions/_lib/data-box-plus-store.js", import.meta.url), "utf8");
 const app = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const messagesApi = readFileSync(new URL("../functions/api/data-box-plus/messages.js", import.meta.url), "utf8");
@@ -19,6 +25,9 @@ assert.match(migration, /CREATE TABLE IF NOT EXISTS data_box_plus_drafts/);
 assert.match(migration, /CREATE TABLE IF NOT EXISTS data_box_plus_draft_attachments/);
 assert.match(migration, /CREATE TABLE IF NOT EXISTS data_box_plus_send_jobs/);
 assert.match(migration, /UNIQUE INDEX IF NOT EXISTS idx_data_box_plus_send_jobs_idempotency/);
+assert.match(sentHistoryMigration, /DELETE FROM data_box_plus_recommendations/);
+assert.match(sentHistoryMigration, /WHERE direction = 'sent'/);
+assert.match(sentHistoryMigration, /summary_loaded = 0/);
 
 assert.deepEqual(dataBoxPlusDraftInputForTest({
   mailboxId: "mailbox-1",
@@ -47,15 +56,61 @@ assert.equal(
   "chunked base64 must preserve large attachment bytes"
 );
 
+const createMessageXml = dataBoxIsdsCreateMessageXmlForTest({
+  recipientDataBoxId: "KR7CDRY",
+  subject: "Smlouva & CA",
+  body: "Podepsaná smlouva",
+  attachments: [{
+    fileName: "smlouva.pdf",
+    mimeType: "application/pdf",
+    contentBase64: Buffer.from("PDF").toString("base64")
+  }]
+});
+assert.match(createMessageXml, /<v20:CreateMessage>/);
+assert.match(createMessageXml, /<v20:dbIDRecipient>kr7cdry<\/v20:dbIDRecipient>/);
+assert.match(createMessageXml, /<v20:dmAnnotation>Smlouva &amp; CA<\/v20:dmAnnotation>/);
+assert.match(createMessageXml, /dmFileMetaType="main" dmFileDescr="zprava\.txt"/);
+assert.match(createMessageXml, /dmFileMetaType="enclosure" dmFileDescr="smlouva\.pdf"/);
+
+const account = dataBoxIsdsAccountFromCredentials({}, {
+  id: "dbp-kaiser-servis",
+  username: "user",
+  password: "secret"
+});
+let sentRequest = null;
+const directResult = await sendDataBoxIsdsMessage({}, account, {
+  recipientDataBoxId: "kr7cdry",
+  subject: "Smlouva CA",
+  body: "Text zprávy"
+}, {
+  fetchImpl: async (url, options) => {
+    sentRequest = { url, options };
+    return new Response(`<?xml version="1.0"?>
+      <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+        <soap:Body><CreateMessageResponse>
+          <dmID>123456789</dmID>
+          <dmStatus><dmStatusCode>0000</dmStatusCode><dmStatusMessage>OK</dmStatusMessage></dmStatus>
+        </CreateMessageResponse></soap:Body>
+      </soap:Envelope>`, { status: 200 });
+  }
+});
+assert.equal(directResult.messageId, "123456789");
+assert.match(sentRequest.url, /\/DS\/dz$/);
+assert.match(sentRequest.options.headers.Authorization, /^Basic /);
+assert.match(sentRequest.options.body, /<v20:CreateMessage>/);
+
 assert.match(store, /payload\.confirmed !== true/);
 assert.match(store, /Idempotency-Key/);
-assert.match(store, /status = 'unknown'/);
+assert.match(store, /failureState = explicitIsdsFailure \? "failed" : "unknown"/);
 assert.match(store, /Opakované odeslání je zablokované proti duplicitě/);
 assert.match(store, /INSERT OR IGNORE INTO data_box_plus_messages/);
 assert.match(store, /applyDataBoxPlusBulkAction/);
 assert.match(store, /getDataBoxPlusAttachmentArchiveFiles/);
-assert.match(store, /50 \* 1024 \* 1024/);
+assert.match(store, /20 \* 1024 \* 1024/);
 assert.match(store, /100 \* 1024 \* 1024/);
+assert.match(store, /sendDataBoxIsdsMessage/);
+assert.match(store, /data_box_plus_sent_history_only/);
+assert.match(store, /DELETE FROM data_box_plus_recommendations WHERE message_id = \?/);
 
 for (const source of [draftApi, sendApi, bulkApi]) {
   assert.match(source, /requireUserPermission\(env, request, "data-box-plus", "manage"\)/);
@@ -71,6 +126,8 @@ assert.match(app, /data-ds-plus-compose-send/);
 assert.match(app, /data-ds-plus-bulk=/);
 assert.match(app, /data-ds-plus-triage-advanced=/);
 assert.match(app, /data-ds-plus-download-all=/);
+assert.match(app, /sentHistoryOnly \? "" : `<p class="ds-plus-triage-row__recommendation"/);
+assert.match(app, /sentHistoryOnly \? "" : dataBoxPlusSummary\(message\)/);
 assert.match(app, /window\.confirm\(`Opravdu odeslat datovou zprávu/);
 assert.doesNotMatch(app, /Odeslání zatím není aktivní/);
 
