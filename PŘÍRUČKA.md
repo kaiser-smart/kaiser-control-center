@@ -1228,11 +1228,18 @@ Cílové webhook URL pro zákaznickou RCS/SMS vrstvu:
 - inbound webhook: `POST https://smart-odpady.ai/api/twilio/inbound`
 - delivery status callback: `POST https://smart-odpady.ai/api/twilio/status`
 
-Runtime konfigurace musí být pouze přes Cloudflare ENV/secrets:
+Runtime konfigurace musí být pouze přes Cloudflare ENV/secrets. Pro zákaznické RCS/SMS mají přednost Kaiser-specifické proměnné, aby je nepřebil starší obecný Twilio účet:
+- `TWILIO_KAISER_ACCOUNT_SID`
+- `TWILIO_KAISER_AUTH_TOKEN`
+- `TWILIO_KAISER_MESSAGING_SERVICE_SID`
+- `TWILIO_RCS_SENDER_ID`
+- `TWILIO_KAISER_STATUS_CALLBACK_URL`
+- `TWILIO_KAISER_INBOUND_WEBHOOK_TOKEN`
+
+Obecné proměnné zůstávají jen jako fallback pro starší integrace a nesmí v produkci přebít Kaiser zákaznickou messaging službu:
 - `TWILIO_ACCOUNT_SID`
 - `TWILIO_AUTH_TOKEN`
 - `TWILIO_MESSAGING_SERVICE_SID`
-- `TWILIO_RCS_SENDER_ID`
 - `TWILIO_STATUS_CALLBACK_URL`
 - `TWILIO_INBOUND_WEBHOOK_SECRET`
 

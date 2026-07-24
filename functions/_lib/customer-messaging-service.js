@@ -29,9 +29,9 @@ function nullableString(value) {
 }
 
 function twilioConfig(env = {}) {
-  const accountSid = cleanString(env.TWILIO_ACCOUNT_SID || env.TWILIO_KAISER_ACCOUNT_SID || env.KAISER_TWILIO_ACCOUNT_SID);
-  const authToken = cleanString(env.TWILIO_AUTH_TOKEN || env.TWILIO_KAISER_AUTH_TOKEN || env.KAISER_TWILIO_AUTH_TOKEN);
-  const messagingServiceSid = cleanString(env.TWILIO_MESSAGING_SERVICE_SID || env.TWILIO_KAISER_MESSAGING_SERVICE_SID || env.KAISER_TWILIO_MESSAGING_SERVICE_SID);
+  const accountSid = cleanString(env.TWILIO_KAISER_ACCOUNT_SID || env.KAISER_TWILIO_ACCOUNT_SID || env.TWILIO_ACCOUNT_SID);
+  const authToken = cleanString(env.TWILIO_KAISER_AUTH_TOKEN || env.KAISER_TWILIO_AUTH_TOKEN || env.TWILIO_AUTH_TOKEN);
+  const messagingServiceSid = cleanString(env.TWILIO_KAISER_MESSAGING_SERVICE_SID || env.KAISER_TWILIO_MESSAGING_SERVICE_SID || env.TWILIO_MESSAGING_SERVICE_SID);
   const rcsSenderId = cleanString(env.TWILIO_RCS_SENDER_ID || env.TWILIO_RCS_SENDER || env.TWILIO_KAISER_RCS_SENDER_ID);
   const statusCallbackUrl = cleanString(env.TWILIO_STATUS_CALLBACK_URL || env.TWILIO_KAISER_STATUS_CALLBACK_URL || env.KSO_TWILIO_STATUS_CALLBACK_URL);
   const mode = lower(env.KSO_CUSTOMER_MESSAGING_MODE || env.KSO_SMS_MODE || (accountSid && authToken && messagingServiceSid ? "live" : "off"));

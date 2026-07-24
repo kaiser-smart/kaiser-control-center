@@ -280,6 +280,39 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
 }
 
 {
+  const oldAccountSid = "AC-OLD-TEST-ACCOUNT";
+  const kaiserAccountSid = "AC-KAISER-TEST-ACCOUNT";
+  const testEnv = env({
+    KSO_CUSTOMER_MESSAGING_MODE: "live",
+    TWILIO_ACCOUNT_SID: oldAccountSid,
+    TWILIO_AUTH_TOKEN: "old-token",
+    TWILIO_MESSAGING_SERVICE_SID: "MG-old",
+    TWILIO_KAISER_ACCOUNT_SID: kaiserAccountSid,
+    TWILIO_KAISER_AUTH_TOKEN: "kaiser-token",
+    TWILIO_KAISER_MESSAGING_SERVICE_SID: "MG3709ede950d2b5ebc7b23fe8d9d004ff"
+  });
+  const originalFetch = globalThis.fetch;
+  let requestUrl = "";
+  let authorization = "";
+  let body = "";
+  globalThis.fetch = async (url, options = {}) => {
+    requestUrl = String(url);
+    authorization = options.headers?.Authorization || "";
+    body = String(options.body || "");
+    return new Response(JSON.stringify({ sid: "SM-KAISER", status: "accepted" }), { status: 201 });
+  };
+  try {
+    const result = await sendCustomerMessage(testEnv, validInput());
+    assert.equal(result.sent, true);
+    assert.equal(requestUrl.endsWith(`/Accounts/${kaiserAccountSid}/Messages.json`), true);
+    assert.equal(Buffer.from(authorization.replace(/^Basic\s+/, ""), "base64").toString("utf8"), `${kaiserAccountSid}:kaiser-token`);
+    assert.match(body, /MessagingServiceSid=MG3709ede950d2b5ebc7b23fe8d9d004ff/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+{
   const testEnv = env({ KSO_CUSTOMER_MESSAGING_MODE: "live" });
   const originalFetch = globalThis.fetch;
   const originalConsoleError = console.error;
