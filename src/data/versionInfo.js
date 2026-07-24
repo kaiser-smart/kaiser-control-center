@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.709"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.710"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Datové schránky: auditované RCS upozornění bez duplicit",
+    text: "První uložení nové příchozí zprávy připraví dvě samostatná upozornění pro Radima Opluštila a Alenu Trnečkovou podle aktivních telefonů v centrální evidenci. D1 idempotence blokuje duplicity, Twilio callback ukládá skutečné stavy a oprávněný detail ukazuje pouze doložené výsledky. Ostré odesílání zůstává bezpečně blokované, dokud není doplněná schválená RCS Content šablona a grafický podklad."
+  },
   {
     title: "Připomínky a chyby: pravdivé potvrzení e-mailu",
     text: "Potvrzení o odeslaném e-mailu se zobrazuje pouze u kroku, který má skutečně potvrzený výsledek poskytovatele. Další změna stavu, odpověď nebo příprava zadání pro Codex už starou hlášku neopakuje."
