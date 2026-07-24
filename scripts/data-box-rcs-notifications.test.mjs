@@ -229,12 +229,19 @@ function messageInput() {
   const storeSource = readFileSync(new URL("../functions/_lib/data-box-plus-store.js", import.meta.url), "utf8");
   const notificationSource = readFileSync(new URL("../functions/_lib/data-box-rcs-notifications.js", import.meta.url), "utf8");
   const templateSpec = readFileSync(new URL("../docs/DATA_BOX_RCS_TEMPLATE.md", import.meta.url), "utf8");
+  const cardAsset = readFileSync(
+    new URL("../public/notifications/kaiser-sarlota-rcs-data-message-v1.png", import.meta.url)
+  );
   assert.match(notificationSource, /datove-schranky-plus\?message=/);
   assert.match(appSource, /applyDataBoxPlusMessageDeepLink/);
   assert.match(endpointSource, /requireUserPermission\(env, request, "data-box-plus", "view"\)/);
   assert.match(endpointSource, /hasPermission\(user, "data-box-plus", "manage"\)/);
   assert.match(storeSource, /created && direction === "received"/);
   assert.match(templateSpec, /Pro odhlášení odpovězte STOP\./);
+  assert.match(templateSpec, /https:\/\/smart-odpady\.ai\/notifications\/kaiser-sarlota-rcs-data-message-v1\.png/);
+  assert.equal(cardAsset.subarray(1, 4).toString("ascii"), "PNG");
+  assert.equal(cardAsset.readUInt32BE(16), 1200);
+  assert.equal(cardAsset.readUInt32BE(20), 600);
   assert.doesNotMatch(appSource, /mock.*RCS|RCS.*mock/i);
 }
 

@@ -6,6 +6,10 @@ Repo očekává schválenou Twilio Content šablonu v serverové proměnné
 `TWILIO_DATA_BOX_RCS_CONTENT_SID`. Bez ní se upozornění bezpečně neodešle a
 důvod se uloží jako `data_box_rcs_template_missing`.
 
+Testovací grafický kandidát je uložený v repozitáři. Produkční použití stále
+vyžaduje zveřejnění assetu, vytvoření Content šablony a kontrolní RCS na
+skutečném telefonu.
+
 ## Kanonická šablona
 
 - interní klíč: `data_box_new_message`
@@ -13,6 +17,9 @@ důvod se uloží jako `data_box_rcs_template_missing`.
 - ověřený RCS sender / značka: `Kaiser servis`
 - typ: `twilio/card`
 - orientace: `VERTICAL`
+- výška média: `MEDIUM`
+- médium:
+  `https://smart-odpady.ai/notifications/kaiser-sarlota-rcs-data-message-v1.png`
 - nadpis: `Nová datová zpráva`
 - tělo:
   `Šarlota přijala novou datovou zprávu do schránky {{1}}.`
@@ -39,13 +46,22 @@ na `rcs:` adresu, protože tím by se automatický fallback vypnul.
 
 ## Grafický podklad
 
-Média karty musí používat schválenou obecnou grafiku Kaiser se Šarlotou,
+Média karty používají obecnou grafiku Kaiser se Šarlotou,
 firemní zelenou a čistým bílým pozadím. Obrázek nesmí obsahovat odesílatele,
 předmět, ID zprávy ani jiné dynamické nebo citlivé údaje.
 
-Finální vektorovou Šarlotu dodává Radim nebo Martin podle `PŘÍRUČKA.md`.
-Dodaný referenční PNG není v repozitáři použitý jako produkční asset.
+Testovací PNG kandidát schválený pro ladicí RCS:
 
-Quicksand lze zaručit v dodaném grafickém podkladu. Nativní dynamický text a
+- repo cesta:
+  `public/notifications/kaiser-sarlota-rcs-data-message-v1.png`,
+- rozměr: `1200 × 600 px`,
+- poměr stran: `2:1`,
+- barevný prostor: `sRGB`,
+- bez dynamických údajů a interních identifikátorů.
+
+Po kontrolním RCS Radim rozhodne, zda se kandidát schválí jako finální, nebo
+se upraví podle skutečného ořezu a vykreslení v telefonu.
+
+Logo je součástí grafického podkladu. Nativní dynamický text a
 tlačítka RCS vykresluje klient telefonu a Twilio karta nepodporuje vložení
 vlastního webfontu; aplikace proto nesmí tvrdit, že jejich font umí vynutit.
