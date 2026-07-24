@@ -1,11 +1,12 @@
 import { isFullAccessRole, normalizeRole } from "../../src/permissions.js";
 
 const NOTIFICATION_DB_BINDING = "SMART_ODPADY_DB";
-const CHANNELS = new Set(["email", "sms"]);
+const CHANNELS = new Set(["email", "sms", "rcs_sms_auto_fallback"]);
 const STATUSES = new Set(["sent", "not_sent", "pending", "failed"]);
 const TYPES = new Set([
   "absence_approval_request",
   "absence_approval_reminder",
+  "absence_approved_rcs",
   "absence_approved_sms",
   "absence_rejected_sms",
   "absence_sickness_recorded_email",
@@ -211,7 +212,7 @@ function rowToNotification(row) {
     managerName: cleanString(row.manager_name),
     subject: cleanString(row.subject),
     messagePreview: errorMessage || cleanString(row.message_preview),
-    provider: cleanString(row.provider || (row.channel === "sms" ? "Twilio" : row.channel === "email" ? "SendGrid" : "")),
+    provider: cleanString(row.provider || (["sms", "rcs_sms_auto_fallback"].includes(row.channel) ? "Twilio" : row.channel === "email" ? "SendGrid" : "")),
     providerMessageId: cleanString(row.provider_message_id),
     providerStatus: cleanString(row.provider_status),
     messageId: cleanString(row.message_id),
@@ -333,6 +334,8 @@ export async function notificationSummary(env, params) {
     emailNotSent: 0,
     smsSent: 0,
     smsNotSent: 0,
+    rcsSent: 0,
+    rcsNotSent: 0,
     pending: 0,
     failed: 0
   };
@@ -356,6 +359,14 @@ export async function notificationSummary(env, params) {
 
     if (channel === "sms" && status !== "sent") {
       summary.smsNotSent += count;
+    }
+
+    if (channel === "rcs_sms_auto_fallback" && status === "sent") {
+      summary.rcsSent += count;
+    }
+
+    if (channel === "rcs_sms_auto_fallback" && status !== "sent") {
+      summary.rcsNotSent += count;
     }
 
     if (status === "pending") {

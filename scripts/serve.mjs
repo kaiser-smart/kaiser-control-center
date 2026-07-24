@@ -8950,7 +8950,12 @@ async function handleApi(request, response) {
       const item = changeMockAbsenceStatus(user, id, status, payload.reason || "Potvrzeno v AI pomocníkovi.");
       sendJson(response, 200, {
         request: item,
-        notification: { status: "skipped", errorMessage: "Lokální vývojový server neposílá skutečné SMS." },
+        notification: {
+          status: "skipped",
+          errorMessage: action === "approve"
+            ? "Lokální vývojový server neposílá skutečné RCS/SMS."
+            : "Lokální vývojový server neposílá skutečné SMS."
+        },
         apiStatus: "ready"
       });
     } catch (error) {
@@ -9333,12 +9338,12 @@ async function handleApi(request, response) {
       try {
         const item = changeMockAbsenceStatus(user, id, "approved", "Schváleno v modulu Dovolená / Nemoc.");
         const notificationError = item.employeePhone
-          ? "Lokální vývojový server neposílá skutečné SMS."
+          ? "Lokální vývojový server neposílá skutečné RCS/SMS."
           : `Chybí telefon příjemce: ${item.employeeName}.`;
         addMockNotificationLog({
           relatedEntityId: item.id,
-          channel: "sms",
-          type: "absence_approved_sms",
+          channel: "rcs_sms_auto_fallback",
+          type: "absence_approved_rcs",
           status: "not_sent",
           recipient: item.employeePhone,
           recipientName: item.employeeName,

@@ -541,6 +541,7 @@ const NOTIFICATION_STATUS_LABELS = {
 const NOTIFICATION_TYPE_LABELS = {
   absence_approval_request: "Nová žádost ke schválení",
   absence_approval_reminder: "Připomínka schválení",
+  absence_approved_rcs: "Schváleno RCS",
   absence_approved_sms: "Schváleno SMS",
   absence_rejected_sms: "Zamítnuto SMS",
   absence_sickness_recorded_email: "Nemoc evidována",
@@ -560,7 +561,8 @@ const NOTIFICATION_TYPE_LABELS = {
 };
 const NOTIFICATION_CHANNEL_OPTIONS = [
   { value: "email", label: "E-mail" },
-  { value: "sms", label: "SMS" }
+  { value: "sms", label: "SMS" },
+  { value: "rcs_sms_auto_fallback", label: "RCS/SMS fallback" }
 ];
 const NOTIFICATION_STATUS_OPTIONS = [
   { value: "sent", label: "Odesláno" },
@@ -580,6 +582,7 @@ const CUSTOMER_MESSAGE_STATUS_OPTIONS = [
   { value: "blocked", label: "Blokováno" }
 ];
 const CUSTOMER_MESSAGE_TEMPLATE_LABELS = {
+  absence_approved: "Schválení nepřítomnosti",
   request_received: "Přijetí požadavku",
   appointment_confirmed: "Potvrzení termínu",
   appointment_changed: "Změna termínu",
@@ -1107,6 +1110,8 @@ const notificationCenterState = {
     emailNotSent: 0,
     smsSent: 0,
     smsNotSent: 0,
+    rcsSent: 0,
+    rcsNotSent: 0,
     pending: 0,
     failed: 0
   },
@@ -4456,12 +4461,12 @@ function moduleEventLogConfig(moduleItem = {}) {
         moduleEventLogStatus("Nastavení reportu", settingsState, "Ukládání nastavení jde přes cloud API, ale pravidelné odeslání reportu není z tohoto bloku označené jako běžící."),
         moduleEventLogStatus("Žádosti přes API", requestsState, absenceApiState.error ? "Načtení žádostí hlásí chybu." : "Stav vychází z načtení žádostí v UI."),
         moduleEventLogStatus("Automatizace měsíčního reportu", "čeká na ověření", "Plán je v nastavení, ale není doložené, že scheduler běží pravidelně v cloudu."),
-        moduleEventLogStatus("E-mail / SMS mimo systém", "vypnuto", "Bez ověřeného scheduleru a potvrzené produkční konfigurace není odesílání označené jako zapnuté."),
+        moduleEventLogStatus("RCS po schválení", "funkční přes API", "Po ručním schválení volá backend transakční RCS přes Twilio Messaging Service. Nedostupné RCS přejde na SMS fallback; výsledek se ukládá do auditu."),
         moduleEventLogStatus("Lékařské prohlídky", "částečně ověřeno", "Pravidla jsou viditelná v UI, odesílání připomínek není v tomto Logu označené jako běžící.")
       ],
       inactiveItems: [
         "Ostré automatické odesílání měsíčního reportu bez ověřeného scheduleru.",
-        "SMS mimo systém z Nastavení Dovolená / Nemoc.",
+        "RCS bez schválení žádosti nebo mimo chráněný backendový tok.",
         "Autonomní schválení nebo zamítnutí žádosti."
       ],
       pilotItems: [
@@ -4475,7 +4480,7 @@ function moduleEventLogConfig(moduleItem = {}) {
         absenceApiState.error
           ? moduleEventLogEvent(absenceApiState.loadedAt, "Načtení žádostí", "chyba", absenceApiState.error)
           : moduleEventLogEvent(absenceApiState.loadedAt, "Načtení žádostí", requestsState, absenceApiState.loaded ? `Načteno ${absenceApiState.requests.length} žádostí.` : "Čeká se na načtení žádostí."),
-        moduleEventLogEvent("", "Odesílání mimo systém", "vypnuto", "Bez ověřené automatizace se report ani SMS neoznačují jako zapnuté.")
+        moduleEventLogEvent("", "RCS po schválení", "funkční přes API", "Spouští se pouze událostí schválení v backendu. Opt-out, deduplikace a výsledek Twilia jsou auditované.")
       ],
       diagnostics: [
         moduleEventLogDiagnostic("absenceSettings.apiStatus", absenceSettingsState.apiStatus),
@@ -41160,6 +41165,8 @@ function notificationSummaryCards() {
     ["E-maily neodeslané", summary.emailNotSent],
     ["SMS odeslané", summary.smsSent],
     ["SMS neodeslané", summary.smsNotSent],
+    ["RCS/fallback odeslané", summary.rcsSent],
+    ["RCS/fallback neodeslané", summary.rcsNotSent],
     ["Čeká na odeslání", summary.pending],
     ["Selhalo", summary.failed]
   ];
@@ -51304,6 +51311,8 @@ async function loadNotificationCenter(options = {}) {
       emailNotSent: Number(summaryResult.emailNotSent || 0),
       smsSent: Number(summaryResult.smsSent || 0),
       smsNotSent: Number(summaryResult.smsNotSent || 0),
+      rcsSent: Number(summaryResult.rcsSent || 0),
+      rcsNotSent: Number(summaryResult.rcsNotSent || 0),
       pending: Number(summaryResult.pending || 0),
       failed: Number(summaryResult.failed || 0)
     };
@@ -55724,7 +55733,7 @@ async function approveAbsenceRequest(requestId) {
     absenceUiState.rejectReason = "";
     setAbsenceNotice(
       "Žádost byla schválena.",
-      absenceNotificationWarning(result.notification, "SMS zaměstnanci", user)
+      absenceNotificationWarning(result.notification, "RCS/SMS zaměstnanci", user)
     );
   } catch (error) {
     setAbsenceNotice("", error.payload?.error || "Žádost se nepodařilo schválit.");

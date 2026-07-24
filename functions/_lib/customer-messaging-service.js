@@ -46,7 +46,7 @@ function twilioConfig(env = {}) {
   const apiKeySecret = cleanString(env.TWILIO_KAISER_API_KEY_SECRET || env.KAISER_TWILIO_API_KEY_SECRET || env.TWILIO_API_KEY_SECRET || env.TWILIO_API_SECRET);
   const messagingServiceSid = cleanString(env.TWILIO_KAISER_MESSAGING_SERVICE_SID || env.KAISER_TWILIO_MESSAGING_SERVICE_SID || env.TWILIO_MESSAGING_SERVICE_SID);
   const rcsSenderId = cleanString(env.TWILIO_RCS_SENDER_ID || env.TWILIO_RCS_SENDER || env.TWILIO_KAISER_RCS_SENDER_ID);
-  const statusCallbackUrl = cleanString(env.TWILIO_STATUS_CALLBACK_URL || env.TWILIO_KAISER_STATUS_CALLBACK_URL || env.KSO_TWILIO_STATUS_CALLBACK_URL);
+  const statusCallbackUrl = cleanString(env.TWILIO_KAISER_STATUS_CALLBACK_URL || env.KSO_TWILIO_STATUS_CALLBACK_URL || env.TWILIO_STATUS_CALLBACK_URL);
   const authPassword = apiKeySecret || authToken;
   const mode = lower(env.KSO_CUSTOMER_MESSAGING_MODE || env.KSO_SMS_MODE || (accountSid && authPassword && messagingServiceSid ? "live" : "off"));
   return {
@@ -57,7 +57,7 @@ function twilioConfig(env = {}) {
     rcsSenderId,
     statusCallbackUrl,
     mode: ["off", "test", "live"].includes(mode) ? mode : "off",
-    inboundWebhookSecretConfigured: Boolean(cleanString(env.TWILIO_INBOUND_WEBHOOK_SECRET || env.TWILIO_KAISER_INBOUND_WEBHOOK_TOKEN || env.KAISER_TWILIO_INBOUND_WEBHOOK_TOKEN))
+    inboundWebhookSecretConfigured: Boolean(cleanString(env.TWILIO_KAISER_INBOUND_WEBHOOK_TOKEN || env.KAISER_TWILIO_INBOUND_WEBHOOK_TOKEN || env.TWILIO_INBOUND_WEBHOOK_SECRET))
   };
 }
 

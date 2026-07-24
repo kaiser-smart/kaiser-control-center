@@ -4,7 +4,7 @@ import {
   approveAbsenceRequestRecord
 } from "../../../../_lib/absence-requests-store.js";
 import { recordAiAction } from "../../../../_lib/ai-action-log-store.js";
-import { sendAbsenceDecisionSms } from "../../../../_lib/notification-service.js";
+import { sendAbsenceApprovalRcsNotification } from "../../../../_lib/notification-service.js";
 
 function requestId(request, params) {
   return decodeURIComponent(String(params?.id || new URL(request.url).pathname.split("/").at(-2) || "")).trim();
@@ -39,7 +39,7 @@ export async function onRequestPost({ request, env, params }) {
   try {
     const users = await getUsers(env);
     const absenceRequest = await approveAbsenceRequestRecord(env, users, user, requestId(request, params), payload);
-    const notification = await sendAbsenceDecisionSms(env, absenceRequest, "approved");
+    const notification = await sendAbsenceApprovalRcsNotification(env, absenceRequest);
 
     await recordAiAction(env, user, {
       assistantId: payload.assistantId || "",
@@ -65,4 +65,3 @@ export async function onRequestPost({ request, env, params }) {
     return absenceRequestError(error);
   }
 }
-

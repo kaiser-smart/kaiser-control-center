@@ -1,6 +1,12 @@
 const STOP_SENTENCE = "Pro odhlášení odpovězte STOP.";
 
 export const CUSTOMER_MESSAGE_TEMPLATES = {
+  absence_approved: {
+    label: "Schválení nepřítomnosti",
+    category: "transactional",
+    internalOnly: true,
+    body: "Smart odpady: Vaše žádost {type} v termínu {term} byla schválena."
+  },
   request_received: {
     label: "Přijetí požadavku",
     category: "transactional",

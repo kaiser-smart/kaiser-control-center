@@ -13,6 +13,7 @@ import {
   renderCustomerMessageTemplate,
   templateAlwaysIncludesStop
 } from "../functions/_lib/customer-message-templates.js";
+import { sendAbsenceApprovalRcsNotification } from "../functions/_lib/notification-service.js";
 
 class FakeStatement {
   constructor(db, sql) {
@@ -42,6 +43,7 @@ class FakeStatement {
 class FakeD1 {
   constructor() {
     this.logs = [];
+    this.notifications = [];
     this.optOuts = [];
     this.inbound = [];
   }
@@ -51,6 +53,20 @@ class FakeD1 {
   }
 
   run(sql, bindings) {
+    if (sql.includes("INSERT INTO notification_logs")) {
+      this.notifications.push({
+        id: bindings[0],
+        type: bindings[1],
+        channel: bindings[2],
+        recipient: bindings[3],
+        related_entity_type: bindings[4],
+        related_entity_id: bindings[5],
+        status: bindings[6],
+        error_message: bindings[7]
+      });
+      return { success: true };
+    }
+
     if (sql.includes("INSERT INTO customer_message_log")) {
       this.logs.push({
         id: bindings[0],
@@ -222,7 +238,9 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
     company: "Test 1 s.r.o.",
     station: "TEST 1 · stanoviště 1",
     waste: "SKO",
-    container: "1×240l"
+    container: "1×240l",
+    type: "Dovolená",
+    term: "03. 08. 2026 - 07. 08. 2026"
   });
   assert.equal(templateAlwaysIncludesStop(rendered.body), true, `${key} musí obsahovat STOP větu`);
 }
@@ -282,6 +300,38 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
 }
 
 {
+  const testEnv = env({ KSO_CUSTOMER_MESSAGING_MODE: "live" });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(
+    JSON.stringify({ sid: "SM-ABSENCE-APPROVED", status: "accepted" }),
+    { status: 201 }
+  );
+  try {
+    const result = await sendAbsenceApprovalRcsNotification(testEnv, {
+      id: "absence-approved-1",
+      employeeId: "employee-1",
+      employeeName: "Testovací zaměstnanec",
+      employeePhone: "777 123 456",
+      type: "vacation",
+      dateFrom: "2026-08-03",
+      dateTo: "2026-08-07"
+    });
+    assert.equal(result.sent, true);
+    assert.equal(result.status, "sent");
+    assert.equal(result.providerStatus, "accepted");
+    assert.equal(result.channel, "rcs_sms_auto_fallback");
+    assert.equal(testEnv.SMART_ODPADY_DB.logs[0].template_key, "absence_approved");
+    assert.equal(testEnv.SMART_ODPADY_DB.logs[0].used_channel, "rcs_sms_auto_fallback");
+    assert.match(testEnv.SMART_ODPADY_DB.logs[0].message_body, /Pro odhlášení odpovězte STOP\./);
+    assert.equal(testEnv.SMART_ODPADY_DB.notifications[0].type, "absence_approved_rcs");
+    assert.equal(testEnv.SMART_ODPADY_DB.notifications[0].channel, "rcs_sms_auto_fallback");
+    assert.equal(testEnv.SMART_ODPADY_DB.notifications[0].status, "sent");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+{
   const oldAccountSid = "AC-OLD-TEST-ACCOUNT";
   const kaiserAccountSid = "AC-KAISER-TEST-ACCOUNT";
   const testEnv = env({
@@ -289,10 +339,12 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
     TWILIO_ACCOUNT_SID: oldAccountSid,
     TWILIO_AUTH_TOKEN: "old-token",
     TWILIO_MESSAGING_SERVICE_SID: "MG-old",
+    TWILIO_STATUS_CALLBACK_URL: "https://old.example.test/api/twilio/status",
     TWILIO_KAISER_ACCOUNT_SID: kaiserAccountSid,
     TWILIO_KAISER_API_KEY_SID: "SK-KAISER-TEST-KEY",
     TWILIO_KAISER_API_KEY_SECRET: "kaiser-key-secret-ě",
-    TWILIO_KAISER_MESSAGING_SERVICE_SID: "MG3709ede950d2b5ebc7b23fe8d9d004ff"
+    TWILIO_KAISER_MESSAGING_SERVICE_SID: "MG3709ede950d2b5ebc7b23fe8d9d004ff",
+    TWILIO_KAISER_STATUS_CALLBACK_URL: "https://smart-odpady.ai/api/twilio/status"
   });
   const originalFetch = globalThis.fetch;
   let requestUrl = "";
@@ -310,6 +362,8 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
     assert.equal(requestUrl.endsWith(`/Accounts/${kaiserAccountSid}/Messages.json`), true);
     assert.equal(Buffer.from(authorization.replace(/^Basic\s+/, ""), "base64").toString("utf8"), "SK-KAISER-TEST-KEY:kaiser-key-secret-ě");
     assert.match(body, /MessagingServiceSid=MG3709ede950d2b5ebc7b23fe8d9d004ff/);
+    assert.match(body, /StatusCallback=https%3A%2F%2Fsmart-odpady.ai%2Fapi%2Ftwilio%2Fstatus/);
+    assert.doesNotMatch(body, /old\.example\.test/);
   } finally {
     globalThis.fetch = originalFetch;
   }

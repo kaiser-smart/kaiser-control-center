@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.714"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.715"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Dovolená a nemoc: RCS po schválení žádosti",
+    text: "Po ručním schválení odešle backend zaměstnanci transakční RCS přes Twilio Messaging Service. Pokud RCS není dostupné, použije se SMS fallback; telefon, opt-out, deduplikace a výsledek poskytovatele se kontrolují a auditují na serveru."
+  },
   {
     title: "Datové schránky: auditované RCS upozornění bez duplicit",
     text: "První uložení nové příchozí zprávy připraví dvě samostatná upozornění pro Radima Opluštila a Alenu Trnečkovou podle ověřených telefonů v centrální evidenci. D1 idempotence blokuje duplicity, Twilio callback ukládá skutečné stavy a oprávněný detail ukazuje pouze doložené výsledky. Produkční Content šablona používá obecnou kartu Šarloty bez údajů zprávy; kontrolní požadavek poskytovatel skutečně přijal."
@@ -2218,7 +2222,7 @@ export const versionNews = [
   },
   {
     title: "Schvalování Dovolená / Nemoc",
-    text: "Žádosti mají cloudový schvalovací workflow, historii, e-mail nadřízenému, SMS zaměstnanci a logování notifikací."
+    text: "Žádosti mají cloudový schvalovací workflow, historii, e-mail nadřízenému, RCS se SMS fallbackem po schválení, SMS po zamítnutí a serverové logování notifikací."
   },
   {
     title: "Hlasový pomocník",

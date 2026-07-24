@@ -2,6 +2,7 @@ import { normalizeIdentifier } from "./auth.js";
 import { markAbsenceReminderSent } from "./absence-requests-store.js";
 import { markMedicalExamReminderSent } from "./medical-exams-store.js";
 import { selectDriverPartOffers } from "./driver-part-price-search.js";
+import { sendCustomerMessage } from "./customer-messaging-service.js";
 import {
   CommunicationStoreError,
   communicationEmailIdentity,
@@ -1475,6 +1476,66 @@ export async function sendAbsenceDecisionSms(env, request, decision) {
     relatedEntityId: request.id,
     recipientName: request.employeeName
   });
+}
+
+export function absenceApprovalRcsMessageInput(request) {
+  return {
+    phone: request?.employeePhone,
+    channelPreference: "rcs",
+    template: "absence_approved",
+    variables: {
+      type: typeLabel(request),
+      term: formatRequestTerm(request)
+    },
+    customerId: request?.employeeId,
+    relatedEntityType: "absence_request",
+    relatedEntityId: request?.id,
+    reason: "provozní transakční oznámení zaměstnanci o schválení žádosti",
+    legalBasis: "pracovněprávní vztah"
+  };
+}
+
+export async function sendAbsenceApprovalRcsNotification(env, request) {
+  let result;
+
+  try {
+    result = await sendCustomerMessage(env, absenceApprovalRcsMessageInput(request));
+  } catch (error) {
+    result = {
+      status: "failed",
+      sent: false,
+      errorMessage: cleanString(error?.message) || "RCS notifikaci se nepodařilo připravit."
+    };
+  }
+
+  const logStatus = result.sent === true
+    ? "sent"
+    : result.status === "failed"
+      ? "failed"
+      : "skipped";
+
+  await logNotification(env, {
+    moduleId: "dovolena-nemoc",
+    type: "absence_approved_rcs",
+    channel: "rcs_sms_auto_fallback",
+    recipient: request?.employeePhone,
+    relatedEntityType: "absence_request",
+    relatedEntityId: request?.id,
+    status: logStatus,
+    provider: "Twilio",
+    providerMessageId: result.twilioMessageSid,
+    providerStatus: result.status,
+    messagePreview: result.messageBody,
+    errorMessage: result.errorMessage
+  });
+
+  return {
+    ...result,
+    status: logStatus,
+    providerStatus: result.status,
+    channel: "rcs_sms_auto_fallback",
+    recipientName: cleanString(request?.employeeName)
+  };
 }
 
 export async function sendAbsenceApprovalReminders(env, requests) {
