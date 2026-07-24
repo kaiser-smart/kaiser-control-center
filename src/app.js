@@ -1809,6 +1809,7 @@ const dataBoxPlusState = {
   loaded: false,
   loading: false,
   error: "",
+  deepLinkHandled: "",
   lastLoadedAt: 0,
   mailboxSaving: false,
   mailboxTestingId: "",
@@ -30379,6 +30380,7 @@ function dataBoxPlusTriageDetailOverlay() {
               <div><dt>${sentHistoryOnly ? "Stav" : "Stav přečtení"}</dt><dd>${escapeHtml(sentHistoryOnly ? (message.status || "Odesláno") : readLabel)}</dd></div>
             </dl>
           </section>
+          ${dataBoxPlusNotifications(message)}
           ${sentHistoryOnly ? "" : dataBoxPlusSummary(message)}
           ${sentHistoryOnly ? "" : facts}
           ${dataBoxPlusTriageAttachments(message)}
@@ -31053,6 +31055,49 @@ function dataBoxPlusFacts(message) {
   `;
 }
 
+function dataBoxPlusNotifications(message) {
+  if (!Array.isArray(message?.notifications)) return "";
+  const statusLabels = {
+    prepared: "Připraveno",
+    provider_sent: "Odesláno poskytovateli",
+    delivered: "Doručeno",
+    read: "Přečteno",
+    failed: "Selhalo",
+    skipped_missing_phone: "Přeskočeno – chybí telefon",
+    blocked_duplicate: "Zablokováno jako duplicita"
+  };
+  return `
+    <section class="ds-plus-detail-section ds-plus-notifications" aria-labelledby="ds-plus-notifications-title">
+      <div class="ds-plus-detail-section__head">
+        <div>
+          <h3 id="ds-plus-notifications-title">Upozornění</h3>
+          <p>Skutečný stav automatického RCS pro oprávněné role.</p>
+        </div>
+      </div>
+      ${message.notifications.length ? `
+        <div class="ds-plus-notifications__list">
+          ${message.notifications.map((notification) => {
+            const status = String(notification.status || "");
+            const lastAttempt = notification.lastAttemptAt || notification.updatedAt || notification.createdAt;
+            return `
+              <article class="ds-plus-notification ds-plus-notification--${escapeHtml(status)}">
+                <div>
+                  <strong>${escapeHtml(notification.recipientName || "Příjemce")}</strong>
+                  <span>${escapeHtml(statusLabels[status] || status || "Stav neuveden")}</span>
+                </div>
+                <dl>
+                  <div><dt>Poslední pokus</dt><dd>${escapeHtml(lastAttempt ? formatDateTime(lastAttempt) : "Neproběhl")}</dd></div>
+                  ${notification.errorMessage ? `<div><dt>Důvod</dt><dd>${escapeHtml(notification.errorMessage)}</dd></div>` : ""}
+                </dl>
+              </article>
+            `;
+          }).join("")}
+        </div>
+      ` : `<p class="ds-plus-notifications__empty">Bez auditního záznamu automatického RCS. U této zprávy nelze tvrdit, že se upozornění připravilo nebo odeslalo.</p>`}
+    </section>
+  `;
+}
+
 function dataBoxPlusSummary(message) {
   if (!message.summaryLoaded) {
     return `<section class="ds-plus-detail-section ds-plus-detail-section--warning"><h3>Shrnutí</h3><p>Přesný obsah zatím není načtený. Zpráva má dostupnou přílohu, kterou je potřeba otevřít.</p></section>`;
@@ -31280,6 +31325,7 @@ function dataBoxPlusDetailOverlay() {
               <div><dt>Schránka</dt><dd>${escapeHtml(mailbox?.name || "Schránka")}</dd></div>
             </dl>
           </section>
+          ${dataBoxPlusNotifications(message)}
           ${dataBoxPlusSummary(message)}
           ${dataBoxPlusAttachments(message)}
           ${dataBoxPlusStatusHistory(message, workflow)}
@@ -43044,6 +43090,7 @@ async function loadDataBoxPlusData(options = {}) {
     dataBoxPlusState.syncRuns = Array.isArray(syncRunsResult.syncRuns) ? syncRunsResult.syncRuns : [];
     dataBoxPlusState.loaded = true;
     dataBoxPlusState.lastLoadedAt = now;
+    await applyDataBoxPlusMessageDeepLink();
   } catch (error) {
     dataBoxPlusState.apiStatus = error.payload?.apiStatus || "waiting";
     dataBoxPlusState.error = dataBoxPlusHumanError(error.payload?.error || error.message || "Datové schránky Plus se teď nepodařilo načíst.");
@@ -43058,6 +43105,25 @@ async function loadDataBoxPlusData(options = {}) {
 
 function ensureDataBoxPlusData() {
   void loadDataBoxPlusData({ force: !dataBoxPlusState.loaded });
+}
+
+async function applyDataBoxPlusMessageDeepLink() {
+  const messageId = String(new URLSearchParams(window.location.search).get("message") || "").trim();
+  if (!messageId || dataBoxPlusState.deepLinkHandled === messageId) return;
+  dataBoxPlusState.deepLinkHandled = messageId;
+  const loaded = await loadDataBoxPlusMessageDetail(messageId);
+  if (!loaded) {
+    dataBoxPlusState.deepLinkHandled = "";
+    return;
+  }
+  const message = dataBoxPlusMessageById(messageId);
+  if (dataBoxPlusWorkingInboxActive()) {
+    dataBoxPlusState.triageMailboxId = message?.mailboxId || dataBoxPlusState.triageMailboxId;
+    dataBoxPlusState.triageFolder = String(message?.direction || "received") === "sent" ? "sent" : "received";
+    dataBoxPlusState.triageSelectedMessageId = messageId;
+  } else {
+    dataBoxPlusState.selectedMessageId = messageId;
+  }
 }
 
 async function loadDataBoxPlusMessageDetail(messageId) {

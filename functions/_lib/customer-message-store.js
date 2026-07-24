@@ -46,6 +46,16 @@ function parseJson(value, fallback = {}) {
   }
 }
 
+function safeStatusCallbackMetadata(payload = {}) {
+  return {
+    messageSid: cleanString(payload.MessageSid || payload.SmsSid || payload.messageSid),
+    status: cleanString(payload.MessageStatus || payload.SmsStatus || payload.status),
+    channel: cleanString(payload.ChannelPrefix || payload.channelPrefix || payload.Channel || payload.channel),
+    errorCode: cleanString(payload.ErrorCode || payload.errorCode),
+    errorMessage: cleanString(payload.ErrorMessage || payload.errorMessage).slice(0, 600)
+  };
+}
+
 function randomId(prefix) {
   const suffix = globalThis.crypto?.randomUUID
     ? globalThis.crypto.randomUUID()
@@ -355,7 +365,7 @@ export async function updateCustomerMessageStatusByTwilioSid(env, { twilioMessag
           mapTwilioStatus(normalizedStatus),
           nullableString(channelFromTwilioPayload(payload)),
           nullableString(errorMessage),
-          safeJson({ ...parseJson(row.metadata_json, {}), latestStatusCallback: payload }),
+          safeJson({ ...parseJson(row.metadata_json, {}), latestStatusCallback: safeStatusCallbackMetadata(payload) }),
           now,
           row.id
         )

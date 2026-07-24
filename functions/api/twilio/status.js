@@ -1,5 +1,6 @@
 import { json } from "../../_lib/auth.js";
 import { processCustomerStatusCallback } from "../../_lib/customer-messaging-service.js";
+import { processDataBoxRcsStatusCallback } from "../../_lib/data-box-rcs-notifications.js";
 import { requireTwilioWebhookAuth } from "../../_lib/twilio-webhook-auth.js";
 
 async function readTwilioPayload(request) {
@@ -23,15 +24,29 @@ export async function onRequestPost({ request, env }) {
     return json({ error: auth.error, apiStatus: "waiting" }, auth.responseStatus);
   }
 
+  let customer = { matched: false, status: "", twilioMessageSid: "" };
+  let dataBox = { matched: false, status: "", providerMessageId: "" };
+  let customerError = "";
+  let dataBoxError = "";
   try {
-    const result = await processCustomerStatusCallback(env, payload);
-    return json(result);
+    customer = await processCustomerStatusCallback(env, payload);
   } catch (error) {
-    console.error("twilio.customer_status_failed", { message: error.message });
-    return json({
-      apiStatus: "waiting",
-      error: "Twilio status callback se nepodařilo uložit.",
-      acceptedUnknownPayload: true
-    }, 200);
+    customerError = String(error?.message || "customer callback failed").slice(0, 300);
+    console.error("twilio.customer_status_failed", { message: customerError });
   }
+  try {
+    dataBox = await processDataBoxRcsStatusCallback(env, payload);
+  } catch (error) {
+    dataBoxError = String(error?.message || "data box callback failed").slice(0, 300);
+    console.error("twilio.data_box_status_failed", { message: dataBoxError });
+  }
+  return json({
+    apiStatus: customerError && dataBoxError ? "waiting" : "ready",
+    status: dataBox.status || customer.status,
+    matched: Boolean(customer.matched || dataBox.matched),
+    customerMatched: customer.matched,
+    dataBoxMatched: dataBox.matched,
+    twilioMessageSid: dataBox.providerMessageId || customer.twilioMessageSid,
+    ...(customerError && dataBoxError ? { error: "Twilio status callback se nepodařilo uložit." } : {})
+  }, 200);
 }
