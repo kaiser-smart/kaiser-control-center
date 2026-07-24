@@ -15,6 +15,77 @@
   --shadow-card-hover: 0 18px 38px rgba(36, 45, 34, 0.14);
 }
 
+.ds-plus-notifications__list {
+  display: grid;
+  gap: 10px;
+}
+
+.ds-plus-notification {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--module-accent, #65b32e) 22%, #dce5d6);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.ds-plus-notification > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ds-plus-notification > div span {
+  color: var(--module-accent-dark, #39751c);
+  font-size: 0.84rem;
+}
+
+.ds-plus-notification dl {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.ds-plus-notification dl div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.35fr) 1fr;
+  gap: 10px;
+}
+
+.ds-plus-notification dt,
+.ds-plus-notification dd {
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+.ds-plus-notification dt {
+  color: #61705b;
+}
+
+.ds-plus-notification--failed,
+.ds-plus-notification--skipped_missing_phone {
+  border-color: #e4b3ad;
+  background: #fff9f8;
+}
+
+.ds-plus-notifications__empty {
+  margin: 0;
+  color: #61705b;
+}
+
+@media (max-width: 560px) {
+  .ds-plus-notification > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .ds-plus-notification dl div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
 /* Detail zaměstnance: krátký read-only přehled, záložky a oddělené editory. */
 .absence-page--employee-card {
   width: min(1380px, calc(100% - 40px));

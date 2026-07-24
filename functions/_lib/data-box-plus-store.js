@@ -24,6 +24,10 @@ import {
 import { sendDataBoxForwardNotification } from "./notification-service.js";
 import { buildDataBoxPlusChatContext } from "./data-box-plus-chat-context.js";
 import { loadFleetVehiclesWithAssignments } from "./fleet-vehicles-store.js";
+import {
+  listDataBoxRcsNotifications,
+  notifyNewDataBoxMessage
+} from "./data-box-rcs-notifications.js";
 
 const DATA_BOX_PLUS_SEND_TIMEOUT_MS = 25000;
 const LEGACY_BOOTSTRAP_MAILBOX_COUNT = 7;
@@ -950,7 +954,7 @@ function rowToDraft(row, attachments = []) {
   };
 }
 
-function rowToMessage(row, attachments = [], actionLogs = []) {
+function rowToMessage(row, attachments = [], actionLogs = [], notifications) {
   if (!row) return null;
   const facts = safeJsonParse(row.facts_json, []);
   return {
@@ -984,7 +988,8 @@ function rowToMessage(row, attachments = [], actionLogs = []) {
     facts,
     attachmentCount: numberValue(row.attachment_count, Array.isArray(attachments) ? attachments.length : 0),
     attachments,
-    history: Array.isArray(actionLogs) ? actionLogs.filter(Boolean) : []
+    history: Array.isArray(actionLogs) ? actionLogs.filter(Boolean) : [],
+    ...(Array.isArray(notifications) ? { notifications: notifications.filter(Boolean) } : {})
   };
 }
 
@@ -1314,8 +1319,9 @@ async function upsertMessage(db, env, account, mailbox, message) {
   const targetMessageId = existing?.id || messageId;
 
   const sentHistoryOnly = direction === "sent";
+  let created = false;
   if (!existing?.id) {
-    await db
+    const insertResult = await db
       .prepare(`
         INSERT OR IGNORE INTO data_box_plus_messages (
           id, mailbox_id, isds_message_id, direction, sender_name, sender_box_id, recipient_name,
@@ -1346,6 +1352,35 @@ async function upsertMessage(db, env, account, mailbox, message) {
         message?.hasAttachments ? "Text zatím nenačten" : "Dostupná"
       )
       .run();
+    created = Number(insertResult?.meta?.changes ?? insertResult?.changes ?? 0) > 0;
+  }
+
+  if (created && direction === "received") {
+    try {
+      await notifyNewDataBoxMessage(env, {
+        messageId,
+        direction,
+        mailboxName: cleanString(mailbox.name || mailbox.company),
+        senderName: cleanString(message.senderName),
+        subject: cleanString(message.subject),
+        deliveredAt: cleanString(message.deliveredAt || message.acceptedAt)
+      });
+    } catch (error) {
+      const reason = cleanString(error?.message || "RCS upozornění se nepodařilo připravit.").slice(0, 600);
+      for (const recipientKey of ["radim-oplustil", "alena-trneckova"]) {
+        await db.prepare(`
+          INSERT INTO data_box_plus_action_log (
+            id, message_id, recommendation_id, actor, action_type, action_payload, created_at, result, audit_note
+          ) VALUES (?, ?, NULL, 'system', 'RCS upozornění', ?, ?, 'failed', ?)
+        `).bind(
+          idValue("dbp-action"),
+          messageId,
+          JSON.stringify({ recipientKey }),
+          new Date().toISOString(),
+          reason
+        ).run();
+      }
+    }
   }
 
   const waitsForDelivery = direction === "received"
@@ -1417,7 +1452,7 @@ async function upsertMessage(db, env, account, mailbox, message) {
       SET status = 'closed_sent_history', updated_at = CURRENT_TIMESTAMP
       WHERE message_id = ?
     `).bind(targetMessageId).run();
-    return { state: existing?.id ? "updated" : "created", attachmentsDownloaded: attachmentState.downloaded };
+    return { state: created ? "created" : "updated", attachmentsDownloaded: attachmentState.downloaded };
   }
   const classification = classifyMessage(message, attachmentState);
   const facts = classification.facts || [];
@@ -1490,7 +1525,7 @@ async function upsertMessage(db, env, account, mailbox, message) {
     .bind(...values, targetMessageId)
     .run();
   await upsertRecommendation(db, targetMessageId, classification, facts);
-  return { state: existing?.id ? "updated" : "created", attachmentsDownloaded: attachmentState.downloaded };
+  return { state: created ? "created" : "updated", attachmentsDownloaded: attachmentState.downloaded };
 }
 
 async function sha256Hex(bytes) {
@@ -2612,7 +2647,7 @@ export async function listDataBoxPlusMessagesPage(env, filters = {}) {
   }
 }
 
-export async function getDataBoxPlusMessage(env, id) {
+export async function getDataBoxPlusMessage(env, id, options = {}) {
   const db = dataBoxPlusDatabase(env, true);
   const messageId = cleanString(id);
   try {
@@ -2626,7 +2661,15 @@ export async function getDataBoxPlusMessage(env, id) {
       .prepare("SELECT * FROM data_box_plus_action_log WHERE message_id = ? ORDER BY created_at DESC LIMIT 30")
       .bind(messageId)
       .all();
-    return rowToMessage(row, (attachments.results || []).map(rowToAttachment), (actionLogs.results || []).map(rowToActionLog));
+    const notifications = options.includeNotifications
+      ? await listDataBoxRcsNotifications(db, messageId)
+      : undefined;
+    return rowToMessage(
+      row,
+      (attachments.results || []).map(rowToAttachment),
+      (actionLogs.results || []).map(rowToActionLog),
+      notifications
+    );
   } catch (error) {
     if (error instanceof DataBoxPlusStoreError) throw error;
     throw dbError(error);
