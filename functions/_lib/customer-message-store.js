@@ -109,11 +109,17 @@ function defaultDateTo() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function maskPhone(value) {
+  const phone = cleanString(value);
+  if (phone.length < 7) return phone ? "***" : "";
+  return `${phone.slice(0, 4)} *** **${phone.slice(-2)}`;
+}
+
 function logRow(row = {}) {
   return {
     id: cleanString(row.id),
     customerId: cleanString(row.customer_id),
-    phone: cleanString(row.phone),
+    phone: maskPhone(row.phone),
     requestedChannel: cleanString(row.requested_channel),
     usedChannel: cleanString(row.used_channel),
     templateKey: cleanString(row.template_key),

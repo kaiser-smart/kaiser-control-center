@@ -11,6 +11,7 @@ import {
   appendStopSentence,
   renderCustomerMessageTemplate
 } from "./customer-message-templates.js";
+import { updateRcsDispatchByTwilioSid } from "./rcs-template-store.js";
 
 const DEFAULT_DEDUPE_WINDOW_SECONDS = 300;
 const STOP_CONFIRMATION = "Kaiser servis: Odhlášení potvrzeno. Na toto číslo už nebudeme posílat RCS/SMS zprávy.";
@@ -309,7 +310,24 @@ export async function processCustomerStatusCallback(env, payload = {}) {
     errorMessage,
     payload
   });
-  return { apiStatus: "ready", status, matched: result.matched, twilioMessageSid };
+  let rcsResult = { matched: false };
+  try {
+    rcsResult = await updateRcsDispatchByTwilioSid(env, twilioMessageSid, {
+      status: ["failed", "undelivered", "canceled"].includes(status.toLowerCase()) ? "failed" : status,
+      usedChannel: cleanString(payload.ChannelPrefix || payload.channelPrefix || payload.Channel || payload.channel),
+      errorMessage
+    });
+  } catch (error) {
+    console.error("rcs_dispatch.status_callback_failed", { message: error.message });
+  }
+  return {
+    apiStatus: "ready",
+    status,
+    matched: result.matched || rcsResult.matched,
+    customerMessageMatched: result.matched,
+    rcsDispatchMatched: rcsResult.matched,
+    twilioMessageSid
+  };
 }
 
 export function customerMessagingStatus(env = {}) {

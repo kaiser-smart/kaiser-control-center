@@ -92,6 +92,7 @@ import { vehicleTrackingMapsConfigPayload } from "../functions/api/vehicle-track
 import { buildOrwiiFuelAnalytics } from "../functions/_lib/orwii-fuel-store.js";
 import { classifySarlotaMemoryTopics } from "../functions/_lib/sarlota-user-memory.js";
 import { buildCollectionRoutesSarlotaContext } from "../functions/_lib/collection-routes-sarlota-context.js";
+import { rcsTemplatePreviewList } from "../functions/_lib/rcs-template-registry.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requestedRoot = process.argv[2] === "dist" ? "dist" : ".";
@@ -5082,6 +5083,51 @@ async function handleApi(request, response) {
         "Set-Cookie": `${devCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200`
       }
     );
+    return true;
+  }
+
+  if (url.pathname === "/api/rcs/templates") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "settings", "manage")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    if (request.method === "GET") {
+      sendJson(response, 200, {
+        templates: rcsTemplatePreviewList({
+          PUBLIC_APP_URL: `http://${request.headers.host || "127.0.0.1:5173"}`
+        }, []),
+        dispatches: [],
+        apiStatus: "ready",
+        localPreview: true
+      });
+      return true;
+    }
+    sendJson(response, 409, {
+      error: "Lokální preview nevytváří Twilio Content SID. Synchronizace je dostupná pouze přes chráněné cloudové API.",
+      apiStatus: "waiting"
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/rcs/messages") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "settings", "manage")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." });
+      return true;
+    }
+    sendJson(response, 409, {
+      error: "Lokální preview skutečnou RCS zprávu neodesílá.",
+      apiStatus: "waiting"
+    });
     return true;
   }
 

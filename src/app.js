@@ -1161,6 +1161,12 @@ const customerMessagingState = {
   optOutLoading: false,
   savingOptOut: false,
   sendingTest: false,
+  rcsTemplates: [],
+  rcsDispatches: [],
+  rcsLoading: false,
+  rcsSyncing: false,
+  rcsError: "",
+  rcsMessage: "",
   error: "",
   optOutError: "",
   message: "",
@@ -7177,10 +7183,14 @@ function settingsManagementSection(user) {
   ensureSarlotaStatusData();
   ensureSarlotaContentData();
   ensureCommunicationInfrastructureData();
+  if (!customerMessagingState.loaded && !customerMessagingState.loading) {
+    void loadCustomerMessaging();
+  }
   const dashboardModule = orderedModules.find((moduleItem) => moduleItem.id === "dashboard");
 
   return `
     ${dashboardModule ? genericModuleSettingsSection(dashboardModule) : ""}
+    ${rcsTemplateCenterSection(true)}
     ${vehicleTrackingAdministrationSettings(user)}
     ${communicationInfrastructureSection(user)}
     ${SarlotaStatusPanel({
@@ -41607,12 +41617,149 @@ function customerMessageTestForm(canManage) {
     <form class="customer-optout-form customer-message-test-form" data-customer-message-test-form>
       <label>
         <span>Testovací telefon</span>
-        <input name="phone" value="+420604542004" placeholder="+420..." required />
+        <input name="phone" value="" placeholder="+420..." autocomplete="tel" required />
       </label>
       <button class="primary-action" type="submit" ${customerMessagingState.sendingTest ? "disabled" : ""}>
         ${customerMessagingState.sendingTest ? "Odesílám..." : "Odeslat provozní test"}
       </button>
     </form>
+  `;
+}
+
+function rcsTemplateStatusLabel(template = {}) {
+  if (template.syncStatus === "ready" && template.contentSid) return "Připraveno";
+  if (template.syncStatus === "asset_missing") return "Chybí asset";
+  if (template.syncStatus === "error") return "Chyba";
+  return "Chybí Content SID";
+}
+
+function rcsTemplateStatusTone(template = {}) {
+  if (template.syncStatus === "ready" && template.contentSid) return "ready";
+  if (template.syncStatus === "asset_missing" || template.syncStatus === "error") return "error";
+  return "waiting";
+}
+
+function rcsTemplateCard(template = {}) {
+  const action = template.actions?.[0] || null;
+  return `
+    <article class="rcs-template-card">
+      <div class="rcs-template-card__meta">
+        <div>
+          <span>${escapeHtml(template.key || "")}</span>
+          <h4>${escapeHtml(template.label || template.key || "RCS šablona")}</h4>
+        </div>
+        <strong class="rcs-template-status rcs-template-status--${escapeHtml(rcsTemplateStatusTone(template))}">
+          ${escapeHtml(rcsTemplateStatusLabel(template))}
+        </strong>
+      </div>
+      <div class="rcs-native-card">
+        ${template.bannerUrl
+          ? `<img src="${escapeHtml(template.bannerUrl)}" alt="" loading="lazy" />`
+          : `<div class="rcs-native-card__missing">Schválený banner chybí</div>`}
+        <div class="rcs-native-card__content">
+          <h5>${escapeHtml(template.sampleTitle || template.label || "")}</h5>
+          <p>${escapeHtml(template.sampleBody || "")}</p>
+          ${action ? `<span class="rcs-native-card__action">${escapeHtml(action.title || "")}</span>` : ""}
+        </div>
+      </div>
+      <dl class="rcs-template-card__facts">
+        <div><dt>Twilio Content SID</dt><dd>${escapeHtml(template.contentSid || "neuvedeno")}</dd></div>
+        <div><dt>Poslední synchronizace</dt><dd>${escapeHtml(template.lastSyncedAt ? formatDateTime(template.lastSyncedAt) : "dosud neproběhla")}</dd></div>
+        <div><dt>SMS fallback</dt><dd>${escapeHtml(template.sampleFallback || "není dostupný")}</dd></div>
+      </dl>
+      ${template.errorMessage ? `<p class="notification-error">${escapeHtml(template.errorMessage)}</p>` : ""}
+    </article>
+  `;
+}
+
+function rcsTemplateTestForm() {
+  const readyTemplates = customerMessagingState.rcsTemplates.filter((template) => template.enabled);
+  if (!readyTemplates.length) {
+    return '<p class="notification-empty">Test bude dostupný po úspěšné synchronizaci alespoň jedné šablony.</p>';
+  }
+  return `
+    <form class="customer-optout-form rcs-template-test-form" data-rcs-template-test-form>
+      <label>
+        <span>RCS šablona</span>
+        <select name="templateKey" required>
+          ${readyTemplates.map((template) => `<option value="${escapeHtml(template.key)}">${escapeHtml(template.label)}</option>`).join("")}
+        </select>
+      </label>
+      <label>
+        <span>Telefon oprávněného administrátora</span>
+        <input name="recipient" value="" placeholder="+420..." autocomplete="tel" required />
+      </label>
+      <button class="primary-action" type="submit" ${customerMessagingState.sendingTest ? "disabled" : ""}>
+        ${customerMessagingState.sendingTest ? "Odesílám..." : "Odeslat jednu testovací kartu"}
+      </button>
+    </form>
+  `;
+}
+
+function rcsDispatchLog() {
+  if (!customerMessagingState.rcsDispatches.length) {
+    return '<p class="notification-empty">Centrální RCS audit zatím neobsahuje žádné odeslání.</p>';
+  }
+  return `
+    <div class="notification-table-wrap">
+      <table class="notification-table">
+        <thead><tr><th>Datum / čas</th><th>Šablona</th><th>Příjemce</th><th>Kanál</th><th>Stav</th><th>Message SID</th><th>Content SID</th><th>Aktér</th></tr></thead>
+        <tbody>
+          ${customerMessagingState.rcsDispatches.map((item) => `
+            <tr>
+              <td data-label="Datum / čas">${escapeHtml(formatDateTime(item.createdAt))}</td>
+              <td data-label="Šablona">${escapeHtml(item.templateKey || "")}</td>
+              <td data-label="Příjemce">${escapeHtml(item.recipientMasked || "***")}</td>
+              <td data-label="Kanál">${escapeHtml(notificationChannelLabel(item.usedChannel || item.requestedChannel))}</td>
+              <td data-label="Stav">${notificationStatusBadge(item.status)}</td>
+              <td data-label="Message SID">${escapeHtml(item.twilioMessageSid || "neuvedeno")}</td>
+              <td data-label="Content SID">${escapeHtml(item.contentSid || "neuvedeno")}</td>
+              <td data-label="Aktér">${escapeHtml(item.actorName || "systém")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function rcsTemplateCenterSection(canManage) {
+  if (!canManage) return "";
+  if (customerMessagingState.rcsLoading && !customerMessagingState.rcsTemplates.length) {
+    return '<section class="notification-center"><p class="notification-empty">Načítám RCS šablony...</p></section>';
+  }
+  return `
+    <section class="notification-center rcs-template-center" aria-labelledby="rcs-template-center-title">
+      <div class="notification-center__header">
+        <div>
+          <span>Twilio Content API</span>
+          <h3 id="rcs-template-center-title">RCS šablony</h3>
+          <p>Centrální registr, nativní Rich Card, SMS fallback a skutečný stav synchronizace. Automatické odesílání událostí není zapnuté.</p>
+        </div>
+        <button class="secondary-link" type="button" data-rcs-template-sync ${customerMessagingState.rcsSyncing ? "disabled" : ""}>
+          ${customerMessagingState.rcsSyncing ? "Synchronizuji..." : "Synchronizovat s Twilio"}
+        </button>
+      </div>
+      ${customerMessagingState.rcsMessage ? `<p class="customer-message-success">${escapeHtml(customerMessagingState.rcsMessage)}</p>` : ""}
+      ${customerMessagingState.rcsError ? `<p class="notification-error">${escapeHtml(customerMessagingState.rcsError)}</p>` : ""}
+      <div class="rcs-template-grid">
+        ${customerMessagingState.rcsTemplates.map(rcsTemplateCard).join("")}
+      </div>
+      <section class="customer-optout-panel" aria-label="Test RCS šablony">
+        <div class="notification-center__header">
+          <div>
+            <span>Kontrolní odeslání</span>
+            <h4>Jedna testovací Rich Card</h4>
+            <p>Backend přijme jen templateKey, recipient, variables a eventId. Odeslání projde opt-outem, idempotencí a auditem.</p>
+          </div>
+        </div>
+        ${rcsTemplateTestForm()}
+      </section>
+      <section class="customer-optout-panel" aria-label="Audit centrálních RCS zpráv">
+        <div class="notification-center__header"><div><span>Pravdivý provozní stav</span><h4>RCS audit</h4></div></div>
+        ${rcsDispatchLog()}
+      </section>
+    </section>
   `;
 }
 
@@ -41651,16 +41798,6 @@ function customerMessagingSection(user) {
         `).join("")}
       </div>
       ${customerMessagingState.message ? `<p class="customer-message-success">${escapeHtml(customerMessagingState.message)}</p>` : ""}
-      <section class="customer-optout-panel" aria-label="Test zákaznické RCS/SMS">
-        <div class="notification-center__header">
-          <div>
-            <span>Kontrolní odeslání</span>
-            <h3>Provozní test RCS/SMS</h3>
-            <p>Odešle jednu provozní testovací zprávu přes zákaznický backend, audit a opt-out kontrolu.</p>
-          </div>
-        </div>
-        ${customerMessageTestForm(canManage)}
-      </section>
       ${customerMessagingFiltersForm()}
       ${customerMessagesTable()}
       <p class="notification-meta">
@@ -51347,8 +51484,20 @@ async function loadCustomerMessaging(options = {}) {
 
   customerMessagingState.loading = true;
   customerMessagingState.optOutLoading = true;
+  customerMessagingState.rcsLoading = hasPermission(user, "settings", "manage");
   customerMessagingState.error = "";
   customerMessagingState.optOutError = "";
+  customerMessagingState.rcsError = "";
+
+  if (hasPermission(user, "settings", "manage")) {
+    try {
+      const rcsResult = await apiJson("/api/rcs/templates");
+      customerMessagingState.rcsTemplates = Array.isArray(rcsResult.templates) ? rcsResult.templates : [];
+      customerMessagingState.rcsDispatches = Array.isArray(rcsResult.dispatches) ? rcsResult.dispatches : [];
+    } catch (error) {
+      customerMessagingState.rcsError = error.payload?.error || "RCS šablony se nepodařilo načíst.";
+    }
+  }
 
   try {
     const query = customerMessageQueryString();
@@ -51379,6 +51528,7 @@ async function loadCustomerMessaging(options = {}) {
     customerMessagingState.loaded = true;
     customerMessagingState.loading = false;
     customerMessagingState.optOutLoading = false;
+    customerMessagingState.rcsLoading = false;
     if (options.render !== false) {
       render();
     }
@@ -51522,6 +51672,72 @@ async function submitCustomerMessageTest(form) {
     await loadCustomerMessaging({ render: false, force: true });
   } catch (error) {
     customerMessagingState.optOutError = error.payload?.error || "Testovací RCS/SMS zprávu se nepodařilo odeslat.";
+  } finally {
+    customerMessagingState.sendingTest = false;
+    render();
+  }
+}
+
+async function synchronizeRcsTemplateCenter() {
+  if (customerMessagingState.rcsSyncing) return;
+  const confirmed = window.confirm(
+    "Synchronizovat centrální RCS šablony s Twilio Content API? Chybějící nebo změněná definice může vytvořit nový Content SID; stejné platné šablony se znovu nevytvoří."
+  );
+  if (!confirmed) return;
+  customerMessagingState.rcsSyncing = true;
+  customerMessagingState.rcsError = "";
+  customerMessagingState.rcsMessage = "";
+  render();
+  try {
+    const result = await apiJson("/api/rcs/templates", {
+      method: "POST",
+      body: JSON.stringify({ confirm: "sync-rcs-templates" })
+    });
+    customerMessagingState.rcsTemplates = Array.isArray(result.templates) ? result.templates : [];
+    customerMessagingState.rcsMessage = "Synchronizace Twilio Content šablon byla dokončená. Stav každé šablony je uvedený na kartě.";
+    await loadCustomerMessaging({ render: false, force: true });
+  } catch (error) {
+    customerMessagingState.rcsError = error.payload?.error || "RCS šablony se nepodařilo synchronizovat.";
+  } finally {
+    customerMessagingState.rcsSyncing = false;
+    render();
+  }
+}
+
+async function submitRcsTemplateTest(form) {
+  if (customerMessagingState.sendingTest) return;
+  const templateKey = form.elements.templateKey?.value || "";
+  const recipient = form.elements.recipient?.value.trim() || "";
+  const template = customerMessagingState.rcsTemplates.find((item) => item.key === templateKey);
+  if (!template?.enabled) {
+    customerMessagingState.rcsError = "Vybraná šablona není připravená.";
+    render();
+    return;
+  }
+  const confirmed = window.confirm(
+    `Odeslat jednu skutečnou testovací kartu „${template.label}“ na zadaný administrátorský telefon?`
+  );
+  if (!confirmed) return;
+  customerMessagingState.sendingTest = true;
+  customerMessagingState.rcsError = "";
+  customerMessagingState.rcsMessage = "";
+  render();
+  try {
+    const result = await apiJson("/api/rcs/messages", {
+      method: "POST",
+      body: JSON.stringify({
+        templateKey,
+        recipient,
+        variables: template.sampleVariables,
+        eventId: `admin-test:${templateKey}:${new Date().toISOString()}`
+      })
+    });
+    customerMessagingState.rcsMessage = result.sent
+      ? `Twilio přijalo testovací kartu. Message SID: ${result.twilioMessageSid || "neuvedeno"}`
+      : `Testovací karta nebyla odeslaná: ${result.errorMessage || result.status || "neznámý stav"}`;
+    await loadCustomerMessaging({ render: false, force: true });
+  } catch (error) {
+    customerMessagingState.rcsError = error.payload?.error || "Testovací RCS kartu se nepodařilo odeslat.";
   } finally {
     customerMessagingState.sendingTest = false;
     render();
@@ -57599,6 +57815,13 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const rcsTemplateTestForm = event.target.closest("[data-rcs-template-test-form]");
+  if (rcsTemplateTestForm) {
+    event.preventDefault();
+    await submitRcsTemplateTest(rcsTemplateTestForm);
+    return;
+  }
+
   const sarlotaVoiceWriteForm = event.target.closest("[data-sarlota-voice-write-form]");
   if (sarlotaVoiceWriteForm) {
     event.preventDefault();
@@ -61060,6 +61283,13 @@ document.addEventListener("click", async (event) => {
   if (customerMessageReload) {
     customerMessagingState.loaded = false;
     loadCustomerMessaging();
+    return;
+  }
+
+  const rcsTemplateSync = event.target.closest("[data-rcs-template-sync]");
+  if (rcsTemplateSync) {
+    event.preventDefault();
+    await synchronizeRcsTemplateCenter();
     return;
   }
 
