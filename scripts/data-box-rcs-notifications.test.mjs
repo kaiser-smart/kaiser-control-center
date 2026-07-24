@@ -202,22 +202,6 @@ function messageInput() {
 }
 
 {
-  const { d1 } = openDatabase();
-  const calls = [];
-  const fetch = async (_url, options) => {
-    calls.push(Object.fromEntries(options.body));
-    return Response.json({ sid: "SM-RADIM-TEST", status: "accepted" }, { status: 201 });
-  };
-  const result = await notifyNewDataBoxMessage(environment(d1), messageInput(), {
-    fetch,
-    recipientKeys: ["radim-oplustil"]
-  });
-  assert.equal(result.length, 1);
-  assert.equal(result[0].recipientKey, "radim-oplustil");
-  assert.equal(calls.length, 1);
-}
-
-{
   const { sqlite, d1 } = openDatabase();
   let call = 0;
   const fetch = async () => {
@@ -243,18 +227,12 @@ function messageInput() {
   const endpointSource = readFileSync(new URL("../functions/api/data-box-plus/messages/[id].js", import.meta.url), "utf8");
   const storeSource = readFileSync(new URL("../functions/_lib/data-box-plus-store.js", import.meta.url), "utf8");
   const notificationSource = readFileSync(new URL("../functions/_lib/data-box-rcs-notifications.js", import.meta.url), "utf8");
-  const testEndpointSource = readFileSync(
-    new URL("../functions/api/data-box-plus/messages/[id]/rcs-test.js", import.meta.url),
-    "utf8"
-  );
   const templateSpec = readFileSync(new URL("../docs/DATA_BOX_RCS_TEMPLATE.md", import.meta.url), "utf8");
   const cardAsset = readFileSync(
     new URL("../public/notifications/kaiser-sarlota-rcs-data-message-v1.png", import.meta.url)
   );
   assert.match(notificationSource, /encodeURIComponent\(messageId\)/);
   assert.match(notificationSource, /TWILIO_KAISER_STATUS_CALLBACK_URL/);
-  assert.match(testEndpointSource, /requireUserPermission\(env, request, "data-box-plus", "manage"\)/);
-  assert.match(testEndpointSource, /recipientKeys: \["radim-oplustil"\]/);
   assert.match(appSource, /applyDataBoxPlusMessageDeepLink/);
   assert.match(endpointSource, /requireUserPermission\(env, request, "data-box-plus", "view"\)/);
   assert.match(endpointSource, /hasPermission\(user, "data-box-plus", "manage"\)/);

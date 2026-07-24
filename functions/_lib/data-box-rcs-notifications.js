@@ -296,15 +296,9 @@ export async function notifyNewDataBoxMessage(env, input = {}, dependencies = {}
   const users = dependencies.users || await listStoredUsers(env);
   const cfg = config(env);
   const fetchImpl = dependencies.fetch || globalThis.fetch;
-  const requestedRecipientKeys = Array.isArray(dependencies.recipientKeys)
-    ? new Set(dependencies.recipientKeys.map(cleanString).filter(Boolean))
-    : null;
-  const recipients = requestedRecipientKeys
-    ? RECIPIENTS.filter((recipient) => requestedRecipientKeys.has(recipient.key))
-    : RECIPIENTS;
   const results = [];
 
-  for (const recipient of recipients) {
+  for (const recipient of RECIPIENTS) {
     const reservation = await reserveNotification(db, messageId, recipient);
     const notification = reservation.notification;
     if (!reservation.created) {
