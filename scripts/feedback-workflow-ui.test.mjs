@@ -6,9 +6,15 @@ const stylesSource = readFileSync(new URL("../src/styles.css", import.meta.url),
 const listApiSource = readFileSync(new URL("../functions/api/feedback-cases.js", import.meta.url), "utf8");
 const detailApiSource = readFileSync(new URL("../functions/api/feedback-cases/[id].js", import.meta.url), "utf8");
 const storeSource = readFileSync(new URL("../functions/_lib/feedback-case-store.js", import.meta.url), "utf8");
+const targetsSource = readFileSync(new URL("../functions/_lib/self-repair-targets.js", import.meta.url), "utf8");
 
 assert.match(appSource, /title: "Připomínky a chyby"/);
+assert.doesNotMatch(appSource, /feedback: "Úkoly a připomínky"/);
+assert.doesNotMatch(targetsSource, /moduleName: "Úkoly a připomínky"/);
+assert.match(targetsSource, /moduleName: "Připomínky a chyby"/);
 assert.match(appSource, /function feedbackCaseIdFromPath/);
+assert.match(appSource, /detailErrorId/);
+assert.match(appSource, /feedbackWorkflowState\.detailErrorId !== caseId/);
 assert.match(appSource, /path === FEEDBACK_ROUTE \|\| path\.startsWith\(`\$\{FEEDBACK_ROUTE\}\//);
 assert.match(appSource, /Nové hlášení/);
 assert.match(appSource, /Moje hlášení/);

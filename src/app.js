@@ -1009,6 +1009,7 @@ const feedbackWorkflowState = {
   detailId: "",
   detail: null,
   detailLoading: false,
+  detailErrorId: "",
   saving: false,
   actionId: "",
   message: "",
@@ -2686,7 +2687,7 @@ const UI_SYSTEM_PILOT_NAV_LABELS = {
   settings: "Nastavení",
   "system-check": "Stav systému",
   "self-repair": "Samoopravy",
-  feedback: "Úkoly a připomínky"
+  feedback: "Připomínky a chyby"
 };
 
 function uiSystemPilotModulesForUser(user) {
@@ -42321,12 +42322,14 @@ async function loadFeedbackWorkflowDetail(caseId, options = {}) {
   if (!id || feedbackWorkflowState.detailLoading) return;
   feedbackWorkflowState.detailId = id;
   feedbackWorkflowState.detailLoading = true;
+  feedbackWorkflowState.detailErrorId = "";
   feedbackWorkflowState.error = "";
   if (options.renderAfter !== false) render();
   try {
     feedbackWorkflowState.detail = await apiJson(`/api/feedback-cases/${encodeURIComponent(id)}`);
   } catch (error) {
     feedbackWorkflowState.detail = null;
+    feedbackWorkflowState.detailErrorId = id;
     feedbackWorkflowState.error = error.payload?.error || "Hlášení neexistuje nebo k němu nemáte přístup.";
   } finally {
     feedbackWorkflowState.detailLoading = false;
@@ -42340,10 +42343,18 @@ function ensureFeedbackWorkflowData() {
     void loadFeedbackWorkflowData();
   }
   const caseId = feedbackCaseIdFromPath();
+  if (!caseId) {
+    feedbackWorkflowState.detailId = "";
+    feedbackWorkflowState.detail = null;
+    feedbackWorkflowState.detailErrorId = "";
+    return;
+  }
   if (
-    caseId &&
     !feedbackWorkflowState.detailLoading &&
-    (feedbackWorkflowState.detailId !== caseId || !feedbackWorkflowState.detail)
+    (
+      feedbackWorkflowState.detailId !== caseId ||
+      (!feedbackWorkflowState.detail && feedbackWorkflowState.detailErrorId !== caseId)
+    )
   ) {
     void loadFeedbackWorkflowDetail(caseId);
   }

@@ -24,7 +24,7 @@ const TARGETS = Object.freeze({
   "system-check": { moduleKey: "system-check", moduleName: "Stav systému", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl },
   "self-repair": { moduleKey: "self-repair", moduleName: "Samoopravy", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl },
   absence: { moduleKey: "absence", moduleName: "Nepřítomnosti", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl },
-  feedback: { moduleKey: "feedback", moduleName: "Úkoly a připomínky", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl }
+  feedback: { moduleKey: "feedback", moduleName: "Připomínky a chyby", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl }
 });
 
 const ALIASES = Object.freeze({

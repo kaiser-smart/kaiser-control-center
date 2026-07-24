@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.706"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.707"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Připomínky a chyby: správná chyba místo nekonečného načítání",
+    text: "Neexistující nebo nedostupné číslo případu nyní skončí srozumitelnou chybou a odkazem zpět na seznam. Navigace i nově vytvářené případy současně používají jednotný název Připomínky a chyby."
+  },
   {
     title: "Připomínky a chyby: celý případ od nahlášení po ověření",
     text: "Každé hlášení dostane čitelné číslo, otevře se přes vlastní stabilní odkaz a je vidět ve společném seznamu s filtrem Svoje. Řešitel mění stav, píše veřejné i interní zprávy a může bezpečně připravit zadání pro Codex. Autor doplní vyžádané informace, dostane interní notifikaci i skutečný e-mail při předání opravy k testu a nakonec potvrdí, zda oprava funguje."
