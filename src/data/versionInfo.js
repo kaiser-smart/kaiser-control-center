@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.716"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.717"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "RCS šablony: kratší texty a věrný mobilní náhled",
+    text: "Všech osm centrálních šablon používá krátký mobilní text, české datum, bezpečné zkracování dynamických hodnot a neutrální variantu bez jména. Nastavení ukazuje celou kartu včetně nativně vypadajícího tlačítka, počty znaků a blokaci synchronizace nad 140 znaků; schválené bannery zůstaly beze změny."
+  },
   {
     title: "Nastavení: centrální RCS šablony přes Twilio Content API",
     text: "Oprávněný správce vidí všech osm provozních šablon jako celé nativní karty, jejich bannery, SMS fallback, Content SID a skutečný stav synchronizace. Sedm schválených motivů lze idempotentně synchronizovat a ručně otestovat přes backend; chybějící motiv čekající dovolené zůstává bezpečně vypnutý. Každé odeslání má trvalou ochranu eventId + templateKey + příjemce a audit s maskovaným telefonem."

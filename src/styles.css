@@ -51133,11 +51133,33 @@ body.collection-driver-blackview-simulator-active #app {
   background: #fde6e9;
 }
 
+.rcs-device-preview {
+  display: grid;
+  gap: 8px;
+  max-width: 390px;
+  margin: 0 auto;
+  padding: 10px;
+  border: 1px solid #d9dcdf;
+  border-radius: 24px;
+  background: #f3f3f5;
+}
+
+.rcs-device-preview__bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+  color: #6d7278;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
 .rcs-native-card {
   overflow: hidden;
-  border: 1px solid #dfe3e5;
-  border-radius: 15px;
-  background: #f7f8f8;
+  border: 1px solid #dedfe2;
+  border-radius: 20px;
+  background: #e9e9eb;
+  box-shadow: 0 6px 18px rgba(30, 35, 39, 0.08);
 }
 
 .rcs-native-card img {
@@ -51161,8 +51183,8 @@ body.collection-driver-blackview-simulator-active #app {
 
 .rcs-native-card__content {
   display: grid;
-  gap: 8px;
-  padding: 14px;
+  gap: 10px;
+  padding: 15px;
 }
 
 .rcs-native-card__content h5,
@@ -51171,21 +51193,63 @@ body.collection-driver-blackview-simulator-active #app {
 }
 
 .rcs-native-card__content p {
-  color: #4f565c;
-  font-size: 0.88rem;
-  line-height: 1.45;
+  color: #74777c;
+  font-size: 0.9rem;
+  line-height: 1.35;
 }
 
 .rcs-native-card__action {
-  display: block;
-  margin-top: 4px;
-  padding: 9px 11px;
-  border: 1px solid #75bd25;
-  border-radius: 9px;
-  color: #3f760f;
-  font-size: 0.84rem;
-  font-weight: 800;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  margin-top: 3px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 999px;
+  color: #111;
+  background: #d4d4d7;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.rcs-native-card__action > span:last-child {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #858990;
+  font-size: 0.75rem;
+}
+
+.rcs-native-card__action--missing {
+  color: #8a2430;
+  background: #fde6e9;
+}
+
+.rcs-device-preview__note {
+  margin: 0;
+  padding: 0 4px 2px;
+  color: #747a80;
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.rcs-template-lengths {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  color: #626970;
+  font-size: 0.76rem;
+}
+
+.rcs-template-lengths .rcs-template-status {
+  margin-left: auto;
 }
 
 .rcs-template-card__facts {
@@ -51218,5 +51282,15 @@ body.collection-driver-blackview-simulator-active #app {
 
   .rcs-template-card {
     padding: 13px;
+  }
+
+  .rcs-device-preview {
+    width: 100%;
+  }
+
+  .rcs-template-lengths .rcs-template-status {
+    width: 100%;
+    margin-left: 0;
+    text-align: center;
   }
 }

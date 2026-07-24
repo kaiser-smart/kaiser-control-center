@@ -3,10 +3,14 @@ import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import {
   RCS_TEMPLATE_REGISTRY,
+  formatCzechDateRange,
+  formatCzechDateShort,
   getRcsTemplate,
   rcsContentVariables,
   rcsTemplatePreviewList,
+  rcsTextLength,
   renderRcsTemplate,
+  shortenRcsText,
   twilioContentDefinition,
   validateRcsVariables
 } from "../functions/_lib/rcs-template-registry.js";
@@ -52,14 +56,29 @@ for (const definition of Object.values(RCS_TEMPLATE_REGISTRY)) {
     assert.equal(rendered.actions[0].type, "URL");
     assert.ok(rendered.actions[0].url.startsWith("https://smart-odpady.ai/"));
     assert.ok(!rendered.body.includes("{{"));
+    assert.ok(rendered.body.startsWith("Ahoj "));
+    assert.ok(rendered.bodyLength <= 140);
+    assert.equal(rendered.bodyLength, rcsTextLength(rendered.body));
   }
 }
 
 assert.throws(() => getRcsTemplate("unknown.template"), /Neznámý templateKey/);
-assert.throws(
-  () => renderRcsTemplate("leave.approved", { ...RCS_TEMPLATE_REGISTRY["leave.approved"].sampleVariables, firstName: "" }, env),
-  /Chybí povinná proměnná: firstName/
+const neutralLeave = renderRcsTemplate(
+  "leave.approved",
+  { ...RCS_TEMPLATE_REGISTRY["leave.approved"].sampleVariables, firstName: "" },
+  env
 );
+assert.equal(neutralLeave.body, "Dovolená 1.–8. srpna 2026 je schválená.");
+assert.ok(!neutralLeave.body.includes("Ahoj ,"));
+assert.equal(formatCzechDateRange("2026-08-01", "2026-08-08"), "1.–8. srpna 2026");
+assert.equal(formatCzechDateRange("30. 7. 2026", "2. 8. 2026"), "30. července–2. srpna 2026");
+assert.equal(formatCzechDateShort("2026-07-31"), "31. července 2026");
+const longSubject = "Žádost o doplnění velmi dlouhého podání včetně několika příloh a dalších podkladů";
+const shortenedSubject = shortenRcsText(longSubject, 45);
+assert.equal(rcsTextLength(shortenedSubject), 45);
+assert.ok(shortenedSubject.endsWith("…"));
+assert.ok(!shortenRcsText("Český vícebajtový řetězec 👩‍🔧 a další text", 20).includes("\uFFFD"));
+assert.equal(shortenRcsText("Text &amp; pokračování", 11), "Text &amp;…");
 assert.throws(
   () => renderRcsTemplate("leave.pending", RCS_TEMPLATE_REGISTRY["leave.pending"].sampleVariables, env),
   (error) => error.code === "asset_missing"
@@ -101,24 +120,60 @@ assert.equal(twilioDefinition.types["twilio/card"].height, "MEDIUM");
 assert.equal(twilioDefinition.types["twilio/card"].media.length, 1);
 assert.match(twilioDefinition.types["twilio/card"].body, /\{\{1\}\}/);
 assert.match(twilioDefinition.types["twilio/text"].body, /Pro odhlášení odpovězte STOP\.$/);
-assert.deepEqual(Object.keys(twilioDefinition.variables), ["1", "2", "3", "4"]);
+assert.deepEqual(Object.keys(twilioDefinition.variables), ["1", "2", "3"]);
+assert.equal(twilioDefinition.variables["1"], "Ahoj Radime, přišla zpráva od Magistrát města Brna: Oznámení.");
+assert.ok(twilioDefinition.variables["2"].startsWith("Ahoj Radime, nová datová zpráva"));
 
 const contentVariables = rcsContentVariables("critical.alert", {
+  firstName: "Radime",
   alertMessage: "Pozor",
   detailUrl: "https://smart-odpady.ai/nastaveni"
 }, env);
 assert.deepEqual(contentVariables, {
-  "1": "Pozor",
-  "2": "https://smart-odpady.ai/nastaveni"
+  "1": "Ahoj Radime, Pozor",
+  "2": "Ahoj Radime, Pozor",
+  "3": "https://smart-odpady.ai/nastaveni"
 });
 
 const previews = rcsTemplatePreviewList(env, []);
 assert.equal(previews.length, 8);
+const expectedMobileCopy = {
+  "leave.approved": ["Dovolená schválena", "Ahoj Radime, dovolená 1.–8. srpna 2026 je schválená.", "Zobrazit detail"],
+  "leave.pending": ["Žádost čeká", "Ahoj Radime, žádost o dovolenou 1.–8. srpna 2026 čeká na schválení.", "Zobrazit žádost"],
+  "ds.new": ["Nová datová zpráva", "Ahoj Radime, přišla zpráva od Magistrát města Brna: Oznámení.", "Otevřít zprávu"],
+  "ds.deadline": ["Blíží se termín", "Ahoj Radime, zprávu „Výzva k doplnění“ je potřeba vyřídit do 31. července 2026.", "Vyřídit zprávu"],
+  "task.new": ["Nový úkol", "Ahoj Radime, nový úkol: Zkontrolovat svozovou trasu. Termín 31. července 2026.", "Otevřít úkol"],
+  "vehicle.fault": ["Nové hlášení vozidla", "Ahoj Radime, u Mercedes 01 bylo nahlášeno: Kontrola brzdového systému.", "Otevřít hlášení"],
+  "critical.alert": ["Důležité upozornění", "Ahoj Radime, Provozní událost vyžaduje tvoji pozornost.", "Zobrazit detail"],
+  "general.info": ["Zpráva od Šarloty", "Ahoj Radime, V KSO je pro tebe nová provozní informace.", "Zobrazit detail"]
+};
+for (const preview of previews) {
+  const [title, body, action] = expectedMobileCopy[preview.key];
+  assert.equal(preview.sampleTitle, title);
+  assert.equal(preview.sampleBody, body);
+  assert.equal(preview.actions[0].title, action);
+  assert.match(preview.sampleFallback, /Pro odhlášení odpovězte STOP\.$/);
+}
 assert.equal(previews.find((item) => item.key === "leave.pending").syncStatus, "asset_missing");
 assert.equal(previews.find((item) => item.key === "leave.pending").enabled, false);
+assert.ok(previews.find((item) => item.key === "leave.pending").sampleBody);
 assert.equal(previews.find((item) => item.key === "ds.new").syncStatus, "content_sid_missing");
+assert.ok(previews.every((item) => item.bodyLength <= 140));
+assert.ok(previews.every((item) => item.actionStatus === "ok"));
 const localPreviews = rcsTemplatePreviewList({ PUBLIC_APP_URL: "http://127.0.0.1:5173" }, []);
 assert.ok(localPreviews.find((item) => item.key === "general.info").sampleVariables.detailUrl.startsWith("http://127.0.0.1:5173/"));
+const boundedAlert = renderRcsTemplate("critical.alert", {
+  firstName: "Radime",
+  alertMessage: "Velmi důležité provozní upozornění ".repeat(8),
+  detailUrl: "https://smart-odpady.ai/nastaveni"
+}, env);
+assert.ok(boundedAlert.bodyLength <= 140);
+assert.ok(boundedAlert.body.endsWith("…"));
+assert.throws(() => renderRcsTemplate("critical.alert", {
+  firstName: "R".repeat(180),
+  alertMessage: "Pozor",
+  detailUrl: "https://smart-odpady.ai/nastaveni"
+}, env), /překračuje limit 140 znaků/);
 
 assert.equal(maskRcsRecipient("+420777123456"), "+420 *** **56");
 assert.equal(
@@ -209,6 +264,11 @@ const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8"
 assert.match(appSource, /RCS šablony/);
 assert.match(appSource, /data-rcs-template-sync/);
 assert.match(appSource, /data-rcs-template-test-form/);
+assert.match(appSource, /Mobilní náhled celé karty/);
+assert.match(appSource, /rcs-native-card__action/);
+assert.match(appSource, /Body: <strong>.*\/ 140 znaků/);
+assert.match(appSource, /Příliš dlouhé/);
+assert.match(appSource, /template\.actionStatus === "missing"/);
 assert.match(appSource, /function settingsManagementSection[\s\S]*rcsTemplateCenterSection\(true\)/);
 assert.match(appSource, /templateKey,\s*recipient,\s*variables: template\.sampleVariables,\s*eventId:/s);
 assert.doesNotMatch(appSource, /value="\+420604542004"/);

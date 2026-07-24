@@ -21,6 +21,26 @@ Každá aktivní šablona obsahuje současně `twilio/card` a textový
 `twilio/text` fallback. Karta používá `VERTICAL` a `MEDIUM`. Dynamické hodnoty
 jsou pouze v nativním obsahu Twilio; bannery se za běhu negenerují.
 
+## Mobilní text a náhled
+
+Renderer skládá krátký výsledný body na backendu. Pokud zná `firstName`,
+začíná text oslovením `Ahoj {{firstName}},`; bez jména použije neutrální
+variantu a nikdy nevytvoří `Ahoj ,`.
+
+Odvozené hodnoty `dateRange`, `subjectShort`, `taskTitleShort`,
+`faultSummaryShort`, `alertMessageShort`, `messageShort` a `deadlineShort`
+vznikají před odesláním. Texty se zkracují po celých Unicode graphemech,
+chráněná URL ani HTML entita se nerozdělí a zkrácení končí znakem `…`.
+Datum a jméno příjemce se výpustkou nezkracují. Výsledný body nesmí překročit
+140 znaků; delší vstup se bezpečně zkrátí, nebo se odeslání a synchronizace
+zastaví.
+
+Nastavení zobrazuje banner, nadpis, celý body i akční tlačítko. Náhled
+napodobuje mobilní kartu, ale přesný font, barvu a systémovou ikonu tlačítka
+řídí Apple Zprávy nebo Android Messages a Twilio je neumí přepsat vlastním
+CSS. U každé karty je proto vidět počet znaků nadpisu a body a stav
+`V pořádku` / `Příliš dlouhé`.
+
 ## Backend
 
 - `GET /api/rcs/templates` vrací registr, synchronizační stav a maskovaný audit.

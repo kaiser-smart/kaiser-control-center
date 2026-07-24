@@ -41639,8 +41639,15 @@ function rcsTemplateStatusTone(template = {}) {
   return "waiting";
 }
 
+function rcsTemplateLengthLabel(template = {}) {
+  return template.bodyLengthStatus === "too_long" || Number(template.bodyLength || 0) > 140
+    ? "Příliš dlouhé"
+    : "V pořádku";
+}
+
 function rcsTemplateCard(template = {}) {
   const action = template.actions?.[0] || null;
+  const lengthTone = template.bodyLengthStatus === "too_long" ? "error" : "ready";
   return `
     <article class="rcs-template-card">
       <div class="rcs-template-card__meta">
@@ -41652,15 +41659,29 @@ function rcsTemplateCard(template = {}) {
           ${escapeHtml(rcsTemplateStatusLabel(template))}
         </strong>
       </div>
-      <div class="rcs-native-card">
-        ${template.bannerUrl
-          ? `<img src="${escapeHtml(template.bannerUrl)}" alt="" loading="lazy" />`
-          : `<div class="rcs-native-card__missing">Schválený banner chybí</div>`}
-        <div class="rcs-native-card__content">
-          <h5>${escapeHtml(template.sampleTitle || template.label || "")}</h5>
-          <p>${escapeHtml(template.sampleBody || "")}</p>
-          ${action ? `<span class="rcs-native-card__action">${escapeHtml(action.title || "")}</span>` : ""}
+      <div class="rcs-device-preview">
+        <div class="rcs-device-preview__bar">
+          <span>Mobilní náhled celé karty</span>
+          <span>iOS / Android</span>
         </div>
+        <div class="rcs-native-card">
+          ${template.bannerUrl
+            ? `<img src="${escapeHtml(template.bannerUrl)}" alt="" loading="lazy" />`
+            : `<div class="rcs-native-card__missing">Schválený banner chybí</div>`}
+          <div class="rcs-native-card__content">
+            <h5>${escapeHtml(template.sampleTitle || template.label || "")}</h5>
+            <p>${escapeHtml(template.sampleBody || "")}</p>
+            ${action
+              ? `<span class="rcs-native-card__action"><span>${escapeHtml(action.title || "")}</span><span aria-hidden="true">↗</span></span>`
+              : '<span class="rcs-native-card__action rcs-native-card__action--missing">Tlačítko chybí</span>'}
+          </div>
+        </div>
+        <p class="rcs-device-preview__note">Přesný font, barvu a ikonu tlačítka řídí aplikace příjemce.</p>
+      </div>
+      <div class="rcs-template-lengths" aria-label="Kontrola délky textu">
+        <span>Nadpis: <strong>${escapeHtml(String(template.titleLength ?? 0))} znaků</strong></span>
+        <span>Body: <strong>${escapeHtml(String(template.bodyLength ?? 0))} / 140 znaků</strong></span>
+        <strong class="rcs-template-status rcs-template-status--${lengthTone}">${escapeHtml(rcsTemplateLengthLabel(template))}</strong>
       </div>
       <dl class="rcs-template-card__facts">
         <div><dt>Twilio Content SID</dt><dd>${escapeHtml(template.contentSid || "neuvedeno")}</dd></div>
@@ -41728,6 +41749,9 @@ function rcsTemplateCenterSection(canManage) {
   if (customerMessagingState.rcsLoading && !customerMessagingState.rcsTemplates.length) {
     return '<section class="notification-center"><p class="notification-empty">Načítám RCS šablony...</p></section>';
   }
+  const hasInvalidTemplate = customerMessagingState.rcsTemplates.some((template) =>
+    template.bodyLengthStatus === "too_long" || template.actionStatus === "missing"
+  );
   return `
     <section class="notification-center rcs-template-center" aria-labelledby="rcs-template-center-title">
       <div class="notification-center__header">
@@ -41736,10 +41760,11 @@ function rcsTemplateCenterSection(canManage) {
           <h3 id="rcs-template-center-title">RCS šablony</h3>
           <p>Centrální registr, nativní Rich Card, SMS fallback a skutečný stav synchronizace. Automatické odesílání událostí není zapnuté.</p>
         </div>
-        <button class="secondary-link" type="button" data-rcs-template-sync ${customerMessagingState.rcsSyncing ? "disabled" : ""}>
+        <button class="secondary-link" type="button" data-rcs-template-sync ${customerMessagingState.rcsSyncing || hasInvalidTemplate ? "disabled" : ""}>
           ${customerMessagingState.rcsSyncing ? "Synchronizuji..." : "Synchronizovat s Twilio"}
         </button>
       </div>
+      ${hasInvalidTemplate ? '<p class="notification-error">Synchronizace je zablokovaná: některá karta překračuje 140 znaků nebo nemá platné tlačítko.</p>' : ""}
       ${customerMessagingState.rcsMessage ? `<p class="customer-message-success">${escapeHtml(customerMessagingState.rcsMessage)}</p>` : ""}
       ${customerMessagingState.rcsError ? `<p class="notification-error">${escapeHtml(customerMessagingState.rcsError)}</p>` : ""}
       <div class="rcs-template-grid">
