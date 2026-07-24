@@ -31057,8 +31057,8 @@ function dataBoxPlusFacts(message) {
 }
 
 function dataBoxPlusNotifications(message) {
-  if (!Array.isArray(message?.notifications)) return "";
-  const radimNotification = message.notifications.find((notification) => notification.recipientKey === "radim-oplustil");
+  const notifications = Array.isArray(message?.notifications) ? message.notifications : [];
+  const radimNotification = notifications.find((notification) => notification.recipientKey === "radim-oplustil");
   const statusLabels = {
     prepared: "Připraveno",
     provider_sent: "Odesláno poskytovateli",
@@ -31081,9 +31081,9 @@ function dataBoxPlusNotifications(message) {
           </button>
         `}
       </div>
-      ${message.notifications.length ? `
+      ${notifications.length ? `
         <div class="ds-plus-notifications__list">
-          ${message.notifications.map((notification) => {
+          ${notifications.map((notification) => {
             const status = String(notification.status || "");
             const lastAttempt = notification.lastAttemptAt || notification.updatedAt || notification.createdAt;
             return `
