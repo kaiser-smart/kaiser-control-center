@@ -305,7 +305,7 @@ export function customerMessagingStatus(env = {}) {
   const config = twilioConfig(env);
   return {
     mode: config.mode,
-    twilioConfigured: Boolean(config.accountSid && config.authToken && config.messagingServiceSid),
+    twilioConfigured: Boolean(config.accountSid && config.authPassword && config.messagingServiceSid),
     messagingServiceSidConfigured: Boolean(config.messagingServiceSid),
     rcsSenderIdConfigured: Boolean(config.rcsSenderId),
     statusCallbackUrlConfigured: Boolean(config.statusCallbackUrl),
