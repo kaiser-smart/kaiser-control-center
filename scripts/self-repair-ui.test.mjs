@@ -32,7 +32,8 @@ assert.match(appSource, /status: SELF_REPAIR_ACTIVE_FILTER_VALUE/);
 assert.match(appSource, /selfRepairState\.cases\.find\(\(item\) => !selfRepairCaseIsArchived\(item\)\)/);
 
 assert.match(pageSource, /selfRepairOperationalOverview\(\)/);
-assert.match(pageSource, /Nahlásit problém/);
+assert.doesNotMatch(pageSource, /Nahlásit problém/);
+assert.doesNotMatch(pageSource, /FEEDBACK_ROUTE/);
 assert.match(pageSource, /Hodinová dostupnost \+ denní bezpečný UI audit/);
 assert.match(pageSource, /uiActionContractAttributes\(selfRepairRefreshAction\)/);
 assert.match(pageSource, /Žádný aktivní případ\. Teď není potřeba nic řešit\./);

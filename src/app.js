@@ -35776,9 +35776,6 @@ function selfRepairPage(moduleItem, user) {
           <h1 id="module-title">Samoopravy</h1>
           <p>Jedno místo pro chyby a drobné úpravy z provozu. Systém je pravidelně hledá a ukládá k bezpečnému vyřízení.</p>
           <div class="module-detail__status"><span>Stav</span><strong>Hodinová dostupnost + denní bezpečný UI audit</strong></div>
-          <div class="module-actions">
-            <a class="primary-link" href="${routeHref(`${FEEDBACK_ROUTE}?new=report&module=self-repair&sourceRoute=${encodeURIComponent(SELF_REPAIR_ROUTE)}#feedback-report`)}" data-link>Nahlásit problém</a>
-          </div>
         </div>
       </section>
 
