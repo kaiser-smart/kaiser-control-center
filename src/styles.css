@@ -15,6 +15,648 @@
   --shadow-card-hover: 0 18px 38px rgba(36, 45, 34, 0.14);
 }
 
+/* Detail zaměstnance: krátký read-only přehled, záložky a oddělené editory. */
+.absence-page--employee-card {
+  width: min(1380px, calc(100% - 40px));
+}
+
+.absence-page--employee-card .employee-card {
+  width: 100%;
+  max-width: 1380px;
+  margin-inline: auto;
+}
+
+.employee-detail-tabs {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--color-border, var(--line));
+  border-radius: var(--radius-card, 18px);
+  background: var(--color-card, #ffffff);
+  box-shadow: var(--shadow-card);
+}
+
+.employee-detail-tab {
+  min-width: 0;
+  min-height: 48px;
+  border: 0;
+  border-radius: calc(var(--radius-button, 14px) - 3px);
+  background: transparent;
+  color: var(--color-muted, var(--muted));
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.employee-detail-tab:hover,
+.employee-detail-tab:focus-visible {
+  background: var(--color-surface, #f7f9f4);
+  color: var(--color-text, var(--ink));
+  outline: none;
+}
+
+.employee-detail-tab.is-active {
+  background: var(--color-primary, var(--kaiser-green));
+  color: #ffffff;
+  font-weight: 800;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--color-primary, var(--kaiser-green)) 22%, transparent);
+}
+
+.employee-detail-tab-content {
+  min-width: 0;
+}
+
+.employee-overview-tab,
+.employee-medical-exam-tab {
+  display: grid;
+  gap: 14px;
+}
+
+.employee-overview-identity {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: clamp(18px, 2.4vw, 28px);
+  border: 1px solid var(--color-border, var(--line));
+  border-radius: var(--radius-card, 18px);
+  background:
+    linear-gradient(135deg, var(--color-primary-softer, #f4faef), transparent 56%),
+    var(--color-card, #ffffff);
+  box-shadow: var(--shadow-card);
+}
+
+.employee-overview-identity > div {
+  min-width: 0;
+}
+
+.employee-overview-identity__label {
+  color: var(--color-primary-dark, var(--kaiser-green-dark));
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.employee-overview-identity h2 {
+  margin: 6px 0 5px;
+  color: var(--color-text, var(--ink));
+  font-size: clamp(1.65rem, 3vw, 2.4rem);
+  line-height: 1.05;
+}
+
+.employee-overview-identity p {
+  margin: 0;
+  color: var(--color-muted, var(--muted));
+  font-weight: 600;
+}
+
+.employee-overview-identity__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.employee-overview-identity__meta a {
+  min-width: 0;
+  color: var(--color-primary-dark, var(--kaiser-green-dark));
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.employee-overview-missing {
+  margin: 0;
+  padding: 13px 15px;
+  border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 35%, var(--color-border, var(--line)));
+  border-radius: var(--radius-button, 14px);
+  background: color-mix(in srgb, var(--color-warning, #f59e0b) 9%, var(--color-card, #ffffff));
+  color: var(--color-text, var(--ink));
+  font-weight: 600;
+}
+
+.employee-overview-deadline-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.employee-overview-deadline-grid article {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  align-content: start;
+  padding: 16px;
+  border: 1px solid var(--color-border, var(--line));
+  border-radius: var(--radius-button, 14px);
+  background: var(--color-surface, #f7f9f4);
+}
+
+.employee-overview-deadline-grid span,
+.employee-detail-readonly-grid dt,
+.employee-medical-current-grid dt,
+.employee-medical-exam-summary__status > span,
+.employee-medical-exam-summary__facts span {
+  color: var(--color-muted, var(--muted));
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.employee-overview-deadline-grid strong {
+  color: var(--color-text, var(--ink));
+  font-size: 1.08rem;
+  line-height: 1.25;
+}
+
+.employee-overview-deadline-grid small {
+  min-height: 2.5em;
+  color: var(--color-muted, var(--muted));
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.employee-overview-deadline-grid .text-action {
+  justify-self: start;
+  margin-top: 5px;
+}
+
+.employee-detail-readonly-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.employee-detail-readonly-grid > div {
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--color-border, var(--line));
+  border-radius: var(--radius-button, 14px);
+  background: var(--color-surface, #f7f9f4);
+}
+
+.employee-detail-readonly-grid dd,
+.employee-medical-current-grid dd {
+  margin: 6px 0 0;
+  color: var(--color-text, var(--ink));
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.employee-medical-exam-summary {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.72fr) minmax(0, 2fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: clamp(18px, 2.4vw, 26px);
+  border: 1px solid var(--color-border, var(--line));
+  border-left: 6px solid var(--color-primary, var(--kaiser-green));
+  border-radius: var(--radius-card, 18px);
+  background: var(--color-card, #ffffff);
+  box-shadow: var(--shadow-card);
+}
+
+.employee-medical-exam-summary--warning {
+  border-left-color: var(--color-warning, #f59e0b);
+}
+
+.employee-medical-exam-summary--danger {
+  border-left-color: var(--color-danger, #ef4444);
+}
+
+.employee-medical-exam-summary--waiting {
+  border-left-color: var(--color-muted, #82907e);
+}
+
+.employee-medical-exam-summary__status {
+  display: grid;
+  justify-items: start;
+  gap: 9px;
+}
+
+.employee-medical-exam-summary__hint {
+  margin: 0;
+  color: var(--color-muted, var(--muted));
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.employee-medical-exam-summary__facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.employee-medical-exam-summary__facts > div {
+  min-width: 0;
+}
+
+.employee-medical-exam-summary__facts strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--color-text, var(--ink));
+  font-size: 0.98rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.employee-medical-exam-summary__action {
+  white-space: nowrap;
+}
+
+.employee-medical-current-card {
+  gap: 18px;
+}
+
+.employee-medical-current-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.employee-medical-current-grid > div {
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--color-border, var(--line));
+  border-radius: var(--radius-button, 14px);
+  background: var(--color-surface, #f7f9f4);
+}
+
+.employee-medical-current-grid__wide {
+  grid-column: span 3;
+}
+
+.employee-medical-current-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  justify-content: flex-end;
+}
+
+.employee-medical-current-actions a {
+  text-decoration: none;
+}
+
+.employee-medical-current-actions button:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+.employee-sensitive-groups {
+  display: grid;
+  gap: 12px;
+}
+
+.employee-sensitive-group {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.employee-sensitive-group + .employee-sensitive-group {
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border, var(--line));
+}
+
+.employee-sensitive-group h3,
+.employee-editor-form-section h3,
+.employee-editor-step__heading h3 {
+  margin: 0;
+  color: var(--color-primary-dark, var(--kaiser-green-dark));
+  font-size: 1rem;
+}
+
+.employee-admin-tools {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border, var(--line));
+}
+
+.employee-admin-tools__content {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 14px;
+}
+
+body:has(.employee-editor-backdrop) {
+  overflow: hidden;
+}
+
+.employee-editor-backdrop {
+  position: fixed;
+  z-index: 10020;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(20, 28, 21, 0.42);
+  backdrop-filter: blur(3px);
+}
+
+.employee-editor {
+  display: flex;
+  width: min(780px, calc(100% - 32px));
+  height: 100dvh;
+  min-width: 0;
+  flex-direction: column;
+  background: var(--color-card, #ffffff);
+  box-shadow: -24px 0 60px rgba(20, 28, 21, 0.2);
+}
+
+.employee-editor__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--color-border, var(--line));
+}
+
+.employee-editor__header span,
+.employee-editor-step__heading span {
+  color: var(--color-primary-dark, var(--kaiser-green-dark));
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.employee-editor__header h2 {
+  margin: 4px 0 0;
+  color: var(--color-text, var(--ink));
+  font-size: 1.55rem;
+}
+
+.employee-editor__close {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--color-border, var(--line));
+  border-radius: var(--radius-button, 14px);
+  background: var(--color-surface, #f7f9f4);
+  color: var(--color-text, var(--ink));
+  font: inherit;
+  font-size: 1.35rem;
+  cursor: pointer;
+}
+
+.employee-editor__form {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  gap: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 24px 24px;
+}
+
+.employee-editor-form-section,
+.employee-editor-step {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.employee-editor-step[hidden] {
+  display: none;
+}
+
+.employee-editor-form-section + .employee-editor-form-section {
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border, var(--line));
+}
+
+.employee-editor .employee-hr-profile-section {
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--color-border, var(--line));
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.employee-editor-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--color-border, var(--line));
+}
+
+.employee-editor-steps button {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--color-border, var(--line));
+  border-radius: var(--radius-button, 14px);
+  background: var(--color-surface, #f7f9f4);
+  color: var(--color-muted, var(--muted));
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.employee-editor-steps button span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--color-card, #ffffff);
+  font-size: 0.72rem;
+}
+
+.employee-editor-steps button.is-active,
+.employee-editor-steps button.is-complete {
+  border-color: var(--color-primary-border, var(--line));
+  background: var(--color-primary-soft, #edf8e7);
+  color: var(--color-primary-dark, var(--kaiser-green-dark));
+}
+
+.employee-editor-step__heading {
+  display: grid;
+  gap: 4px;
+}
+
+.employee-medical-term-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.employee-medical-term-grid .employee-card-field {
+  grid-column: 1 / -1;
+}
+
+.employee-editor__footer {
+  display: flex;
+  position: sticky;
+  z-index: 2;
+  bottom: -24px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: auto -24px -24px;
+  padding: 16px 24px calc(16px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-border, var(--line));
+  background: color-mix(in srgb, var(--color-card, #ffffff) 94%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.employee-editor__footer > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 1120px) {
+  .employee-detail-tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .employee-medical-exam-summary {
+    grid-template-columns: minmax(170px, 0.7fr) minmax(0, 2fr);
+  }
+
+  .employee-medical-exam-summary__action {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .employee-medical-exam-summary__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .absence-page--employee-card {
+    width: min(100% - 16px, 1380px);
+  }
+
+  .employee-detail-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .employee-overview-identity,
+  .employee-medical-exam-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-overview-identity {
+    display: grid;
+  }
+
+  .employee-overview-identity > .primary-action,
+  .employee-medical-exam-summary__action {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  .employee-overview-deadline-grid,
+  .employee-detail-readonly-grid,
+  .employee-medical-current-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-medical-current-grid__wide {
+    grid-column: auto;
+  }
+
+  .employee-medical-current-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .employee-medical-current-actions .secondary-link,
+  .employee-medical-current-actions .text-action {
+    width: 100%;
+    min-height: 48px;
+    justify-content: center;
+  }
+
+  .employee-editor {
+    width: 100%;
+  }
+
+  .employee-editor__header {
+    padding: calc(14px + env(safe-area-inset-top)) 16px 14px;
+  }
+
+  .employee-editor-steps {
+    padding: 10px 16px;
+  }
+
+  .employee-editor-steps button {
+    display: grid;
+    gap: 3px;
+    font-size: 0.72rem;
+  }
+
+  .employee-editor-steps button span {
+    margin-inline: auto;
+  }
+
+  .employee-editor__form {
+    padding: 16px 16px 20px;
+  }
+
+  .employee-editor__footer {
+    margin: auto -16px -20px;
+    padding-inline: 16px;
+  }
+
+  .employee-editor__footer,
+  .employee-editor__footer > div {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .employee-editor__footer > div .primary-action,
+  .employee-editor__footer > div .text-action,
+  .employee-editor__footer > .secondary-link {
+    width: 100%;
+  }
+
+  .employee-medical-term-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  .employee-detail-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-medical-exam-summary__facts {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-detail-tab {
+    min-height: 44px;
+  }
+}
+
 /* Pneumatiky */
 .tyres-page {
   --tyres-line: rgba(15, 23, 42, 0.12);

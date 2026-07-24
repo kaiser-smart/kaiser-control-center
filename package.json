@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.704",
+  "version": "0.1.705",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,6 +16,7 @@
     "test:driver-reports": "node scripts/driver-report-context.test.mjs && node scripts/driver-reports-click-ui.test.mjs && node scripts/driver-reports-access-safety.test.mjs",
     "test:driver-tablet-audio": "node scripts/driver-tablet-audio.test.mjs && node scripts/driver-tablet-audio-store.test.mjs",
     "test:dashboard": "node scripts/main-dashboard.test.mjs",
+    "test:employee-detail": "node scripts/employee-detail-ui.test.mjs",
     "test:tyres": "node scripts/tyres-store.test.mjs && node scripts/tyres-ui.test.mjs",
     "test:orwii-fuel": "node scripts/orwii-fuel-store.test.mjs && node scripts/fleet-vehicle-aliases.test.mjs && node scripts/fleet-fuel-analytics.test.mjs",
     "test:vehicle-tracking": "node scripts/tcars-vehicle-detail.test.mjs && node scripts/tcars-pairing-audit.test.mjs && node scripts/vehicle-tracking-maps-config.test.mjs && node scripts/vehicle-tracking-history.test.mjs && node scripts/vehicle-tracking-analytics.test.mjs && node scripts/fleet-trip-job-pairing.test.mjs && node scripts/vehicle-tracking-preferences.test.mjs",

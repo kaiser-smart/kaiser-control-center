@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.704"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.705"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Detail zaměstnance: rychlý přehled a samostatné prohlídky",
+    text: "Karta zaměstnance je nově read-only a rozdělená do sedmi pracovních záložek. Lékařské prohlídky mají jednoznačný stav, termín, připojený dokument a tříkrokovou editaci v bočním panelu; na mobilu se editor otevře přes celou obrazovku. Existující API, oprávnění, audit, dokumenty a ukládání zůstávají zachované."
+  },
   {
     title: "Hlášení řidičů: bezpečný formulář a výběr ND podle VIN",
     text: "Řidič se dostane ke svému hlášení i mobilnímu přehledu, rozepsaný formulář je chráněný před ztrátou a ověření na pozadí je výchozí vypnuté s pravdivým popisem možného e-mailu. Servis má zpět výběr osobních vozidel pro read-only Partslink24 ověření podle VIN a samostatný přehled pravidel a automatizací."
