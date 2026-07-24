@@ -1220,6 +1220,13 @@ Aktuální produkční Twilio konfigurace k 2026-07-24:
 - Regulatory Bundle SID: `BUd7724338659f002703a3d3f31eae13c0`
 - stav Regulatory Bundle: `Approved`
 
+Ověřený produkční test k 2026-07-24:
+- testovací provozní zpráva z KSO na `+420604542004` byla předaná Twiliu jako `accepted`,
+- Twilio message SID testu: `SM83f8051c378c5c546f7c48398016c524`,
+- Radim potvrdil doručení jako RCS,
+- auditní záznam v KSO vznikl v `customer_message_log`,
+- pokud audit zůstane ve stavu `pending`, je potřeba řešit doručovací status callback, ne samotné RCS odeslání.
+
 Twilio Messaging Service musí mít v Sender Poolu současně:
 - schváleného RCS sendera,
 - SMS-capable české mobilní číslo jako fallback.
@@ -1236,6 +1243,7 @@ Runtime konfigurace musí být pouze přes Cloudflare ENV/secrets. Pro zákaznic
 - `TWILIO_RCS_SENDER_ID`
 - `TWILIO_KAISER_STATUS_CALLBACK_URL`
 - `TWILIO_KAISER_INBOUND_WEBHOOK_TOKEN`
+- `TWILIO_KAISER_STATUS_WEBHOOK_TOKEN`
 
 Obecné proměnné zůstávají jen jako fallback pro starší integrace a nesmí v produkci přebít Kaiser zákaznickou messaging službu:
 - `TWILIO_ACCOUNT_SID`
