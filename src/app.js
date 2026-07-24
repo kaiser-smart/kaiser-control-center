@@ -1155,6 +1155,7 @@ const customerMessagingState = {
   loading: false,
   optOutLoading: false,
   savingOptOut: false,
+  sendingTest: false,
   error: "",
   optOutError: "",
   message: "",
@@ -41547,6 +41548,24 @@ function customerOptOutList(canManage) {
   `;
 }
 
+function customerMessageTestForm(canManage) {
+  if (!canManage) {
+    return "";
+  }
+
+  return `
+    <form class="customer-optout-form customer-message-test-form" data-customer-message-test-form>
+      <label>
+        <span>Testovací telefon</span>
+        <input name="phone" value="+420604542004" placeholder="+420..." required />
+      </label>
+      <button class="primary-action" type="submit" ${customerMessagingState.sendingTest ? "disabled" : ""}>
+        ${customerMessagingState.sendingTest ? "Odesílám..." : "Odeslat provozní test"}
+      </button>
+    </form>
+  `;
+}
+
 function customerMessagingSection(user) {
   if (!canViewNotificationCenter(user)) {
     return "";
@@ -41582,6 +41601,16 @@ function customerMessagingSection(user) {
         `).join("")}
       </div>
       ${customerMessagingState.message ? `<p class="customer-message-success">${escapeHtml(customerMessagingState.message)}</p>` : ""}
+      <section class="customer-optout-panel" aria-label="Test zákaznické RCS/SMS">
+        <div class="notification-center__header">
+          <div>
+            <span>Kontrolní odeslání</span>
+            <h3>Provozní test RCS/SMS</h3>
+            <p>Odešle jednu provozní testovací zprávu přes zákaznický backend, audit a opt-out kontrolu.</p>
+          </div>
+        </div>
+        ${customerMessageTestForm(canManage)}
+      </section>
       ${customerMessagingFiltersForm()}
       ${customerMessagesTable()}
       <p class="notification-meta">
@@ -51386,6 +51415,47 @@ async function submitCustomerOptOut(form) {
   }
 }
 
+async function submitCustomerMessageTest(form) {
+  if (customerMessagingState.sendingTest) {
+    return;
+  }
+
+  customerMessagingState.sendingTest = true;
+  customerMessagingState.optOutError = "";
+  customerMessagingState.message = "";
+  const phone = form.elements.phone?.value.trim() || "";
+  render();
+
+  try {
+    const result = await apiJson("/api/customer-messages", {
+      method: "POST",
+      body: JSON.stringify({
+        phone,
+        template: "dispatch_message",
+        variables: {
+          message: "Test RCS/SMS provozní zprávy pro Radima. Pokud je RCS dostupné, dorazí jako RCS; jinak jako SMS fallback."
+        },
+        channelPreference: "rcs",
+        customerId: "radim-test",
+        relatedEntityType: "customer_messaging_test",
+        relatedEntityId: `radim-${new Date().toISOString().slice(0, 10)}`,
+        reason: "provozní test zákaznické RCS/SMS konfigurace se souhlasem Radima",
+        legalBasis: "souhlas Radima s testem ve vlákně Codex dne 2026-07-24",
+        consent: true
+      })
+    });
+    customerMessagingState.message = result.sent
+      ? `Testovací zpráva byla předaná Twiliu. SID: ${result.twilioMessageSid || "čeká na callback"}`
+      : `Testovací zpráva nebyla odeslána: ${result.errorMessage || result.status || "neznámý stav"}`;
+    await loadCustomerMessaging({ render: false, force: true });
+  } catch (error) {
+    customerMessagingState.optOutError = error.payload?.error || "Testovací RCS/SMS zprávu se nepodařilo odeslat.";
+  } finally {
+    customerMessagingState.sendingTest = false;
+    render();
+  }
+}
+
 async function removeCustomerOptOut(phone) {
   const confirmed = window.confirm(`Opravdu odebrat opt-out pro ${phone}? Po odebrání bude možné na číslo znovu posílat provozní RCS/SMS.`);
   if (!confirmed) {
@@ -57447,6 +57517,13 @@ document.addEventListener("submit", async (event) => {
   if (customerOptOutForm) {
     event.preventDefault();
     await submitCustomerOptOut(customerOptOutForm);
+    return;
+  }
+
+  const customerMessageTestForm = event.target.closest("[data-customer-message-test-form]");
+  if (customerMessageTestForm) {
+    event.preventDefault();
+    await submitCustomerMessageTest(customerMessageTestForm);
     return;
   }
 
