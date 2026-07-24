@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.717"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.718"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "RCS šablony: samostatný náhled pro Android a iOS",
+    text: "Mobilní náhled centrálních RCS šablon nově rozlišuje širokou Android Rich Card s akcemi přes šířku od užšího systémového zobrazení v Apple Zprávách. Přepínač u každé šablony pravdivě připomíná, že přesné rozměry, barvy a ikony řídí telefon příjemce."
+  },
   {
     title: "RCS šablony: kratší texty a věrný mobilní náhled",
     text: "Všech osm centrálních šablon používá krátký mobilní text, české datum, bezpečné zkracování dynamických hodnot a neutrální variantu bez jména. Nastavení ukazuje celou kartu včetně nativně vypadajícího tlačítka, počty znaků a blokaci synchronizace nad 140 znaků; schválené bannery zůstaly beze změny."

@@ -20,6 +20,18 @@ import {
   sendRcsTemplateMessage
 } from "../functions/_lib/rcs-template-service.js";
 
+const platformPreviewAppSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+const platformPreviewStylesSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+
+assert.match(platformPreviewAppSource, /data-rcs-preview-platform="android"/);
+assert.match(platformPreviewAppSource, /data-rcs-preview-platform="ios"/);
+assert.match(platformPreviewAppSource, /data-rcs-preview-panel="android"/);
+assert.match(platformPreviewAppSource, /data-rcs-preview-panel="ios"/);
+assert.match(platformPreviewAppSource, /Android obvykle zobrazí akce přes šířku karty/);
+assert.match(platformPreviewStylesSource, /\.rcs-native-card--android/);
+assert.match(platformPreviewStylesSource, /\.rcs-native-card--ios/);
+assert.match(platformPreviewStylesSource, /\.rcs-native-card__action--android/);
+
 const env = {
   PUBLIC_APP_URL: "https://smart-odpady.ai",
   KSO_CUSTOMER_MESSAGING_MODE: "live",

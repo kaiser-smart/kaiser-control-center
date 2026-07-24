@@ -41645,9 +41645,47 @@ function rcsTemplateLengthLabel(template = {}) {
     : "V pořádku";
 }
 
+function rcsTemplatePreviewMedia(template = {}) {
+  return template.bannerUrl
+    ? `<img src="${escapeHtml(template.bannerUrl)}" alt="" loading="lazy" />`
+    : `<div class="rcs-native-card__missing">Schválený banner chybí</div>`;
+}
+
+function rcsTemplateAndroidActions(template = {}) {
+  const actions = Array.isArray(template.actions) ? template.actions : [];
+  if (!actions.length) {
+    return '<span class="rcs-native-card__action rcs-native-card__action--missing">Tlačítko chybí</span>';
+  }
+  return `
+    <div class="rcs-native-card__actions">
+      ${actions.map((action) => `
+        <span class="rcs-native-card__action rcs-native-card__action--android">
+          <span>${escapeHtml(action.title || "")}</span>
+          <span aria-hidden="true">↗</span>
+        </span>
+      `).join("")}
+    </div>
+  `;
+}
+
+function rcsTemplateIosAction(template = {}) {
+  const actions = Array.isArray(template.actions) ? template.actions : [];
+  if (!actions.length) {
+    return '<span class="rcs-native-card__action rcs-native-card__action--missing">Tlačítko chybí</span>';
+  }
+  const action = actions[0];
+  const label = actions.length > 1 ? `Akce (${actions.length})` : action.title || "";
+  return `
+    <span class="rcs-native-card__action rcs-native-card__action--ios">
+      <span>${escapeHtml(label)}</span>
+      <span aria-hidden="true">›</span>
+    </span>
+  `;
+}
+
 function rcsTemplateCard(template = {}) {
-  const action = template.actions?.[0] || null;
   const lengthTone = template.bodyLengthStatus === "too_long" ? "error" : "ready";
+  const previewId = `rcs-preview-${String(template.key || "template").replace(/[^a-z0-9_-]+/gi, "-")}`;
   return `
     <article class="rcs-template-card">
       <div class="rcs-template-card__meta">
@@ -41662,21 +41700,68 @@ function rcsTemplateCard(template = {}) {
       <div class="rcs-device-preview">
         <div class="rcs-device-preview__bar">
           <span>Mobilní náhled celé karty</span>
-          <span>iOS / Android</span>
+          <span>Orientační vykreslení</span>
         </div>
-        <div class="rcs-native-card">
-          ${template.bannerUrl
-            ? `<img src="${escapeHtml(template.bannerUrl)}" alt="" loading="lazy" />`
-            : `<div class="rcs-native-card__missing">Schválený banner chybí</div>`}
-          <div class="rcs-native-card__content">
-            <h5>${escapeHtml(template.sampleTitle || template.label || "")}</h5>
-            <p>${escapeHtml(template.sampleBody || "")}</p>
-            ${action
-              ? `<span class="rcs-native-card__action"><span>${escapeHtml(action.title || "")}</span><span aria-hidden="true">↗</span></span>`
-              : '<span class="rcs-native-card__action rcs-native-card__action--missing">Tlačítko chybí</span>'}
+        <div class="rcs-platform-switch" role="tablist" aria-label="Operační systém náhledu">
+          <button
+            id="${previewId}-android-tab"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="${previewId}-android"
+            data-rcs-preview-platform="android"
+          >Android</button>
+          <button
+            id="${previewId}-ios-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="${previewId}-ios"
+            data-rcs-preview-platform="ios"
+          >iOS</button>
+        </div>
+        <div
+          id="${previewId}-android"
+          class="rcs-platform-panel rcs-platform-panel--android"
+          role="tabpanel"
+          aria-labelledby="${previewId}-android-tab"
+          data-rcs-preview-panel="android"
+        >
+          <div class="rcs-platform-panel__label">
+            <strong>Android</strong>
+            <span>Google Messages</span>
+          </div>
+          <div class="rcs-native-card rcs-native-card--android">
+            ${rcsTemplatePreviewMedia(template)}
+            <div class="rcs-native-card__content">
+              <h5>${escapeHtml(template.sampleTitle || template.label || "")}</h5>
+              <p>${escapeHtml(template.sampleBody || "")}</p>
+              ${rcsTemplateAndroidActions(template)}
+            </div>
           </div>
         </div>
-        <p class="rcs-device-preview__note">Přesný font, barvu a ikonu tlačítka řídí aplikace příjemce.</p>
+        <div
+          id="${previewId}-ios"
+          class="rcs-platform-panel rcs-platform-panel--ios"
+          role="tabpanel"
+          aria-labelledby="${previewId}-ios-tab"
+          data-rcs-preview-panel="ios"
+          hidden
+        >
+          <div class="rcs-platform-panel__label">
+            <strong>iOS</strong>
+            <span>Apple Zprávy</span>
+          </div>
+          <div class="rcs-native-card rcs-native-card--ios">
+            ${rcsTemplatePreviewMedia(template)}
+            <div class="rcs-native-card__content">
+              <h5>${escapeHtml(template.sampleTitle || template.label || "")}</h5>
+              <p>${escapeHtml(template.sampleBody || "")}</p>
+              ${rcsTemplateIosAction(template)}
+            </div>
+          </div>
+        </div>
+        <p class="rcs-device-preview__note">Android obvykle zobrazí akce přes šířku karty. iOS používá systémové akce; přesnou šířku, barvu a ikonu řídí aplikace příjemce.</p>
       </div>
       <div class="rcs-template-lengths" aria-label="Kontrola délky textu">
         <span>Nadpis: <strong>${escapeHtml(String(template.titleLength ?? 0))} znaků</strong></span>
@@ -61315,6 +61400,19 @@ document.addEventListener("click", async (event) => {
   if (rcsTemplateSync) {
     event.preventDefault();
     await synchronizeRcsTemplateCenter();
+    return;
+  }
+
+  const rcsPreviewPlatform = event.target.closest("[data-rcs-preview-platform]");
+  if (rcsPreviewPlatform) {
+    const preview = rcsPreviewPlatform.closest(".rcs-device-preview");
+    const platform = rcsPreviewPlatform.dataset.rcsPreviewPlatform;
+    preview?.querySelectorAll("[data-rcs-preview-platform]").forEach((button) => {
+      button.setAttribute("aria-selected", button === rcsPreviewPlatform ? "true" : "false");
+    });
+    preview?.querySelectorAll("[data-rcs-preview-panel]").forEach((panel) => {
+      panel.hidden = panel.dataset.rcsPreviewPanel !== platform;
+    });
     return;
   }
 

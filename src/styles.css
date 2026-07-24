@@ -51136,7 +51136,8 @@ body.collection-driver-blackview-simulator-active #app {
 .rcs-device-preview {
   display: grid;
   gap: 8px;
-  max-width: 390px;
+  width: 100%;
+  max-width: 420px;
   margin: 0 auto;
   padding: 10px;
   border: 1px solid #d9dcdf;
@@ -51154,12 +51155,81 @@ body.collection-driver-blackview-simulator-active #app {
   font-weight: 700;
 }
 
+.rcs-platform-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: #e3e4e7;
+}
+
+.rcs-platform-switch button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 10px;
+  color: #676d74;
+  background: transparent;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rcs-platform-switch button[aria-selected="true"] {
+  color: #1f2428;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(30, 35, 39, 0.12);
+}
+
+.rcs-platform-switch button:focus-visible {
+  outline: 3px solid rgba(117, 189, 37, 0.28);
+  outline-offset: 1px;
+}
+
+.rcs-platform-panel[hidden] {
+  display: none;
+}
+
+.rcs-platform-panel {
+  display: grid;
+  gap: 6px;
+}
+
+.rcs-platform-panel__label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+  color: #6d7278;
+  font-size: 0.7rem;
+}
+
+.rcs-platform-panel__label strong {
+  color: #30353a;
+  font-size: 0.76rem;
+}
+
 .rcs-native-card {
   overflow: hidden;
   border: 1px solid #dedfe2;
   border-radius: 20px;
   background: #e9e9eb;
   box-shadow: 0 6px 18px rgba(30, 35, 39, 0.08);
+}
+
+.rcs-native-card--android {
+  width: 100%;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.rcs-native-card--ios {
+  width: calc(100% - 34px);
+  max-width: 350px;
+  border-radius: 20px;
+  background: #e9e9eb;
 }
 
 .rcs-native-card img {
@@ -51198,6 +51268,11 @@ body.collection-driver-blackview-simulator-active #app {
   line-height: 1.35;
 }
 
+.rcs-native-card__actions {
+  display: grid;
+  gap: 7px;
+}
+
 .rcs-native-card__action {
   display: flex;
   align-items: center;
@@ -51214,6 +51289,23 @@ body.collection-driver-blackview-simulator-active #app {
   font-weight: 600;
 }
 
+.rcs-native-card__action--android {
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 0;
+  border: 1px solid #6b9f42;
+  border: 1px solid color-mix(in srgb, var(--accent, #75bd25) 72%, #35402d);
+  border-radius: 10px;
+  color: #274613;
+  background: #eff8e8;
+  background: color-mix(in srgb, var(--accent, #75bd25) 17%, #fff);
+  text-align: center;
+}
+
+.rcs-native-card__action--ios {
+  border-radius: 999px;
+}
+
 .rcs-native-card__action > span:last-child {
   display: grid;
   width: 24px;
@@ -51224,6 +51316,15 @@ body.collection-driver-blackview-simulator-active #app {
   color: #fff;
   background: #858990;
   font-size: 0.75rem;
+}
+
+.rcs-native-card__action--android > span:last-child {
+  width: auto;
+  height: auto;
+  flex-basis: auto;
+  color: currentColor;
+  background: transparent;
+  font-size: 0.85rem;
 }
 
 .rcs-native-card__action--missing {
@@ -51284,13 +51385,22 @@ body.collection-driver-blackview-simulator-active #app {
     padding: 13px;
   }
 
-  .rcs-device-preview {
-    width: 100%;
-  }
-
   .rcs-template-lengths .rcs-template-status {
     width: 100%;
     margin-left: 0;
     text-align: center;
+  }
+}
+
+@media (max-width: 360px) {
+  .rcs-device-preview__bar,
+  .rcs-platform-panel__label {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .rcs-native-card--ios {
+    width: calc(100% - 18px);
   }
 }

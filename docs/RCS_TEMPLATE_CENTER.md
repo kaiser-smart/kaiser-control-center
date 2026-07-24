@@ -35,9 +35,11 @@ Datum a jméno příjemce se výpustkou nezkracují. Výsledný body nesmí pře
 140 znaků; delší vstup se bezpečně zkrátí, nebo se odeslání a synchronizace
 zastaví.
 
-Nastavení zobrazuje banner, nadpis, celý body i akční tlačítko. Náhled
-napodobuje mobilní kartu, ale přesný font, barvu a systémovou ikonu tlačítka
-řídí Apple Zprávy nebo Android Messages a Twilio je neumí přepsat vlastním
+Nastavení zobrazuje banner, nadpis, celý body i akční tlačítko. Přepínač
+odděluje orientační náhled pro Android / Google Messages od iOS / Apple
+Zpráv. Android ukazuje akce přes dostupnou šířku Rich Card, zatímco iOS
+používá užší kartu a systémovou prezentaci akcí. Přesný font, rozměr, barvu
+a systémovou ikonu řídí aplikace příjemce a Twilio je neumí přepsat vlastním
 CSS. U každé karty je proto vidět počet znaků nadpisu a body a stav
 `V pořádku` / `Příliš dlouhé`.
 
