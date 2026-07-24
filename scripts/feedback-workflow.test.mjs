@@ -138,11 +138,25 @@ assert.equal(retried.case.id, created.case.id);
 assert.equal(retried.deduplicated, true);
 assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM self_repair_cases").get().count, 1);
 
+sqlite.prepare(`
+  UPDATE self_repair_cases
+  SET module_key = 'self-repair',
+      module_name = 'Samoopravy',
+      title = '[PRODUKČNÍ TEST] Samoopravy Fáze 1'
+  WHERE id = ?
+`).run(created.case.id);
+
 const sharedList = await listFeedbackCases(env, anotherUser);
 assert.equal(sharedList.cases.length, 1);
 assert.equal(sharedList.cases[0].isOwn, false);
+assert.equal(sharedList.cases[0].moduleName, "Připomínky a chyby");
+assert.equal(sharedList.cases[0].title, "Technické ověření systému");
 assert.equal("internalNote" in sharedList.cases[0], false);
 assert.equal("automationStatus" in sharedList.cases[0], false);
+
+const managerList = await listFeedbackCases(env, manager);
+assert.equal(managerList.cases[0].moduleName, "Samoopravy");
+assert.equal(managerList.cases[0].title, "[PRODUKČNÍ TEST] Samoopravy Fáze 1");
 
 const otherOwn = await listFeedbackCases(env, anotherUser, { own: true });
 assert.equal(otherOwn.cases.length, 0);
