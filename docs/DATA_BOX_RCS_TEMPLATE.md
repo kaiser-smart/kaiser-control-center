@@ -10,6 +10,7 @@ důvod se uloží jako `data_box_rcs_template_missing`.
 
 - interní klíč: `data_box_new_message`
 - doporučený Twilio friendly name: `kaiser_data_box_new_message_v1`
+- ověřený RCS sender / značka: `Kaiser servis`
 - typ: `twilio/card`
 - orientace: `VERTICAL`
 - nadpis: `Nová datová zpráva`

@@ -21,6 +21,10 @@ export const versionInfo = {
 
 export const versionNews = [
   {
+    title: "Datové schránky: auditované RCS upozornění bez duplicit",
+    text: "První uložení nové příchozí zprávy připraví dvě samostatná upozornění pro Radima Opluštila a Alenu Trnečkovou podle aktivních telefonů v centrální evidenci. D1 idempotence blokuje duplicity, Twilio callback ukládá skutečné stavy a oprávněný detail ukazuje pouze doložené výsledky. Ostré odesílání zůstává bezpečně blokované, dokud není doplněná schválená RCS Content šablona a grafický podklad."
+  },
+  {
     title: "Samoopravy: bez duplicitního hlášení problému",
     text: "Z interního modulu Samoopravy bylo odstraněné tlačítko Nahlásit problém. Uživatelské hlášení chyb a připomínek zůstává dostupné v určeném modulu Připomínky a chyby."
   },
