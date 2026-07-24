@@ -28,6 +28,17 @@ function nullableString(value) {
   return cleaned || null;
 }
 
+function base64Encode(value) {
+  const bytes = new TextEncoder().encode(String(value ?? ""));
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function twilioBasicAuthHeader(username, password) {
+  return `Basic ${base64Encode(`${username}:${password}`)}`;
+}
+
 function twilioConfig(env = {}) {
   const accountSid = cleanString(env.TWILIO_KAISER_ACCOUNT_SID || env.KAISER_TWILIO_ACCOUNT_SID || env.TWILIO_ACCOUNT_SID);
   const authToken = cleanString(env.TWILIO_KAISER_AUTH_TOKEN || env.KAISER_TWILIO_AUTH_TOKEN || env.TWILIO_AUTH_TOKEN);
@@ -98,7 +109,7 @@ async function twilioPostMessage(config, { to, body, channel }) {
   const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(config.accountSid)}/Messages.json`, {
     method: "POST",
     headers: {
-      Authorization: `Basic ${btoa(`${config.authUsername}:${config.authPassword}`)}`,
+      Authorization: twilioBasicAuthHeader(config.authUsername, config.authPassword),
       "Content-Type": "application/x-www-form-urlencoded"
     },
     body: new URLSearchParams({

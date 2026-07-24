@@ -18,6 +18,17 @@ function nullableString(value) {
   return cleaned || null;
 }
 
+function base64Encode(value) {
+  const bytes = new TextEncoder().encode(String(value ?? ""));
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function twilioBasicAuthHeader(username, password) {
+  return `Basic ${base64Encode(`${username}:${password}`)}`;
+}
+
 function idValue(prefix) {
   const suffix = globalThis.crypto?.randomUUID
     ? globalThis.crypto.randomUUID()
@@ -256,7 +267,7 @@ async function postTwilio(cfg, phone, variables, fetchImpl) {
     {
       method: "POST",
       headers: {
-        Authorization: `Basic ${btoa(`${cfg.authUsername}:${cfg.authPassword}`)}`,
+        Authorization: twilioBasicAuthHeader(cfg.authUsername, cfg.authPassword),
         "Content-Type": "application/x-www-form-urlencoded"
       },
       body: new URLSearchParams({
