@@ -151,6 +151,10 @@ function feedbackUrl(env) {
   return `${appBaseUrl(env).replace(/\/+$/, "")}/pripominky`;
 }
 
+function feedbackCaseUrl(env, caseId) {
+  return `${feedbackUrl(env)}/${encodeURIComponent(cleanString(caseId))}`;
+}
+
 function dashboardUrl(env) {
   return `${appBaseUrl(env).replace(/\/+$/, "")}/`;
 }
@@ -1203,6 +1207,63 @@ export async function sendModuleFeedbackResolvedNotification(env, feedback, opti
     relatedEntityType: "module_feedback",
     messagePreview: resolutionMessage || "Připomínka byla označena jako Hotovo."
   });
+}
+
+function renderFeedbackReadyForVerificationEmail({ item, recipientName, resolutionMessage, ctaUrl }) {
+  const subject = "Smart odpady – oprava je připravená k ověření";
+  return `<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${htmlEscape(subject)}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body style="margin:0;padding:0;background:#f7f9f4;font-family:'Quicksand',Arial,Helvetica,sans-serif;color:#1f2921;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#f7f9f4;">
+    <tr>
+      <td align="center" style="padding:42px 16px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:640px;background:#ffffff;border:1px solid #e1e6de;border-radius:16px;overflow:hidden;">
+          <tr>
+            <td style="padding:40px 42px 42px;">
+              <p style="display:inline-block;margin:0 0 24px;padding:10px 22px;border-radius:14px;background:#75bd25;font-size:26px;line-height:30px;font-weight:700;color:#fff;">kaiser.</p>
+              <p style="margin:0 0 12px;font-size:13px;line-height:20px;font-weight:800;color:#476f1d;">PŘIPRAVENO K OVĚŘENÍ</p>
+              <h1 style="margin:0 0 14px;font-size:36px;line-height:42px;font-weight:800;color:#1f2921;">Oprava je připravená. Prosíme o test.</h1>
+              <p style="margin:0 0 24px;font-size:17px;line-height:27px;font-weight:600;color:#566159;">Dobrý den${recipientName ? `, ${htmlEscape(recipientName)}` : ""}, hlášení <strong>${htmlEscape(item.caseNumber || item.id)}</strong> „${htmlEscape(item.title)}“ bylo opraveno a čeká na vaše ověření.</p>
+              ${resolutionMessage ? `<div style="margin:0 0 24px;padding:18px 20px;border-radius:14px;background:#f5f8f1;border:1px solid #e0e8d9;"><p style="margin:0;font-size:15px;line-height:24px;font-weight:600;color:#3f4a45;">${htmlEscape(resolutionMessage).replaceAll("\n", "<br>")}</p></div>` : ""}
+              <p style="margin:0 0 28px;font-size:15px;line-height:24px;font-weight:600;color:#566159;">V detailu hlášení klikněte na <strong>Oprava funguje</strong>, nebo nám dejte vědět, že problém stále trvá.</p>
+              <a href="${htmlEscape(ctaUrl)}" style="display:inline-block;padding:14px 22px;border-radius:12px;background:#75bd25;color:#ffffff;text-decoration:none;font-size:16px;line-height:22px;font-weight:800;">Otevřít hlášení a otestovat</a>
+              <p style="margin:30px 0 0;font-size:13px;line-height:20px;font-weight:500;color:#8a9388;">Automatická zpráva ze systému Smart odpady.<br>Kaiser servis, spol. s r.o.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+export async function sendFeedbackReadyForVerificationNotification(env, item, options = {}) {
+  const recipientName = cleanString(options.recipientName || item.reporterUserName);
+  const resolutionMessage = cleanString(options.resolutionMessage || item.publicMessage);
+  const result = await sendEmail(env, {
+    type: "feedback_ready_for_verification_email",
+    to: cleanString(options.recipientEmail),
+    subject: "Smart odpady – oprava je připravená k ověření",
+    html: renderFeedbackReadyForVerificationEmail({
+      item,
+      recipientName,
+      resolutionMessage,
+      ctaUrl: feedbackCaseUrl(env, item.id)
+    }),
+    relatedEntityId: item.id,
+    recipientName,
+    moduleId: "feedback",
+    relatedEntityType: "feedback_case",
+    messagePreview: resolutionMessage || "Oprava je připravená k ověření."
+  });
+  return { ...result, provider: "SendGrid" };
 }
 
 export async function sendVersionNewsNotification(env, news, options = {}) {

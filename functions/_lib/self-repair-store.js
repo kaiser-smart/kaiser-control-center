@@ -132,6 +132,16 @@ function randomId(prefix) {
   return `${prefix}-${suffix}`;
 }
 
+function feedbackCaseNumber(caseId, createdAt) {
+  const date = cleanText(createdAt, 40).slice(0, 10).replaceAll("-", "");
+  const suffix = cleanText(caseId, 200)
+    .replace(/^self-repair-case-/, "")
+    .replace(/[^a-z0-9]/gi, "")
+    .slice(0, 6)
+    .toUpperCase();
+  return `KSO-${date || "CASE"}-${suffix || stableHash(caseId).slice(0, 6).toUpperCase()}`;
+}
+
 function safeAttachmentFilename(value) {
   return cleanText(value, 240)
     .replace(/[\\/]+/g, "-")
@@ -357,6 +367,7 @@ function rowToCase(row) {
 
   return {
     id: cleanText(row.id, 200),
+    caseNumber: cleanText(row.case_number, 80) || feedbackCaseNumber(row.id, row.created_at),
     feedbackId: cleanText(row.feedback_id, 200),
     source: cleanText(row.source, 80),
     caseType,
@@ -379,6 +390,18 @@ function rowToCase(row) {
     buildVersion: cleanText(row.build_version, 100),
     buildCommit: cleanText(row.build_commit, 160),
     browserInfo: cleanText(row.browser_info, 600),
+    screenInfo: cleanText(row.screen_info, 300),
+    technicalContext: parseJson(row.technical_context_json, {}),
+    workflowStatus: cleanText(row.workflow_status, 80) || "new",
+    assigneeUserId: cleanText(row.assignee_user_id, 200),
+    assigneeUserName: cleanText(row.assignee_user_name, 240),
+    publicMessage: cleanText(row.public_message, 8000),
+    detailsQuestion: cleanText(row.details_question, 8000),
+    resumeWorkflowStatus: cleanText(row.resume_workflow_status, 80) || "accepted",
+    automationStatus: cleanText(row.automation_status, 80) || "not_evaluated",
+    lastPublicUpdateAt: cleanText(row.last_public_update_at, 80),
+    readyForVerificationAt: cleanText(row.ready_for_verification_at, 80),
+    verifiedAt: cleanText(row.verified_at, 80),
     reporterUserId: cleanText(row.reporter_user_id, 200),
     reporterUserName: cleanText(row.reporter_user_name, 240),
     fingerprint: cleanText(row.fingerprint, 200),
@@ -465,6 +488,13 @@ function normalizeUserReport(input, currentUser, target) {
     buildVersion: cleanText(input.buildVersion, 100),
     buildCommit: cleanText(input.buildCommit, 160),
     browserInfo: cleanText(input.browserInfo, 600),
+    screenInfo: cleanText(input.screenInfo, 300),
+    technicalContext: typeof input.technicalContext === "string"
+      ? parseJson(input.technicalContext, {})
+      : input.technicalContext && typeof input.technicalContext === "object"
+        ? input.technicalContext
+        : {},
+    clientRequestId: cleanText(input.clientRequestId, 200),
     reporterUserId,
     reporterUserName: cleanText(currentUser?.name || currentUser?.email || "Uživatel", 240)
   };
@@ -479,8 +509,29 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
 
   const preparedAttachment = await normalizeSelfRepairAttachment(options.attachment);
   const report = normalizeUserReport(input, currentUser, target);
+  if (report.clientRequestId) {
+    try {
+      const existingRow = await db.prepare(`
+        SELECT *
+        FROM self_repair_cases
+        WHERE client_request_id = ? AND reporter_user_id = ? AND source = 'user_feedback'
+        LIMIT 1
+      `).bind(report.clientRequestId, report.reporterUserId).first();
+      if (existingRow) {
+        return {
+          case: rowToCase(existingRow),
+          feedback: null,
+          attachment: null,
+          deduplicated: true
+        };
+      }
+    } catch (error) {
+      if (!cleanText(error?.message, 1000).includes("no such column")) throw error;
+    }
+  }
   const now = new Date().toISOString();
   const caseId = randomId("self-repair-case");
+  const caseNumber = feedbackCaseNumber(caseId, now);
   const feedbackId = randomId("module-feedback");
   const evidenceId = randomId("self-repair-evidence");
   const auditId = randomId("self-repair-audit");
@@ -496,6 +547,8 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
     buildVersion: report.buildVersion,
     buildCommit: report.buildCommit,
     browserInfo: report.browserInfo,
+    screenInfo: report.screenInfo,
+    technicalContext: report.technicalContext,
     expectedBehavior: report.expectedBehavior,
     actualBehavior: report.actualBehavior,
     reproductionSteps: report.reproductionSteps
@@ -513,6 +566,7 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
   }) : null;
   const createdCase = {
     id: caseId,
+    caseNumber,
     feedbackId,
     ...report,
     caseTypeLabel: SELF_REPAIR_CASE_TYPE_LABELS[report.caseType],
@@ -524,6 +578,18 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
     lastSeenAt: now,
     triageSummary: "",
     internalNote: "",
+    workflowStatus: "new",
+    assigneeUserId: "",
+    assigneeUserName: "",
+    publicMessage: "",
+    detailsQuestion: "",
+    resumeWorkflowStatus: "accepted",
+    automationStatus: "not_evaluated",
+    screenInfo: report.screenInfo,
+    technicalContext: report.technicalContext,
+    lastPublicUpdateAt: "",
+    readyForVerificationAt: "",
+    verifiedAt: "",
     attachments: attachment ? [attachment] : [],
     createdAt: now,
     updatedAt: now,
@@ -609,8 +675,11 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
           source_route, build_version, build_commit, browser_info,
           reporter_user_id, reporter_user_name, fingerprint, occurrence_count,
           first_seen_at, last_seen_at, triage_summary, internal_note,
-          created_at, updated_at, updated_by_user_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          created_at, updated_at, updated_by_user_id, case_number, workflow_status,
+          assignee_user_id, assignee_user_name, public_message, details_question,
+          resume_workflow_status, automation_status, screen_info, technical_context_json,
+          last_public_update_at, ready_for_verification_at, verified_at, client_request_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', NULL, NULL, NULL, NULL, 'accepted', 'not_evaluated', ?, ?, NULL, NULL, NULL, ?)
       `).bind(
         caseId,
         feedbackId,
@@ -642,7 +711,11 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
         null,
         now,
         now,
-        report.reporterUserId
+        report.reporterUserId,
+        caseNumber,
+        nullableText(report.screenInfo, 300),
+        safeJson(report.technicalContext, {}),
+        nullableText(report.clientRequestId, 200)
       ),
       db.prepare(`
         INSERT INTO self_repair_case_evidence (
@@ -676,6 +749,8 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
           status: "new",
           riskLevel: "unclassified",
           moduleKey: report.moduleKey,
+          workflowStatus: "new",
+          caseNumber,
           targetRepoKey: report.targetRepoKey,
           feedbackId,
           attachmentId: attachment?.id || "",
@@ -719,6 +794,23 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
           storageKey: attachmentKey,
           message: cleanText(cleanupError?.message, 500)
         });
+      }
+    }
+    const errorMessage = cleanText(error?.message, 1000).toLowerCase();
+    if (report.clientRequestId && (errorMessage.includes("unique") || errorMessage.includes("constraint"))) {
+      const existingRow = await db.prepare(`
+        SELECT *
+        FROM self_repair_cases
+        WHERE client_request_id = ? AND reporter_user_id = ? AND source = 'user_feedback'
+        LIMIT 1
+      `).bind(report.clientRequestId, report.reporterUserId).first();
+      if (existingRow) {
+        return {
+          case: rowToCase(existingRow),
+          feedback: null,
+          attachment: null,
+          deduplicated: true
+        };
       }
     }
     if (error instanceof SelfRepairStoreError) throw error;
@@ -1167,7 +1259,9 @@ export async function getSelfRepairAttachmentFile(env, currentUser, caseIdValue,
 
     const sameReporter = cleanText(row.reporter_user_id, 200).toLowerCase()
       === cleanText(currentUser?.id || currentUser?.email, 200).toLowerCase();
+    const publicAttachment = cleanText(row.visibility, 40) !== "internal";
     const canRead = hasPermission(currentUser, "self-repair", "view")
+      || (publicAttachment && hasPermission(currentUser, "feedback", "view"))
       || (sameReporter && hasPermission(currentUser, "feedback", "view"));
     if (!canRead) {
       throw new SelfRepairStoreError("Nemáte oprávnění zobrazit tuto přílohu.", 403, "self_repair_attachment_forbidden");

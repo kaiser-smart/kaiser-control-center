@@ -98,6 +98,7 @@ sqlite.exec(readFileSync(new URL("../migrations/0016_create_module_automation_ru
 sqlite.exec(readFileSync(new URL("../migrations/0034_create_self_repair_cases.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../migrations/0035_activate_self_repair_hourly_monitor.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../migrations/0051_create_self_repair_case_attachments.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../migrations/0060_create_feedback_case_workflow.sql", import.meta.url), "utf8"));
 
 const attachmentBucket = new R2Bucket();
 const env = {
@@ -226,10 +227,13 @@ assert.equal(downloaded.attachment.filename, "doklad-testu.txt");
 assert.equal(Buffer.from(downloaded.body).toString("utf8"), "Testovací příloha k managerské připomínce.");
 assert.equal(downloaded.headers["Cache-Control"], "private, no-store");
 
-await assert.rejects(
-  getSelfRepairAttachmentFile(env, { ...reporter, id: "user-driver-2", active: true }, created.case.id, created.attachment.id),
-  (error) => error instanceof SelfRepairStoreError && error.code === "self_repair_attachment_forbidden"
+const sharedAttachment = await getSelfRepairAttachmentFile(
+  env,
+  { ...reporter, id: "user-driver-2", active: true },
+  created.case.id,
+  created.attachment.id
 );
+assert.equal(sharedAttachment.attachment.filename, "doklad-testu.txt");
 
 const updated = await updateSelfRepairCase(env, manager, created.case.id, {
   status: "closed",

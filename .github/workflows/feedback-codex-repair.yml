@@ -1,0 +1,69 @@
+name: Feedback case · Codex repair
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: Internal idempotency key
+        required: true
+        type: string
+      case_id:
+        description: Feedback case ID
+        required: true
+        type: string
+      case_number:
+        description: Human-readable case number
+        required: true
+        type: string
+      prompt:
+        description: Admin-reviewed repair assignment
+        required: true
+        type: string
+
+jobs:
+  generate_patch:
+    name: Prepare repair patch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run Codex
+        id: codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          sandbox: workspace-write
+          safety-strategy: drop-sudo
+          output-file: codex-result.md
+          prompt: |
+            Toto je ručně zkontrolované zadání z interního modulu Připomínky a chyby.
+            Případ: ${{ inputs.case_number }} (${{ inputs.case_id }})
+            Interní job: ${{ inputs.job_id }}
+
+            ${{ inputs.prompt }}
+
+            Implementuj opravu a proveď cílené testy. Nevytvářej release, neodesílej
+            komunikaci a nic nenasazuj. Na konci ponech změny pouze v pracovním stromu
+            a jasně popiš výsledek v codex-result.md.
+
+      - name: Create reviewable patch
+        run: |
+          git add -N .
+          git diff --binary HEAD > codex.patch
+          test -s codex-result.md
+
+      - name: Upload Codex result
+        uses: actions/upload-artifact@v4
+        with:
+          name: feedback-${{ inputs.case_number }}-${{ inputs.job_id }}
+          path: |
+            codex.patch
+            codex-result.md
+          if-no-files-found: error
+          retention-days: 30

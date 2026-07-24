@@ -82,7 +82,7 @@ async function versionCopiedModuleImports(directory) {
 const fixedRouteEntries = [
   { path: "/", moduleKey: "dashboard", label: "Hlavní stránka" },
   { path: "/sarlota", moduleKey: "dashboard", label: "Šarlota" },
-  { path: "/pripominky", moduleKey: "feedback", label: "Připomínky" },
+  { path: "/pripominky", moduleKey: "feedback", label: "Připomínky a chyby" },
   { path: "/dovolena-nemoc/rychle-zadani", moduleKey: "absence", label: "Nepřítomnosti – rychlé zadání" },
   { path: "/dovolena-nemoc/moje-zadosti", moduleKey: "absence", label: "Nepřítomnosti – moje žádosti" },
   { path: "/dovolena-nemoc/nova-zadost", moduleKey: "absence", label: "Nepřítomnosti – nová žádost" },
@@ -163,6 +163,7 @@ await writeFile(path.join(dist, "index.html"), versionedTemplate());
 await writeFile(path.join(dist, "404.html"), versionedTemplate());
 await writeFile(path.join(dist, "_redirects"), [
   "/sarlota /sarlota/index.html 200",
+  "/pripominky/* /index.html 200",
   "/dovolena-nemoc/* /index.html 200",
   "/vozovy-park/* /index.html 200",
   "/sledovani-vozidel/* /index.html 200",

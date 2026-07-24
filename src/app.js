@@ -60,6 +60,8 @@ import {
 } from "./data/dataBoxPlusChat.js";
 import { DATA_BOX_PLUS_MANTRA } from "./data/dataBoxPlusMantra.js?v=1.0";
 import { DATA_BOX_PLUS_OPERATIONAL_CONTRACT } from "./data/dataBoxPlusOperationalContract.js";
+import { FEEDBACK_MANTRA } from "./data/feedbackMantra.js";
+import { FEEDBACK_OPERATIONAL_CONTRACT } from "./data/feedbackOperationalContract.js";
 import {
   receivablesActiveTab,
   receivablesHashTargetId
@@ -317,12 +319,12 @@ const app = document.querySelector("#app");
 const orderedModules = [...modules].sort((a, b) => a.order - b.order);
 const feedbackMenuItem = {
   id: "feedback",
-  title: "Úkoly a připomínky",
-  description: "Věci k dořešení, nápady z provozu a jejich stav.",
+  title: "Připomínky a chyby",
+  description: "Nahlášení problému, průběh řešení a ověření opravy.",
   route: "/pripominky",
   icon: ReportsIcon,
   status: "správa",
-  ctaLabel: "Zobrazit úkoly",
+  ctaLabel: "Otevřít hlášení",
   active: true,
   disabled: false,
   order: 15
@@ -357,6 +359,27 @@ const SELF_REPAIR_STATUS_OPTIONS = [
   { value: "rejected", label: "Zamítnuto" },
   { value: "duplicate", label: "Duplicitní" },
   { value: "closed", label: "Uzavřeno" }
+];
+const FEEDBACK_WORKFLOW_STATUS_OPTIONS = [
+  { value: "new", label: "Nové" },
+  { value: "accepted", label: "Přijato" },
+  { value: "needs_details", label: "Potřebujeme doplnit" },
+  { value: "in_progress", label: "V řešení" },
+  { value: "ready_for_verification", label: "Připraveno k ověření" },
+  { value: "done", label: "Hotovo" },
+  { value: "rejected", label: "Zamítnuto" },
+  { value: "duplicate", label: "Duplicitní" }
+];
+const FEEDBACK_AUTOMATION_STATUS_OPTIONS = [
+  { value: "not_evaluated", label: "Nevyhodnoceno" },
+  { value: "waiting_for_review", label: "Čeká na kontrolu" },
+  { value: "suitable", label: "Vhodné pro automatickou opravu" },
+  { value: "unsuitable", label: "Nevhodné pro automatickou opravu" },
+  { value: "proposal_ready", label: "Návrh připraven" },
+  { value: "waiting_for_approval", label: "Čeká na schválení" },
+  { value: "deployed", label: "Nasazeno" },
+  { value: "verified", label: "Ověřeno" },
+  { value: "failed", label: "Selhalo" }
 ];
 const SELF_REPAIR_RISK_OPTIONS = [
   { value: "unclassified", label: "Nezatříděno" },
@@ -970,6 +993,55 @@ const feedbackState = {
   apiStatus: "waiting",
   savingId: "",
   cardMessages: {}
+};
+const feedbackWorkflowState = {
+  cases: [],
+  total: 0,
+  ownTotal: 0,
+  permissions: {
+    canCreate: false,
+    canManage: false
+  },
+  notifications: [],
+  unreadCount: 0,
+  loaded: false,
+  loading: false,
+  detailId: "",
+  detail: null,
+  detailLoading: false,
+  saving: false,
+  actionId: "",
+  message: "",
+  error: "",
+  emailResult: null,
+  created: null,
+  attachmentFile: null,
+  attachmentName: "",
+  clientRequestId: globalThis.crypto?.randomUUID?.() || `feedback-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  filters: {
+    status: "",
+    priority: "",
+    module: "",
+    author: "",
+    assignee: "",
+    search: ""
+  },
+  draft: {
+    caseType: "bug",
+    moduleKey: "",
+    title: "",
+    description: "",
+    expectedBehavior: "",
+    sourceRoute: ""
+  },
+  baseline: {
+    caseType: "bug",
+    moduleKey: "",
+    title: "",
+    description: "",
+    expectedBehavior: "",
+    sourceRoute: ""
+  }
 };
 const feedbackCreateState = {
   open: false,
@@ -5873,6 +5945,24 @@ function currentSelfRepairReportDirtyTarget() {
   };
 }
 
+function currentFeedbackWorkflowDirtyTarget() {
+  if (
+    normalizePath(window.location.pathname) !== FEEDBACK_ROUTE ||
+    feedbackWorkflowActiveTab(currentUser()) !== "new" ||
+    feedbackWorkflowState.created
+  ) {
+    return null;
+  }
+  const form = document.querySelector("[data-feedback-workflow-report-form]");
+  const current = form ? updateFeedbackWorkflowDraft(form) : feedbackWorkflowState.draft;
+  return {
+    type: "feedback-workflow",
+    form,
+    current,
+    isDirty: feedbackWorkflowDraftIsDirty(current)
+  };
+}
+
 function currentTyresDirtyTarget() {
   if (normalizePath(window.location.pathname) !== "/pneumatiky") {
     return null;
@@ -5945,6 +6035,12 @@ function currentDirtyTarget() {
 
   if (selfRepairReportTarget?.isDirty) {
     return selfRepairReportTarget;
+  }
+
+  const feedbackWorkflowTarget = currentFeedbackWorkflowDirtyTarget();
+
+  if (feedbackWorkflowTarget?.isDirty) {
+    return feedbackWorkflowTarget;
   }
 
   const tyresTarget = currentTyresDirtyTarget();
@@ -41984,9 +42080,8 @@ function feedbackAdminItem(item, canEdit) {
 
       ${canEdit ? (isSelfRepairTicket ? `
         <section class="feedback-ticket__readonly feedback-ticket__readonly--self-repair" aria-label="Správa v Samoopravách">
-          <strong>Správa v Samoopravách</strong>
-          <p>Stav, riziko a interní poznámku upravte v modulu Samoopravy. E-mail uživateli je ve Fázi 1 vypnutý.</p>
-          <a class="secondary-link" href="${routeHref(SELF_REPAIR_ROUTE)}" data-link>Otevřít Samoopravy</a>
+          <strong>Hlášení bylo převedeno do nového workflow</strong>
+          <p>Konkrétní případ otevřete v modulu Připomínky a chyby. Starý obecný odkaz bez ID byl odstraněn.</p>
         </section>
       ` : `
         <form class="feedback-ticket__management" data-feedback-update-form data-feedback-id="${escapeHtml(item.id)}">
@@ -42035,7 +42130,7 @@ function feedbackAdminItem(item, canEdit) {
   `;
 }
 
-function feedbackPage(user) {
+function legacyFeedbackPage(user) {
   const allFeedback = feedbackState.items;
   const visibleFeedback = visibleFeedbackForUser(allFeedback, user);
   const summary = feedbackSummary(visibleFeedback);
@@ -42157,6 +42252,630 @@ function feedbackPage(user) {
           ${apiMessage || items || emptyState}
         </div>
       </section>
+    </main>
+  `;
+}
+
+function feedbackCaseIdFromPath(path = normalizePath(window.location.pathname)) {
+  if (!path.startsWith(`${FEEDBACK_ROUTE}/`)) return "";
+  const value = path.slice(FEEDBACK_ROUTE.length + 1).split("/")[0] || "";
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return "";
+  }
+}
+
+function feedbackWorkflowActiveTab(user) {
+  if (feedbackCaseIdFromPath()) return "detail";
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("new") === "report") return "new";
+  const tab = url.searchParams.get("tab") || "list";
+  if (tab === "manage" && !hasPermission(user, "self-repair", "manage")) return "list";
+  return ["new", "list", "manage"].includes(tab) ? tab : "list";
+}
+
+function feedbackWorkflowSyncDraftFromUrl() {
+  const url = new URL(window.location.href);
+  const moduleKey = String(url.searchParams.get("module") || "").trim();
+  const sourceRoute = String(url.searchParams.get("sourceRoute") || "").trim();
+  if (!feedbackWorkflowState.draft.moduleKey && moduleKey) {
+    feedbackWorkflowState.draft.moduleKey = moduleKey;
+    feedbackWorkflowState.baseline.moduleKey = moduleKey;
+  }
+  if (!feedbackWorkflowState.draft.sourceRoute && sourceRoute.startsWith("/") && !sourceRoute.startsWith("//")) {
+    feedbackWorkflowState.draft.sourceRoute = sourceRoute;
+    feedbackWorkflowState.baseline.sourceRoute = sourceRoute;
+  }
+}
+
+async function loadFeedbackWorkflowData(options = {}) {
+  if (!authState.user || feedbackWorkflowState.loading) return;
+  feedbackWorkflowState.loading = true;
+  feedbackWorkflowState.error = "";
+  if (options.renderAfter !== false) render();
+  try {
+    const [casesResult, notificationsResult] = await Promise.all([
+      apiJson("/api/feedback-cases?limit=500"),
+      apiJson("/api/feedback-case-notifications")
+    ]);
+    feedbackWorkflowState.cases = Array.isArray(casesResult.cases) ? casesResult.cases : [];
+    feedbackWorkflowState.total = Number(casesResult.total || feedbackWorkflowState.cases.length);
+    feedbackWorkflowState.ownTotal = Number(casesResult.ownTotal || 0);
+    feedbackWorkflowState.permissions = casesResult.permissions || feedbackWorkflowState.permissions;
+    feedbackWorkflowState.notifications = Array.isArray(notificationsResult.notifications)
+      ? notificationsResult.notifications
+      : [];
+    feedbackWorkflowState.unreadCount = Number(notificationsResult.unreadCount || 0);
+    feedbackWorkflowState.loaded = true;
+  } catch (error) {
+    feedbackWorkflowState.error = error.payload?.error || "Hlášení se teď nepodařilo načíst.";
+  } finally {
+    feedbackWorkflowState.loading = false;
+    if (options.renderAfter !== false) render();
+  }
+}
+
+async function loadFeedbackWorkflowDetail(caseId, options = {}) {
+  const id = String(caseId || "").trim();
+  if (!id || feedbackWorkflowState.detailLoading) return;
+  feedbackWorkflowState.detailId = id;
+  feedbackWorkflowState.detailLoading = true;
+  feedbackWorkflowState.error = "";
+  if (options.renderAfter !== false) render();
+  try {
+    feedbackWorkflowState.detail = await apiJson(`/api/feedback-cases/${encodeURIComponent(id)}`);
+  } catch (error) {
+    feedbackWorkflowState.detail = null;
+    feedbackWorkflowState.error = error.payload?.error || "Hlášení neexistuje nebo k němu nemáte přístup.";
+  } finally {
+    feedbackWorkflowState.detailLoading = false;
+    if (options.renderAfter !== false) render();
+  }
+}
+
+function ensureFeedbackWorkflowData() {
+  feedbackWorkflowSyncDraftFromUrl();
+  if (!feedbackWorkflowState.loaded && !feedbackWorkflowState.loading) {
+    void loadFeedbackWorkflowData();
+  }
+  const caseId = feedbackCaseIdFromPath();
+  if (
+    caseId &&
+    !feedbackWorkflowState.detailLoading &&
+    (feedbackWorkflowState.detailId !== caseId || !feedbackWorkflowState.detail)
+  ) {
+    void loadFeedbackWorkflowDetail(caseId);
+  }
+}
+
+function feedbackWorkflowStatusTone(status) {
+  return {
+    new: "new",
+    accepted: "accepted",
+    needs_details: "needs-details",
+    in_progress: "in-progress",
+    ready_for_verification: "verification",
+    done: "done",
+    rejected: "rejected",
+    duplicate: "duplicate"
+  }[status] || "new";
+}
+
+function feedbackWorkflowStatusBadge(item) {
+  return `<span class="feedback-workflow-status feedback-workflow-status--${feedbackWorkflowStatusTone(item.workflowStatus)}">${escapeHtml(item.workflowStatusLabel || "Nové")}</span>`;
+}
+
+function feedbackWorkflowTabs(user, activeTab) {
+  const canManage = hasPermission(user, "self-repair", "manage");
+  const tabs = [
+    { id: "new", label: "Nové hlášení", href: `${FEEDBACK_ROUTE}?tab=new` },
+    { id: "list", label: "Moje hlášení", href: `${FEEDBACK_ROUTE}?tab=list` },
+    ...(canManage ? [{ id: "manage", label: "Správa hlášení", href: `${FEEDBACK_ROUTE}?tab=manage` }] : [])
+  ];
+  return `
+    <nav class="feedback-workflow-tabs" aria-label="Připomínky a chyby">
+      ${tabs.map((tab) => `
+        <a class="${activeTab === tab.id ? "is-active" : ""}" href="${routeHref(tab.href)}" data-link ${activeTab === tab.id ? 'aria-current="page"' : ""}>
+          ${escapeHtml(tab.label)}
+        </a>
+      `).join("")}
+    </nav>
+  `;
+}
+
+function feedbackWorkflowNotificationPanel() {
+  const unread = feedbackWorkflowState.notifications.filter((item) => !item.readAt).slice(0, 4);
+  if (!unread.length) return "";
+  return `
+    <section class="feedback-workflow-notifications" aria-labelledby="feedback-notifications-title">
+      <div>
+        <p class="module-detail__eyebrow">Novinky</p>
+        <h2 id="feedback-notifications-title">Změny ve vašich hlášeních</h2>
+      </div>
+      <div>
+        ${unread.map((item) => `
+          <a href="${routeHref(`${FEEDBACK_ROUTE}/${encodeURIComponent(item.caseId)}`)}" data-link data-feedback-notification-id="${escapeHtml(item.id)}">
+            <strong>${escapeHtml(item.title)}</strong>
+            <span>${escapeHtml(item.message)}</span>
+          </a>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function feedbackWorkflowReportPanel(user) {
+  if (!hasPermission(user, "feedback", "create")) {
+    return '<p class="feedback-workflow-empty">Nemáte oprávnění vytvořit hlášení.</p>';
+  }
+  if (feedbackWorkflowState.created?.case?.id) {
+    const item = feedbackWorkflowState.created.case;
+    const backRoute = feedbackWorkflowState.draft.sourceRoute || "/";
+    return `
+      <section class="feedback-workflow-confirmation" role="status" aria-labelledby="feedback-created-title">
+        <span class="feedback-workflow-confirmation__icon" aria-hidden="true">✓</span>
+        <div>
+          <p class="module-detail__eyebrow">Uloženo</p>
+          <h2 id="feedback-created-title">Hlášení bylo vytvořeno</h2>
+          <dl>
+            <div><dt>Číslo případu</dt><dd>${escapeHtml(item.caseNumber)}</dd></div>
+            <div><dt>Stav</dt><dd>${feedbackWorkflowStatusBadge(item)}</dd></div>
+          </dl>
+          <p>Hlášení nyní čeká na kontrolu.</p>
+          <div class="feedback-workflow-confirmation__actions">
+            <a class="primary-action" href="${routeHref(`${FEEDBACK_ROUTE}/${encodeURIComponent(item.id)}`)}" data-link>Otevřít hlášení</a>
+            <a class="secondary-link" href="${routeHref(backRoute)}" data-link>Zpět do modulu</a>
+            <button class="secondary-link" type="button" data-feedback-new-another>Vytvořit další</button>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  const draft = feedbackWorkflowState.draft;
+  const disabled = feedbackWorkflowState.saving ? "disabled" : "";
+  return `
+    <section class="feedback-workflow-new" id="feedback-report" aria-labelledby="feedback-new-title">
+      <header>
+        <div>
+          <p class="module-detail__eyebrow">Nové hlášení</p>
+          <h2 id="feedback-new-title">Co máme opravit nebo zlepšit?</h2>
+          <p>Stačí stručný popis. Technické údaje o stránce a zařízení doplní systém automaticky.</p>
+        </div>
+      </header>
+      <form data-feedback-workflow-report-form>
+        <div class="feedback-workflow-form-grid">
+          <label>
+            <span>Typ *</span>
+            <select name="caseType" data-feedback-workflow-draft required ${disabled}>
+              <option value="bug" ${draft.caseType === "bug" ? "selected" : ""}>Chyba</option>
+              <option value="improvement" ${draft.caseType === "improvement" ? "selected" : ""}>Připomínka</option>
+            </select>
+          </label>
+          <label>
+            <span>Modul *</span>
+            <select name="moduleKey" data-feedback-workflow-draft required ${disabled}>
+              ${optionList(feedbackModuleOptions(), draft.moduleKey, "Vyberte modul")}
+            </select>
+          </label>
+          <label class="feedback-workflow-field--wide">
+            <span>Stručný název *</span>
+            <input name="title" value="${escapeHtml(draft.title)}" data-feedback-workflow-draft maxlength="240" required placeholder="Např. Nejde uložit rozměr pneumatiky" ${disabled} />
+          </label>
+          <label class="feedback-workflow-field--wide">
+            <span>Popis problému *</span>
+            <textarea name="description" data-feedback-workflow-draft rows="6" maxlength="8000" required placeholder="Co se stalo a co vám to znemožňuje?" ${disabled}>${escapeHtml(draft.description)}</textarea>
+          </label>
+          <label class="feedback-workflow-field--wide">
+            <span>Co jste očekávali <small>volitelné</small></span>
+            <textarea name="expectedBehavior" data-feedback-workflow-draft rows="3" maxlength="5000" placeholder="Jak by se aplikace měla správně zachovat?" ${disabled}>${escapeHtml(draft.expectedBehavior)}</textarea>
+          </label>
+          <label class="feedback-workflow-field--wide feedback-workflow-file">
+            <span>Příloha <small>volitelné, max. 10 MB</small></span>
+            <input name="attachment" type="file" accept="${SELF_REPAIR_ATTACHMENT_ACCEPT}" ${disabled} />
+            ${feedbackWorkflowState.attachmentName ? `<small>Vybráno: ${escapeHtml(feedbackWorkflowState.attachmentName)}. Soubor zůstane připravený i po chybě odeslání.</small>` : ""}
+          </label>
+        </div>
+        <input type="hidden" name="sourceRoute" value="${escapeHtml(draft.sourceRoute)}" />
+        <div class="feedback-workflow-form-actions">
+          <button class="primary-action" type="submit" ${disabled}>${feedbackWorkflowState.saving ? "Odesílám…" : "Vytvořit hlášení"}</button>
+          <span>Po uložení uvidíte číslo případu a můžete ihned otevřít detail.</span>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function feedbackWorkflowFilteredCases(ownOnly = false) {
+  const filters = feedbackWorkflowState.filters;
+  return feedbackWorkflowState.cases.filter((item) => {
+    if (ownOnly && !item.isOwn) return false;
+    if (filters.status && item.workflowStatus !== filters.status) return false;
+    if (filters.priority && item.priority !== filters.priority) return false;
+    if (filters.module && item.moduleKey !== filters.module) return false;
+    if (filters.author && !String(item.reporterUserName || "").toLowerCase().includes(filters.author.toLowerCase())) return false;
+    if (filters.assignee && !String(item.assigneeUserName || "").toLowerCase().includes(filters.assignee.toLowerCase())) return false;
+    if (filters.search) {
+      const text = [item.caseNumber, item.title, item.description, item.moduleName, item.reporterUserName, item.assigneeUserName, item.publicMessage]
+        .join(" ")
+        .toLowerCase();
+      if (!text.includes(filters.search.toLowerCase())) return false;
+    }
+    return true;
+  });
+}
+
+function feedbackWorkflowListPanel() {
+  const url = new URL(window.location.href);
+  const ownOnly = url.searchParams.get("scope") === "mine";
+  const cases = feedbackWorkflowFilteredCases(ownOnly);
+  const scopeAllHref = `${FEEDBACK_ROUTE}?tab=list`;
+  const scopeMineHref = `${FEEDBACK_ROUTE}?tab=list&scope=mine`;
+  return `
+    <section class="feedback-workflow-list-section" aria-labelledby="feedback-list-title">
+      <header class="feedback-workflow-section-head">
+        <div>
+          <p class="module-detail__eyebrow">${ownOnly ? "Filtrovaný pohled" : "Společný přehled"}</p>
+          <h2 id="feedback-list-title">${ownOnly ? "Moje hlášení" : "Všechna hlášení"}</h2>
+          <p>Každý vidí společný přehled. Přepínačem Svoje zobrazíte jen hlášení, která jste vytvořili.</p>
+        </div>
+        <div class="feedback-workflow-scope" aria-label="Rozsah hlášení">
+          <a class="${ownOnly ? "" : "is-active"}" href="${routeHref(scopeAllHref)}" data-link>Všechna <span>${escapeHtml(feedbackWorkflowState.total)}</span></a>
+          <a class="${ownOnly ? "is-active" : ""}" href="${routeHref(scopeMineHref)}" data-link>Svoje <span>${escapeHtml(feedbackWorkflowState.ownTotal)}</span></a>
+        </div>
+      </header>
+      ${feedbackWorkflowState.loading && !feedbackWorkflowState.loaded
+        ? '<p class="feedback-workflow-empty">Načítám hlášení…</p>'
+        : cases.length
+          ? `
+            <div class="feedback-workflow-table-wrap">
+              <table class="feedback-workflow-table feedback-workflow-table--public">
+                <thead><tr><th>Hlášení</th><th>Modul</th><th>Vytvořeno</th><th>Stav</th><th>Poslední změna</th><th></th></tr></thead>
+                <tbody>
+                  ${cases.map((item) => `
+                    <tr data-feedback-case-open="${escapeHtml(item.id)}" tabindex="0">
+                      <td data-label="Hlášení">
+                        <strong>${escapeHtml(item.title)}</strong>
+                        <small>${escapeHtml(item.caseNumber)} · ${escapeHtml(item.caseTypeLabel)}</small>
+                        ${item.publicMessage ? `<p>${escapeHtml(item.publicMessage)}</p>` : ""}
+                      </td>
+                      <td data-label="Modul">${escapeHtml(item.moduleName)}</td>
+                      <td data-label="Vytvořeno">${escapeHtml(formatDateTime(item.createdAt))}</td>
+                      <td data-label="Stav">${feedbackWorkflowStatusBadge(item)}</td>
+                      <td data-label="Poslední změna">${escapeHtml(formatDateTime(item.updatedAt))}</td>
+                      <td><a class="secondary-link" href="${routeHref(`${FEEDBACK_ROUTE}/${encodeURIComponent(item.id)}`)}" data-link>Otevřít</a></td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+          `
+          : '<p class="feedback-workflow-empty">V tomto pohledu zatím nejsou žádná hlášení.</p>'
+      }
+    </section>
+  `;
+}
+
+function feedbackWorkflowManagementFilters() {
+  const filters = feedbackWorkflowState.filters;
+  return `
+    <form class="feedback-workflow-filters" data-feedback-workflow-filters>
+      <label><span>Stav</span><select name="status">${optionList(FEEDBACK_WORKFLOW_STATUS_OPTIONS, filters.status)}</select></label>
+      <label><span>Priorita</span><select name="priority">${optionList(FEEDBACK_PRIORITIES, filters.priority)}</select></label>
+      <label><span>Modul</span><select name="module">${optionList(feedbackModuleOptions(), filters.module)}</select></label>
+      <label><span>Autor</span><input name="author" value="${escapeHtml(filters.author)}" placeholder="Jméno autora" /></label>
+      <label><span>Řešitel</span><input name="assignee" value="${escapeHtml(filters.assignee)}" placeholder="Jméno řešitele" /></label>
+      <label class="feedback-workflow-field--wide"><span>Fulltext</span><input name="search" value="${escapeHtml(filters.search)}" placeholder="Číslo, název nebo text" /></label>
+      <div class="feedback-workflow-filter-actions">
+        <button class="primary-action" type="submit">Filtrovat</button>
+        <button class="secondary-link" type="button" data-feedback-workflow-filter-reset>Reset</button>
+      </div>
+    </form>
+  `;
+}
+
+function feedbackWorkflowManagementPanel(user) {
+  if (!hasPermission(user, "self-repair", "manage")) return "";
+  const cases = feedbackWorkflowFilteredCases(false);
+  return `
+    <section class="feedback-workflow-list-section" aria-labelledby="feedback-manage-title">
+      <header class="feedback-workflow-section-head">
+        <div>
+          <p class="module-detail__eyebrow">Správa hlášení</p>
+          <h2 id="feedback-manage-title">Fronta k vyřízení</h2>
+          <p>Kompaktní seznam. Úpravy se otevírají až v detailu konkrétního případu.</p>
+        </div>
+        <button class="secondary-link" type="button" data-feedback-workflow-refresh>Obnovit</button>
+      </header>
+      ${feedbackWorkflowManagementFilters()}
+      <div class="feedback-workflow-table-wrap">
+        <table class="feedback-workflow-table feedback-workflow-table--management">
+          <thead><tr><th>Stav</th><th>Priorita</th><th>Název</th><th>Modul</th><th>Autor</th><th>Vytvořeno</th><th>Řešitel</th><th>Poslední změna</th><th></th></tr></thead>
+          <tbody>
+            ${cases.map((item) => `
+              <tr data-feedback-case-open="${escapeHtml(item.id)}" tabindex="0">
+                <td data-label="Stav">${feedbackWorkflowStatusBadge(item)}</td>
+                <td data-label="Priorita"><span class="feedback-workflow-priority feedback-workflow-priority--${priorityTone(item.priority)}">${escapeHtml(item.priority)}</span></td>
+                <td data-label="Název"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.caseNumber)}</small></td>
+                <td data-label="Modul">${escapeHtml(item.moduleName)}</td>
+                <td data-label="Autor">${escapeHtml(item.reporterUserName)}</td>
+                <td data-label="Vytvořeno">${escapeHtml(formatDateTime(item.createdAt))}</td>
+                <td data-label="Řešitel">${escapeHtml(item.assigneeUserName || "Nepřiřazeno")}</td>
+                <td data-label="Poslední změna">${escapeHtml(formatDateTime(item.updatedAt))}</td>
+                <td><a class="secondary-link" href="${routeHref(`${FEEDBACK_ROUTE}/${encodeURIComponent(item.id)}`)}" data-link>Otevřít</a></td>
+              </tr>
+            `).join("") || '<tr><td colspan="9">Podle zvolených filtrů tu není žádné hlášení.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function feedbackWorkflowAttachments(attachments = []) {
+  if (!attachments.length) return '<p class="feedback-workflow-muted">Bez přílohy.</p>';
+  return `
+    <div class="feedback-workflow-attachments">
+      ${attachments.map((item) => `
+        <a href="${escapeHtml(item.openUrl)}" target="_blank" rel="noopener">
+          <span>${escapeHtml(item.filename)}</span>
+          <small>${escapeHtml(formatFileSize(item.sizeBytes) || "Otevřít")}</small>
+        </a>
+      `).join("")}
+    </div>
+  `;
+}
+
+function feedbackWorkflowMessages(messages = []) {
+  if (!messages.length) return '<p class="feedback-workflow-muted">Zatím bez zpráv.</p>';
+  return `
+    <ol class="feedback-workflow-timeline">
+      ${messages.map((item) => `
+        <li class="${item.visibility === "internal" ? "is-internal" : ""}">
+          <div><strong>${escapeHtml(item.authorUserName || "Systém")}</strong><time>${escapeHtml(formatDateTime(item.createdAt))}</time></div>
+          <p>${escapeHtml(item.body)}</p>
+          ${item.visibility === "internal" ? "<small>Interní poznámka</small>" : ""}
+        </li>
+      `).join("")}
+    </ol>
+  `;
+}
+
+function feedbackWorkflowAudit(audit = []) {
+  if (!audit.length) return '<p class="feedback-workflow-muted">Zatím bez auditních záznamů.</p>';
+  return `
+    <ol class="feedback-workflow-audit">
+      ${audit.map((item) => `
+        <li>
+          <div><strong>${escapeHtml(item.changedByUserName || "Systém")}</strong><time>${escapeHtml(formatDateTime(item.changedAt))}</time></div>
+          <p>${escapeHtml(item.note || item.action)}</p>
+          <small>${escapeHtml(item.action)}</small>
+        </li>
+      `).join("")}
+    </ol>
+  `;
+}
+
+function feedbackWorkflowAssigneeOptions(item, user) {
+  const candidates = [...allAccessUsers(), user]
+    .filter(Boolean)
+    .filter((candidate, index, all) => {
+      const id = String(candidate.id || candidate.email || "");
+      return id && all.findIndex((other) => String(other.id || other.email || "") === id) === index;
+    });
+  const currentIncluded = candidates.some((candidate) => String(candidate.id || candidate.email) === item.assigneeUserId);
+  if (!currentIncluded && item.assigneeUserId) {
+    candidates.push({ id: item.assigneeUserId, name: item.assigneeUserName || item.assigneeUserId });
+  }
+  return [
+    '<option value="">Nepřiřazeno</option>',
+    ...candidates.map((candidate) => {
+      const id = String(candidate.id || candidate.email || "");
+      const name = String(candidate.name || candidate.email || id);
+      return `<option value="${escapeHtml(id)}" data-name="${escapeHtml(name)}" ${id === item.assigneeUserId ? "selected" : ""}>${escapeHtml(name)}</option>`;
+    })
+  ].join("");
+}
+
+function feedbackWorkflowCodexPanel(detail) {
+  const jobs = Array.isArray(detail.codexJobs) ? detail.codexJobs : [];
+  const latest = jobs[0] || null;
+  const capability = detail.codex || { configured: false, status: "not_configured" };
+  return `
+    <section class="feedback-workflow-codex" aria-labelledby="feedback-codex-title">
+      <div class="feedback-workflow-action-heading">
+        <div><span>Interní proces</span><h3 id="feedback-codex-title">Předání opravy Codexu</h3></div>
+        <span class="feedback-workflow-capability feedback-workflow-capability--${capability.configured ? "ready" : "waiting"}">${capability.configured ? "Runner připraven" : "Runner není nastaven"}</span>
+      </div>
+      <p>Vytvoření hlášení Codex nespouští. Nejdřív připravte zadání a zkontrolujte ho.</p>
+      ${latest ? `
+        <div class="feedback-workflow-codex-job">
+          <div><strong>Stav: ${escapeHtml(latest.status)}</strong><span>${escapeHtml(formatDateTime(latest.updatedAt || latest.createdAt))}</span></div>
+          <textarea rows="12" readonly>${escapeHtml(latest.promptText)}</textarea>
+          ${latest.externalTaskUrl ? `<a href="${escapeHtml(latest.externalTaskUrl)}" target="_blank" rel="noopener">Otevřít úlohu Codexu</a>` : ""}
+          ${latest.errorMessage ? `<p class="feedback-workflow-error">${escapeHtml(latest.errorMessage)}</p>` : ""}
+        </div>
+      ` : ""}
+      <form data-feedback-codex-form data-case-id="${escapeHtml(detail.case.id)}">
+        ${latest?.status === "draft" && capability.configured ? `
+          <input type="hidden" name="jobId" value="${escapeHtml(latest.id)}" />
+          <label><span>Potvrzení</span><input name="confirmation" placeholder="Napište PŘEDAT CODEXU" required /></label>
+          <button class="primary-action" type="submit" name="action" value="submit">Předat Codexu</button>
+        ` : `
+          <button class="secondary-link" type="submit" name="action" value="prepare">Připravit zadání pro Codex</button>
+        `}
+      </form>
+      ${!capability.configured ? "<small>Zadání lze připravit a zkontrolovat. Odeslání se nezobrazí, dokud backend nemá potvrzený Codex runner a tajný přístup.</small>" : ""}
+    </section>
+  `;
+}
+
+function feedbackWorkflowManagerPanel(detail, user) {
+  const item = detail.case;
+  if (!detail.permissions?.canManage) return "";
+  return `
+    <aside class="feedback-workflow-manager" aria-labelledby="feedback-manager-title">
+      <div class="feedback-workflow-action-heading">
+        <div><span>Správa hlášení</span><h2 id="feedback-manager-title">Vyřízení případu</h2></div>
+        <button class="secondary-link" type="button" data-feedback-case-take="${escapeHtml(item.id)}">Převzít</button>
+      </div>
+      <form data-feedback-case-manage-form data-case-id="${escapeHtml(item.id)}">
+        <label><span>Stav</span><select name="workflowStatus">${optionList(FEEDBACK_WORKFLOW_STATUS_OPTIONS, item.workflowStatus, "Vyberte stav")}</select></label>
+        <label><span>Priorita</span><select name="priority">${optionList(FEEDBACK_PRIORITIES, item.priority, "Vyberte prioritu")}</select></label>
+        <label>
+          <span>Řešitel</span>
+          <select name="assigneeUserId" data-feedback-assignee-select>${feedbackWorkflowAssigneeOptions(item, user)}</select>
+        </label>
+        <label><span>Otázka při žádosti o doplnění</span><textarea name="detailsQuestion" rows="3" placeholder="Co přesně má uživatel doplnit?">${escapeHtml(item.detailsQuestion)}</textarea></label>
+        <label><span>Zpráva uživateli</span><textarea name="publicMessage" rows="4" placeholder="Co jste zjistili nebo opravili?"></textarea><small>Zobrazí se uživateli v detailu.</small></label>
+        <label><span>Interní poznámka</span><textarea name="internalNote" rows="4" placeholder="Pouze pro řešitele">${escapeHtml(item.internalNote)}</textarea><small>Běžný uživatel ji nikdy neuvidí.</small></label>
+        <label><span>Stav interní opravy</span><select name="automationStatus">${optionList(FEEDBACK_AUTOMATION_STATUS_OPTIONS, item.automationStatus, "Vyberte stav")}</select></label>
+        <button class="primary-action" type="submit">Uložit změny</button>
+      </form>
+      ${feedbackWorkflowCodexPanel(detail)}
+    </aside>
+  `;
+}
+
+function feedbackWorkflowReplyPanel(detail) {
+  if (!detail.permissions?.canReply) return "";
+  return `
+    <section class="feedback-workflow-user-action feedback-workflow-user-action--question" aria-labelledby="feedback-reply-title">
+      <p class="module-detail__eyebrow">Potřebujeme doplnit</p>
+      <h2 id="feedback-reply-title">${escapeHtml(detail.case.detailsQuestion || "Doplňte prosím další informace")}</h2>
+      <form data-feedback-case-reply-form data-case-id="${escapeHtml(detail.case.id)}">
+        <label><span>Vaše odpověď *</span><textarea name="body" rows="5" required></textarea></label>
+        <label><span>Příloha <small>volitelné</small></span><input type="file" name="attachment" accept="${SELF_REPAIR_ATTACHMENT_ACCEPT}" /></label>
+        <button class="primary-action" type="submit">Odeslat doplnění</button>
+      </form>
+    </section>
+  `;
+}
+
+function feedbackWorkflowVerificationPanel(detail) {
+  if (!detail.permissions?.canVerify) return "";
+  return `
+    <section class="feedback-workflow-user-action feedback-workflow-user-action--verify" aria-labelledby="feedback-verify-title">
+      <p class="module-detail__eyebrow">Ověření opravy</p>
+      <h2 id="feedback-verify-title">Vyzkoušejte opravu a dejte nám vědět</h2>
+      <p>${escapeHtml(detail.case.publicMessage || "Oprava je připravená k ověření.")}</p>
+      <form data-feedback-case-verify-form data-case-id="${escapeHtml(detail.case.id)}">
+        <label><span>Poznámka <small>volitelné</small></span><textarea name="note" rows="3" placeholder="Co jste při testu zjistili?"></textarea></label>
+        <div>
+          <button class="primary-action" type="submit" name="result" value="fixed">Oprava funguje</button>
+          <button class="secondary-link" type="submit" name="result" value="persists">Problém stále trvá</button>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function feedbackWorkflowDetailPage(user) {
+  const detail = feedbackWorkflowState.detail;
+  if (feedbackWorkflowState.detailLoading && !detail) {
+    return '<section class="feedback-workflow-empty feedback-workflow-empty--detail">Načítám detail hlášení…</section>';
+  }
+  if (!detail?.case) {
+    return `
+      <section class="feedback-workflow-empty feedback-workflow-empty--detail">
+        <h2>Hlášení se nepodařilo otevřít</h2>
+        <p>${escapeHtml(feedbackWorkflowState.error || "Případ neexistuje nebo k němu nemáte přístup.")}</p>
+        <a class="secondary-link" href="${routeHref(`${FEEDBACK_ROUTE}?tab=list`)}" data-link>Zpět na seznam</a>
+      </section>
+    `;
+  }
+  const item = detail.case;
+  return `
+    <div class="feedback-workflow-detail">
+      <div class="feedback-workflow-detail__main">
+        <a class="feedback-workflow-back" href="${routeHref(`${FEEDBACK_ROUTE}?tab=list`)}" data-link>← Zpět na hlášení</a>
+        <header class="feedback-workflow-detail__header">
+          <div>
+            <p class="module-detail__eyebrow">${escapeHtml(item.caseNumber)}</p>
+            <h1>${escapeHtml(item.title)}</h1>
+          </div>
+          ${feedbackWorkflowStatusBadge(item)}
+        </header>
+        <dl class="feedback-workflow-detail__facts">
+          <div><dt>Priorita</dt><dd>${escapeHtml(item.priority)}</dd></div>
+          <div><dt>Modul</dt><dd>${escapeHtml(item.moduleName)}</dd></div>
+          <div><dt>Autor</dt><dd>${escapeHtml(item.reporterUserName)}</dd></div>
+          <div><dt>Vytvořeno</dt><dd>${escapeHtml(formatDateTime(item.createdAt))}</dd></div>
+          <div><dt>Řešitel</dt><dd>${escapeHtml(item.assigneeUserName || "Zatím nepřiřazeno")}</dd></div>
+          <div><dt>Poslední změna</dt><dd>${escapeHtml(formatDateTime(item.updatedAt))}</dd></div>
+        </dl>
+        ${feedbackWorkflowReplyPanel(detail)}
+        ${feedbackWorkflowVerificationPanel(detail)}
+        <section class="feedback-workflow-content-card"><h2>Popis</h2><p>${escapeHtml(item.description)}</p></section>
+        ${item.expectedBehavior ? `<section class="feedback-workflow-content-card"><h2>Očekávaný stav</h2><p>${escapeHtml(item.expectedBehavior)}</p></section>` : ""}
+        <section class="feedback-workflow-content-card"><h2>Přílohy</h2>${feedbackWorkflowAttachments(detail.attachments)}</section>
+        <section class="feedback-workflow-content-card"><h2>Komunikace a historie</h2>${feedbackWorkflowMessages(detail.messages)}</section>
+        ${detail.permissions?.canManage ? `
+          <details class="feedback-workflow-technical">
+            <summary>Technický kontext a audit</summary>
+            <div>
+              <dl>
+                <div><dt>URL</dt><dd>${escapeHtml(item.sourceRoute || "Neuvedena")}</dd></div>
+                <div><dt>Zařízení</dt><dd>${escapeHtml(item.browserInfo || "Neuvedeno")}</dd></div>
+                <div><dt>Obrazovka</dt><dd>${escapeHtml(item.screenInfo || "Neuvedena")}</dd></div>
+                <div><dt>Verze</dt><dd>${escapeHtml(item.buildVersion || "Neuvedena")} · ${escapeHtml(item.buildCommit || "")}</dd></div>
+              </dl>
+              <pre>${escapeHtml(JSON.stringify(item.technicalContext || {}, null, 2))}</pre>
+              <h3>Audit</h3>
+              ${feedbackWorkflowAudit(detail.audit)}
+            </div>
+          </details>
+        ` : ""}
+      </div>
+      ${feedbackWorkflowManagerPanel(detail, user)}
+    </div>
+  `;
+}
+
+function feedbackPage(user) {
+  ensureFeedbackWorkflowData();
+  const activeTab = feedbackWorkflowActiveTab(user);
+  const content = activeTab === "detail"
+    ? feedbackWorkflowDetailPage(user)
+    : activeTab === "new"
+      ? feedbackWorkflowReportPanel(user)
+      : activeTab === "manage"
+        ? feedbackWorkflowManagementPanel(user)
+        : feedbackWorkflowListPanel();
+  const emailNotice = feedbackWorkflowState.emailResult
+    ? feedbackResolutionNotificationMessage(feedbackWorkflowState.emailResult)
+    : "";
+  return `
+    <main class="app-shell module-page module-theme-scope feedback-workflow-page" ${moduleThemeStyleAttribute()}>
+      ${userBar(user)}
+      <nav class="topbar" aria-label="Navigace">
+        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
+        <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
+      </nav>
+      <section class="feedback-workflow-hero" aria-labelledby="feedback-workflow-title">
+        <div>
+          <p class="module-detail__eyebrow">Podpora aplikace</p>
+          <h1 id="feedback-workflow-title">Připomínky a chyby</h1>
+          <p>Nahlaste problém, sledujte jeho stav a po opravě potvrďte, zda vše funguje.</p>
+        </div>
+        <div class="feedback-workflow-hero__summary">
+          <span>Všechna hlášení <strong>${escapeHtml(feedbackWorkflowState.total)}</strong></span>
+          <span>Moje hlášení <strong>${escapeHtml(feedbackWorkflowState.ownTotal)}</strong></span>
+        </div>
+      </section>
+      ${feedbackWorkflowTabs(user, activeTab)}
+      ${feedbackWorkflowState.message ? `<p class="feedback-workflow-notice" role="status">${escapeHtml(feedbackWorkflowState.message)}${emailNotice ? ` ${escapeHtml(emailNotice)}` : ""}</p>` : ""}
+      ${feedbackWorkflowState.error ? `<p class="feedback-workflow-error" role="alert">${escapeHtml(feedbackWorkflowState.error)}</p>` : ""}
+      ${activeTab === "list" ? feedbackWorkflowNotificationPanel() : ""}
+      ${content}
+      ${activeTab === "manage" ? `
+        <details class="feedback-workflow-contract">
+          <summary>Provozní pravidla modulu</summary>
+          <p>${escapeHtml(FEEDBACK_MANTRA.summary)}</p>
+          <small>${escapeHtml(FEEDBACK_OPERATIONAL_CONTRACT.id)} · ${escapeHtml(FEEDBACK_MANTRA.version)}</small>
+        </details>
+      ` : ""}
     </main>
   `;
 }
@@ -52943,7 +53662,7 @@ function renderAuthenticatedApp(user) {
     return;
   }
 
-  if (path === FEEDBACK_ROUTE) {
+  if (path === FEEDBACK_ROUTE || path.startsWith(`${FEEDBACK_ROUTE}/`)) {
     if (!canViewModule(user, "feedback")) {
       app.innerHTML = forbiddenPage(user);
       document.title = `Bez oprávnění | ${APP_NAME}`;
@@ -52951,7 +53670,7 @@ function renderAuthenticatedApp(user) {
     }
 
     app.innerHTML = feedbackPage(user);
-    document.title = `Připomínky | ${APP_NAME}`;
+    document.title = `Připomínky a chyby | ${APP_NAME}`;
     return;
   }
 
@@ -53652,6 +54371,298 @@ function exportFeedbackCsv() {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function updateFeedbackWorkflowDraft(form) {
+  if (!form) return feedbackWorkflowState.draft;
+  feedbackWorkflowState.draft = {
+    caseType: form.elements.caseType?.value || "bug",
+    moduleKey: form.elements.moduleKey?.value || "",
+    title: form.elements.title?.value.trim() || "",
+    description: form.elements.description?.value.trim() || "",
+    expectedBehavior: form.elements.expectedBehavior?.value.trim() || "",
+    sourceRoute: form.elements.sourceRoute?.value || feedbackWorkflowState.draft.sourceRoute || ""
+  };
+  return feedbackWorkflowState.draft;
+}
+
+function feedbackWorkflowDraftIsDirty(draft = feedbackWorkflowState.draft) {
+  return ["title", "description", "expectedBehavior"].some((key) => String(draft[key] || "").trim())
+    || Boolean(feedbackWorkflowState.attachmentFile);
+}
+
+function resetFeedbackWorkflowDraft(options = {}) {
+  feedbackWorkflowState.draft = {
+    ...feedbackWorkflowState.baseline,
+    caseType: "bug",
+    title: "",
+    description: "",
+    expectedBehavior: ""
+  };
+  feedbackWorkflowState.attachmentFile = null;
+  feedbackWorkflowState.attachmentName = "";
+  feedbackWorkflowState.clientRequestId = globalThis.crypto?.randomUUID?.() || `feedback-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  feedbackWorkflowState.created = null;
+  feedbackWorkflowState.error = "";
+  if (!options.keepMessage) feedbackWorkflowState.message = "";
+}
+
+async function submitFeedbackWorkflowReport(form) {
+  if (!hasPermission(currentUser(), "feedback", "create") || feedbackWorkflowState.saving) return false;
+  const draft = updateFeedbackWorkflowDraft(form);
+  if (!draft.moduleKey || !draft.title || !draft.description) {
+    feedbackWorkflowState.error = "Vyplňte typ, modul, stručný název a popis problému.";
+    render();
+    return false;
+  }
+  const selectedFile = form.elements.attachment?.files?.[0] || feedbackWorkflowState.attachmentFile || null;
+  if (selectedFile && selectedFile.size > SELF_REPAIR_ATTACHMENT_MAX_SIZE_BYTES) {
+    feedbackWorkflowState.error = "Příloha může mít nejvýše 10 MB.";
+    render();
+    return false;
+  }
+  feedbackWorkflowState.attachmentFile = selectedFile;
+  feedbackWorkflowState.attachmentName = selectedFile?.name || "";
+  const body = new FormData();
+  body.set("caseType", draft.caseType);
+  body.set("clientRequestId", feedbackWorkflowState.clientRequestId);
+  body.set("moduleKey", draft.moduleKey);
+  body.set("title", draft.title);
+  body.set("description", draft.description);
+  body.set("expectedBehavior", draft.expectedBehavior);
+  body.set("sourceRoute", draft.sourceRoute || FEEDBACK_ROUTE);
+  body.set("buildVersion", buildMeta.version || "");
+  body.set("buildCommit", buildMeta.commit || "");
+  body.set("browserInfo", navigator.userAgent || "");
+  body.set(
+    "screenInfo",
+    `${window.innerWidth} × ${window.innerHeight} CSS px · ${window.screen?.width || 0} × ${window.screen?.height || 0} px · DPR ${window.devicePixelRatio || 1}`
+  );
+  body.set("technicalContext", JSON.stringify({
+    capturedAt: new Date().toISOString(),
+    sourceUrl: draft.sourceRoute || FEEDBACK_ROUTE,
+    formUrl: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+    online: navigator.onLine,
+    language: navigator.language,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    referrer: document.referrer || "",
+    platform: navigator.userAgentData?.platform || navigator.platform || ""
+  }));
+  if (selectedFile) body.set("attachment", selectedFile, selectedFile.name);
+
+  feedbackWorkflowState.saving = true;
+  feedbackWorkflowState.error = "";
+  feedbackWorkflowState.message = "";
+  render();
+  try {
+    const result = await apiJson("/api/feedback-cases", { method: "POST", body });
+    if (!result.case?.id || !result.case?.caseNumber) {
+      throw new Error("API nepotvrdilo vytvoření případu.");
+    }
+    feedbackWorkflowState.created = result;
+    feedbackWorkflowState.detail = result;
+    feedbackWorkflowState.detailId = result.case.id;
+    feedbackWorkflowState.cases = [
+      result.case,
+      ...feedbackWorkflowState.cases.filter((item) => item.id !== result.case.id)
+    ];
+    feedbackWorkflowState.total += 1;
+    feedbackWorkflowState.ownTotal += 1;
+    feedbackWorkflowState.loaded = true;
+    feedbackWorkflowState.message = "";
+    return true;
+  } catch (error) {
+    feedbackWorkflowState.error = error.payload?.error || error.message || "Hlášení se nepodařilo vytvořit. Vyplněná data zůstala zachována.";
+    return false;
+  } finally {
+    feedbackWorkflowState.saving = false;
+    render();
+  }
+}
+
+function applyFeedbackWorkflowFilters(form) {
+  feedbackWorkflowState.filters = {
+    status: form.elements.status?.value || "",
+    priority: form.elements.priority?.value || "",
+    module: form.elements.module?.value || "",
+    author: form.elements.author?.value.trim() || "",
+    assignee: form.elements.assignee?.value.trim() || "",
+    search: form.elements.search?.value.trim() || ""
+  };
+  render();
+}
+
+function resetFeedbackWorkflowFilters() {
+  feedbackWorkflowState.filters = {
+    status: "",
+    priority: "",
+    module: "",
+    author: "",
+    assignee: "",
+    search: ""
+  };
+  render();
+}
+
+async function saveFeedbackWorkflowCase(form) {
+  const caseId = form.dataset.caseId || "";
+  if (!caseId || !hasPermission(currentUser(), "self-repair", "manage")) return;
+  const assignee = form.elements.assigneeUserId;
+  const selectedOption = assignee?.selectedOptions?.[0];
+  feedbackWorkflowState.actionId = caseId;
+  feedbackWorkflowState.message = "";
+  feedbackWorkflowState.error = "";
+  feedbackWorkflowState.emailResult = null;
+  render();
+  try {
+    const result = await apiJson(`/api/feedback-cases/${encodeURIComponent(caseId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        workflowStatus: form.elements.workflowStatus?.value || "new",
+        priority: form.elements.priority?.value || "Běžná",
+        assigneeUserId: assignee?.value || "",
+        assigneeUserName: selectedOption?.dataset?.name || selectedOption?.textContent?.trim() || "",
+        detailsQuestion: form.elements.detailsQuestion?.value.trim() || "",
+        publicMessage: form.elements.publicMessage?.value.trim() || "",
+        internalNote: form.elements.internalNote?.value.trim() || "",
+        automationStatus: form.elements.automationStatus?.value || "not_evaluated"
+      })
+    });
+    feedbackWorkflowState.detail = result;
+    feedbackWorkflowState.detailId = caseId;
+    feedbackWorkflowState.emailResult = result.email || null;
+    feedbackWorkflowState.message = "Změny byly uloženy.";
+    await loadFeedbackWorkflowData({ renderAfter: false });
+    await loadFeedbackWorkflowDetail(caseId, { renderAfter: false });
+    return true;
+  } catch (error) {
+    feedbackWorkflowState.error = error.payload?.error || "Změny se nepodařilo uložit.";
+    return false;
+  } finally {
+    feedbackWorkflowState.actionId = "";
+    render();
+  }
+}
+
+async function takeFeedbackWorkflowCase(caseId) {
+  const detail = feedbackWorkflowState.detail;
+  const user = currentUser();
+  if (!detail?.case || detail.case.id !== caseId || !hasPermission(user, "self-repair", "manage")) return;
+  feedbackWorkflowState.actionId = caseId;
+  feedbackWorkflowState.error = "";
+  try {
+    const result = await apiJson(`/api/feedback-cases/${encodeURIComponent(caseId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        workflowStatus: detail.case.workflowStatus === "new" ? "accepted" : detail.case.workflowStatus,
+        assigneeUserId: user.id || user.email || "",
+        assigneeUserName: user.name || user.email || "Řešitel",
+        priority: detail.case.priority,
+        automationStatus: detail.case.automationStatus
+      })
+    });
+    feedbackWorkflowState.detail = result;
+    feedbackWorkflowState.message = "Případ jste převzali.";
+    await loadFeedbackWorkflowData({ renderAfter: false });
+  } catch (error) {
+    feedbackWorkflowState.error = error.payload?.error || "Případ se nepodařilo převzít.";
+  } finally {
+    feedbackWorkflowState.actionId = "";
+    render();
+  }
+}
+
+async function replyFeedbackWorkflowCase(form) {
+  const caseId = form.dataset.caseId || "";
+  const body = new FormData(form);
+  feedbackWorkflowState.actionId = caseId;
+  feedbackWorkflowState.error = "";
+  render();
+  try {
+    const result = await apiJson(`/api/feedback-cases/${encodeURIComponent(caseId)}/reply`, {
+      method: "POST",
+      body
+    });
+    feedbackWorkflowState.detail = result;
+    feedbackWorkflowState.message = "Doplnění bylo odesláno řešiteli.";
+    await loadFeedbackWorkflowData({ renderAfter: false });
+  } catch (error) {
+    feedbackWorkflowState.error = error.payload?.error || "Doplnění se nepodařilo odeslat.";
+  } finally {
+    feedbackWorkflowState.actionId = "";
+    render();
+  }
+}
+
+async function verifyFeedbackWorkflowCase(form, submitter) {
+  const caseId = form.dataset.caseId || "";
+  const resultValue = submitter?.value || "";
+  feedbackWorkflowState.actionId = caseId;
+  feedbackWorkflowState.error = "";
+  render();
+  try {
+    const result = await apiJson(`/api/feedback-cases/${encodeURIComponent(caseId)}/verify`, {
+      method: "POST",
+      body: JSON.stringify({
+        result: resultValue,
+        note: form.elements.note?.value.trim() || ""
+      })
+    });
+    feedbackWorkflowState.detail = result;
+    feedbackWorkflowState.message = resultValue === "fixed"
+      ? "Děkujeme. Hlášení bylo uzavřeno jako Hotovo."
+      : "Hlášení jsme vrátili do řešení a zachovali celou historii.";
+    await loadFeedbackWorkflowData({ renderAfter: false });
+  } catch (error) {
+    feedbackWorkflowState.error = error.payload?.error || "Výsledek ověření se nepodařilo uložit.";
+  } finally {
+    feedbackWorkflowState.actionId = "";
+    render();
+  }
+}
+
+async function runFeedbackCodexAction(form, submitter) {
+  const caseId = form.dataset.caseId || "";
+  const action = submitter?.value || "prepare";
+  feedbackWorkflowState.actionId = caseId;
+  feedbackWorkflowState.error = "";
+  feedbackWorkflowState.message = "";
+  render();
+  try {
+    await apiJson(`/api/feedback-cases/${encodeURIComponent(caseId)}/codex`, {
+      method: "POST",
+      body: JSON.stringify({
+        action,
+        jobId: form.elements.jobId?.value || "",
+        confirmation: form.elements.confirmation?.value || ""
+      })
+    });
+    feedbackWorkflowState.message = action === "prepare"
+      ? "Zadání pro Codex bylo připraveno. Codex zatím nebyl spuštěn."
+      : "Codex runner potvrdil převzetí zadání.";
+    await loadFeedbackWorkflowDetail(caseId, { renderAfter: false });
+  } catch (error) {
+    feedbackWorkflowState.error = error.payload?.error || "Akci pro Codex se nepodařilo dokončit.";
+  } finally {
+    feedbackWorkflowState.actionId = "";
+    render();
+  }
+}
+
+async function markFeedbackWorkflowNotification(notificationId) {
+  if (!notificationId) return;
+  try {
+    await apiJson("/api/feedback-case-notifications", {
+      method: "PATCH",
+      body: JSON.stringify({ id: notificationId })
+    });
+    feedbackWorkflowState.notifications = feedbackWorkflowState.notifications.map((item) => (
+      item.id === notificationId ? { ...item, readAt: new Date().toISOString() } : item
+    ));
+    feedbackWorkflowState.unreadCount = Math.max(0, feedbackWorkflowState.unreadCount - 1);
+  } catch {
+    // Otevření detailu nesmí blokovat dočasná chyba označení notifikace.
+  }
 }
 
 function absenceSettingsFormData(form) {
@@ -55566,6 +56577,12 @@ async function saveDirtyChanges() {
     return submitSelfRepairReport(selfRepairReportTarget.form);
   }
 
+  const feedbackWorkflowTarget = currentFeedbackWorkflowDirtyTarget();
+
+  if (feedbackWorkflowTarget?.isDirty) {
+    return submitFeedbackWorkflowReport(feedbackWorkflowTarget.form);
+  }
+
   const tyresTarget = currentTyresDirtyTarget();
 
   if (tyresTarget?.isDirty) {
@@ -55633,6 +56650,14 @@ function discardDirtyChanges() {
   if (selfRepairReportTarget?.isDirty) {
     selfRepairReportState.draft = { ...selfRepairReportState.baseline };
     selfRepairReportState.error = "";
+    render();
+    return;
+  }
+
+  const feedbackWorkflowTarget = currentFeedbackWorkflowDirtyTarget();
+
+  if (feedbackWorkflowTarget?.isDirty) {
+    resetFeedbackWorkflowDraft();
     render();
     return;
   }
@@ -56298,6 +57323,48 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  const feedbackWorkflowReportForm = event.target.closest("[data-feedback-workflow-report-form]");
+  if (feedbackWorkflowReportForm) {
+    event.preventDefault();
+    await submitFeedbackWorkflowReport(feedbackWorkflowReportForm);
+    return;
+  }
+
+  const feedbackWorkflowManageForm = event.target.closest("[data-feedback-case-manage-form]");
+  if (feedbackWorkflowManageForm) {
+    event.preventDefault();
+    await saveFeedbackWorkflowCase(feedbackWorkflowManageForm);
+    return;
+  }
+
+  const feedbackWorkflowReplyForm = event.target.closest("[data-feedback-case-reply-form]");
+  if (feedbackWorkflowReplyForm) {
+    event.preventDefault();
+    await replyFeedbackWorkflowCase(feedbackWorkflowReplyForm);
+    return;
+  }
+
+  const feedbackWorkflowVerifyForm = event.target.closest("[data-feedback-case-verify-form]");
+  if (feedbackWorkflowVerifyForm) {
+    event.preventDefault();
+    await verifyFeedbackWorkflowCase(feedbackWorkflowVerifyForm, event.submitter);
+    return;
+  }
+
+  const feedbackWorkflowCodexForm = event.target.closest("[data-feedback-codex-form]");
+  if (feedbackWorkflowCodexForm) {
+    event.preventDefault();
+    await runFeedbackCodexAction(feedbackWorkflowCodexForm, event.submitter);
+    return;
+  }
+
+  const feedbackWorkflowFiltersForm = event.target.closest("[data-feedback-workflow-filters]");
+  if (feedbackWorkflowFiltersForm) {
+    event.preventDefault();
+    applyFeedbackWorkflowFilters(feedbackWorkflowFiltersForm);
+    return;
+  }
+
   const feedbackCreateForm = event.target.closest("[data-feedback-create-form]");
   if (feedbackCreateForm) {
     event.preventDefault();
@@ -56647,6 +57714,12 @@ document.addEventListener("input", (event) => {
     return;
   }
 
+  const feedbackWorkflowDraftField = event.target.closest("[data-feedback-workflow-draft]");
+  if (feedbackWorkflowDraftField) {
+    updateFeedbackWorkflowDraft(feedbackWorkflowDraftField.closest("[data-feedback-workflow-report-form]"));
+    return;
+  }
+
   const selfRepairFilter = event.target.closest("[data-self-repair-filter]");
   if (selfRepairFilter && selfRepairFilter.tagName === "SELECT") {
     applySelfRepairFilters(selfRepairFilter.closest("[data-self-repair-filters]"));
@@ -56672,6 +57745,28 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  const feedbackWorkflowAttachment = event.target.closest("[data-feedback-workflow-report-form] input[name='attachment']");
+  if (feedbackWorkflowAttachment) {
+    const file = feedbackWorkflowAttachment.files?.[0] || null;
+    if (file && file.size > SELF_REPAIR_ATTACHMENT_MAX_SIZE_BYTES) {
+      feedbackWorkflowState.attachmentFile = null;
+      feedbackWorkflowState.attachmentName = "";
+      feedbackWorkflowState.error = "Příloha může mít nejvýše 10 MB.";
+      feedbackWorkflowAttachment.value = "";
+    } else {
+      feedbackWorkflowState.attachmentFile = file;
+      feedbackWorkflowState.attachmentName = file?.name || "";
+      feedbackWorkflowState.error = "";
+    }
+    return;
+  }
+
+  const feedbackWorkflowDraftField = event.target.closest("[data-feedback-workflow-draft]");
+  if (feedbackWorkflowDraftField) {
+    updateFeedbackWorkflowDraft(feedbackWorkflowDraftField.closest("[data-feedback-workflow-report-form]"));
+    return;
+  }
+
   const dataBoxPlusTriageAdvanced = event.target.closest("[data-ds-plus-triage-advanced]");
   if (dataBoxPlusTriageAdvanced) {
     const field = dataBoxPlusTriageAdvanced.dataset.dsPlusTriageAdvanced;
@@ -57181,6 +58276,42 @@ window.addEventListener("offline", () => handleCollectionDailyDriverConnectivity
 window.addEventListener("online", () => handleCollectionDailyDriverConnectivityChange(true));
 
 document.addEventListener("click", async (event) => {
+  const feedbackNewAnother = event.target.closest("[data-feedback-new-another]");
+  if (feedbackNewAnother) {
+    event.preventDefault();
+    resetFeedbackWorkflowDraft();
+    render();
+    return;
+  }
+
+  const feedbackRefresh = event.target.closest("[data-feedback-workflow-refresh]");
+  if (feedbackRefresh) {
+    event.preventDefault();
+    await loadFeedbackWorkflowData({ force: true });
+    return;
+  }
+
+  const feedbackFilterReset = event.target.closest("[data-feedback-workflow-filter-reset]");
+  if (feedbackFilterReset) {
+    event.preventDefault();
+    resetFeedbackWorkflowFilters();
+    return;
+  }
+
+  const feedbackTake = event.target.closest("[data-feedback-case-take]");
+  if (feedbackTake) {
+    event.preventDefault();
+    await takeFeedbackWorkflowCase(feedbackTake.dataset.feedbackCaseTake || "");
+    return;
+  }
+
+  const feedbackRow = event.target.closest("[data-feedback-case-open]");
+  if (feedbackRow && !event.target.closest("a, button, input, textarea, select, label, form")) {
+    event.preventDefault();
+    navigateToUrl(routeHref(`${FEEDBACK_ROUTE}/${encodeURIComponent(feedbackRow.dataset.feedbackCaseOpen || "")}`));
+    return;
+  }
+
   const tyresTabButton = event.target.closest("[data-tyres-tab]");
   if (tyresTabButton) {
     event.preventDefault();
@@ -60143,10 +61274,19 @@ document.addEventListener("click", async (event) => {
   }
 
   event.preventDefault();
+  if (link.dataset.feedbackNotificationId) {
+    void markFeedbackWorkflowNotification(link.dataset.feedbackNotificationId);
+  }
   guardedAccessAction(() => navigateToUrl(link.href));
 });
 
 document.addEventListener("keydown", (event) => {
+  const feedbackRow = event.target.closest?.("[data-feedback-case-open]");
+  if (feedbackRow && ["Enter", " "].includes(event.key) && event.target === feedbackRow) {
+    event.preventDefault();
+    navigateToUrl(routeHref(`${FEEDBACK_ROUTE}/${encodeURIComponent(feedbackRow.dataset.feedbackCaseOpen || "")}`));
+    return;
+  }
   scrollDataBoxPlusChatHistoryByKeyboard(event);
   if (event.key === "Escape" && (collectionRoutesPilotState.myDailyRouteMapFullscreen || collectionRoutesPilotState.myDailyRouteNavigationActive)) {
     event.preventDefault();

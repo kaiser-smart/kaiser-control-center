@@ -143,7 +143,8 @@ export const ROLE_PERMISSIONS = {
     ...actions("costs", ["view"]),
     ...actions("receivables", ["view"]),
     ...actions("reports", ["view"]),
-    ...actions("absence", ["view"])
+    ...actions("absence", ["view"]),
+    ...actions("feedback", ["view", "create"])
   ]
 };
 
