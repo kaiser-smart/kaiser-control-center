@@ -80,6 +80,13 @@ export async function validateTwilioRequestSignature({ request, authToken, param
 export async function requireTwilioWebhookAuth(env, request, payload = {}, rawBody = "") {
   const authToken = cleanString(env?.TWILIO_KAISER_AUTH_TOKEN || env?.KAISER_TWILIO_AUTH_TOKEN || env?.TWILIO_AUTH_TOKEN);
   const signatureConfigured = Boolean(authToken && cleanString(request.headers.get("X-Twilio-Signature")));
+  const expected = cleanString(
+    env?.TWILIO_INBOUND_WEBHOOK_SECRET ||
+    env?.TWILIO_KAISER_INBOUND_WEBHOOK_TOKEN ||
+    env?.KAISER_TWILIO_INBOUND_WEBHOOK_TOKEN ||
+    env?.TWILIO_KAISER_STATUS_WEBHOOK_TOKEN ||
+    env?.KAISER_TWILIO_STATUS_WEBHOOK_TOKEN
+  );
 
   if (signatureConfigured) {
     const valid = await validateTwilioRequestSignature({ request, authToken, params: payload, rawBody });
@@ -88,16 +95,11 @@ export async function requireTwilioWebhookAuth(env, request, payload = {}, rawBo
     }
 
     console.warn("twilio.webhook_signature_invalid", { path: new URL(request.url).pathname });
-    return { ok: false, responseStatus: 401, error: "Neplatný Twilio podpis." };
+    if (!expected) {
+      return { ok: false, responseStatus: 401, error: "Neplatný Twilio podpis." };
+    }
   }
 
-  const expected = cleanString(
-    env?.TWILIO_INBOUND_WEBHOOK_SECRET ||
-    env?.TWILIO_KAISER_INBOUND_WEBHOOK_TOKEN ||
-    env?.KAISER_TWILIO_INBOUND_WEBHOOK_TOKEN ||
-    env?.TWILIO_KAISER_STATUS_WEBHOOK_TOKEN ||
-    env?.KAISER_TWILIO_STATUS_WEBHOOK_TOKEN
-  );
   if (!expected) {
     return { ok: false, responseStatus: 503, error: "Webhook secret není nastavený v serverových secrets." };
   }

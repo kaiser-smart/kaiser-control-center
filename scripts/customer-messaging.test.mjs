@@ -337,6 +337,31 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
 }
 
 {
+  const payload = { MessageSid: "SM-KAISER", MessageStatus: "read" };
+  const url = "https://smart-odpady.ai/api/twilio/status?secret=shared-status-secret";
+  const request = new Request(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-twilio-signature": "invalid-signature"
+    },
+    body: new URLSearchParams(payload)
+  });
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const auth = await requireTwilioWebhookAuth({
+      TWILIO_AUTH_TOKEN: "old-token",
+      TWILIO_KAISER_STATUS_WEBHOOK_TOKEN: "shared-status-secret"
+    }, request, payload, new URLSearchParams(payload).toString());
+    assert.equal(auth.ok, true);
+    assert.equal(auth.method, "shared_secret");
+  } finally {
+    console.warn = originalWarn;
+  }
+}
+
+{
   const testEnv = env({ KSO_CUSTOMER_MESSAGING_MODE: "live" });
   const originalFetch = globalThis.fetch;
   const originalConsoleError = console.error;
