@@ -31058,6 +31058,7 @@ function dataBoxPlusFacts(message) {
 
 function dataBoxPlusNotifications(message) {
   if (!Array.isArray(message?.notifications)) return "";
+  const radimNotification = message.notifications.find((notification) => notification.recipientKey === "radim-oplustil");
   const statusLabels = {
     prepared: "Připraveno",
     provider_sent: "Odesláno poskytovateli",
@@ -31074,6 +31075,11 @@ function dataBoxPlusNotifications(message) {
           <h3 id="ds-plus-notifications-title">Upozornění</h3>
           <p>Skutečný stav automatického RCS pro oprávněné role.</p>
         </div>
+        ${radimNotification ? "" : `
+          <button class="secondary-action" type="button" data-ds-plus-rcs-test="${escapeHtml(message.id)}">
+            Odeslat schválený test Radimovi
+          </button>
+        `}
       </div>
       ${message.notifications.length ? `
         <div class="ds-plus-notifications__list">
@@ -59002,6 +59008,33 @@ document.addEventListener("click", async (event) => {
     dataBoxPlusState.notice = "";
     await loadDataBoxPlusMessageDetail(dataBoxPlusState.selectedMessageId);
     render();
+    return;
+  }
+
+  const dataBoxPlusRcsTest = event.target.closest("[data-ds-plus-rcs-test]");
+  if (dataBoxPlusRcsTest) {
+    event.preventDefault();
+    const messageId = dataBoxPlusRcsTest.dataset.dsPlusRcsTest || "";
+    dataBoxPlusState.actionLoading = "rcs-test";
+    dataBoxPlusState.notice = "";
+    render();
+    try {
+      const result = await apiJson(`/api/data-box-plus/messages/${encodeURIComponent(messageId)}/rcs-test`, {
+        method: "POST",
+        body: JSON.stringify({ confirm: "send-radim-rcs-test" })
+      });
+      dataBoxPlusState.notice = result.sent
+        ? `Testovací RCS bylo předané Twiliu. SID: ${result.providerMessageId || "neuvedeno"}`
+        : `Testovací RCS nebylo odeslané: ${result.errorMessage || result.status || "neznámý stav"}`;
+      await loadDataBoxPlusMessageDetail(messageId);
+    } catch (error) {
+      dataBoxPlusState.notice = dataBoxPlusHumanError(
+        error.payload?.error || error.message || "Testovací RCS se nepodařilo odeslat."
+      );
+    } finally {
+      dataBoxPlusState.actionLoading = "";
+      render();
+    }
     return;
   }
 
