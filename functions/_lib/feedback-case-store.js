@@ -185,6 +185,22 @@ function fallbackCaseNumber(row) {
     .toUpperCase()}`;
 }
 
+function publicModuleName(item) {
+  return ["feedback", "self-repair"].includes(item.moduleKey)
+    ? "Připomínky a chyby"
+    : item.moduleName;
+}
+
+function publicTitle(item) {
+  if (
+    /^\[PRODUKČNÍ TEST\]/i.test(item.title) &&
+    /(samoopravy|fáze|codex|deploy)/i.test(item.title)
+  ) {
+    return "Technické ověření systému";
+  }
+  return item.title;
+}
+
 function rowToCase(row) {
   if (!row) return null;
   const workflowStatus = normalizeWorkflowStatus(row.workflow_status, "new");
@@ -199,7 +215,9 @@ function rowToCase(row) {
     workflowStatusLabel: FEEDBACK_WORKFLOW_STATUSES[workflowStatus],
     priority: normalizePriority(row.priority),
     moduleKey: cleanText(row.module_key, 100),
-    moduleName: cleanText(row.module_name, 200),
+    moduleName: cleanText(row.module_key, 100) === "feedback"
+      ? "Připomínky a chyby"
+      : cleanText(row.module_name, 200),
     title: cleanText(row.title, 240),
     description: cleanText(row.description, 8000),
     expectedBehavior: cleanText(row.expected_behavior, 5000),
@@ -285,8 +303,8 @@ function publicCase(item, user) {
     workflowStatusLabel: item.workflowStatusLabel,
     priority: item.priority,
     moduleKey: item.moduleKey,
-    moduleName: item.moduleName,
-    title: item.title,
+    moduleName: publicModuleName(item),
+    title: publicTitle(item),
     description: item.description,
     expectedBehavior: item.expectedBehavior,
     sourceRoute: item.sourceRoute,

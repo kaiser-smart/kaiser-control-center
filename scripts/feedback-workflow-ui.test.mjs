@@ -41,6 +41,9 @@ assert.match(listApiSource, /requireUserPermission\(env, request, "feedback", "c
 assert.match(detailApiSource, /requireUserPermission\(env, request, "self-repair", "manage"\)/);
 assert.match(detailApiSource, /sendFeedbackReadyForVerificationNotification/);
 assert.match(storeSource, /function publicCase/);
+assert.match(storeSource, /function publicModuleName/);
+assert.match(storeSource, /function publicTitle/);
+assert.match(storeSource, /Technické ověření systému/);
 assert.match(storeSource, /internalNote:/);
 assert.match(storeSource, /if \(!canManage\(user\)\) return publicCase/);
 assert.match(storeSource, /feedback_codex_runner_not_configured/);
