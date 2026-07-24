@@ -1230,7 +1230,8 @@ Cílové webhook URL pro zákaznickou RCS/SMS vrstvu:
 
 Runtime konfigurace musí být pouze přes Cloudflare ENV/secrets. Pro zákaznické RCS/SMS mají přednost Kaiser-specifické proměnné, aby je nepřebil starší obecný Twilio účet:
 - `TWILIO_KAISER_ACCOUNT_SID`
-- `TWILIO_KAISER_AUTH_TOKEN`
+- `TWILIO_KAISER_API_KEY_SID`
+- `TWILIO_KAISER_API_KEY_SECRET`
 - `TWILIO_KAISER_MESSAGING_SERVICE_SID`
 - `TWILIO_RCS_SENDER_ID`
 - `TWILIO_KAISER_STATUS_CALLBACK_URL`
@@ -1239,6 +1240,8 @@ Runtime konfigurace musí být pouze přes Cloudflare ENV/secrets. Pro zákaznic
 Obecné proměnné zůstávají jen jako fallback pro starší integrace a nesmí v produkci přebít Kaiser zákaznickou messaging službu:
 - `TWILIO_ACCOUNT_SID`
 - `TWILIO_AUTH_TOKEN`
+- `TWILIO_API_KEY_SID`
+- `TWILIO_API_KEY_SECRET`
 - `TWILIO_MESSAGING_SERVICE_SID`
 - `TWILIO_STATUS_CALLBACK_URL`
 - `TWILIO_INBOUND_WEBHOOK_SECRET`

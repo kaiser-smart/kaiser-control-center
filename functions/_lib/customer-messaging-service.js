@@ -31,13 +31,17 @@ function nullableString(value) {
 function twilioConfig(env = {}) {
   const accountSid = cleanString(env.TWILIO_KAISER_ACCOUNT_SID || env.KAISER_TWILIO_ACCOUNT_SID || env.TWILIO_ACCOUNT_SID);
   const authToken = cleanString(env.TWILIO_KAISER_AUTH_TOKEN || env.KAISER_TWILIO_AUTH_TOKEN || env.TWILIO_AUTH_TOKEN);
+  const apiKeySid = cleanString(env.TWILIO_KAISER_API_KEY_SID || env.KAISER_TWILIO_API_KEY_SID || env.TWILIO_API_KEY_SID || env.TWILIO_API_KEY);
+  const apiKeySecret = cleanString(env.TWILIO_KAISER_API_KEY_SECRET || env.KAISER_TWILIO_API_KEY_SECRET || env.TWILIO_API_KEY_SECRET || env.TWILIO_API_SECRET);
   const messagingServiceSid = cleanString(env.TWILIO_KAISER_MESSAGING_SERVICE_SID || env.KAISER_TWILIO_MESSAGING_SERVICE_SID || env.TWILIO_MESSAGING_SERVICE_SID);
   const rcsSenderId = cleanString(env.TWILIO_RCS_SENDER_ID || env.TWILIO_RCS_SENDER || env.TWILIO_KAISER_RCS_SENDER_ID);
   const statusCallbackUrl = cleanString(env.TWILIO_STATUS_CALLBACK_URL || env.TWILIO_KAISER_STATUS_CALLBACK_URL || env.KSO_TWILIO_STATUS_CALLBACK_URL);
-  const mode = lower(env.KSO_CUSTOMER_MESSAGING_MODE || env.KSO_SMS_MODE || (accountSid && authToken && messagingServiceSid ? "live" : "off"));
+  const authPassword = apiKeySecret || authToken;
+  const mode = lower(env.KSO_CUSTOMER_MESSAGING_MODE || env.KSO_SMS_MODE || (accountSid && authPassword && messagingServiceSid ? "live" : "off"));
   return {
     accountSid,
-    authToken,
+    authUsername: apiKeySid || accountSid,
+    authPassword,
     messagingServiceSid,
     rcsSenderId,
     statusCallbackUrl,
@@ -84,7 +88,7 @@ function outboundErrorMessage(config, phone, body) {
   if (!phone) return "Chybí validní telefonní číslo.";
   if (!body) return "Zpráva je prázdná.";
   if (!config.accountSid) return "Chybí TWILIO_ACCOUNT_SID.";
-  if (!config.authToken) return "Chybí TWILIO_AUTH_TOKEN.";
+  if (!config.authPassword) return "Chybí TWILIO_KAISER_API_KEY_SECRET nebo TWILIO_AUTH_TOKEN.";
   if (!config.messagingServiceSid) return "Chybí TWILIO_MESSAGING_SERVICE_SID.";
   if (config.mode === "off") return "Zákaznické RCS/SMS odesílání je vypnuté.";
   return "";
@@ -94,7 +98,7 @@ async function twilioPostMessage(config, { to, body, channel }) {
   const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(config.accountSid)}/Messages.json`, {
     method: "POST",
     headers: {
-      Authorization: `Basic ${btoa(`${config.accountSid}:${config.authToken}`)}`,
+      Authorization: `Basic ${btoa(`${config.authUsername}:${config.authPassword}`)}`,
       "Content-Type": "application/x-www-form-urlencoded"
     },
     body: new URLSearchParams({

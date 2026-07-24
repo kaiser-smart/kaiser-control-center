@@ -45,6 +45,8 @@ function database(env) {
 function config(env = {}) {
   const accountSid = cleanString(env.TWILIO_KAISER_ACCOUNT_SID || env.KAISER_TWILIO_ACCOUNT_SID || env.TWILIO_ACCOUNT_SID);
   const authToken = cleanString(env.TWILIO_KAISER_AUTH_TOKEN || env.KAISER_TWILIO_AUTH_TOKEN || env.TWILIO_AUTH_TOKEN);
+  const apiKeySid = cleanString(env.TWILIO_KAISER_API_KEY_SID || env.KAISER_TWILIO_API_KEY_SID || env.TWILIO_API_KEY_SID || env.TWILIO_API_KEY);
+  const apiKeySecret = cleanString(env.TWILIO_KAISER_API_KEY_SECRET || env.KAISER_TWILIO_API_KEY_SECRET || env.TWILIO_API_KEY_SECRET || env.TWILIO_API_SECRET);
   const messagingServiceSid = cleanString(env.TWILIO_KAISER_MESSAGING_SERVICE_SID || env.KAISER_TWILIO_MESSAGING_SERVICE_SID || env.TWILIO_MESSAGING_SERVICE_SID);
   const rcsSenderId = cleanString(env.TWILIO_RCS_SENDER_ID || env.TWILIO_RCS_SENDER);
   const contentSid = cleanString(env.TWILIO_DATA_BOX_RCS_CONTENT_SID);
@@ -55,12 +57,13 @@ function config(env = {}) {
       || env.KSO_TWILIO_STATUS_CALLBACK_URL
   );
   const mode = cleanString(
-    env.KSO_CUSTOMER_MESSAGING_MODE || (accountSid && authToken && messagingServiceSid ? "live" : "off")
+    env.KSO_CUSTOMER_MESSAGING_MODE || (accountSid && (apiKeySecret || authToken) && messagingServiceSid ? "live" : "off")
   ).toLowerCase();
   const publicAppUrl = cleanString(env.PUBLIC_APP_URL || env.APP_PUBLIC_URL || "https://smart-odpady.ai").replace(/\/+$/, "");
   return {
     accountSid,
-    authToken,
+    authUsername: apiKeySid || accountSid,
+    authPassword: apiKeySecret || authToken,
     messagingServiceSid,
     rcsSenderId,
     contentSid,
@@ -253,7 +256,7 @@ async function postTwilio(cfg, phone, variables, fetchImpl) {
     {
       method: "POST",
       headers: {
-        Authorization: `Basic ${btoa(`${cfg.accountSid}:${cfg.authToken}`)}`,
+        Authorization: `Basic ${btoa(`${cfg.authUsername}:${cfg.authPassword}`)}`,
         "Content-Type": "application/x-www-form-urlencoded"
       },
       body: new URLSearchParams({
@@ -331,7 +334,7 @@ export async function notifyNewDataBoxMessage(env, input = {}, dependencies = {}
       blockingError = cfg.mode === "test"
         ? "Test režim: poskytovatel nebyl volán."
         : "RCS/SMS odesílání je vypnuté.";
-    } else if (!cfg.accountSid || !cfg.authToken || !cfg.messagingServiceSid || !cfg.rcsSenderId) {
+    } else if (!cfg.accountSid || !cfg.authPassword || !cfg.messagingServiceSid || !cfg.rcsSenderId) {
       blockingCode = "twilio_rcs_configuration_missing";
       blockingError = "Chybí úplná serverová konfigurace Twilio Messaging Service a RCS sendera.";
     } else if (!cfg.contentSid) {

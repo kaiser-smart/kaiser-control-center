@@ -288,7 +288,8 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
     TWILIO_AUTH_TOKEN: "old-token",
     TWILIO_MESSAGING_SERVICE_SID: "MG-old",
     TWILIO_KAISER_ACCOUNT_SID: kaiserAccountSid,
-    TWILIO_KAISER_AUTH_TOKEN: "kaiser-token",
+    TWILIO_KAISER_API_KEY_SID: "SK-KAISER-TEST-KEY",
+    TWILIO_KAISER_API_KEY_SECRET: "kaiser-key-secret",
     TWILIO_KAISER_MESSAGING_SERVICE_SID: "MG3709ede950d2b5ebc7b23fe8d9d004ff"
   });
   const originalFetch = globalThis.fetch;
@@ -305,7 +306,7 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
     const result = await sendCustomerMessage(testEnv, validInput());
     assert.equal(result.sent, true);
     assert.equal(requestUrl.endsWith(`/Accounts/${kaiserAccountSid}/Messages.json`), true);
-    assert.equal(Buffer.from(authorization.replace(/^Basic\s+/, ""), "base64").toString("utf8"), `${kaiserAccountSid}:kaiser-token`);
+    assert.equal(Buffer.from(authorization.replace(/^Basic\s+/, ""), "base64").toString("utf8"), "SK-KAISER-TEST-KEY:kaiser-key-secret");
     assert.match(body, /MessagingServiceSid=MG3709ede950d2b5ebc7b23fe8d9d004ff/);
   } finally {
     globalThis.fetch = originalFetch;
