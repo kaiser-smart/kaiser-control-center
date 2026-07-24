@@ -6,9 +6,10 @@ Repo očekává schválenou Twilio Content šablonu v serverové proměnné
 `TWILIO_DATA_BOX_RCS_CONTENT_SID`. Bez ní se upozornění bezpečně neodešle a
 důvod se uloží jako `data_box_rcs_template_missing`.
 
-Testovací grafický kandidát je uložený v repozitáři. Produkční použití stále
-vyžaduje zveřejnění assetu, vytvoření Content šablony a kontrolní RCS na
-skutečném telefonu.
+Testovací grafický kandidát je uložený v repozitáři. Twilio Content šablona
+`kaiser_data_box_new_message_v1` byla vytvořená 24. 7. 2026 a Twilio ji označuje
+jako způsobilou pro RCS. Produkční použití stále vyžaduje zveřejnění assetu,
+nastavení jejího SID do serverové konfigurace a kontrolní RCS na skutečném telefonu.
 
 ## Kanonická šablona
 
@@ -27,8 +28,10 @@ skutečném telefonu.
   `Předmět: {{3}}`
   `Doručeno: {{4}}`
   `Pro odhlášení odpovězte STOP.`
-- hlavní URL tlačítko: `Zobrazit zprávu` → `{{5}}`
-- vedlejší URL tlačítko: `Otevřít Datové zprávy` → `{{6}}`
+- hlavní URL tlačítko: `Zobrazit zprávu` →
+  `https://smart-odpady.ai/datove-schranky-plus?message={{5}}`
+- vedlejší URL tlačítko: `Otevřít Datové zprávy` →
+  `https://smart-odpady.ai/datove-schranky-plus`
 
 Proměnné:
 
@@ -36,8 +39,7 @@ Proměnné:
 2. odesílatel zprávy,
 3. předmět,
 4. datum a čas doručení v `Europe/Prague`,
-5. chráněný deep-link konkrétní zprávy,
-6. kanonická trasa `/datove-schranky-plus`.
+5. URL-encoded ID zprávy vložené pouze do chráněného deep-linku.
 
 Šablona musí mít vedle RCS karty také textový SMS fallback se stejnými
 minimálními údaji, oběma odkazy a větou `Pro odhlášení odpovězte STOP.`.

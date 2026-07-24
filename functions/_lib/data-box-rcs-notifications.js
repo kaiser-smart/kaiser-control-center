@@ -48,7 +48,12 @@ function config(env = {}) {
   const messagingServiceSid = cleanString(env.TWILIO_MESSAGING_SERVICE_SID || env.TWILIO_KAISER_MESSAGING_SERVICE_SID);
   const rcsSenderId = cleanString(env.TWILIO_RCS_SENDER_ID || env.TWILIO_RCS_SENDER);
   const contentSid = cleanString(env.TWILIO_DATA_BOX_RCS_CONTENT_SID);
-  const statusCallbackUrl = cleanString(env.TWILIO_STATUS_CALLBACK_URL || env.KSO_TWILIO_STATUS_CALLBACK_URL);
+  const statusCallbackUrl = cleanString(
+    env.TWILIO_STATUS_CALLBACK_URL
+      || env.TWILIO_KAISER_STATUS_CALLBACK_URL
+      || env.KAISER_TWILIO_STATUS_CALLBACK_URL
+      || env.KSO_TWILIO_STATUS_CALLBACK_URL
+  );
   const mode = cleanString(
     env.KSO_CUSTOMER_MESSAGING_MODE || (accountSid && authToken && messagingServiceSid ? "live" : "off")
   ).toLowerCase();
@@ -238,8 +243,7 @@ function contentVariables(input, cfg) {
     "2": cleanString(input.senderName) || "Odesílatel neuveden",
     "3": cleanString(input.subject) || "Předmět neuveden",
     "4": deliveredAtText(input.deliveredAt),
-    "5": `${cfg.publicAppUrl}/datove-schranky-plus?message=${encodeURIComponent(messageId)}`,
-    "6": `${cfg.publicAppUrl}/datove-schranky-plus`
+    "5": encodeURIComponent(messageId)
   };
 }
 

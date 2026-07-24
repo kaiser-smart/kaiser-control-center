@@ -124,8 +124,7 @@ function messageInput() {
   assert.equal(variables["1"], "Kaiser servis");
   assert.equal(variables["2"], "Česká správa");
   assert.equal(variables["3"], "Nové rozhodnutí");
-  assert.equal(variables["5"], "https://smart-odpady.ai/datove-schranky-plus?message=message-1");
-  assert.equal(variables["6"], "https://smart-odpady.ai/datove-schranky-plus");
+  assert.equal(variables["5"], "message-1");
 
   const second = await notifyNewDataBoxMessage(environment(d1), messageInput(), { fetch });
   assert.equal(second.length, 2);
@@ -232,12 +231,14 @@ function messageInput() {
   const cardAsset = readFileSync(
     new URL("../public/notifications/kaiser-sarlota-rcs-data-message-v1.png", import.meta.url)
   );
-  assert.match(notificationSource, /datove-schranky-plus\?message=/);
+  assert.match(notificationSource, /encodeURIComponent\(messageId\)/);
+  assert.match(notificationSource, /TWILIO_KAISER_STATUS_CALLBACK_URL/);
   assert.match(appSource, /applyDataBoxPlusMessageDeepLink/);
   assert.match(endpointSource, /requireUserPermission\(env, request, "data-box-plus", "view"\)/);
   assert.match(endpointSource, /hasPermission\(user, "data-box-plus", "manage"\)/);
   assert.match(storeSource, /created && direction === "received"/);
   assert.match(templateSpec, /Pro odhlášení odpovězte STOP\./);
+  assert.match(templateSpec, /datove-schranky-plus\?message=\{\{5\}\}/);
   assert.match(templateSpec, /https:\/\/smart-odpady\.ai\/notifications\/kaiser-sarlota-rcs-data-message-v1\.png/);
   assert.equal(cardAsset.subarray(1, 4).toString("ascii"), "PNG");
   assert.equal(cardAsset.readUInt32BE(16), 1200);
