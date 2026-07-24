@@ -78,7 +78,7 @@ export async function validateTwilioRequestSignature({ request, authToken, param
 }
 
 export async function requireTwilioWebhookAuth(env, request, payload = {}, rawBody = "") {
-  const authToken = cleanString(env?.TWILIO_AUTH_TOKEN || env?.TWILIO_KAISER_AUTH_TOKEN || env?.KAISER_TWILIO_AUTH_TOKEN);
+  const authToken = cleanString(env?.TWILIO_KAISER_AUTH_TOKEN || env?.KAISER_TWILIO_AUTH_TOKEN || env?.TWILIO_AUTH_TOKEN);
   const signatureConfigured = Boolean(authToken && cleanString(request.headers.get("X-Twilio-Signature")));
 
   if (signatureConfigured) {

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import {
   __test as messagingTest,
   processCustomerInboundMessage,
   processCustomerStatusCallback,
   sendCustomerMessage
 } from "../functions/_lib/customer-messaging-service.js";
+import { requireTwilioWebhookAuth } from "../functions/_lib/twilio-webhook-auth.js";
 import {
   CUSTOMER_MESSAGE_TEMPLATES,
   customerTemplateOptions,
@@ -311,6 +313,27 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
   } finally {
     globalThis.fetch = originalFetch;
   }
+}
+
+{
+  const payload = { MessageSid: "SM-KAISER", MessageStatus: "read" };
+  const url = "https://smart-odpady.ai/api/twilio/status";
+  const signatureBase = `${url}MessageSid${payload.MessageSid}MessageStatus${payload.MessageStatus}`;
+  const signature = createHmac("sha1", "kaiser-token").update(signatureBase).digest("base64");
+  const request = new Request(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-twilio-signature": signature
+    },
+    body: new URLSearchParams(payload)
+  });
+  const auth = await requireTwilioWebhookAuth({
+    TWILIO_AUTH_TOKEN: "old-token",
+    TWILIO_KAISER_AUTH_TOKEN: "kaiser-token"
+  }, request, payload, new URLSearchParams(payload).toString());
+  assert.equal(auth.ok, true);
+  assert.equal(auth.method, "twilio_signature");
 }
 
 {
