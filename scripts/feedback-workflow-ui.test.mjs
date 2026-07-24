@@ -15,6 +15,7 @@ assert.match(targetsSource, /moduleName: "Připomínky a chyby"/);
 assert.match(appSource, /function feedbackCaseIdFromPath/);
 assert.match(appSource, /detailErrorId/);
 assert.match(appSource, /feedbackWorkflowState\.detailErrorId !== caseId/);
+assert.match(appSource, /async function verifyFeedbackWorkflowCase[\s\S]*feedbackWorkflowState\.emailResult = null/);
 assert.match(appSource, /path === FEEDBACK_ROUTE \|\| path\.startsWith\(`\$\{FEEDBACK_ROUTE\}\//);
 assert.match(appSource, /Nové hlášení/);
 assert.match(appSource, /Moje hlášení/);

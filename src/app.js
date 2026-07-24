@@ -54561,6 +54561,7 @@ async function takeFeedbackWorkflowCase(caseId) {
   if (!detail?.case || detail.case.id !== caseId || !hasPermission(user, "self-repair", "manage")) return;
   feedbackWorkflowState.actionId = caseId;
   feedbackWorkflowState.error = "";
+  feedbackWorkflowState.emailResult = null;
   try {
     const result = await apiJson(`/api/feedback-cases/${encodeURIComponent(caseId)}`, {
       method: "PATCH",
@@ -54588,6 +54589,7 @@ async function replyFeedbackWorkflowCase(form) {
   const body = new FormData(form);
   feedbackWorkflowState.actionId = caseId;
   feedbackWorkflowState.error = "";
+  feedbackWorkflowState.emailResult = null;
   render();
   try {
     const result = await apiJson(`/api/feedback-cases/${encodeURIComponent(caseId)}/reply`, {
@@ -54610,6 +54612,7 @@ async function verifyFeedbackWorkflowCase(form, submitter) {
   const resultValue = submitter?.value || "";
   feedbackWorkflowState.actionId = caseId;
   feedbackWorkflowState.error = "";
+  feedbackWorkflowState.emailResult = null;
   render();
   try {
     const result = await apiJson(`/api/feedback-cases/${encodeURIComponent(caseId)}/verify`, {
@@ -54638,6 +54641,7 @@ async function runFeedbackCodexAction(form, submitter) {
   feedbackWorkflowState.actionId = caseId;
   feedbackWorkflowState.error = "";
   feedbackWorkflowState.message = "";
+  feedbackWorkflowState.emailResult = null;
   render();
   try {
     await apiJson(`/api/feedback-cases/${encodeURIComponent(caseId)}/codex`, {
