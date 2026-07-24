@@ -1195,6 +1195,49 @@ Codex se má zastavit pouze tehdy, když:
 - test může smazat, přepsat nebo poškodit produkční data,
 - odeslání vyžaduje bezpečnostní rozhodnutí mimo už daný pokyn Radima.
 
+### 14.2 Kaiser Twilio RCS/SMS
+
+Zákaznické RCS/SMS v KSO smí sloužit pouze pro provozní nebo transakční komunikaci k požadavkům, termínům služeb, svozům a dispečinku. Nesmí se používat pro nevyžádaný marketing, akce, newslettery ani promo nabídky.
+
+Každá zákaznická RCS/SMS zpráva musí:
+- jít přes backendovou zákaznickou messaging vrstvu,
+- mít validní telefonní číslo,
+- mít souhlas nebo právní důvod,
+- projít kontrolou opt-out seznamu,
+- obsahovat větu `Pro odhlášení odpovězte STOP.`,
+- být zapsaná do auditního logu včetně stavu a případného Twilio message SID.
+
+STOP odpovědi `STOP`, `STOP SMS`, `NEPOSILAT` a `NEPOSILAT SMS` musí systém uložit jako opt-out. Na opt-out číslo se nesmí poslat RCS ani SMS.
+
+Aktuální produkční Twilio konfigurace k 2026-07-24:
+- Messaging Service: `Kaiser servis RCS SMS Transactional`
+- Messaging Service SID: `MG3709ede950d2b5ebc7b23fe8d9d004ff`
+- RCS sender: `rcs:kaiser_servis_3h9fyrkk_agent`
+- RCS Sender SID: `XE7b359245834a803ab3058dfd10b53b43`
+- SMS fallback číslo: `+420736354111`
+- SMS fallback Phone Number SID: `PN253dd5cc010e5b2ff0434cec35b6b7b7`
+- Regulatory Bundle: `Kaiser servis Czechia SMS`
+- Regulatory Bundle SID: `BUd7724338659f002703a3d3f31eae13c0`
+- stav Regulatory Bundle: `Approved`
+
+Twilio Messaging Service musí mít v Sender Poolu současně:
+- schváleného RCS sendera,
+- SMS-capable české mobilní číslo jako fallback.
+
+Cílové webhook URL pro zákaznickou RCS/SMS vrstvu:
+- inbound webhook: `POST https://smart-odpady.ai/api/twilio/inbound`
+- delivery status callback: `POST https://smart-odpady.ai/api/twilio/status`
+
+Runtime konfigurace musí být pouze přes Cloudflare ENV/secrets:
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_MESSAGING_SERVICE_SID`
+- `TWILIO_RCS_SENDER_ID`
+- `TWILIO_STATUS_CALLBACK_URL`
+- `TWILIO_INBOUND_WEBHOOK_SECRET`
+
+Do repozitáře, dokumentace, screenshotů ani chatu se nesmí ukládat `TWILIO_AUTH_TOKEN`, webhook secret ani jiné citlivé hodnoty. SID hodnoty nejsou Auth Token, ale runtime je má číst z ENV, ne z aplikační logiky.
+
 ## 15. Souběžná práce Radim / Martin / Codex
 
 Na projektu může současně pracovat více lidí nebo více Codex vláken.
