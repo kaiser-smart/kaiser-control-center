@@ -2446,10 +2446,11 @@ export async function closeDriverPartRequest(env, user, id, payload = {}) {
 
 export function driverPartRequestPermissionSummary(user) {
   const role = normalizeRole(user?.role);
+  const canManage = canManageDriverPartRequests(user);
   return {
     role,
-    canCreate: canCreateDriverPartRequest(user),
-    canManage: canManageDriverPartRequests(user),
+    canCreate: canCreateDriverPartRequest(user) || canManage,
+    canManage,
     canSearchPartslink24: canUsePartslink24VinSearch(user),
     limitation: role === "ridic"
       ? "Řidič může vytvořit hlášení a sledovat vlastní stav. Objednání, doručení a servis řeší oprávněná role."

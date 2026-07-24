@@ -5334,6 +5334,25 @@ async function handleApi(request, response) {
     return true;
   }
 
+  if (
+    ["/api/modules/driver-reports/rules", "/api/modules/driver-reports/automation-runs"].includes(url.pathname) &&
+    request.method === "GET"
+  ) {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "driver-reports", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění číst pravidla Hlášení řidičů." });
+      return true;
+    }
+    sendJson(response, 200, url.pathname.endsWith("/automation-runs")
+      ? { runs: [], runnerRuns: [], apiStatus: "ready" }
+      : { rules: [], apiStatus: "ready" });
+    return true;
+  }
+
   if (url.pathname === "/api/collection-routes/incidents" && request.method === "GET") {
     const user = currentDevUser(request);
     if (!user) {

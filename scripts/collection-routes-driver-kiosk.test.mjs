@@ -32,6 +32,8 @@ assert.equal(isCollectionRoutesDriverKioskUser(manager), false);
 assert.equal(isCollectionRoutesDriverKioskUser({ ...driver, active: false }), false);
 assert.equal(collectionRoutesDriverKioskRedirectPath(driver, "/"), "/trasy-svozu");
 assert.equal(collectionRoutesDriverKioskRedirectPath(driver, "/vozovy-park"), "/trasy-svozu");
+assert.equal(collectionRoutesDriverKioskRedirectPath(driver, "/hlaseni-ridicu"), "");
+assert.equal(collectionRoutesDriverKioskRedirectPath(driver, "/hlaseni-ridicu/"), "");
 assert.equal(collectionRoutesDriverKioskRedirectPath(driver, "/trasy-svozu/"), "");
 assert.equal(collectionRoutesDriverKioskRedirectPath(driver, "/trasy-svozu/test"), "");
 assert.equal(collectionRoutesDriverKioskRedirectPath(manager, "/vozovy-park"), "");

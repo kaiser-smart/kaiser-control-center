@@ -3,6 +3,7 @@ import { COLLECTION_ROUTES_OPERATIONAL_CONTRACT } from "./collectionRoutesOperat
 
 export const COLLECTION_ROUTES_DRIVER_KIOSK_ROUTE = "/trasy-svozu";
 export const COLLECTION_ROUTES_DRIVER_TEST_KIOSK_ROUTE = "/trasy-svozu/test";
+export const COLLECTION_ROUTES_DRIVER_REPORTS_ROUTE = "/hlaseni-ridicu";
 export const COLLECTION_ROUTES_DRIVER_SIMULATED_GPS_VALUE = "simulated";
 export const COLLECTION_ROUTES_DRIVER_TABLET_DEVICE = COLLECTION_ROUTES_OPERATIONAL_CONTRACT.driverTablet;
 
@@ -43,7 +44,9 @@ export function collectionRoutesDriverKioskCanonicalPath(user, pathname, search 
 
 export function collectionRoutesDriverKioskRedirectPath(user, pathname) {
   if (!isCollectionRoutesDriverKioskUser(user)) return "";
-  return isCollectionRoutesDriverKioskPath(pathname)
+  const path = normalizedPathname(pathname);
+  return isCollectionRoutesDriverKioskPath(path)
+    || path === COLLECTION_ROUTES_DRIVER_REPORTS_ROUTE
     ? ""
     : COLLECTION_ROUTES_DRIVER_KIOSK_ROUTE;
 }

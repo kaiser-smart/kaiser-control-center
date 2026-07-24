@@ -1279,7 +1279,7 @@ const driverReportsState = {
     vin: "",
     vehicleBrand: "jiné",
     note: "",
-    handoffAfterCreate: true,
+    handoffAfterCreate: false,
     licensePlateUnverified: false,
     licensePlateOverrideNote: ""
   },
@@ -4588,12 +4588,12 @@ function moduleEventLogConfig(moduleItem = {}) {
         moduleEventLogStatus("Hlášení přes API", apiState, driverReportsState.error || "Stav vychází z načtení pracovní fronty v UI."),
         moduleEventLogStatus("SPZ / vozidlo", driverReportsState.plateValidation.exact ? "ověřeno" : "čeká na ověření", driverReportsState.plateValidation.message || "Ověření SPZ probíhá jen pro konkrétní zadání."),
         moduleEventLogStatus("PartsLink24 / VIN pilot", "dry-run", "Vyhledávání dílů a cen je pilotní kontrola. Nic se neobjedná samo."),
-        moduleEventLogStatus("E-mail / SMS servis", "vypnuto", "Automatické odesílání mimo systém není zapnuté. Každý externí dopad musí projít potvrzenou backend akcí."),
+        moduleEventLogStatus("E-mail servis", "ruční souhlas", "Ruční formulář nic neodesílá mimo systém bez výslovného zaškrtnutí. Po souhlasu a splnění backendových podmínek může být odeslán e-mail Patrikovi."),
         moduleEventLogStatus("Autonomní akce", "jen návrh", "Modul může připravit další krok, ale neprovede objednávku ani servis bez člověka.")
       ],
       inactiveItems: [
         "Automatické objednání dílu.",
-        "Automatické odeslání e-mailu/SMS bez potvrzené backend akce.",
+        "Automatické odeslání e-mailu bez výslovného souhlasu ve formuláři nebo samostatné potvrzené backend akce.",
         "Autonomní uzavření hlášení s provozním dopadem."
       ],
       pilotItems: [
@@ -4605,7 +4605,7 @@ function moduleEventLogConfig(moduleItem = {}) {
           ? moduleEventLogEvent("", "Načtení hlášení", "chyba", driverReportsState.error)
           : moduleEventLogEvent("", "Načtení hlášení", apiState, driverReportsState.loaded ? `V UI je ${driverReportsState.items.length} hlášení.` : "Čeká se na načtení hlášení."),
         moduleEventLogEvent("", "SPZ ověření", driverReportsState.plateValidation.exact ? "ověřeno" : "čeká na ověření", driverReportsState.plateValidation.message || "Bez konkrétního zadání není SPZ ověřená."),
-        moduleEventLogEvent("", "Odesílání mimo systém", "vypnuto", "Modul nic neodesílá automaticky.")
+        moduleEventLogEvent("", "Odesílání mimo systém", "podmíněné", "Výchozí ruční uložení nic neodesílá. E-mail Patrikovi může následovat jen po výslovném souhlasu nebo samostatné oprávněné akci a po splnění backendových podmínek.")
       ],
       diagnostics: [
         moduleEventLogDiagnostic("apiStatus", driverReportsState.apiStatus),
@@ -5878,6 +5878,31 @@ function currentTyresDirtyTarget() {
   };
 }
 
+function currentDriverReportDirtyTarget() {
+  if (!isDriverReportsPath()) {
+    return null;
+  }
+
+  const form = document.querySelector("[data-driver-report-form]");
+  const draft = driverReportsState.draft || {};
+  const isDirty = [
+    draft.licensePlate,
+    draft.defectDescription,
+    draft.vehicleName,
+    draft.vin,
+    draft.note,
+    draft.licensePlateOverrideNote
+  ].some((value) => String(value || "").trim())
+    || draft.handoffAfterCreate === true
+    || draft.licensePlateUnverified === true;
+
+  return isDirty ? {
+    type: "driver-report",
+    form,
+    isDirty: true
+  } : null;
+}
+
 function currentDirtyTarget() {
   const accessTarget = currentAccessDirtyTarget();
 
@@ -5913,6 +5938,12 @@ function currentDirtyTarget() {
 
   if (tyresTarget?.isDirty) {
     return tyresTarget;
+  }
+
+  const driverReportTarget = currentDriverReportDirtyTarget();
+
+  if (driverReportTarget?.isDirty) {
+    return driverReportTarget;
   }
 
   const employeeTarget = currentEmployeeCardDirtyTarget();
@@ -35813,7 +35844,7 @@ function driverReportPartslink24Section(item) {
     : driverReportPartslink24StatusLabel("");
   const message = pilot.message || latest?.message || eligibility.message || "Pilotní vyhledání je dostupné jen pro osobní vozidla s VIN.";
   const workflowUrl = latest?.workflowUrl || "";
-  const partslink24Url = "https://www.partslink24.com/partslink24/startup.do";
+  const partslink24Url = "https://www.partslink24.com/";
   const vinStatus = pilotStatus === "waiting_vin"
     ? "waiting_vin"
     : pilot.vehicleInPilot ? "ready_for_vin_verification" : pilotStatus;
@@ -36113,7 +36144,7 @@ function driverReportMatchesCurrentFilters(item, options = {}) {
 }
 
 function driverReportVisibleItems(items, tab = driverReportsState.activeTab) {
-  if (tab === "settings") {
+  if (["rules", "settings"].includes(tab)) {
     return [];
   }
   if (tab === "parts") {
@@ -36144,6 +36175,7 @@ function driverReportTabs(items) {
       ${driverReportTabButton("reports", "Hlášení", reports)}
       ${driverReportTabButton("parts", "Náhradní díly", parts)}
       ${driverReportTabButton("archive", "Archiv", archive)}
+      ${driverReportTabButton("rules", "Pravidla a automatizace", "Cloud")}
       ${driverReportTabButton("settings", "Nastavení", "Log")}
     </div>
   `;
@@ -36159,9 +36191,21 @@ function driverReportsSettingsSection() {
         </div>
         <span>Log událostí</span>
       </div>
-      ${moduleEventLogForModule({ id: "driver-reports", title: "Hlášení řidičů", route: DRIVER_REPORT_ROUTE, status: "Testování" })}
+      ${moduleEventLogForModule({ id: "driver-reports", title: "Hlášení řidičů", route: DRIVER_REPORT_ROUTE, status: "Pilot" })}
     </section>
   `;
+}
+
+function driverReportsRulesSection(user) {
+  return moduleRulesAutomationPanel({
+    moduleKey: "driver-reports",
+    moduleName: "Hlášení řidičů",
+    user,
+    description: "Pravdivý seznam uložených pravidel a automatizací pro Hlášení řidičů.",
+    cloudNote: "Tato záložka pouze čte cloudovou evidenci. Zobrazení pravidla samo nic nespouští, neodesílá a nemění.",
+    readOnly: true,
+    humanDetail: true
+  });
 }
 
 function driverReportFilters(items) {
@@ -36289,13 +36333,56 @@ function driverReportPartRowActions(item) {
     <div class="driver-report-row-actions">
       <button class="text-action" type="button" data-driver-report-select="${escapeHtml(item.id)}">Otevřít</button>
       ${canRunVin ? `<button class="text-action" type="button" data-driver-report-partslink24-search data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Ověřit podle VIN</button>` : ""}
-      ${canRunVin ? `<a class="text-action" href="https://www.partslink24.com/partslink24/startup.do" target="_blank" rel="noopener noreferrer">Partslink24</a>` : ""}
+      ${canRunVin ? `<a class="text-action" href="https://www.partslink24.com/" target="_blank" rel="noopener noreferrer">Partslink24</a>` : ""}
       ${canRunPrice ? `<button class="text-action" type="button" data-driver-report-action="price-boost" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Ceny Autopilota</button>` : ""}
       ${canHandoff ? `<button class="text-action" type="button" data-driver-report-action="handoff" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Odeslat Patrikovi</button>` : ""}
       ${canManage && ["ordered", "handed_to_ordering"].includes(item.status) ? `<button class="text-action" type="button" data-driver-report-action="arrived" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Díl dorazil</button>` : ""}
       ${canManage && ["part_arrived", "service_scheduled"].includes(item.status) ? `<button class="text-action" type="button" data-driver-report-action="complete" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Vyřízeno</button>` : ""}
       ${canManage && !["completed", "canceled"].includes(item.status) ? `<button class="text-action text-action--danger" type="button" data-driver-report-action="cancel" data-request-id="${escapeHtml(item.id)}" ${loading ? "disabled" : ""}>Zrušit</button>` : ""}
     </div>
+  `;
+}
+
+function driverReportPartslink24SelectionPanel(items) {
+  const canSearch = driverReportCanSearchPartslink24();
+  const eligibleItems = items.filter((item) => (
+    !driverReportIsArchived(item) &&
+    driverReportIsPartRelated(item) &&
+    item.partslink24Eligibility?.canSearchPartslink24 === true &&
+    item.partslink24Eligibility?.allowed === true
+  ));
+  const partslink24LoginUrl = "https://www.partslink24.com/";
+
+  return `
+    <section class="driver-report-partslink24-select" aria-labelledby="driver-report-partslink24-select-title">
+      <div>
+        <p class="module-detail__eyebrow">Osobní vozidla</p>
+        <h3 id="driver-report-partslink24-select-title">Výběr ND podle VIN</h3>
+        <p>Vyber hlášení osobního vozidla s ověřeným VIN. KSO připraví auditovaný read-only krok; objednávku ani přihlášení do Partslink24 neprovede.</p>
+      </div>
+      ${canSearch && eligibleItems.length ? `
+        <form class="driver-report-partslink24-select__form" data-driver-report-partslink24-selection-form>
+          <label>
+            <span>Hlášení / vozidlo</span>
+            <select name="requestId" required>
+              ${eligibleItems.map((item) => `
+                <option value="${escapeHtml(item.id)}">
+                  ${escapeHtml([item.reportId, item.licensePlate, driverReportVehicleLabel(item), item.partAiDetectedName || item.probablePart].filter(Boolean).join(" · "))}
+                </option>
+              `).join("")}
+            </select>
+          </label>
+          <button class="secondary-link" type="submit" ${driverReportsState.actionLoading ? "disabled" : ""}>Připravit ověření podle VIN</button>
+        </form>
+      ` : `
+        <p class="driver-report-empty">
+          ${canSearch
+            ? "Teď tu není osobní vozidlo s hlášením náhradního dílu a ověřeným VIN."
+            : "Výběr podle VIN je dostupný dispečerovi, garážmistrovi a rolím s oprávněním k hledání dílů."}
+        </p>
+      `}
+      <a class="secondary-link" href="${partslink24LoginUrl}" target="_blank" rel="noopener noreferrer">Otevřít Partslink24 a přihlásit se</a>
+    </section>
   `;
 }
 
@@ -36608,12 +36695,15 @@ function driverReportCreateForm(user, options = {}) {
           </label>
         </details>
 
-        <label class="driver-report-check">
-          <input type="checkbox" name="handoffAfterCreate" ${draft.handoffAfterCreate ? "checked" : ""} ${disabled ? "disabled" : ""}>
-          <span>Po uložení spustit ověření na pozadí</span>
-        </label>
       `}
-      <p class="driver-report-form-note">Po ověření SPZ se hlášení uloží přímo do servisní fronty. Tím se nic neobjedná ani neodešle mimo systém.</p>
+      <label class="driver-report-check driver-report-check--external">
+        <input type="checkbox" name="handoffAfterCreate" ${draft.handoffAfterCreate ? "checked" : ""} ${disabled ? "disabled" : ""}>
+        <span>
+          Po uložení spustit ověření dílu a cen na pozadí.
+          <small>Volba je výchozí vypnutá. Pokud budou splněné podmínky, backend může odeslat e-mail Patrikovi; nic se samo neobjedná.</small>
+        </span>
+      </label>
+      <p class="driver-report-form-note">Bez zaškrtnutí se hlášení jen uloží do servisní fronty a nic se neodešle mimo systém.</p>
       <button class="primary-action driver-report-pitstop-submit" type="submit" data-driver-report-submit ${submitDisabled ? "disabled" : ""}>
         ${driverReportsState.saving ? "Odesílám..." : "Odeslat hlášení"}
       </button>
@@ -36914,6 +37004,45 @@ function driverReportsSummaryCards(items) {
   `;
 }
 
+function driverReportMobileOwnReports(items, user) {
+  const isDriver = normalizeRole(user?.role) === "ridic";
+  const reports = items
+    .filter((item) => !driverReportIsArchived(item))
+    .slice(0, 8);
+
+  return `
+    <section class="driver-report-mobile-reports" aria-labelledby="driver-report-mobile-reports-title">
+      <div class="driver-report-mobile-reports__head">
+        <div>
+          <span>Aktuální stav</span>
+          <h2 id="driver-report-mobile-reports-title">${isDriver ? "Moje hlášení" : "Poslední hlášení"}</h2>
+        </div>
+        <strong>${escapeHtml(String(reports.length))}</strong>
+      </div>
+      ${driverReportsState.loading && !reports.length ? `<p>Načítám hlášení…</p>` : ""}
+      ${!driverReportsState.loading && !reports.length ? `<p>Zatím tu není žádné otevřené hlášení.</p>` : ""}
+      <div class="driver-report-mobile-reports__list">
+        ${reports.map((item) => `
+          <details class="driver-report-mobile-report">
+            <summary>
+              <span>
+                <strong>${escapeHtml(item.licensePlate || "Bez SPZ")}</strong>
+                <small>${escapeHtml(item.reportId || item.id || "")}</small>
+              </span>
+              <mark class="driver-report-status driver-report-status--${escapeHtml(driverReportDisplayStatusTone(item))}">${escapeHtml(driverReportDisplayStatusLabel(item))}</mark>
+            </summary>
+            <p>${escapeHtml(item.defectDescription || "Bez popisu")}</p>
+            <dl>
+              <div><dt>Vozidlo</dt><dd>${escapeHtml(driverReportVehicleLabel(item))}</dd></div>
+              <div><dt>Aktualizováno</dt><dd>${escapeHtml(formatDateTime(item.updatedAt || item.reportedAt) || "neuvedeno")}</dd></div>
+            </dl>
+          </details>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function driverReportCreateEntry(user) {
   return `
     <section class="driver-report-click-entry" id="nove-hlaseni" aria-labelledby="driver-report-create-title">
@@ -37086,6 +37215,9 @@ async function validateDriverReportLicensePlate(form, value) {
 
 function driverReportsPage(moduleItem, user, isDashboard = false) {
   ensureDriverReportsData();
+  if (driverReportsState.activeTab === "rules") {
+    ensureModuleRulesData("driver-reports");
+  }
   if (hasPermission(user, "fleet", "view")) {
     void loadFleetVehicles({ renderAfter: false });
   }
@@ -37132,13 +37264,14 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
       ${driverReportsState.message ? `<p class="module-feedback__notice" role="status">${escapeHtml(driverReportsState.message)}</p>` : ""}
       ${driverReportsState.permissions?.limitation ? `<p class="driver-report-limitation">${escapeHtml(driverReportsState.permissions.limitation)}</p>` : ""}
 
-      ${driverReportsState.activeTab === "settings" ? "" : driverReportsSummaryCards(items)}
+      ${["rules", "settings"].includes(driverReportsState.activeTab) ? "" : driverReportsSummaryCards(items)}
 
-      ${driverReportsState.activeTab === "settings" ? "" : driverReportCreateEntry(user)}
+      ${["rules", "settings"].includes(driverReportsState.activeTab) ? "" : driverReportCreateEntry(user)}
+      ${driverReportMobileOwnReports(items, user)}
 
       <section class="driver-report-desktop-workspace" aria-label="Pracovní fronta Hlášení řidičů">
         ${driverReportTabs(items)}
-        ${driverReportsState.activeTab === "settings" ? driverReportsSettingsSection() : `
+        ${driverReportsState.activeTab === "settings" ? driverReportsSettingsSection() : driverReportsState.activeTab === "rules" ? driverReportsRulesSection(user) : `
           ${driverReportFilters(items)}
           <section class="driver-report-queue-panel" aria-labelledby="driver-report-queue-title">
             <div class="driver-report-queue-head">
@@ -37148,6 +37281,7 @@ function driverReportsPage(moduleItem, user, isDashboard = false) {
               </div>
               <span>${escapeHtml(String(activeItems.length))} řádků</span>
             </div>
+            ${driverReportsState.activeTab === "parts" ? driverReportPartslink24SelectionPanel(items) : ""}
             ${driverReportsState.loading && !items.length ? `<p class="driver-report-empty driver-report-empty--table">Načítám hlášení...</p>` : ""}
             ${!driverReportsState.loading ? driverReportActiveQueue(items) : ""}
           </section>
@@ -37182,6 +37316,10 @@ function driverReportFormData(form) {
 }
 
 async function submitDriverReportForm(form) {
+  if (!form) {
+    return false;
+  }
+
   driverReportDraftFromFormElement(form);
   await validateDriverReportLicensePlate(form, driverReportsState.draft.licensePlate);
 
@@ -37189,9 +37327,10 @@ async function submitDriverReportForm(form) {
     driverReportsState.error = driverReportsState.plateValidation?.message || "Nejdřív ověřte SPZ vozidla.";
     updateDriverReportPlateFeedback(form);
     render();
-    return;
+    return false;
   }
 
+  let saved = false;
   driverReportsState.saving = true;
   driverReportsState.error = "";
   driverReportsState.message = "";
@@ -37217,7 +37356,7 @@ async function submitDriverReportForm(form) {
       vin: "",
       vehicleBrand: "jiné",
       note: "",
-      handoffAfterCreate: true,
+      handoffAfterCreate: false,
       licensePlateUnverified: false,
       licensePlateOverrideNote: ""
     };
@@ -37234,12 +37373,14 @@ async function submitDriverReportForm(form) {
     };
     driverReportsState.loaded = false;
     await loadDriverReports({ renderAfter: false, force: true });
+    saved = true;
   } catch (error) {
     driverReportsState.error = error.payload?.error || "Hlášení se nepodařilo odeslat.";
   } finally {
     driverReportsState.saving = false;
     render();
   }
+  return saved;
 }
 
 async function submitDriverReportOrderForm(form) {
@@ -37403,7 +37544,7 @@ async function submitDriverReportSearch(form) {
 }
 
 function setDriverReportTab(tab) {
-  driverReportsState.activeTab = ["reports", "parts", "archive", "settings"].includes(tab) ? tab : "reports";
+  driverReportsState.activeTab = ["reports", "parts", "archive", "rules", "settings"].includes(tab) ? tab : "reports";
   driverReportsState.selected = null;
   render();
 }
@@ -55116,6 +55257,12 @@ async function saveDirtyChanges() {
     return saveTyresDirtyChanges();
   }
 
+  const driverReportTarget = currentDriverReportDirtyTarget();
+
+  if (driverReportTarget?.isDirty) {
+    return submitDriverReportForm(driverReportTarget.form);
+  }
+
   const employeeTarget = currentEmployeeCardDirtyTarget();
   let savedEmployeeSection = false;
 
@@ -55181,6 +55328,39 @@ function discardDirtyChanges() {
     tyresState.editingId = "";
     tyresState.message = "Neuložené změny Pneumatik byly zahozeny.";
     tyresState.error = "";
+    render();
+    return;
+  }
+
+  const driverReportTarget = currentDriverReportDirtyTarget();
+
+  if (driverReportTarget?.isDirty) {
+    driverReportsState.draft = {
+      licensePlate: "",
+      defectDescription: "",
+      driverName: authState.user?.name || "",
+      driverPhone: authState.user?.phone || "",
+      vehicleName: "",
+      vin: "",
+      vehicleBrand: "jiné",
+      note: "",
+      handoffAfterCreate: false,
+      licensePlateUnverified: false,
+      licensePlateOverrideNote: ""
+    };
+    driverReportsState.plateValidation = {
+      input: "",
+      normalized: "",
+      status: "idle",
+      message: "",
+      vehicle: null,
+      suggestions: [],
+      validFormat: false,
+      exact: false,
+      loading: false
+    };
+    driverReportsState.message = "Rozepsané hlášení bylo zahozeno.";
+    driverReportsState.error = "";
     render();
     return;
   }
@@ -55723,6 +55903,14 @@ document.addEventListener("submit", async (event) => {
   if (driverReportForm) {
     event.preventDefault();
     await submitDriverReportForm(driverReportForm);
+    return;
+  }
+
+  const driverReportPartslink24SelectionForm = event.target.closest("[data-driver-report-partslink24-selection-form]");
+  if (driverReportPartslink24SelectionForm) {
+    event.preventDefault();
+    const data = new FormData(driverReportPartslink24SelectionForm);
+    await runDriverReportPartslink24Search(String(data.get("requestId") || ""));
     return;
   }
 
@@ -58393,7 +58581,9 @@ document.addEventListener("click", async (event) => {
   const driverReportTab = event.target.closest("[data-driver-report-tab]");
   if (driverReportTab) {
     event.preventDefault();
-    setDriverReportTab(driverReportTab.dataset.driverReportTab || "reports");
+    guardedAccessAction(() => {
+      setDriverReportTab(driverReportTab.dataset.driverReportTab || "reports");
+    });
     return;
   }
 
