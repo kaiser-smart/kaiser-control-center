@@ -50,7 +50,8 @@ function openDatabase({ trneckovaPhone = "+420777222333" } = {}) {
     "../migrations/0002_add_user_manager.sql",
     "../migrations/0029_create_data_box_plus_tables.sql",
     "../migrations/0032_create_customer_messaging.sql",
-    "../migrations/0045_create_data_box_rcs_notifications.sql"
+    "../migrations/0045_create_data_box_rcs_notifications.sql",
+    "../migrations/modular/audit/0001_audit_foundation.sql"
   ]) {
     sqlite.exec(readFileSync(new URL(migration, import.meta.url), "utf8"));
   }
@@ -85,6 +86,8 @@ function openDatabase({ trneckovaPhone = "+420777222333" } = {}) {
 function environment(d1) {
   return {
     SMART_ODPADY_DB: d1,
+    DB_MESSAGES: d1,
+    DB_AUDIT: d1,
     TWILIO_ACCOUNT_SID: "AC00000000000000000000000000000000",
     TWILIO_AUTH_TOKEN: "secret",
     TWILIO_MESSAGING_SERVICE_SID: "MG00000000000000000000000000000000",
@@ -217,7 +220,7 @@ function messageInput() {
   assert.equal(failed.errorCode, "63018");
   assert.equal(failed.errorMessage, "RCS provider rejected the message");
   assert.equal(
-    sqlite.prepare("SELECT COUNT(*) AS count FROM data_box_plus_action_log WHERE result = 'failed'").get().count,
+    sqlite.prepare("SELECT COUNT(*) AS count FROM audit_events WHERE event_type = 'data_box_rcs_notification' AND severity = 'error'").get().count,
     1
   );
 }

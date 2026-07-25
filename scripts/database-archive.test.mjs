@@ -1,0 +1,116 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
+
+import { archiveCollectionSnapshotChunk } from "../functions/_lib/collection-snapshot-archive.js";
+
+class D1Statement {
+  constructor(owner, sql, values = []) {
+    this.owner = owner;
+    this.sql = sql;
+    this.values = values;
+  }
+  bind(...values) {
+    return new D1Statement(this.owner, this.sql, values);
+  }
+  async all() {
+    return { results: this.owner.sqlite.prepare(this.sql).all(...this.values) };
+  }
+  async first() {
+    return this.owner.sqlite.prepare(this.sql).get(...this.values) || null;
+  }
+  async run() {
+    return { success: true, meta: this.owner.sqlite.prepare(this.sql).run(...this.values) };
+  }
+}
+
+class D1Database {
+  constructor(sqlite) {
+    this.sqlite = sqlite;
+  }
+  prepare(sql) {
+    return new D1Statement(this, sql);
+  }
+  async batch(statements) {
+    const results = [];
+    this.sqlite.exec("BEGIN");
+    try {
+      for (const statement of statements) results.push(await statement.run());
+      this.sqlite.exec("COMMIT");
+      return results;
+    } catch (error) {
+      this.sqlite.exec("ROLLBACK");
+      throw error;
+    }
+  }
+}
+
+class MemoryR2 {
+  constructor() {
+    this.objects = new Map();
+  }
+  async put(key, body, options = {}) {
+    const bytes = new Uint8Array(body);
+    this.objects.set(key, { bytes, customMetadata: options.customMetadata || {} });
+  }
+  async head(key) {
+    const object = this.objects.get(key);
+    return object ? { size: object.bytes.byteLength, customMetadata: object.customMetadata } : null;
+  }
+}
+
+const sourceSqlite = new DatabaseSync(":memory:");
+sourceSqlite.exec(`
+  CREATE TABLE collection_import_batches (
+    id TEXT PRIMARY KEY, status TEXT NOT NULL, finished_at TEXT, created_at TEXT
+  );
+  CREATE TABLE collection_import_rows (
+    id TEXT PRIMARY KEY, batch_id TEXT NOT NULL, row_number INTEGER,
+    source_entity TEXT, source_id TEXT, status TEXT, summary_json TEXT,
+    issues_json TEXT, created_at TEXT
+  );
+  INSERT INTO collection_import_batches VALUES
+    ('closed', 'preview', '2026-07-20T01:00:00.000Z', '2026-07-20T00:00:00.000Z'),
+    ('open', 'preview', NULL, '2026-07-20T00:00:00.000Z');
+  INSERT INTO collection_import_rows VALUES
+    ('row-1','closed',1,'route','1','preview','{"a":1}','[]','2026-07-20T00:00:01.000Z'),
+    ('row-2','closed',2,'route','2','preview','{"a":2}','[]','2026-07-20T00:00:02.000Z'),
+    ('row-open','open',1,'route','3','preview','{"a":3}','[]','2026-07-20T00:00:03.000Z');
+`);
+
+const archiveSqlite = new DatabaseSync(":memory:");
+archiveSqlite.exec(readFileSync(new URL("../migrations/modular/archive/0001_archive_foundation.sql", import.meta.url), "utf8"));
+const auditSqlite = new DatabaseSync(":memory:");
+auditSqlite.exec(readFileSync(new URL("../migrations/modular/audit/0001_audit_foundation.sql", import.meta.url), "utf8"));
+const r2 = new MemoryR2();
+const env = {
+  SMART_ODPADY_DB: new D1Database(sourceSqlite),
+  DB_ARCHIVE: new D1Database(archiveSqlite),
+  DB_AUDIT: new D1Database(auditSqlite),
+  R2_ARCHIVE: r2
+};
+
+const result = await archiveCollectionSnapshotChunk(env, {
+  batchSize: 500,
+  retentionDays: 2,
+  scheduledTime: Date.parse("2026-07-25T12:00:00.000Z")
+});
+assert.equal(result.status, "completed");
+assert.equal(result.selectedRows, 2);
+assert.equal(result.transferredRows, 2);
+assert.equal(result.deletedRows, 0);
+assert.equal(sourceSqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_rows").get().count, 3);
+assert.equal(archiveSqlite.prepare("SELECT COUNT(*) AS count FROM archive_objects").get().count, 2);
+assert.equal(archiveSqlite.prepare("SELECT status FROM archive_integrity_checks").get().status, "verified");
+assert.equal(auditSqlite.prepare("SELECT deleted_rows FROM archive_runs").get().deleted_rows, 0);
+assert.equal(r2.objects.size, 1);
+
+const second = await archiveCollectionSnapshotChunk(env, {
+  batchSize: 500,
+  retentionDays: 2,
+  scheduledTime: Date.parse("2026-07-25T12:05:00.000Z")
+});
+assert.equal(second.selectedRows, 0);
+assert.equal(sourceSqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_rows").get().count, 3);
+
+console.log("database archive tests: ok");

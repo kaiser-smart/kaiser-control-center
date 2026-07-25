@@ -1,4 +1,4 @@
-const DB_BINDING = "SMART_ODPADY_DB";
+import { getMessagesDatabase } from "./databases.js";
 
 export class CustomerMessageStoreError extends Error {
   constructor(message, status = 400, code = "customer_message_store_error") {
@@ -10,15 +10,15 @@ export class CustomerMessageStoreError extends Error {
 }
 
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
-  if (!db && required) {
+  try {
+    return getMessagesDatabase(env, { required });
+  } catch {
     throw new CustomerMessageStoreError(
-      "Databáze zákaznických zpráv není nastavená. Chybí Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze zákaznických zpráv není nastavená. Chybí Cloudflare D1 binding DB_MESSAGES.",
       503,
       "customer_message_database_missing"
     );
   }
-  return db;
 }
 
 function cleanString(value) {

@@ -1,3 +1,5 @@
+import { getAuditDatabase } from "./databases.js";
+
 const MONITOR_DB_BINDING = "SMART_ODPADY_DB";
 const DEFAULT_TARGET_URL = "https://smart-odpady.ai/";
 const VALID_STATUS = new Set(["OK", "WARNING", "ERROR", "NEOVĚŘENO"]);
@@ -91,6 +93,43 @@ async function countRows(db, sql, ...bindings) {
   return Number(row?.count || 0);
 }
 
+async function latestDatabaseCapacity(env) {
+  const auditDb = getAuditDatabase(env, { required: false });
+  if (!auditDb) return { status: "NEOVĚŘENO", databases: [], note: "Chybí binding DB_AUDIT." };
+  try {
+    const result = await auditDb.prepare(`
+      SELECT s.*
+      FROM database_capacity_snapshots s
+      INNER JOIN (
+        SELECT database_domain, MAX(recorded_at) AS recorded_at
+        FROM database_capacity_snapshots
+        GROUP BY database_domain
+      ) latest
+        ON latest.database_domain = s.database_domain
+       AND latest.recorded_at = s.recorded_at
+      ORDER BY s.usage_percent DESC
+    `).all();
+    const databases = result.results || [];
+    const levels = new Set(databases.map((item) => String(item.level || "")));
+    const status = levels.has("blocked") || levels.has("critical")
+      ? "ERROR"
+      : levels.has("archive") || levels.has("reduced_logging") || levels.has("warning")
+        ? "WARNING"
+        : databases.length ? "OK" : "NEOVĚŘENO";
+    return {
+      status,
+      databases,
+      note: databases.length ? "" : "Kapacitní cron zatím nemá uložený výsledek."
+    };
+  } catch (error) {
+    return {
+      status: "NEOVĚŘENO",
+      databases: [],
+      note: `Kapacitu nelze načíst: ${cleanString(error?.message) || "neznámá chyba"}`
+    };
+  }
+}
+
 export async function getSystemCheckStatus(env) {
   const db = monitorDb(env, true);
 
@@ -102,7 +141,8 @@ export async function getSystemCheckStatus(env) {
       dataBoxPlusMessages,
       dataBoxPlusAttachments,
       dataBoxPlusAccounts,
-      latestDataBoxPlusSync
+      latestDataBoxPlusSync,
+      databaseCapacity
     ] = await Promise.all([
       runProductionMonitor(env, { source: "read-only-status" }).catch(() => null),
       countRows(db, "SELECT COUNT(*) AS count FROM data_box_plus_rules"),
@@ -115,7 +155,8 @@ export async function getSystemCheckStatus(env) {
         FROM data_box_plus_sync_runs
         ORDER BY started_at DESC
         LIMIT 1
-      `).first()
+      `).first(),
+      latestDatabaseCapacity(env)
     ]);
 
     return {
@@ -136,6 +177,7 @@ export async function getSystemCheckStatus(env) {
         status: "NEOVĚŘENO",
         note: "GitHub Actions kontrola není v této bezpečné fázi přidaná ani napojená."
       },
+      databaseCapacity,
       dataBox: {
         expectedDefaultMailboxId: "data-box-plus",
         messages: dataBoxPlusMessages,

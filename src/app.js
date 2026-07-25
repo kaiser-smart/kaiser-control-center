@@ -35437,6 +35437,32 @@ function systemCheckAutomationItems(data) {
   ];
 }
 
+function systemCheckDatabaseCapacityItems(data) {
+  const capacity = data?.databaseCapacity || {};
+  const databases = Array.isArray(capacity.databases) ? capacity.databases : [];
+  if (!databases.length) {
+    return [{
+      label: "Kapacita D1",
+      status: capacity.status || "NEOVĚŘENO",
+      detail: capacity.note || "Kapacitní cron zatím nemá uložený výsledek."
+    }];
+  }
+  return databases.map((database) => {
+    const percent = Number(database.usage_percent || 0);
+    const days = Number(database.estimated_days_to_full);
+    const status = ["blocked", "critical"].includes(String(database.level || ""))
+      ? "ERROR"
+      : ["archive", "reduced_logging", "warning"].includes(String(database.level || ""))
+        ? "WARNING"
+        : "OK";
+    return {
+      label: database.database_name || database.database_domain || "D1",
+      status,
+      detail: `${percent.toFixed(2)} % · ${formatFileSize(Number(database.size_bytes || 0))} · stránky ~${Number(database.page_count || 0)} · volné ${database.free_page_count == null ? "D1 neposkytuje" : Number(database.free_page_count)}${Number.isFinite(days) ? ` · odhad ${days.toFixed(1)} dne` : ""}`
+    };
+  });
+}
+
 function systemCheckAccountsItems(data) {
   const accounts = Array.isArray(data?.dataBox?.accounts) ? data.dataBox.accounts : [];
   if (!accounts.length) {
@@ -35523,6 +35549,7 @@ function systemCheckPage(moduleItem, user) {
         ${systemCheckSection("DS modul", systemCheckDataBoxItems(data))}
         ${systemCheckSection("Mobil", systemCheckMobileItems())}
         ${systemCheckSection("Automatizace", systemCheckAutomationItems(data))}
+        ${systemCheckSection("Kapacita databází", systemCheckDatabaseCapacityItems(data))}
         ${systemCheckSection("DS účty", systemCheckAccountsItems(data))}
         ${systemCheckExternalCard(data)}
       </section>

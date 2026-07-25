@@ -11,8 +11,8 @@ import {
   createOutgoingCommunicationAudit,
   updateOutgoingCommunicationAudit
 } from "./communication-store.js";
+import { getMessagesDatabase } from "./databases.js";
 
-const NOTIFICATION_DB_BINDING = "SMART_ODPADY_DB";
 const DETAILED_NOTIFICATION_COLUMNS = [
   "module_id",
   "subject",
@@ -44,7 +44,7 @@ const TYPE_LABELS = {
 };
 
 function notificationDatabase(env) {
-  return env?.[NOTIFICATION_DB_BINDING] || null;
+  return getMessagesDatabase(env, { required: false });
 }
 
 async function notificationLogColumns(db) {

@@ -1,8 +1,8 @@
 import { listStoredUsers } from "./users-store.js";
 import { isCustomerMessageOptedOut } from "./customer-message-store.js";
 import { normalizeCustomerPhone } from "./customer-messaging-service.js";
+import { getAuditDatabase, getMessagesDatabase } from "./databases.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const TEMPLATE_KEY = "data_box_new_message";
 const RECIPIENTS = [
   { key: "radim-oplustil", name: "Radim Opluštil" },
@@ -48,9 +48,7 @@ function personKey(value) {
 }
 
 function database(env) {
-  const db = env?.[DB_BINDING];
-  if (!db) throw new Error("Chybí D1 binding SMART_ODPADY_DB.");
-  return db;
+  return getMessagesDatabase(env);
 }
 
 function config(env = {}) {
@@ -112,7 +110,7 @@ function notificationRow(row = {}) {
   };
 }
 
-async function writeActionLog(db, notification, status, errorMessage = "") {
+async function writeActionLog(env, notification, status, errorMessage = "") {
   const noteByStatus = {
     prepared: "RCS upozornění bylo připravené k bezpečnému serverovému odeslání.",
     provider_sent: "Poskytovatel přijal požadavek na RCS upozornění.",
@@ -122,13 +120,20 @@ async function writeActionLog(db, notification, status, errorMessage = "") {
     skipped_missing_phone: errorMessage || "RCS upozornění nebylo odeslané, protože chybí ověřený telefon.",
     blocked_duplicate: "Duplicitní RCS upozornění bylo zablokované idempotencí."
   };
-  await db.prepare(`
-    INSERT INTO data_box_plus_action_log (
-      id, message_id, recommendation_id, actor, action_type, action_payload, created_at, result, audit_note
-    ) VALUES (?, ?, NULL, 'system', 'RCS upozornění', ?, ?, ?, ?)
+  const auditDb = getAuditDatabase(env, { required: false });
+  if (!auditDb) return;
+  await auditDb.prepare(`
+    INSERT OR IGNORE INTO audit_events (
+      id, event_type, module_key, severity, actor_type, entity_type, entity_id,
+      idempotency_key, detail, metadata_json, created_at
+    ) VALUES (?, 'data_box_rcs_notification', 'data-box-plus', ?, 'system',
+      'data_box_message', ?, ?, ?, ?, ?)
   `).bind(
-    idValue("dbp-action"),
+    idValue("audit-event"),
+    status === "failed" ? "error" : "info",
     notification.messageId,
+    `data-box-rcs:${notification.id}:${status}:${notification.providerMessageId || ""}`,
+    noteByStatus[status] || errorMessage || status,
     JSON.stringify({
       notificationId: notification.id,
       recipientKey: notification.recipientKey,
@@ -136,13 +141,11 @@ async function writeActionLog(db, notification, status, errorMessage = "") {
       recipientUserId: notification.recipientUserId || null,
       providerMessageId: notification.providerMessageId || null
     }),
-    new Date().toISOString(),
-    status,
-    noteByStatus[status] || errorMessage || status
+    new Date().toISOString()
   ).run();
 }
 
-async function writeEvent(db, notification, status, details = {}) {
+async function writeEvent(env, db, notification, status, details = {}) {
   const now = new Date().toISOString();
   await db.prepare(`
     INSERT INTO data_box_plus_rcs_notification_events (
@@ -157,10 +160,18 @@ async function writeEvent(db, notification, status, details = {}) {
     nullableString(details.errorMessage),
     now
   ).run();
-  await writeActionLog(db, {
-    ...notification,
-    providerMessageId: details.providerMessageId || notification.providerMessageId
-  }, status, cleanString(details.errorMessage));
+  try {
+    await writeActionLog(env, {
+      ...notification,
+      providerMessageId: details.providerMessageId || notification.providerMessageId
+    }, status, cleanString(details.errorMessage));
+  } catch (error) {
+    console.error("data_box_rcs.audit_write_failed", {
+      notificationId: notification.id,
+      status,
+      message: cleanString(error?.message)
+    });
+  }
 }
 
 async function updateNotification(db, notification, patch = {}) {
@@ -302,12 +313,12 @@ export async function notifyNewDataBoxMessage(env, input = {}, dependencies = {}
     const reservation = await reserveNotification(db, messageId, recipient);
     const notification = reservation.notification;
     if (!reservation.created) {
-      await writeEvent(db, notification, "blocked_duplicate");
+      await writeEvent(env, db, notification, "blocked_duplicate");
       results.push({ ...notification, status: "blocked_duplicate", duplicate: true });
       continue;
     }
 
-    await writeEvent(db, notification, "prepared");
+    await writeEvent(env, db, notification, "prepared");
     const user = findRecipientUser(users, recipient);
     const phone = normalizeCustomerPhone(user?.phone);
     if (!user || !phone) {
@@ -321,7 +332,7 @@ export async function notifyNewDataBoxMessage(env, input = {}, dependencies = {}
         errorCode: user ? "verified_phone_missing" : "recipient_user_missing",
         errorMessage: reason
       });
-      await writeEvent(db, notification, "skipped_missing_phone", {
+      await writeEvent(env, db, notification, "skipped_missing_phone", {
         errorCode: notification.errorCode,
         errorMessage: reason
       });
@@ -361,7 +372,7 @@ export async function notifyNewDataBoxMessage(env, input = {}, dependencies = {}
         errorCode: blockingCode,
         errorMessage: blockingError
       });
-      await writeEvent(db, notification, status, { errorCode: blockingCode, errorMessage: blockingError });
+      await writeEvent(env, db, notification, status, { errorCode: blockingCode, errorMessage: blockingError });
       results.push({ ...notification, sent: false });
       continue;
     }
@@ -380,7 +391,7 @@ export async function notifyNewDataBoxMessage(env, input = {}, dependencies = {}
         errorCode: "",
         errorMessage: ""
       });
-      await writeEvent(db, notification, "provider_sent", { providerMessageId });
+      await writeEvent(env, db, notification, "provider_sent", { providerMessageId });
       results.push({ ...notification, sent: true });
     } catch (error) {
       const errorMessage = cleanString(error?.message || "Twilio odeslání selhalo.").slice(0, 600);
@@ -391,7 +402,7 @@ export async function notifyNewDataBoxMessage(env, input = {}, dependencies = {}
         errorCode,
         errorMessage
       });
-      await writeEvent(db, notification, "failed", { errorCode, errorMessage });
+      await writeEvent(env, db, notification, "failed", { errorCode, errorMessage });
       results.push({ ...notification, sent: false });
     }
   }
@@ -454,7 +465,7 @@ export async function processDataBoxRcsStatusCallback(env, payload = {}) {
     errorCode: providerError.code,
     errorMessage: providerError.message
   });
-  await writeEvent(db, notification, status, {
+  await writeEvent(env, db, notification, status, {
     providerMessageId,
     errorCode: providerError.code,
     errorMessage: providerError.message
@@ -462,7 +473,8 @@ export async function processDataBoxRcsStatusCallback(env, payload = {}) {
   return { matched: true, status, providerMessageId };
 }
 
-export async function listDataBoxRcsNotifications(db, messageId) {
+export async function listDataBoxRcsNotifications(env, messageId) {
+  const db = database(env);
   const result = await db.prepare(`
     SELECT * FROM data_box_plus_rcs_notifications
     WHERE message_id = ?

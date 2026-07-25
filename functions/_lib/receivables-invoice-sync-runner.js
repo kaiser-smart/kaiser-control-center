@@ -28,6 +28,10 @@ function database(env) {
   return db;
 }
 
+function bulkWritesBlocked(env) {
+  return clean(env?.D1_CAPACITY_BLOCK_BULK_WRITES).toLowerCase() === "true";
+}
+
 function appBaseUrl(env) {
   return clean(env?.APP_BASE_URL || "https://smart-odpady.ai").replace(/\/+$/, "");
 }
@@ -148,6 +152,16 @@ async function callPages(env, action, scheduledAt) {
 export async function runReceivablesInvoiceSyncAutomation(env, options = {}) {
   const db = database(env);
   const now = new Date(Number(options.scheduledTime || Date.now()));
+  if (bulkWritesBlocked(env)) {
+    return {
+      mode: "staging-only",
+      status: "blocked",
+      moduleKey: MODULE_KEY,
+      action: "",
+      message: "Vistos invoice snapshot je dočasně zablokovaný kapacitní pojistkou D1.",
+      capacityGuard: true
+    };
+  }
   const action = await pendingAction(db) || scheduledReceivablesAction(now);
   if (!action) {
     return { mode: "staging-only", status: "not_scheduled", moduleKey: MODULE_KEY, action: "" };

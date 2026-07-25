@@ -1,13 +1,11 @@
-const DB_BINDING = "SMART_ODPADY_DB";
+import { getMessagesDatabase } from "./databases.js";
 
 function cleanString(value) {
   return String(value ?? "").trim();
 }
 
 function database(env) {
-  const db = env?.[DB_BINDING];
-  if (!db) throw new Error("Chybí D1 binding SMART_ODPADY_DB.");
-  return db;
+  return getMessagesDatabase(env);
 }
 
 function nowIso() {
