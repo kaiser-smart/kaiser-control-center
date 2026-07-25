@@ -41312,8 +41312,10 @@ function modulePage(moduleItem, user, isDashboard = false) {
               <strong>${escapeHtml(
                 rcsSmsAutopilotState.status?.outboundEffects === "enabled_with_server_gates"
                   ? "Řízený live provoz"
-                  : rcsSmsAutopilotState.status?.mode === "review" && rcsSmsAutopilotState.status?.asyncProcessing?.active === true
-                    ? "Pouze návrhy"
+                  : rcsSmsAutopilotState.status?.mode === "review"
+                    && rcsSmsAutopilotState.status?.asyncProcessing?.active === true
+                    && rcsSmsAutopilotState.status?.reviewPilot?.enabled === true
+                    ? "Interní pilot návrhů · bez odesílání"
                     : "Automatické odpovědi vypnuté"
               )}</strong>
             </div>

@@ -55,6 +55,22 @@ function modeFromEnv(env = {}) {
   return ["off", "review", "live"].includes(mode) ? mode : "off";
 }
 
+function reviewPilotUserIds(env = {}) {
+  return [...new Set(
+    cleanString(env.RCS_SMS_AUTOPILOT_REVIEW_USER_IDS)
+      .split(/[\s,;]+/)
+      .map((value) => cleanString(value))
+      .filter(Boolean)
+  )];
+}
+
+function reviewPilotAllowsContext(env = {}, context = {}) {
+  const allowedUserIds = reviewPilotUserIds(env);
+  return context.senderType === "employee"
+    && Boolean(cleanString(context.userId))
+    && allowedUserIds.includes(cleanString(context.userId));
+}
+
 function effectiveModeFromRuntime(env = {}, runtimeConfig = {}) {
   const configuredMode = modeFromEnv(env);
   if (configuredMode === "off" || runtimeConfig.autopilotEnabled !== true) return "off";
@@ -290,6 +306,44 @@ async function blankBeforeAi(env, record, mode, { replyAllowed = false } = {}) {
   return { status: "awaiting_field", fixedRule: "empty_message", reply };
 }
 
+async function blockOutsideReviewPilot(env, record) {
+  const { message, context } = record;
+  const configuredUserCount = reviewPilotUserIds(env).length;
+  await setRcsSmsMessageState(env, message.id, {
+    status: "human_takeover",
+    senderType: context.senderType,
+    responseMode: "human",
+    requestedTool: "handoff_to_human",
+    requiresHuman: true,
+    reason: "Interní review pilot: odesílatel není v povoleném KSO user allowlistu.",
+    processed: true
+  });
+  await setRcsSmsConversationState(env, message.conversationId, {
+    status: "human_takeover",
+    humanTakeover: true,
+    openIntent: "human_handoff",
+    awaitingField: ""
+  });
+  await appendRcsSmsEvent(env, {
+    conversationId: message.conversationId,
+    messageId: message.id,
+    eventType: "review_pilot_scope_blocked",
+    status: "human_takeover",
+    detail: "Zpráva je mimo interní review pilot; OpenAI, nástroj ani odpověď nebyly spuštěné.",
+    metadata: {
+      configuredUserCount,
+      senderType: cleanString(context.senderType),
+      hasVerifiedUserId: Boolean(cleanString(context.userId)),
+      outboundEffects: "disabled"
+    }
+  });
+  return {
+    status: "human_takeover",
+    mode: "review",
+    reviewPilotExcluded: true
+  };
+}
+
 export async function processRcsSmsAutopilotMessage(env, messageId, options = {}) {
   const runtimeConfig = await getRcsSmsRuntimeConfig(env);
   const mode = effectiveModeFromRuntime(env, runtimeConfig);
@@ -378,6 +432,9 @@ export async function processRcsSmsAutopilotMessage(env, messageId, options = {}
       metadata: { mode, ruleId: ASYNC_RULE_ID }
     });
     return { status: "autopilot_disabled", mode, automationActive: false };
+  }
+  if (mode === "review" && !reviewPilotAllowsContext(env, context)) {
+    return blockOutsideReviewPilot(env, record);
   }
 
   try {
@@ -713,6 +770,8 @@ export async function rcsSmsAutopilotStatus(env) {
   ]);
   const configuredMode = modeFromEnv(env);
   const mode = effectiveModeFromRuntime(env, operational.runtimeConfig);
+  const reviewPilotUserCount = reviewPilotUserIds(env).length;
+  const reviewPilotEnabled = mode === "review" && asyncActive && reviewPilotUserCount > 0;
   return {
     apiStatus: "ready",
     moduleKey: MODULE_KEY,
@@ -721,7 +780,14 @@ export async function rcsSmsAutopilotStatus(env) {
     cloudProcessing: "Cloudflare Pages Functions waitUntil",
     asyncProcessing: {
       ruleId: ASYNC_RULE_ID,
-      active: mode !== "off" && asyncActive
+      active: mode !== "off" && asyncActive && (mode !== "review" || reviewPilotUserCount > 0)
+    },
+    reviewPilot: {
+      enabled: reviewPilotEnabled,
+      configuredUserCount: reviewPilotUserCount,
+      identitySource: "KSO user.id",
+      failClosed: true,
+      outboundEffects: "disabled"
     },
     retryRunner: {
       runner: RUNNER_NAME,
@@ -752,5 +818,7 @@ export const __test = {
   isRcsSmsStopMessage,
   modeFromEnv,
   nextRetryAt,
+  reviewPilotAllowsContext,
+  reviewPilotUserIds,
   toolSuccessReply
 };

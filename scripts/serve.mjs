@@ -99,6 +99,15 @@ const requestedRoot = process.argv[2] === "dist" ? "dist" : ".";
 const publicRoot = path.join(root, requestedRoot);
 const preferredPort = Number(process.env.PORT || 5173);
 const devCookieName = "smart_odpady_dev_session";
+const localRcsSmsReviewPilot = String(process.env.RCS_SMS_AUTOPILOT_MODE || "")
+  .trim()
+  .toLowerCase() === "review";
+const localRcsSmsReviewUserCount = [...new Set(
+  String(process.env.RCS_SMS_AUTOPILOT_REVIEW_USER_IDS || "")
+    .split(/[\s,;]+/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+)].length;
 const devSessions = new Map();
 let mockUsers = DEFAULT_USERS.map((user) => user.id === "pneumatiky-miroslav-vasek"
   ? { ...user, email: "radim@nanolab.cz" }
@@ -171,7 +180,7 @@ const mockRcsSmsAutopilotRules = [
     title: "Asynchronní zpracování příchozí odpovědi",
     description: "Uložená zpráva se zpracuje přes Cloudflare waitUntil pouze podle serverového režimu.",
     type: "automation",
-    status: "inactive",
+    status: localRcsSmsReviewPilot && localRcsSmsReviewUserCount > 0 ? "active" : "inactive",
     conditionsJson: "{\"mode\":\"live\"}",
     actionsJson: "{\"process\":\"classify_validate_execute_reply\"}",
     isAutomation: true,
@@ -5324,11 +5333,18 @@ async function handleApi(request, response) {
       status: {
         apiStatus: "ready",
         moduleKey: "rcs-sms-autopilot",
-        mode: "off",
+        mode: localRcsSmsReviewPilot && localRcsSmsReviewUserCount > 0 ? "review" : "off",
         cloudProcessing: "Lokální náhled bez externích účinků",
         asyncProcessing: {
           ruleId: "rcs-sms-autopilot-async-processing",
-          active: false
+          active: localRcsSmsReviewPilot && localRcsSmsReviewUserCount > 0
+        },
+        reviewPilot: {
+          enabled: localRcsSmsReviewPilot && localRcsSmsReviewUserCount > 0,
+          configuredUserCount: localRcsSmsReviewUserCount,
+          identitySource: "KSO user.id",
+          failClosed: true,
+          outboundEffects: "disabled"
         },
         retryRunner: {
           runner: "rcs-sms-autopilot-retry-5m",

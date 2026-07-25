@@ -22,6 +22,19 @@ RCS_SMS_AUTOPILOT_MODE=live
 - `review`: OpenAI uloží strukturovaný návrh, nic neprovede ani neodešle.
 - `live`: server smí po vlastní validaci provést povolený nástroj a odpovědět přes existující zákaznickou messaging vrstvu.
 
+`review` je navíc fail-closed omezený na interní KSO účty uvedené podle
+stabilního `user.id` v serverové proměnné:
+
+```text
+RCS_SMS_AUTOPILOT_REVIEW_USER_IDS=
+```
+
+Prázdný allowlist nepovolí OpenAI nikomu. Odesílatel mimo allowlist se uloží
+do společné schránky a předá člověku, ale OpenAI, nástroj ani odpověď se
+nespustí. Telefon slouží jen k dohledání unikátního aktivního uživatele; členství
+v pilotu vždy ověřuje backend podle `user.id`. API ani UI hodnoty allowlistu
+nezveřejňují, ukazují pouze počet povolených interních účtů.
+
 Samotná aktivace pravidla v UI režim ENV nemění. Pro jakýkoli AI provoz musí být současně nastavený ENV režim a aktivní automatizace `rcs-sms-autopilot-async-processing`; retry navíc vyžaduje aktivní `rcs-sms-autopilot-retry-runner`. Vše se při chybě ověření zavře do bezpečného stavu bez účinku.
 
 ## Serverový tok
@@ -149,4 +162,8 @@ npm run build
 git diff --check
 ```
 
-Před zapnutím `review` nebo `live` je nutné samostatně ověřit produkční D1 migraci, Twilio podpis na skutečné URL, ENV secrets, status callback, oprávnění rolí a pravdivý audit. `live` se nesmí zapnout jen změnou UI pravidla.
+Před zapnutím `review` je nutné navíc ověřit neprázdný allowlist interních
+`user.id`, unikátní telefonní match a vazbu uživatele na zaměstnance. Před
+zapnutím `review` nebo `live` je nutné samostatně ověřit produkční D1 migraci,
+Twilio podpis na skutečné URL, ENV secrets, status callback, oprávnění rolí a
+pravdivý audit. `live` se nesmí zapnout jen změnou UI pravidla.

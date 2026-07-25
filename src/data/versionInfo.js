@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.725"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.726"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "RCS/SMS Autopilot: interní review pilot bez odesílání",
+    text: "Režim návrhů je fail-closed omezený na povolené interní KSO user.id. Odesílatel mimo pilot se předá člověku bez OpenAI, nástroje a odpovědi; UI ukazuje počet pilotních účtů a odchozí účinky zůstávají vypnuté."
+  },
   {
     title: "RCS/SMS konverzace: bezpečný centrální Autopilot Šarlota",
     text: "Příchozí RCS i SMS odpovědi mají společnou auditovanou schránku v MESSAGES, kontext původní zprávy, pevné STOP a bezpečnostní kontroly před AI, přísně povolené nástroje a lidské převzetí. Výchozí režim i odchozí účinky zůstávají vypnuté; telefon není zdroj oprávnění a bez ověřeného serverového kontextu se změna neprovede."

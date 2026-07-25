@@ -103,6 +103,9 @@ function statusCards() {
     ["Otevřené požadavky", counts.openRequests || 0],
     ["Chyby", counts.errors || 0]
   ];
+  if (status.mode === "review") {
+    cards.splice(1, 0, ["Pilotní účty", status.reviewPilot?.configuredUserCount || 0]);
+  }
   return `
     <div class="rcs-autopilot-stats">
       ${cards.map(([label, value]) => `
@@ -337,7 +340,8 @@ export function rcsSmsAutopilotEventLogHtml() {
   const mode = status.mode || "unknown";
   const asyncActive = status.asyncProcessing?.active === true;
   const liveActive = mode === "live" && asyncActive && status.outboundEffects === "enabled_with_server_gates";
-  const reviewActive = mode === "review" && asyncActive;
+  const reviewActive = mode === "review" && asyncActive && status.reviewPilot?.enabled === true;
+  const reviewPilotCount = Number(status.reviewPilot?.configuredUserCount || 0);
   const lastEvent = status.lastEvent;
   return `
     <section class="rcs-autopilot-event-log" aria-labelledby="rcs-autopilot-event-log-title">
@@ -349,7 +353,7 @@ export function rcsSmsAutopilotEventLogHtml() {
         ${statusChip(liveActive ? "open" : reviewActive ? "review_ready" : "autopilot_disabled")}
       </header>
       <div class="rcs-autopilot-event-log__grid">
-        <article><span>Autopilot</span><strong>${esc(liveActive ? modeLabel(mode) : reviewActive ? modeLabel(mode) : "Vypnuto bezpečnostní bránou")}</strong><p>${liveActive ? "AI i odpovědi jsou povolené jen přes serverové ochrany." : reviewActive ? "AI vytváří pouze návrhy bez automatické odpovědi." : "AI a automatické odpovědi nemají provozní účinek."}</p></article>
+        <article><span>Autopilot</span><strong>${esc(liveActive ? modeLabel(mode) : reviewActive ? "Interní pilot návrhů" : "Vypnuto bezpečnostní bránou")}</strong><p>${liveActive ? "AI i odpovědi jsou povolené jen přes serverové ochrany." : reviewActive ? `AI vytváří návrhy pouze pro ${reviewPilotCount} povolený interní účet; nic neodesílá.` : "AI a automatické odpovědi nemají provozní účinek."}</p></article>
         <article><span>Twilio</span><strong>${status.twilio?.twilioConfigured ? "Nastavené" : "Čeká na ENV"}</strong><p>Webhook používá podpis nebo serverový secret.</p></article>
         <article><span>OpenAI</span><strong>${status.openAi?.configured ? "Nastavené" : "Čeká na ENV"}</strong><p>Model pouze navrhuje strukturovaný výsledek.</p></article>
         <article><span>Cloud runner</span><strong>${status.retryRunner?.active ? "Aktivní podle režimu" : "Bez provozního účinku"}</strong><p>${esc(status.retryRunner?.cron || "*/5 * * * *")} · nejvýše tři pokusy.</p></article>
@@ -360,6 +364,7 @@ export function rcsSmsAutopilotEventLogHtml() {
           <div><dt>Zdroj dat</dt><dd>Konverzace DB_MESSAGES · identita DB_CORE · běhy DB_AUDIT</dd></div>
           <div><dt>Zpracování</dt><dd>${esc(status.cloudProcessing || "Cloudflare Pages Functions waitUntil")}</dd></div>
           <div><dt>Asynchronní pravidlo</dt><dd>${asyncActive ? "active" : "inactive"}</dd></div>
+          <div><dt>Review pilot</dt><dd>${reviewActive ? `${reviewPilotCount} interní účet · fail-closed` : "neaktivní"}</dd></div>
           <div><dt>Oprávnění</dt><dd>${esc(status.permissionsSource || "KSO backend")}</dd></div>
           <div><dt>Externí účinky</dt><dd>${esc(status.outboundEffects || "disabled")}</dd></div>
           <div><dt>Poslední událost</dt><dd>${lastEvent ? `${esc(lastEvent.eventType)} · ${esc(formatDateTime(lastEvent.createdAt))}` : "Zatím není uložená"}</dd></div>

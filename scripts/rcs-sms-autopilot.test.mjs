@@ -15,6 +15,7 @@ import {
   hasImmediateDanger,
   ingestAndScheduleRcsSmsAutopilot,
   isRcsSmsStopMessage,
+  processRcsSmsAutopilotMessage,
   runRcsSmsAutopilotRetry
 } from "../functions/_lib/rcs-sms-autopilot-service.js";
 import { __test as toolsTest } from "../functions/_lib/rcs-sms-autopilot-tools.js";
@@ -92,6 +93,27 @@ assert.equal(hasImmediateDanger("Kdy přijede svoz?"), false);
 assert.equal(serviceTest.modeFromEnv({}), "off");
 assert.equal(serviceTest.modeFromEnv({ RCS_SMS_AUTOPILOT_MODE: "invalid" }), "off");
 assert.equal(serviceTest.modeFromEnv({ RCS_SMS_AUTOPILOT_MODE: "review" }), "review");
+assert.deepEqual(serviceTest.reviewPilotUserIds({
+  RCS_SMS_AUTOPILOT_REVIEW_USER_IDS: " user-1, user-2;user-1 "
+}), ["user-1", "user-2"]);
+assert.equal(serviceTest.reviewPilotAllowsContext({
+  RCS_SMS_AUTOPILOT_REVIEW_USER_IDS: "user-1"
+}, {
+  senderType: "employee",
+  userId: "user-1"
+}), true);
+assert.equal(serviceTest.reviewPilotAllowsContext({
+  RCS_SMS_AUTOPILOT_REVIEW_USER_IDS: ""
+}, {
+  senderType: "employee",
+  userId: "user-1"
+}), false);
+assert.equal(serviceTest.reviewPilotAllowsContext({
+  RCS_SMS_AUTOPILOT_REVIEW_USER_IDS: "user-1"
+}, {
+  senderType: "customer",
+  userId: "user-1"
+}), false);
 assert.equal(serviceTest.effectiveModeFromRuntime(
   { RCS_SMS_AUTOPILOT_MODE: "live" },
   { autopilotEnabled: false, outboundEnabled: false }
@@ -453,6 +475,108 @@ assert.equal(storeTest.mediaFromPayload({
   );
   assert.equal(originalReplyContext.context.relatedEntityId, "task-autopilot-test");
 
+  messagesSqlite.prepare(`
+    UPDATE rcs_sms_runtime_config
+    SET autopilot_enabled = 1, outbound_enabled = 0
+    WHERE id = 'production'
+  `).run();
+  coreSqlite.prepare("UPDATE module_rules SET status = 'active' WHERE id = ?")
+    .run(serviceTest.ASYNC_RULE_ID);
+  integrationEnv.RCS_SMS_AUTOPILOT_MODE = "review";
+  integrationEnv.RCS_SMS_AUTOPILOT_REVIEW_USER_IDS = "different-user";
+  let forbiddenOpenAiCalls = 0;
+  const excludedReview = await ingestAndScheduleRcsSmsAutopilot(integrationEnv, {
+    From: "rcs:+420777123456",
+    Body: "Prosím připrav návrh odpovědi.",
+    MessageSid: "SM_INBOUND_REVIEW_EXCLUDED"
+  });
+  assert.equal(excludedReview.scheduled, false);
+  const excludedResult = await processRcsSmsAutopilotMessage(
+    integrationEnv,
+    excludedReview.message.id,
+    {
+      fetchImpl: async () => {
+        forbiddenOpenAiCalls += 1;
+        throw new Error("OpenAI se mimo pilot nesmí zavolat.");
+      }
+    }
+  );
+  assert.equal(excludedResult.status, "human_takeover");
+  assert.equal(excludedResult.reviewPilotExcluded, true);
+  assert.equal(forbiddenOpenAiCalls, 0);
+  assert.equal(messagesSqlite.prepare(
+    "SELECT status FROM rcs_sms_messages WHERE twilio_message_sid = ?"
+  ).get("SM_INBOUND_REVIEW_EXCLUDED").status, "human_takeover");
+  assert.equal(messagesSqlite.prepare(
+    "SELECT COUNT(*) AS total FROM rcs_sms_events WHERE event_type = 'review_pilot_scope_blocked'"
+  ).get().total, 1);
+
+  messagesSqlite.prepare(`
+    UPDATE rcs_sms_conversations
+    SET status = 'open', human_takeover = 0
+    WHERE phone = '+420777123456'
+  `).run();
+  integrationEnv.RCS_SMS_AUTOPILOT_REVIEW_USER_IDS = "user-autopilot-test";
+  integrationEnv.RCS_SMS_AUTOPILOT_OPENAI_API_KEY = "review-pilot-test-only";
+  const allowedReview = await ingestAndScheduleRcsSmsAutopilot(integrationEnv, {
+    From: "rcs:+420777123456",
+    Body: "Kdy mám úkol převzít?",
+    MessageSid: "SM_INBOUND_REVIEW_ALLOWED"
+  });
+  const allowedResult = await processRcsSmsAutopilotMessage(
+    integrationEnv,
+    allowedReview.message.id,
+    {
+      fetchImpl: async () => new Response(JSON.stringify({
+        id: "resp-review-pilot",
+        output: [{
+          type: "function_call",
+          call_id: "call-review-pilot",
+          name: "get_conversation_context",
+          arguments: JSON.stringify({
+            intent: "question_about_previous_message",
+            confidence: 0.94,
+            responseMode: "human",
+            replyText: "Návrh odpovědi je připravený ke kontrole.",
+            arguments: {},
+            requiresHuman: true,
+            reason: "Review pilot ukládá pouze návrh."
+          })
+        }]
+      }), { status: 200, headers: { "Content-Type": "application/json" } })
+    }
+  );
+  assert.equal(
+    allowedResult.status,
+    "review_ready",
+    `Review návrh musí projít strict validací: ${JSON.stringify(allowedResult)}`
+  );
+  const allowedStored = messagesSqlite.prepare(`
+    SELECT status, response_mode, openai_response_id
+    FROM rcs_sms_messages
+    WHERE twilio_message_sid = ?
+  `).get("SM_INBOUND_REVIEW_ALLOWED");
+  assert.equal(allowedStored.status, "review_ready");
+  assert.equal(allowedStored.response_mode, "human");
+  assert.equal(allowedStored.openai_response_id, "resp-review-pilot");
+  assert.equal(messagesSqlite.prepare(
+    "SELECT COUNT(*) AS total FROM rcs_sms_tool_runs"
+  ).get().total, 0);
+  assert.equal(messagesSqlite.prepare(
+    "SELECT COUNT(*) AS total FROM rcs_sms_messages WHERE direction = 'outbound'"
+  ).get().total, 0);
+
+  messagesSqlite.prepare(`
+    UPDATE rcs_sms_runtime_config
+    SET autopilot_enabled = 0, outbound_enabled = 0
+    WHERE id = 'production'
+  `).run();
+  coreSqlite.prepare("UPDATE module_rules SET status = 'inactive' WHERE id = ?")
+    .run(serviceTest.ASYNC_RULE_ID);
+  integrationEnv.RCS_SMS_AUTOPILOT_MODE = "off";
+  integrationEnv.RCS_SMS_AUTOPILOT_REVIEW_USER_IDS = "";
+  delete integrationEnv.RCS_SMS_AUTOPILOT_OPENAI_API_KEY;
+
   integrationEnv.RCS_SMS_AUTOPILOT_MODE = "live";
   const blankPending = [];
   await ingestAndScheduleRcsSmsAutopilot(integrationEnv, {
@@ -558,11 +682,16 @@ rcsSmsAutopilotState.items = [{
 rcsSmsAutopilotState.total = 1;
 rcsSmsAutopilotState.loaded = true;
 rcsSmsAutopilotState.status = {
-  mode: "off",
+  mode: "review",
   counts: { conversations: 1 },
   openAi: { configured: false },
   twilio: { twilioConfigured: false },
-  asyncProcessing: { active: false },
+  asyncProcessing: { active: true },
+  reviewPilot: {
+    enabled: true,
+    configuredUserCount: 1,
+    failClosed: true
+  },
   retryRunner: { active: false, cron: "*/5 * * * *" },
   outboundEffects: "disabled"
 };
@@ -570,6 +699,8 @@ const ui = rcsSmsAutopilotContent({ canManage: true, rulesHtml: "<section>rules<
 assert.match(ui, /Společná schránka odpovědí/);
 assert.match(ui, /Pravdivý provozní stav/);
 assert.match(ui, /Seznam pravidel|rules/);
+assert.match(ui, /Interní pilot návrhů/);
+assert.match(ui, /1 interní účet/);
 assert.doesNotMatch(ui, /<script>alert/);
 assert.match(ui, /&lt;script&gt;alert/);
 
