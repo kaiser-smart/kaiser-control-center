@@ -460,6 +460,7 @@ assert.match(
   const env = {
     COLLECTION_ROUTES_TEST_DB: d1,
     SMART_ODPADY_DB: production.d1,
+    DB_CORE: production.d1,
     SMART_ODPADY_DOCUMENTS: bucket,
     APP_ENV: "production",
     COLLECTION_ROUTES_INCIDENT_DISPATCH_MODE: workflowTest.LIVE_DISPATCH_MODE
@@ -522,6 +523,7 @@ assert.match(
   const env = {
     COLLECTION_ROUTES_TEST_DB: d1,
     SMART_ODPADY_DB: production.d1,
+    DB_CORE: production.d1,
     SMART_ODPADY_DOCUMENTS: bucket,
     COLLECTION_ROUTES_TEST_EMAIL_TO: "protected-test@example.invalid",
     APP_ENV: "production",
@@ -699,6 +701,7 @@ assert.match(
   const env = {
     COLLECTION_ROUTES_TEST_DB: d1,
     SMART_ODPADY_DB: production.d1,
+    DB_CORE: production.d1,
     SMART_ODPADY_DOCUMENTS: bucket,
     APP_ENV: "production"
   };

@@ -1,5 +1,5 @@
 import { isFullAccessRole, normalizeRole } from "../../src/permissions.js";
-import { getMessagesDatabase } from "./databases.js";
+import { getCoreDatabase, getMessagesDatabase } from "./databases.js";
 
 const CHANNELS = new Set(["email", "sms", "rcs_sms_auto_fallback"]);
 const STATUSES = new Set(["sent", "not_sent", "pending", "failed"]);
@@ -24,6 +24,7 @@ const TYPES = new Set([
   "twilio_delivery_status",
   "sms_inbound_reply"
 ]);
+const MAX_ABSENCE_FILTER_IDS = 80;
 
 export class NotificationsStoreError extends Error {
   constructor(message, status = 400, code = "notifications_store_error") {
@@ -134,9 +135,11 @@ function normalizeFilters(params) {
   };
 }
 
-function whereForFilters(filters, columns = new Set()) {
+function whereForFilters(filters, columns = new Set(), absenceIds = {}) {
   const clauses = ["n.created_at >= ?", "n.created_at <= ?"];
   const binds = [isoStart(filters.dateFrom), isoEnd(filters.dateTo)];
+  const scopeIds = absenceIds.scope || [];
+  const searchIds = absenceIds.search || [];
 
   if (filters.channel) {
     clauses.push("n.channel = ?");
@@ -153,14 +156,16 @@ function whereForFilters(filters, columns = new Set()) {
     binds.push(filters.type);
   }
 
-  if (filters.employeeId) {
-    clauses.push("lower(a.employee_id) = lower(?)");
-    binds.push(filters.employeeId);
-  }
-
-  if (filters.managerId) {
-    clauses.push("lower(a.manager_id) = lower(?)");
-    binds.push(filters.managerId);
+  if (filters.employeeId || filters.managerId) {
+    if (!scopeIds.length) {
+      clauses.push("1 = 0");
+    } else {
+      clauses.push(`(
+        n.related_entity_type = 'absence_request'
+        AND n.related_entity_id IN (${scopeIds.map(() => "?").join(", ")})
+      )`);
+      binds.push(...scopeIds);
+    }
   }
 
   if (filters.search) {
@@ -169,22 +174,79 @@ function whereForFilters(filters, columns = new Set()) {
       "lower(coalesce(n.error_message, '')) LIKE lower(?)",
       ...(columns.has("subject") ? ["lower(coalesce(n.subject, '')) LIKE lower(?)"] : []),
       ...(columns.has("message_preview") ? ["lower(coalesce(n.message_preview, '')) LIKE lower(?)"] : []),
-      "lower(coalesce(n.type, '')) LIKE lower(?)",
-      "lower(coalesce(a.employee_name, '')) LIKE lower(?)",
-      "lower(coalesce(a.manager_name, '')) LIKE lower(?)",
-      "lower(coalesce(a.note, '')) LIKE lower(?)"
+      "lower(coalesce(n.type, '')) LIKE lower(?)"
     ];
+    const absenceSearch = searchIds.length
+      ? ` OR (
+          n.related_entity_type = 'absence_request'
+          AND n.related_entity_id IN (${searchIds.map(() => "?").join(", ")})
+        )`
+      : "";
     clauses.push(`(
       ${searchColumns.join("\n      OR ")}
+      ${absenceSearch}
     )`);
     const pattern = `%${filters.search}%`;
     binds.push(...searchColumns.map(() => pattern));
+    if (searchIds.length) binds.push(...searchIds);
   }
 
   return {
     where: clauses.join(" AND "),
     binds
   };
+}
+
+async function absenceIdsForCriteria(env, criteria) {
+  if (!criteria.employeeId && !criteria.managerId && !criteria.search) return [];
+  const db = getCoreDatabase(env);
+  const clauses = [];
+  const binds = [];
+
+  if (criteria.employeeId) {
+    clauses.push("lower(employee_id) = lower(?)");
+    binds.push(criteria.employeeId);
+  }
+  if (criteria.managerId) {
+    clauses.push("lower(manager_id) = lower(?)");
+    binds.push(criteria.managerId);
+  }
+  if (criteria.search) {
+    clauses.push(`(
+      lower(coalesce(employee_name, '')) LIKE lower(?)
+      OR lower(coalesce(manager_name, '')) LIKE lower(?)
+      OR lower(coalesce(note, '')) LIKE lower(?)
+    )`);
+    const pattern = `%${criteria.search}%`;
+    binds.push(pattern, pattern, pattern);
+  }
+
+  const result = await db.prepare(`
+    SELECT id, employee_id, employee_name, manager_id, manager_name, note
+    FROM absence_requests
+    WHERE ${clauses.join(" AND ")}
+    ORDER BY updated_at DESC
+    LIMIT ?
+  `).bind(...binds, MAX_ABSENCE_FILTER_IDS).all();
+  return (result.results || []).map((row) => cleanString(row.id)).filter(Boolean);
+}
+
+async function absenceRowsByIds(env, ids) {
+  const uniqueIds = [...new Set(ids.map(cleanString).filter(Boolean))].slice(0, 100);
+  if (!uniqueIds.length) return [];
+  const db = getCoreDatabase(env, { required: false });
+  if (!db) return [];
+  try {
+    const result = await db.prepare(`
+      SELECT id, employee_id, employee_name, manager_id, manager_name, note
+      FROM absence_requests
+      WHERE id IN (${uniqueIds.map(() => "?").join(", ")})
+    `).bind(...uniqueIds).all();
+    return result.results || [];
+  } catch (error) {
+    console.error("notifications.absence_enrichment_failed", { message: error?.message });
+    return [];
+  }
 }
 
 function rowToNotification(row) {
@@ -233,16 +295,20 @@ export async function listNotifications(env, params) {
   const db = notificationsDatabase(env, true);
   const filters = normalizeFilters(params);
   const columns = await notificationLogColumns(db);
-  const { where, binds } = whereForFilters(filters, columns);
+  const [scopeIds, searchIds] = await Promise.all([
+    absenceIdsForCriteria(env, {
+      employeeId: filters.employeeId,
+      managerId: filters.managerId
+    }),
+    absenceIdsForCriteria(env, { search: filters.search })
+  ]);
+  const { where, binds } = whereForFilters(filters, columns, { scope: scopeIds, search: searchIds });
   const offset = (filters.page - 1) * filters.pageSize;
 
   const countResult = await db
     .prepare(`
       SELECT COUNT(*) AS total
       FROM notification_logs n
-      LEFT JOIN absence_requests a
-        ON n.related_entity_type = 'absence_request'
-        AND n.related_entity_id = a.id
       WHERE ${where}
     `)
     .bind(...binds)
@@ -275,25 +341,29 @@ export async function listNotifications(env, params) {
         ${selectNotificationColumn(columns, "attempts", "1")},
         n.sent_at,
         n.created_at,
-        ${selectNotificationColumn(columns, "updated_at", "n.created_at")},
-        a.employee_id,
-        a.employee_name,
-        a.manager_id,
-        a.manager_name,
-        a.note
+        ${selectNotificationColumn(columns, "updated_at", "n.created_at")}
       FROM notification_logs n
-      LEFT JOIN absence_requests a
-        ON n.related_entity_type = 'absence_request'
-        AND n.related_entity_id = a.id
       WHERE ${where}
       ORDER BY n.created_at DESC
       LIMIT ? OFFSET ?
     `)
     .bind(...binds, filters.pageSize, offset)
     .all();
+  const rows = result.results || [];
+  const absenceRows = await absenceRowsByIds(
+    env,
+    rows
+      .filter((row) => cleanString(row.related_entity_type) === "absence_request")
+      .map((row) => row.related_entity_id)
+  );
+  const absenceById = new Map(absenceRows.map((row) => [cleanString(row.id), row]));
+  const enrichedRows = rows.map((row) => ({
+    ...row,
+    ...(absenceById.get(cleanString(row.related_entity_id)) || {})
+  }));
 
   return {
-    items: (result.results || []).map(rowToNotification),
+    items: enrichedRows.map(rowToNotification),
     total: Number(countResult?.total || 0),
     page: filters.page,
     pageSize: filters.pageSize,
@@ -318,9 +388,6 @@ export async function notificationSummary(env, params) {
     .prepare(`
       SELECT n.channel, n.status, COUNT(*) AS count
       FROM notification_logs n
-      LEFT JOIN absence_requests a
-        ON n.related_entity_type = 'absence_request'
-        AND n.related_entity_id = a.id
       WHERE ${where}
       GROUP BY n.channel, n.status
     `)

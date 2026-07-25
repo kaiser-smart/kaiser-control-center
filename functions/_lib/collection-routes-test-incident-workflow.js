@@ -17,6 +17,7 @@ import {
   sendCollectionRouteIncidentDispatcherLiveSms,
   sendCollectionRouteIncidentDispatcherTestEmail
 } from "./notification-service.js";
+import { getCoreDatabase } from "./databases.js";
 
 const PRODUCTION_DB_BINDING = "SMART_ODPADY_DB";
 const INCIDENT_BUCKET_BINDING = "SMART_ODPADY_DOCUMENTS";
@@ -310,6 +311,7 @@ async function dispatcherLoadCounts(testDb) {
 
 export async function resolveAvailableCollectionRouteDispatcher(env, testDb, options = {}) {
   const db = productionDatabase(env, true);
+  const absenceDb = getCoreDatabase(env);
   const today = pragueDate(options.now || Date.now());
   const result = await db.prepare(`
     SELECT
@@ -341,7 +343,7 @@ export async function resolveAvailableCollectionRouteDispatcher(env, testDb, opt
   const availability = await Promise.all(candidates.map(async (candidate) => {
     const absenceState = normalizeText(candidate.current_absence_status);
     const cardUnavailable = Boolean(absenceState && absenceState !== "v praci" && absenceState !== "v praci.");
-    const absent = cardUnavailable || await employeeIsAbsent(db, candidate, today);
+    const absent = cardUnavailable || await employeeIsAbsent(absenceDb, candidate, today);
     return {
       id: cleanString(candidate.id || candidate.user_id),
       userId: cleanString(candidate.kso_user_id || candidate.user_id),
@@ -364,7 +366,7 @@ export async function resolveAvailableCollectionRouteDispatcher(env, testDb, opt
     selected: available[0] || null,
     candidates: availability,
     checkedDate: today,
-    source: "SMART_ODPADY_DB.users + employee_cards + absence_requests"
+    source: "SMART_ODPADY_DB.users + employee_cards; DB_CORE.absence_requests"
   };
 }
 
