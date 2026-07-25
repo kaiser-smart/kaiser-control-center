@@ -7,6 +7,7 @@ import { runReceivablesInvoiceSyncAutomation } from "../functions/_lib/receivabl
 import { runSelfRepairHourlyMonitor } from "../functions/_lib/self-repair-monitor-runner.js";
 import { SELF_REPAIR_MONITOR_CRON } from "../functions/_lib/self-repair-monitor-config.js";
 import { runCollectionRouteIncidentReminderAutomation } from "../functions/_lib/collection-routes-incident-reminder-runner.js";
+import { retryFailedAbsenceHistoryWorkflows } from "../functions/_lib/absence-requests-store.js";
 
 const COLLECTION_ROUTES_CRON = "*/15 * * * *";
 const COLLECTION_ROUTE_INCIDENT_REMINDER_CRON = "*/5 * * * *";
@@ -16,11 +17,23 @@ export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil((async () => {
       if (controller.cron === COLLECTION_ROUTE_INCIDENT_REMINDER_CRON) {
-        const summary = await runCollectionRouteIncidentReminderAutomation(env, {
-          scheduledTime: controller.scheduledTime,
-          cron: controller.cron,
-          triggeredBy: "cloudflare-cron"
-        });
+        const [summary, absenceHistoryRetry] = await Promise.all([
+          runCollectionRouteIncidentReminderAutomation(env, {
+            scheduledTime: controller.scheduledTime,
+            cron: controller.cron,
+            triggeredBy: "cloudflare-cron"
+          }),
+          retryFailedAbsenceHistoryWorkflows(env, {
+            limit: 25,
+            now: new Date(controller.scheduledTime).toISOString()
+          }).catch((error) => ({
+            status: "failed",
+            selected: 0,
+            completed: 0,
+            failed: 1,
+            error: error?.message || "absence_history_retry_failed"
+          }))
+        ]);
         console.log("collection_route_incident_test_reminder.completed", {
           status: summary.status,
           checked: summary.checked || 0,
@@ -30,6 +43,15 @@ export default {
           protectedTestOnly: true,
           realCustomerCommunication: "disabled",
           realDispatcherCommunication: "disabled",
+          sms: "disabled",
+          rcs: "disabled"
+        });
+        console.log("absence_history_retry.completed", {
+          status: absenceHistoryRetry.status,
+          selected: absenceHistoryRetry.selected,
+          completed: absenceHistoryRetry.completed,
+          failed: absenceHistoryRetry.failed,
+          error: absenceHistoryRetry.error || null,
           sms: "disabled",
           rcs: "disabled"
         });
@@ -195,7 +217,10 @@ export default {
       },
       absence: {
         cron: ABSENCE_CRON,
-        mode: "dry-run"
+        mode: "dry-run",
+        historyRetryCron: COLLECTION_ROUTE_INCIDENT_REMINDER_CRON,
+        historyRetryBatchSize: 25,
+        historyDatabase: "DB_AUDIT"
       },
       selfRepair: {
         cron: SELF_REPAIR_MONITOR_CRON,

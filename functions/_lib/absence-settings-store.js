@@ -1,8 +1,8 @@
 import {
   normalizeAbsenceSettings
 } from "../../src/data/absence.js";
+import { getCoreDatabase } from "./databases.js";
 
-const ABSENCE_SETTINGS_DB_BINDING = "SMART_ODPADY_DB";
 const ABSENCE_SETTINGS_ID = "current";
 
 export class AbsenceSettingsStoreError extends Error {
@@ -15,17 +15,7 @@ export class AbsenceSettingsStoreError extends Error {
 }
 
 function absenceSettingsDatabase(env, required = false) {
-  const db = env?.[ABSENCE_SETTINGS_DB_BINDING] || null;
-
-  if (!db && required) {
-    throw new AbsenceSettingsStoreError(
-      "Databáze nastavení nepřítomností není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
-      503,
-      "absence_settings_database_missing"
-    );
-  }
-
-  return db;
+  return getCoreDatabase(env, { required });
 }
 
 async function ensureAbsenceSettingsTable(db) {
