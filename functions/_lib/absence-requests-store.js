@@ -1,6 +1,10 @@
 import { hasPermission, isFullAccessRole, normalizeRole } from "../../src/permissions.js";
-
-const ABSENCE_DB_BINDING = "SMART_ODPADY_DB";
+import { getAuditDatabase, getCoreDatabase } from "./databases.js";
+import {
+  beginCrossDatabaseWorkflow,
+  recordWorkflowAttempt,
+  updateCrossDatabaseWorkflow
+} from "./cross-database-workflows.js";
 
 const REQUEST_TYPES = new Set(["vacation", "sick", "doctor", "care", "compensatory_leave", "unpaid_leave", "other"]);
 const APPROVAL_TYPES = new Set(["vacation", "doctor", "care", "compensatory_leave", "unpaid_leave", "other"]);
@@ -69,17 +73,11 @@ export class AbsenceRequestStoreError extends Error {
 }
 
 function absenceDatabase(env, required = false) {
-  const db = env?.[ABSENCE_DB_BINDING] || null;
+  return getCoreDatabase(env, { required });
+}
 
-  if (!db && required) {
-    throw new AbsenceRequestStoreError(
-      "Databáze nepřítomností není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
-      503,
-      "absence_database_missing"
-    );
-  }
-
-  return db;
+function absenceAuditDatabase(env, required = false) {
+  return getAuditDatabase(env, { required });
 }
 
 function cleanString(value) {
@@ -444,44 +442,160 @@ function normalizeInput(input, users, currentUser) {
   };
 }
 
-async function appendHistory(db, requestId, fromStatus, toStatus, currentUser, note = "") {
-  await db
-    .prepare(`
-      INSERT INTO absence_approval_history (
-        id,
-        absence_request_id,
-        from_status,
-        to_status,
-        changed_by_user_id,
-        changed_by_name,
-        changed_at,
-        note
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-    .bind(
-      randomId("absence-history"),
-      requestId,
-      nullableString(fromStatus),
-      toStatus,
-      nullableString(currentUser?.id),
-      nullableString(currentUser?.name || currentUser?.email),
-      isoNow(),
-      nullableString(note)
-    )
-    .run();
+async function executeAbsenceHistoryWorkflow(env, workflow, payload = {}) {
+  const auditDb = absenceAuditDatabase(env, true);
+  const startedAt = isoNow();
+  const idempotencyKey = cleanString(workflow?.idempotency_key);
+
+  try {
+    await auditDb
+      .prepare(`
+        INSERT INTO absence_approval_history (
+          id,
+          absence_request_id,
+          from_status,
+          to_status,
+          changed_by_user_id,
+          changed_by_name,
+          changed_at,
+          note,
+          idempotency_key
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(idempotency_key) DO NOTHING
+      `)
+      .bind(
+        `absence-history-${workflow.id}`,
+        cleanString(payload.requestId),
+        nullableString(payload.fromStatus),
+        cleanString(payload.toStatus),
+        nullableString(payload.changedByUserId),
+        nullableString(payload.changedByName),
+        cleanString(payload.changedAt),
+        nullableString(payload.note),
+        idempotencyKey
+      )
+      .run();
+
+    await recordWorkflowAttempt(env, {
+      workflowId: workflow.id,
+      databaseDomain: "audit",
+      operationName: "absence_history_insert",
+      status: "completed",
+      startedAt,
+      finishedAt: isoNow(),
+      metadata: { idempotencyKey }
+    });
+    await updateCrossDatabaseWorkflow(env, workflow.id, { status: "completed" });
+    return { workflowId: workflow.id, idempotencyKey };
+  } catch (error) {
+    const nextAttemptAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    try {
+      await recordWorkflowAttempt(env, {
+        workflowId: workflow.id,
+        databaseDomain: "audit",
+        operationName: "absence_history_insert",
+        status: "failed",
+        errorMessage: error?.message,
+        startedAt,
+        finishedAt: isoNow(),
+        metadata: { idempotencyKey }
+      });
+    } catch {
+      // Výpadek AUDIT nesmí zneplatnit již uložený provozní záznam v CORE.
+    }
+    await updateCrossDatabaseWorkflow(env, workflow.id, {
+      status: "failed",
+      lastError: error?.message,
+      nextAttemptAt
+    });
+    throw error;
+  }
 }
 
-async function appendHistorySafely(db, requestId, fromStatus, toStatus, currentUser, note = "") {
+async function appendHistory(env, requestId, fromStatus, toStatus, currentUser, note = "", changedAt = isoNow()) {
+  const idempotencyKey = [
+    "absence-history",
+    cleanString(requestId),
+    cleanString(toStatus),
+    cleanString(changedAt)
+  ].join(":");
+  const payload = {
+    requestId: cleanString(requestId),
+    fromStatus: cleanString(fromStatus),
+    toStatus: cleanString(toStatus),
+    changedByUserId: cleanString(currentUser?.id),
+    changedByName: cleanString(currentUser?.name || currentUser?.email),
+    changedAt: cleanString(changedAt),
+    note: cleanString(note)
+  };
+  const workflow = await beginCrossDatabaseWorkflow(env, {
+    workflowType: "absence_history_append",
+    idempotencyKey,
+    payload,
+    compensation: {
+      strategy: "retry_audit_append",
+      coreRollbackRequired: false
+    }
+  });
+  return executeAbsenceHistoryWorkflow(env, workflow, payload);
+}
+
+export async function retryFailedAbsenceHistoryWorkflows(env, options = {}) {
+  const coreDb = absenceDatabase(env, true);
+  const limit = Math.max(1, Math.min(Number(options.limit || 25), 100));
+  const now = cleanString(options.now) || isoNow();
+  const result = await coreDb.prepare(`
+    SELECT *
+    FROM cross_database_workflows
+    WHERE workflow_type = 'absence_history_append'
+      AND status = 'failed'
+      AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+    ORDER BY updated_at ASC
+    LIMIT ?
+  `).bind(now, limit).all();
+  const workflows = result.results || [];
+  let completed = 0;
+  let failed = 0;
+
+  for (const workflow of workflows) {
+    try {
+      const payload = JSON.parse(workflow.payload_json || "{}");
+      await executeAbsenceHistoryWorkflow(env, workflow, payload);
+      completed += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+
+  return {
+    status: failed ? "partial" : "completed",
+    selected: workflows.length,
+    completed,
+    failed
+  };
+}
+
+async function appendHistorySafely(env, requestId, fromStatus, toStatus, currentUser, note = "", changedAt = isoNow()) {
   try {
-    await appendHistory(db, requestId, fromStatus, toStatus, currentUser, note);
-    return { ok: true };
+    const workflow = await appendHistory(
+      env,
+      requestId,
+      fromStatus,
+      toStatus,
+      currentUser,
+      note,
+      changedAt
+    );
+    return { ok: true, ...workflow };
   } catch (error) {
     console.error("absence_requests.history_append_failed", { message: error.message });
     return { ok: false, code: "absence_history_append_failed" };
   }
 }
 
-async function historyForRequest(db, requestId) {
+async function historyForRequest(env, requestId) {
+  const db = absenceAuditDatabase(env);
+  if (!db) return [];
   try {
     const result = await db
       .prepare("SELECT * FROM absence_approval_history WHERE absence_request_id = ? ORDER BY changed_at DESC")
@@ -495,7 +609,7 @@ async function historyForRequest(db, requestId) {
   }
 }
 
-async function requestById(db, requestId, includeHistory = false) {
+async function requestById(env, db, requestId, includeHistory = false) {
   const row = await db
     .prepare("SELECT * FROM absence_requests WHERE id = ? LIMIT 1")
     .bind(requestId)
@@ -505,7 +619,7 @@ async function requestById(db, requestId, includeHistory = false) {
     return null;
   }
 
-  const history = includeHistory ? await historyForRequest(db, requestId) : [];
+  const history = includeHistory ? await historyForRequest(env, requestId) : [];
   return requestFromRow(row, history);
 }
 
@@ -590,7 +704,7 @@ export async function listEmployeeAvailabilityForSarlota(env, options = {}) {
 
 export async function getAbsenceRequestRecord(env, users, currentUser, requestId) {
   const db = absenceDatabase(env, true);
-  const request = await requestById(db, requestId, true);
+  const request = await requestById(env, db, requestId, true);
 
   if (!request) {
     throw new AbsenceRequestStoreError("Žádost nebyla nalezena.", 404, "absence_request_not_found");
@@ -700,21 +814,29 @@ export async function createAbsenceRequestRecord(env, users, currentUser, input)
     )
     .run();
 
-  const historyResult = await appendHistorySafely(db, request.id, "draft", request.status, currentUser, request.note);
+  const historyResult = await appendHistorySafely(
+    env,
+    request.id,
+    "draft",
+    request.status,
+    currentUser,
+    request.note,
+    request.createdAt
+  );
 
   return {
     ...request,
     typeLabel: TYPE_LABELS[request.type],
     statusLabel: STATUS_LABELS[request.status],
     dateTo: request.dateTo || addDays(request.dateFrom, 0),
-    history: await historyForRequest(db, request.id),
+    history: await historyForRequest(env, request.id),
     historyStatus: historyResult.ok ? "ok" : "warning"
   };
 }
 
 export async function approveAbsenceRequestRecord(env, users, currentUser, requestId, input = {}) {
   const db = absenceDatabase(env, true);
-  const request = await requestById(db, requestId, true);
+  const request = await requestById(env, db, requestId, true);
 
   if (!request) {
     throw new AbsenceRequestStoreError("Žádost nebyla nalezena.", 404, "absence_request_not_found");
@@ -748,13 +870,21 @@ export async function approveAbsenceRequestRecord(env, users, currentUser, reque
     )
     .run();
 
-  await appendHistorySafely(db, request.id, request.status, "approved", currentUser, cleanString(input?.note) || "Schváleno.");
+  await appendHistorySafely(
+    env,
+    request.id,
+    request.status,
+    "approved",
+    currentUser,
+    cleanString(input?.note) || "Schváleno.",
+    now
+  );
   return getAbsenceRequestRecord(env, users, currentUser, request.id);
 }
 
 export async function rejectAbsenceRequestRecord(env, users, currentUser, requestId, input = {}) {
   const db = absenceDatabase(env, true);
-  const request = await requestById(db, requestId, true);
+  const request = await requestById(env, db, requestId, true);
 
   if (!request) {
     throw new AbsenceRequestStoreError("Žádost nebyla nalezena.", 404, "absence_request_not_found");
@@ -790,13 +920,21 @@ export async function rejectAbsenceRequestRecord(env, users, currentUser, reques
     )
     .run();
 
-  await appendHistorySafely(db, request.id, request.status, "rejected", currentUser, reason || "Zamítnuto.");
+  await appendHistorySafely(
+    env,
+    request.id,
+    request.status,
+    "rejected",
+    currentUser,
+    reason || "Zamítnuto.",
+    now
+  );
   return getAbsenceRequestRecord(env, users, currentUser, request.id);
 }
 
 export async function cancelAbsenceRequestRecord(env, users, currentUser, requestId) {
   const db = absenceDatabase(env, true);
-  const request = await requestById(db, requestId, true);
+  const request = await requestById(env, db, requestId, true);
 
   if (!request) {
     throw new AbsenceRequestStoreError("Žádost nebyla nalezena.", 404, "absence_request_not_found");
@@ -816,7 +954,15 @@ export async function cancelAbsenceRequestRecord(env, users, currentUser, reques
     .prepare("UPDATE absence_requests SET status = 'cancelled', updated_at = ? WHERE id = ?")
     .bind(now, request.id)
     .run();
-  await appendHistorySafely(db, request.id, request.status, "cancelled", currentUser, "Zrušeno uživatelem.");
+  await appendHistorySafely(
+    env,
+    request.id,
+    request.status,
+    "cancelled",
+    currentUser,
+    "Zrušeno uživatelem.",
+    now
+  );
   return getAbsenceRequestRecord(env, users, currentUser, request.id);
 }
 
@@ -827,7 +973,7 @@ export async function markAbsenceReminderSent(env, requestId) {
     .prepare("UPDATE absence_requests SET reminder_sent_at = ?, updated_at = ? WHERE id = ?")
     .bind(now, now, requestId)
     .run();
-  return requestById(db, requestId, true);
+  return requestById(env, db, requestId, true);
 }
 
 export async function listAbsenceRequestsForReminder(env, options = {}) {
@@ -863,7 +1009,7 @@ export async function employeeAbsenceDetail(env, users, currentUser, employeeId)
 
   const histories = [];
   for (const item of items.slice(0, 20)) {
-    histories.push(...(await historyForRequest(db, item.id)));
+    histories.push(...(await historyForRequest(env, item.id)));
   }
 
   const year = new Date().getFullYear();
@@ -881,3 +1027,7 @@ export async function employeeAbsenceDetail(env, users, currentUser, employeeId)
     note: items.length ? "Historie nepřítomností je načtená z cloud API." : "Zatím tu nejsou žádné žádosti."
   };
 }
+
+export const __test = Object.freeze({
+  appendHistorySafely
+});

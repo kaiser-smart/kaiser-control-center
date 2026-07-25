@@ -129,8 +129,11 @@ PDF, fotografie, audio, přílohy, zdrojové soubory, kompletní payloady a expo
 4. MESSAGES write-first: obecná komunikace a Data Box RCS jsou připravené na `DB_MESSAGES`; legacy kopie zůstávají.
 5. Backfill MESSAGES: dokončen pro obecné komunikační tabulky a Data Box RCS, počty a vazby ověřeny.
 6. Copy-only archivace: běží po 500 řádcích, R2 a SHA-256 se ověřují, mazání zdroje je zakázané.
-7. CORE/AUDIT/ARCHIVE migrace zbývajících modulů: připravená cílová mapa, nikoli big-bang přepnutí.
-8. Destruktivní cleanup: nezačal; vyžaduje nový Time Travel bookmark, kontrolní počty a samostatné potvrzení.
+7. První CORE/AUDIT modul `absence`: schéma a backfill jsou připravené; `absence_requests` a
+   `absence_settings` patří do CORE, `absence_approval_history` do AUDIT. Přenos používá
+   idempotentní workflow s retry a bez tichého fallbacku do legacy.
+8. CORE/AUDIT/ARCHIVE migrace zbývajících modulů: připravená cílová mapa, nikoli big-bang přepnutí.
+9. Destruktivní cleanup: nezačal; vyžaduje nový Time Travel bookmark, kontrolní počty a samostatné potvrzení.
 
 ## Retence
 
