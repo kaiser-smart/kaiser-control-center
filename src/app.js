@@ -35458,7 +35458,36 @@ function systemCheckDatabaseCapacityItems(data) {
     return {
       label: database.database_name || database.database_domain || "D1",
       status,
-      detail: `${percent.toFixed(2)} % · ${formatFileSize(Number(database.size_bytes || 0))} · stránky ~${Number(database.page_count || 0)} · volné ${database.free_page_count == null ? "D1 neposkytuje" : Number(database.free_page_count)}${Number.isFinite(days) ? ` · odhad ${days.toFixed(1)} dne` : ""}`
+      detail: `${percent.toFixed(2)} % · ${formatFileSize(Number(database.size_bytes || 0))} · stav ${database.level || "-"} · kontrola ${formatDateTime(database.recorded_at)} · stránky ~${Number(database.page_count || 0)} · volné ${database.free_page_count == null ? "D1 neposkytuje" : Number(database.free_page_count)}${Number.isFinite(days) ? ` · odhad ${days.toFixed(1)} dne` : ""}`
+    };
+  }).concat(capacity.legacyDatabase ? [{
+    label: "SMART_ODPADY_DB – legacy pouze pro auditované čtení",
+    status: "WARNING",
+    detail: `${Number(capacity.legacyDatabase.usage_percent || 0).toFixed(2)} % · ${formatFileSize(Number(capacity.legacyDatabase.size_bytes || 0))} · nové zápisy jsou zablokované · kontrola ${formatDateTime(capacity.legacyDatabase.recorded_at)}`
+  }] : []);
+}
+
+function systemCheckCronItems(data) {
+  const health = data?.cronHealth || {};
+  const items = Array.isArray(health.items) ? health.items : [];
+  if (!items.length) {
+    return [{
+      label: "Cloudové crony",
+      status: health.status || "NEOVĚŘENO",
+      detail: health.note || "Stavy cloudových běhů zatím nejsou dostupné."
+    }];
+  }
+  return items.map((item) => {
+    const status = String(item.status || "").toLowerCase();
+    const displayStatus = !item.terminal
+      ? "ERROR"
+      : ["error", "failed", "partial_error", "partial_failure"].includes(status)
+        ? "WARNING"
+        : "OK";
+    return {
+      label: item.label || item.key || "Cloudový cron",
+      status: displayStatus,
+      detail: `${item.status || "neznámý"} · ukončeno ${formatDateTime(item.finishedAt)}${item.schedule ? ` · plán ${item.schedule}` : ""}${item.message ? ` · ${item.message}` : ""}`
     };
   });
 }
@@ -35550,6 +35579,7 @@ function systemCheckPage(moduleItem, user) {
         ${systemCheckSection("Mobil", systemCheckMobileItems())}
         ${systemCheckSection("Automatizace", systemCheckAutomationItems(data))}
         ${systemCheckSection("Kapacita databází", systemCheckDatabaseCapacityItems(data))}
+        ${systemCheckSection("Ukončení cloudových cronů", systemCheckCronItems(data))}
         ${systemCheckSection("DS účty", systemCheckAccountsItems(data))}
         ${systemCheckExternalCard(data)}
       </section>

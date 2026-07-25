@@ -149,7 +149,10 @@ export async function archiveReceivableSnapshotChunk(env, options = {}) {
 }
 
 async function archiveSnapshotChunk(env, options = {}) {
-  const sourceDb = getLegacyDatabase(env);
+  const sourceDb = getLegacyDatabase(env, {
+    moduleName: "collection-snapshot-archive",
+    purpose: `copy-verify archive source read: ${clean(options.sourceTable)}`
+  });
   const archiveDb = getArchiveDatabase(env);
   const auditDb = getAuditDatabase(env);
   const bucket = env?.R2_ARCHIVE;

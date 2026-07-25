@@ -8,7 +8,15 @@ import {
 } from "./databases.js";
 
 const DATABASES = Object.freeze([
-  { domain: "legacy", name: "SMART_ODPADY_DB", id: "6d9ab099-fa10-4245-b06b-e146b63450a9", get: getLegacyDatabase },
+  {
+    domain: "legacy",
+    name: "SMART_ODPADY_DB",
+    id: "6d9ab099-fa10-4245-b06b-e146b63450a9",
+    get: (env) => getLegacyDatabase(env, {
+      moduleName: "database-capacity-monitor",
+      purpose: "capacity and object inventory read"
+    })
+  },
   { domain: "core", name: "SMART_ODPADY_CORE", id: "7babb37a-dc19-4bbc-b4f8-3346f4e1aa23", get: getCoreDatabase },
   { domain: "messages", name: "SMART_ODPADY_MESSAGES", id: "8aeb65e8-9f53-4c93-869e-1f58484b1319", get: getMessagesDatabase },
   { domain: "audit", name: "SMART_ODPADY_AUDIT", id: "5abc8fa4-c155-4bf0-9c46-2db73d6d98e0", get: getAuditDatabase },

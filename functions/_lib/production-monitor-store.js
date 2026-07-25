@@ -95,7 +95,7 @@ async function countRows(db, sql, ...bindings) {
 
 async function latestDatabaseCapacity(env) {
   const auditDb = getAuditDatabase(env, { required: false });
-  if (!auditDb) return { status: "NEOVĚŘENO", databases: [], note: "Chybí binding DB_AUDIT." };
+  if (!auditDb) return { status: "NEOVĚŘENO", databases: [], legacyDatabase: null, note: "Chybí binding DB_AUDIT." };
   try {
     const result = await auditDb.prepare(`
       SELECT s.*
@@ -109,7 +109,13 @@ async function latestDatabaseCapacity(env) {
        AND latest.recorded_at = s.recorded_at
       ORDER BY s.usage_percent DESC
     `).all();
-    const databases = result.results || [];
+    const allDatabases = result.results || [];
+    const databases = allDatabases.filter((item) =>
+      ["core", "messages", "audit", "archive"].includes(cleanString(item.database_domain).toLowerCase())
+    );
+    const legacyDatabase = allDatabases.find((item) =>
+      cleanString(item.database_domain).toLowerCase() === "legacy"
+    ) || null;
     const levels = new Set(databases.map((item) => String(item.level || "")));
     const status = levels.has("blocked") || levels.has("critical")
       ? "ERROR"
@@ -119,13 +125,163 @@ async function latestDatabaseCapacity(env) {
     return {
       status,
       databases,
-      note: databases.length ? "" : "Kapacitní cron zatím nemá uložený výsledek."
+      legacyDatabase,
+      modularComplete: databases.length === 4,
+      recordedAt: databases.reduce((latest, item) =>
+        cleanString(item.recorded_at) > latest ? cleanString(item.recorded_at) : latest, ""),
+      note: databases.length === 4
+        ? ""
+        : `Kapacitní cron má ${databases.length} ze 4 modulárních databází.`
     };
   } catch (error) {
     return {
       status: "NEOVĚŘENO",
       databases: [],
+      legacyDatabase: null,
       note: `Kapacitu nelze načíst: ${cleanString(error?.message) || "neznámá chyba"}`
+    };
+  }
+}
+
+const TERMINAL_CRON_STATUSES = new Set([
+  "blocked",
+  "completed",
+  "dry_run",
+  "error",
+  "failed",
+  "invalidated",
+  "ok",
+  "partial",
+  "partial_error",
+  "partial_failure",
+  "processed",
+  "requires_confirmation",
+  "skipped",
+  "success"
+]);
+
+function cronItem(key, label, row, options = {}) {
+  const status = cleanString(row?.status).toLowerCase() || "missing";
+  const finishedAt = cleanString(row?.finished_at || row?.recorded_at);
+  const terminal = TERMINAL_CRON_STATUSES.has(status) && Boolean(finishedAt);
+  return {
+    key,
+    label,
+    status,
+    terminal,
+    startedAt: cleanString(row?.started_at || row?.recorded_at),
+    finishedAt,
+    message: cleanString(row?.message || row?.errors || options.message),
+    errorCode: cleanString(row?.error_code),
+    schedule: cleanString(options.schedule)
+  };
+}
+
+async function latestCronHealth(env) {
+  const auditDb = getAuditDatabase(env, { required: false });
+  if (!auditDb) {
+    return {
+      status: "NEOVĚŘENO",
+      items: [],
+      nonTerminalCount: null,
+      note: "Chybí binding DB_AUDIT."
+    };
+  }
+
+  try {
+    const [
+      runnersResult,
+      runningRunnerCount,
+      runningAutomationCount,
+      dataBoxPlus,
+      history,
+      analytics,
+      pairing,
+      orwii,
+      archiveResult,
+      capacityResult
+    ] = await Promise.all([
+      auditDb.prepare(`
+        SELECT r.*
+        FROM module_automation_runner_runs r
+        INNER JOIN (
+          SELECT runner_name, MAX(started_at) AS started_at
+          FROM module_automation_runner_runs
+          GROUP BY runner_name
+        ) latest ON latest.runner_name = r.runner_name AND latest.started_at = r.started_at
+        ORDER BY r.runner_name
+      `).all(),
+      countRows(auditDb, "SELECT COUNT(*) AS count FROM module_automation_runner_runs WHERE status = 'running' OR finished_at IS NULL"),
+      countRows(auditDb, "SELECT COUNT(*) AS count FROM module_automation_runs WHERE status = 'running' OR finished_at IS NULL"),
+      auditDb.prepare("SELECT * FROM data_box_plus_sync_runs ORDER BY started_at DESC LIMIT 1").first(),
+      auditDb.prepare("SELECT * FROM vehicle_tracking_history_runs ORDER BY started_at DESC LIMIT 1").first(),
+      auditDb.prepare("SELECT * FROM vehicle_tracking_analytics_runs ORDER BY started_at DESC LIMIT 1").first(),
+      auditDb.prepare("SELECT * FROM fleet_trip_job_pairing_runs ORDER BY started_at DESC LIMIT 1").first(),
+      auditDb.prepare("SELECT * FROM fleet_orwii_fuel_sync_runs ORDER BY started_at DESC LIMIT 1").first(),
+      auditDb.prepare(`
+        SELECT a.*
+        FROM archive_runs a
+        INNER JOIN (
+          SELECT source_table, MAX(started_at) AS started_at
+          FROM archive_runs
+          GROUP BY source_table
+        ) latest ON latest.source_table = a.source_table AND latest.started_at = a.started_at
+        ORDER BY a.source_table
+      `).all(),
+      auditDb.prepare(`
+        SELECT recorded_at, COUNT(DISTINCT database_domain) AS database_count
+        FROM database_capacity_snapshots
+        WHERE database_domain IN ('core', 'messages', 'audit', 'archive')
+        GROUP BY recorded_at
+        ORDER BY recorded_at DESC
+        LIMIT 1
+      `).first()
+    ]);
+
+    const items = [
+      ...(runnersResult.results || []).map((row) =>
+        cronItem(`runner:${cleanString(row.runner_name)}`, cleanString(row.runner_name), row, {
+          schedule: row.cron
+        })
+      ),
+      cronItem("data-box-plus-sync", "Datové schránky Plus – synchronizace", dataBoxPlus, {
+        schedule: "každou celou hodinu"
+      }),
+      cronItem("vehicle-tracking-history", "GPS historie vozidel", history, { schedule: "* * * * *" }),
+      cronItem("vehicle-tracking-analytics", "GPS analytika", analytics, { schedule: "*/5 * * * *" }),
+      cronItem("fleet-trip-job-pairing", "Párování jízd a zakázek", pairing, { schedule: "*/15 * * * *" }),
+      cronItem("orwii-fuel-sync", "ORWII palivo", orwii, { schedule: "17 * * * *" }),
+      ...(archiveResult.results || []).map((row) =>
+        cronItem(`archive:${cleanString(row.source_table)}`, `Archivace ${cleanString(row.source_table)}`, row, {
+          schedule: "*/5 * * * *"
+        })
+      ),
+      cronItem("database-capacity", "Kapacita databází", capacityResult
+        ? {
+            status: Number(capacityResult.database_count || 0) === 4 ? "completed" : "partial_failure",
+            recorded_at: capacityResult.recorded_at
+          }
+        : null, { schedule: "*/15 * * * *" })
+    ];
+    const nonTerminalCount = Number(runningRunnerCount || 0) + Number(runningAutomationCount || 0);
+    const allTerminal = nonTerminalCount === 0 && items.length > 0 && items.every((item) => item.terminal);
+    const failed = items.some((item) => ["error", "failed", "partial_error", "partial_failure"].includes(item.status));
+    return {
+      status: allTerminal ? (failed ? "WARNING" : "OK") : "ERROR",
+      items,
+      nonTerminalCount,
+      allTerminal,
+      note: allTerminal
+        ? "Všechny evidované cloudové běhy mají terminální stav."
+        : `${nonTerminalCount} evidovaných běhů nemá terminální stav.`
+    };
+  } catch (error) {
+    return {
+      status: "NEOVĚŘENO",
+      items: [],
+      nonTerminalCount: null,
+      allTerminal: false,
+      note: `Stavy cronů nelze načíst: ${cleanString(error?.message) || "neznámá chyba"}`
     };
   }
 }
@@ -142,7 +298,8 @@ export async function getSystemCheckStatus(env) {
       dataBoxPlusAttachments,
       dataBoxPlusAccounts,
       latestDataBoxPlusSync,
-      databaseCapacity
+      databaseCapacity,
+      cronHealth
     ] = await Promise.all([
       runProductionMonitor(env, { source: "read-only-status" }).catch(() => null),
       countRows(db, "SELECT COUNT(*) AS count FROM data_box_plus_rules"),
@@ -156,7 +313,8 @@ export async function getSystemCheckStatus(env) {
         ORDER BY started_at DESC
         LIMIT 1
       `).first(),
-      latestDatabaseCapacity(env)
+      latestDatabaseCapacity(env),
+      latestCronHealth(env)
     ]);
 
     return {
@@ -178,6 +336,7 @@ export async function getSystemCheckStatus(env) {
         note: "GitHub Actions kontrola není v této bezpečné fázi přidaná ani napojená."
       },
       databaseCapacity,
+      cronHealth,
       dataBox: {
         expectedDefaultMailboxId: "data-box-plus",
         messages: dataBoxPlusMessages,

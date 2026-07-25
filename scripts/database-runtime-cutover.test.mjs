@@ -3,9 +3,13 @@ import { execFileSync } from "node:child_process";
 
 import {
   CrossDatabaseQueryError,
+  LegacyDatabaseWriteError,
   databaseDomainForSql,
+  getLegacyDatabase,
+  legacySqlAccess,
   getModuleDatabase
 } from "../functions/_lib/databases.js";
+import { readFileSync } from "node:fs";
 
 class Statement {
   constructor(database, sql, values = []) {
@@ -23,6 +27,21 @@ class Statement {
   async run() {
     this.database.calls.push({ type: "run", sql: this.sql, values: this.values });
     return { success: true, meta: { changes: 1 } };
+  }
+
+  async first() {
+    this.database.calls.push({ type: "first", sql: this.sql, values: this.values });
+    return { count: 1 };
+  }
+
+  async all() {
+    this.database.calls.push({ type: "all", sql: this.sql, values: this.values });
+    return { results: [{ count: 1 }] };
+  }
+
+  async raw() {
+    this.database.calls.push({ type: "raw", sql: this.sql, values: this.values });
+    return [[1]];
   }
 }
 
@@ -81,6 +100,58 @@ await assert.rejects(() => scoped.batch([coreStatement, messageStatement]), Cros
 assert.equal(core.calls.filter((call) => call.type === "batch").length, 0);
 assert.equal(messages.calls.filter((call) => call.type === "batch").length, 0);
 
+assert.equal(legacySqlAccess("SELECT * FROM users").allowed, true);
+assert.equal(legacySqlAccess("WITH rows AS (SELECT 1) SELECT * FROM rows").allowed, true);
+assert.equal(legacySqlAccess("PRAGMA page_count").allowed, true);
+assert.equal(legacySqlAccess("WITH rows AS (SELECT 1) UPDATE users SET active = 0").allowed, false);
+assert.equal(legacySqlAccess("VACUUM").allowed, false);
+
+const legacy = new D1("legacy");
+const legacyAudit = new D1("legacy-audit");
+const legacyReadOnly = getLegacyDatabase({
+  SMART_ODPADY_DB: legacy,
+  DB_AUDIT: legacyAudit
+}, {
+  moduleName: "legacy-test",
+  purpose: "read-only proof"
+});
+assert.deepEqual(await legacyReadOnly.prepare("SELECT COUNT(*) AS count FROM users").first(), { count: 1 });
+assert.equal(legacy.calls.filter((call) => call.type === "first").length, 1);
+assert.equal(legacyAudit.calls.filter((call) => call.type === "run").length, 1);
+
+await assert.rejects(
+  () => legacyReadOnly.prepare("INSERT INTO users (id) VALUES (?)").bind("forbidden").run(),
+  LegacyDatabaseWriteError
+);
+assert.equal(legacy.calls.filter((call) => call.type === "run").length, 0);
+assert.equal(legacyAudit.calls.filter((call) => call.type === "run").length, 2);
+await assert.rejects(
+  () => legacyReadOnly.exec("SELECT * FROM users"),
+  LegacyDatabaseWriteError
+);
+assert.equal(legacyAudit.calls.filter((call) => call.type === "run").length, 3);
+
+const failingAudit = new D1("failing-audit");
+failingAudit.prepare = (sql) => {
+  const statement = new Statement(failingAudit, sql);
+  statement.run = async () => {
+    throw new Error("audit unavailable");
+  };
+  return statement;
+};
+const auditFailClosed = getLegacyDatabase({
+  SMART_ODPADY_DB: legacy,
+  DB_AUDIT: failingAudit
+}, {
+  moduleName: "legacy-audit-outage-test",
+  purpose: "fail closed proof"
+});
+await assert.rejects(
+  () => auditFailClosed.prepare("SELECT COUNT(*) AS count FROM users").first(),
+  /audit unavailable/
+);
+assert.equal(legacy.calls.filter((call) => call.type === "first").length, 1);
+
 const isolatedCore = getModuleDatabase({ DB_CORE: core }, {
   moduleName: "core-outage-isolation",
   allowedDomains: ["core"],
@@ -111,5 +182,17 @@ assert.deepEqual(legacyFiles, [
   "functions/_lib/databases.js",
   "workers/database-capacity-runner.js"
 ].sort());
+
+const legacyBindingConfigs = [
+  "wrangler.toml",
+  "wrangler.module-automation-runner.toml",
+  "wrangler.data-box-plus-sync-runner.toml",
+  "wrangler.data-box-automation-runner.toml",
+  "wrangler.orwii-fuel-sync-runner.toml",
+  "wrangler.self-repair-ui-interaction-runner.toml"
+].filter((file) => readFileSync(file, "utf8").includes('binding = "SMART_ODPADY_DB"'));
+assert.deepEqual(legacyBindingConfigs, []);
+assert.match(readFileSync("wrangler.database-capacity-runner.toml", "utf8"), /binding = "SMART_ODPADY_DB"/);
+assert.match(readFileSync("wrangler.database-archive-runner.toml", "utf8"), /binding = "SMART_ODPADY_DB"/);
 
 console.log("database runtime cutover tests: ok");
