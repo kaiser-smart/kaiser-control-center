@@ -5308,6 +5308,102 @@ function employeeFullName(employee) {
     "Zaměstnanec";
 }
 
+const RCS_TEST_VOCATIVE_NAMES = new Map([
+  ["ales", "Aleši"],
+  ["eva", "Evo"],
+  ["jan", "Jane"],
+  ["jana", "Jano"],
+  ["jarka", "Jarko"],
+  ["jarmila", "Jarmilo"],
+  ["jiri", "Jiří"],
+  ["karel", "Karle"],
+  ["lenka", "Lenko"],
+  ["lucie", "Lucie"],
+  ["marek", "Marku"],
+  ["martin", "Martine"],
+  ["pavel", "Pavle"],
+  ["petr", "Petře"],
+  ["petra", "Petro"],
+  ["radek", "Radku"],
+  ["radim", "Radime"],
+  ["roman", "Romane"],
+  ["tomas", "Tomáši"]
+]);
+
+function rcsTestNormalizePhone(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const compact = raw.replace(/[^\d+]/g, "");
+  if (compact.startsWith("+")) return compact;
+  if (compact.startsWith("00")) return `+${compact.slice(2)}`;
+  const digits = compact.replace(/\D/g, "");
+  return digits.length === 9 ? `+420${digits}` : digits ? `+${digits}` : "";
+}
+
+function rcsTestPhoneKey(value) {
+  return rcsTestNormalizePhone(value).replace(/\D/g, "");
+}
+
+function rcsTestNormalizeNameKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function rcsTestFirstName(value) {
+  const cleaned = String(value || "").trim();
+  if (!cleaned || cleaned.includes("@")) return "";
+  return cleaned.split(/\s+/)[0] || "";
+}
+
+function rcsTestVocativeFromName(value) {
+  const firstName = rcsTestFirstName(value);
+  if (!firstName) return "";
+  const mapped = RCS_TEST_VOCATIVE_NAMES.get(rcsTestNormalizeNameKey(firstName));
+  if (mapped) return mapped;
+  if (/a$/i.test(firstName)) return `${firstName.slice(0, -1)}o`;
+  if (/[bcčdďfghjklmnňpqrřsštťvwxzž]$/i.test(firstName)) return `${firstName}e`;
+  return firstName;
+}
+
+function rcsTestRecipientCandidates() {
+  const candidates = [];
+  const addCandidate = (person, source) => {
+    const phone = rcsTestNormalizePhone(person?.phone || person?.personalPhone || person?.mobilePhone || "");
+    const phoneKey = rcsTestPhoneKey(phone);
+    if (!phoneKey) return;
+    const displayName = employeeFullName(person);
+    const preferredVocative = String(person?.preferredVocative || person?.vocative || "").trim();
+    const firstName = preferredVocative || rcsTestVocativeFromName(person?.firstName || displayName || person?.name);
+    if (!firstName) return;
+    candidates.push({
+      phone,
+      phoneKey,
+      firstName,
+      displayName,
+      source
+    });
+  };
+
+  adminUsersState.users.forEach((user) => addCandidate(user, "Uživatelé"));
+  employeeCardState.employees.forEach((employee) => addCandidate(employee, "Zaměstnanci"));
+
+  const unique = new Map();
+  candidates.forEach((candidate) => {
+    const key = `${candidate.phoneKey}:${candidate.firstName}`;
+    if (!unique.has(key)) unique.set(key, candidate);
+  });
+  return [...unique.values()].sort((a, b) => a.displayName.localeCompare(b.displayName, "cs"));
+}
+
+function rcsTestRecipientForPhone(phone) {
+  const phoneKey = rcsTestPhoneKey(phone);
+  if (!phoneKey) return null;
+  return rcsTestRecipientCandidates().find((candidate) => candidate.phoneKey === phoneKey) || null;
+}
+
 function employeeNameLink(employeeId, employeeName) {
   return `
     <a class="absence-employee-link" href="${routeHref(employeeCardRoute(employeeId))}" data-link>
@@ -41780,6 +41876,7 @@ function rcsTemplateCard(template = {}) {
 
 function rcsTemplateTestForm() {
   const readyTemplates = customerMessagingState.rcsTemplates.filter((template) => template.enabled);
+  const recipients = rcsTestRecipientCandidates();
   if (!readyTemplates.length) {
     return '<p class="notification-empty">Test bude dostupný po úspěšné synchronizaci alespoň jedné šablony.</p>';
   }
@@ -41793,7 +41890,18 @@ function rcsTemplateTestForm() {
       </label>
       <label>
         <span>Telefon oprávněného administrátora</span>
-        <input name="recipient" value="" placeholder="+420..." autocomplete="tel" required />
+        <input name="recipient" value="" placeholder="+420..." autocomplete="tel" list="rcs-test-recipient-list" required />
+      </label>
+      ${recipients.length ? `
+        <datalist id="rcs-test-recipient-list">
+          ${recipients.map((recipient) => `
+            <option value="${escapeHtml(recipient.phone)}">${escapeHtml(`${recipient.firstName} · ${recipient.displayName} · ${recipient.source}`)}</option>
+          `).join("")}
+        </datalist>
+      ` : ""}
+      <label>
+        <span>Oslovení pro test</span>
+        <input name="firstName" value="" placeholder="Petře / Jarko" autocomplete="off" />
       </label>
       <button class="primary-action" type="submit" ${customerMessagingState.sendingTest ? "disabled" : ""}>
         ${customerMessagingState.sendingTest ? "Odesílám..." : "Odeslat jednu testovací kartu"}
@@ -51816,16 +51924,31 @@ async function synchronizeRcsTemplateCenter() {
 
 async function submitRcsTemplateTest(form) {
   if (customerMessagingState.sendingTest) return;
+  if (!adminUsersState.loaded) await loadAdminUsers();
+  if (!employeeCardState.employeesLoaded) await loadEmployeeList({ renderAfter: false });
   const templateKey = form.elements.templateKey?.value || "";
   const recipient = form.elements.recipient?.value.trim() || "";
+  const directoryRecipient = rcsTestRecipientForPhone(recipient);
+  const manualFirstName = rcsTestVocativeFromName(form.elements.firstName?.value || "");
+  const firstName = directoryRecipient?.firstName || manualFirstName;
   const template = customerMessagingState.rcsTemplates.find((item) => item.key === templateKey);
   if (!template?.enabled) {
     customerMessagingState.rcsError = "Vybraná šablona není připravená.";
     render();
     return;
   }
+  if (!rcsTestPhoneKey(recipient)) {
+    customerMessagingState.rcsError = "Zadejte platné telefonní číslo pro testovací RCS.";
+    render();
+    return;
+  }
+  if (!firstName) {
+    customerMessagingState.rcsError = "Telefon není dohledaný v Uživatelích/Zaměstnancích a chybí oslovení pro test. Test nebyl odeslaný.";
+    render();
+    return;
+  }
   const confirmed = window.confirm(
-    `Odeslat jednu skutečnou testovací kartu „${template.label}“ na zadaný administrátorský telefon?`
+    `Odeslat jednu skutečnou testovací kartu „${template.label}“ na ${rcsTestNormalizePhone(recipient)} s oslovením „Ahoj ${firstName}“?`
   );
   if (!confirmed) return;
   customerMessagingState.sendingTest = true;
@@ -51837,8 +51960,11 @@ async function submitRcsTemplateTest(form) {
       method: "POST",
       body: JSON.stringify({
         templateKey,
-        recipient,
-        variables: template.sampleVariables,
+        recipient: rcsTestNormalizePhone(recipient),
+        variables: {
+          ...template.sampleVariables,
+          firstName
+        },
         eventId: `admin-test:${templateKey}:${new Date().toISOString()}`
       })
     });

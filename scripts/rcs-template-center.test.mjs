@@ -284,7 +284,9 @@ assert.match(appSource, /Body: <strong>.*\/ 140 znaků/);
 assert.match(appSource, /Příliš dlouhé/);
 assert.match(appSource, /template\.actionStatus === "missing"/);
 assert.match(appSource, /function settingsManagementSection[\s\S]*rcsTemplateCenterSection\(true\)/);
-assert.match(appSource, /templateKey,\s*recipient,\s*variables: template\.sampleVariables,\s*eventId:/s);
+assert.match(appSource, /rcsTestRecipientForPhone\(recipient\)/);
+assert.match(appSource, /Telefon není dohledaný v Uživatelích\/Zaměstnancích/);
+assert.match(appSource, /variables:\s*\{\s*\.\.\.template\.sampleVariables,\s*firstName\s*\}/s);
 assert.doesNotMatch(appSource, /value="\+420604542004"/);
 
 const migration = readFileSync(new URL("../migrations/0062_create_rcs_template_center.sql", import.meta.url), "utf8");
