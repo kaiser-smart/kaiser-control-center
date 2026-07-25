@@ -191,8 +191,7 @@ async function latestCronHealth(env) {
   try {
     const [
       runnersResult,
-      runningRunnerCount,
-      runningAutomationCount,
+      nonTerminalCounts,
       dataBoxPlus,
       history,
       analytics,
@@ -211,8 +210,17 @@ async function latestCronHealth(env) {
         ) latest ON latest.runner_name = r.runner_name AND latest.started_at = r.started_at
         ORDER BY r.runner_name
       `).all(),
-      countRows(auditDb, "SELECT COUNT(*) AS count FROM module_automation_runner_runs WHERE status = 'running' OR finished_at IS NULL"),
-      countRows(auditDb, "SELECT COUNT(*) AS count FROM module_automation_runs WHERE status = 'running' OR finished_at IS NULL"),
+      auditDb.prepare(`
+        SELECT
+          (SELECT COUNT(*) FROM module_automation_runner_runs WHERE status = 'running' OR finished_at IS NULL) AS module_runners,
+          (SELECT COUNT(*) FROM module_automation_runs WHERE status = 'running' OR finished_at IS NULL) AS module_automations,
+          (SELECT COUNT(*) FROM data_box_plus_sync_runs WHERE status = 'running' OR finished_at IS NULL) AS data_box_plus,
+          (SELECT COUNT(*) FROM vehicle_tracking_history_runs WHERE status = 'running' OR finished_at IS NULL) AS vehicle_history,
+          (SELECT COUNT(*) FROM vehicle_tracking_analytics_runs WHERE status = 'running' OR finished_at IS NULL) AS vehicle_analytics,
+          (SELECT COUNT(*) FROM fleet_trip_job_pairing_runs WHERE status = 'running' OR finished_at IS NULL) AS trip_pairing,
+          (SELECT COUNT(*) FROM fleet_orwii_fuel_sync_runs WHERE status = 'running' OR finished_at IS NULL) AS orwii,
+          (SELECT COUNT(*) FROM archive_runs WHERE status = 'running' OR finished_at IS NULL) AS archives
+      `).first(),
       auditDb.prepare("SELECT * FROM data_box_plus_sync_runs ORDER BY started_at DESC LIMIT 1").first(),
       auditDb.prepare("SELECT * FROM vehicle_tracking_history_runs ORDER BY started_at DESC LIMIT 1").first(),
       auditDb.prepare("SELECT * FROM vehicle_tracking_analytics_runs ORDER BY started_at DESC LIMIT 1").first(),
@@ -263,13 +271,25 @@ async function latestCronHealth(env) {
           }
         : null, { schedule: "*/15 * * * *" })
     ];
-    const nonTerminalCount = Number(runningRunnerCount || 0) + Number(runningAutomationCount || 0);
+    const nonTerminalBySource = {
+      moduleRunners: Number(nonTerminalCounts?.module_runners || 0),
+      moduleAutomations: Number(nonTerminalCounts?.module_automations || 0),
+      dataBoxPlus: Number(nonTerminalCounts?.data_box_plus || 0),
+      vehicleHistory: Number(nonTerminalCounts?.vehicle_history || 0),
+      vehicleAnalytics: Number(nonTerminalCounts?.vehicle_analytics || 0),
+      tripPairing: Number(nonTerminalCounts?.trip_pairing || 0),
+      orwii: Number(nonTerminalCounts?.orwii || 0),
+      archives: Number(nonTerminalCounts?.archives || 0)
+    };
+    const nonTerminalCount = Object.values(nonTerminalBySource)
+      .reduce((sum, count) => sum + count, 0);
     const allTerminal = nonTerminalCount === 0 && items.length > 0 && items.every((item) => item.terminal);
     const failed = items.some((item) => ["error", "failed", "partial_error", "partial_failure"].includes(item.status));
     return {
       status: allTerminal ? (failed ? "WARNING" : "OK") : "ERROR",
       items,
       nonTerminalCount,
+      nonTerminalBySource,
       allTerminal,
       note: allTerminal
         ? "Všechny evidované cloudové běhy mají terminální stav."
