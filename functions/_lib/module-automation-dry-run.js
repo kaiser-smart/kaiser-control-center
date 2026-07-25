@@ -1,3 +1,5 @@
+import { getCoreDatabase } from "./databases.js";
+
 const DB_BINDING = "SMART_ODPADY_DB";
 const DEFAULT_DATABASE_NAME = "smart-odpady";
 const DEFAULT_MODULE_KEY = "absence";
@@ -243,7 +245,7 @@ async function countApprovalReminderCandidates(db, now) {
   return Number(row?.count || 0);
 }
 
-async function evaluateRule(db, rule, now) {
+async function evaluateRule(db, coreDb, rule, now) {
   if (rule.id === "absence-medical-exam-due-soon") {
     const count = await countMedicalExams(db, "due_soon");
     return `Dry-run: ${count} kandidátu na upozornění do 60 dnů. E-mail/SMS neodesláno.`;
@@ -255,7 +257,7 @@ async function evaluateRule(db, rule, now) {
   }
 
   if (rule.id === "absence-approval-reminder-24h") {
-    const count = await countApprovalReminderCandidates(db, now);
+    const count = await countApprovalReminderCandidates(coreDb, now);
     return `Dry-run: ${count} žádostí čeká déle než 24 hodin. E-mail/SMS neodesláno.`;
   }
 
@@ -417,7 +419,7 @@ async function runRuleDryRun(db, rule, context) {
   }
 
   try {
-    const message = await evaluateRule(db, rule, context.now);
+    const message = await evaluateRule(db, context.coreDb, rule, context.now);
     const finishedAt = new Date().toISOString();
     const run = {
       id: randomId("module-automation-run"),
@@ -486,6 +488,7 @@ async function runRuleDryRun(db, rule, context) {
 
 export async function runModuleAutomationDryRun(env, options = {}) {
   const db = database(env);
+  const coreDb = getCoreDatabase(env);
   const moduleKey = cleanString(options.moduleKey || env?.MODULE_AUTOMATION_MODULE_KEY || DEFAULT_MODULE_KEY);
   const timeZone = cleanString(options.timeZone || env?.MODULE_AUTOMATION_TIME_ZONE || DEFAULT_TIME_ZONE);
   const databaseName = cleanString(options.databaseName || env?.MODULE_AUTOMATION_DATABASE_NAME || DEFAULT_DATABASE_NAME);
@@ -525,6 +528,7 @@ export async function runModuleAutomationDryRun(env, options = {}) {
 
     for (const rule of rules) {
       results.push(await runRuleDryRun(db, rule, {
+        coreDb,
         now,
         timeZone,
         triggeredBy,
