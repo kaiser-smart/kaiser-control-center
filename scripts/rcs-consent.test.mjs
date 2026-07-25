@@ -102,7 +102,7 @@ assert.match(KAISER_RCS_CONSENT.text, /STOP/);
   const database = new FakeD1();
   const response = await onRequestPost({
     request: request({ phone: "+420777123456", operationalRcsConsent: true }, { origin: "https://example.com", ip: "203.0.113.11" }),
-    env: { SMART_ODPADY_DB: database }
+    env: { DB_MESSAGES: database }
   });
   assert.equal(response.status, 403);
   assert.equal(database.consents.length, 0);
@@ -112,7 +112,7 @@ assert.match(KAISER_RCS_CONSENT.text, /STOP/);
   const database = new FakeD1();
   const response = await onRequestPost({
     request: request({ phone: "+420777123456", operationalRcsConsent: false }, { ip: "203.0.113.12" }),
-    env: { SMART_ODPADY_DB: database }
+    env: { DB_MESSAGES: database }
   });
   assert.equal(response.status, 400);
   assert.match((await payload(response)).error, /samostatný souhlas/);
@@ -123,7 +123,7 @@ assert.match(KAISER_RCS_CONSENT.text, /STOP/);
   const database = new FakeD1();
   const response = await onRequestPost({
     request: request({ phone: "123", operationalRcsConsent: true }, { ip: "203.0.113.13" }),
-    env: { SMART_ODPADY_DB: database }
+    env: { DB_MESSAGES: database }
   });
   assert.equal(response.status, 400);
   assert.match((await payload(response)).error, /české telefonní číslo/);
@@ -133,7 +133,7 @@ assert.match(KAISER_RCS_CONSENT.text, /STOP/);
   const database = new FakeD1();
   const response = await onRequestPost({
     request: request({ phone: "+420777123456", operationalRcsConsent: true, website: "robot" }, { ip: "203.0.113.14" }),
-    env: { SMART_ODPADY_DB: database }
+    env: { DB_MESSAGES: database }
   });
   assert.equal(response.status, 200);
   assert.equal(database.consents.length, 0);
@@ -144,7 +144,7 @@ assert.match(KAISER_RCS_CONSENT.text, /STOP/);
   database.optOuts.add("+420777123456");
   const firstResponse = await onRequestPost({
     request: request({ phone: "777 123 456", operationalRcsConsent: true }, { ip: "203.0.113.15" }),
-    env: { SMART_ODPADY_DB: database }
+    env: { DB_MESSAGES: database }
   });
   assert.equal(firstResponse.status, 201);
   const firstPayload = await payload(firstResponse);
@@ -156,7 +156,7 @@ assert.match(KAISER_RCS_CONSENT.text, /STOP/);
 
   const duplicateResponse = await onRequestPost({
     request: request({ phone: "+420777123456", operationalRcsConsent: true }, { ip: "203.0.113.16" }),
-    env: { SMART_ODPADY_DB: database }
+    env: { DB_MESSAGES: database }
   });
   assert.equal(duplicateResponse.status, 200);
   assert.equal((await payload(duplicateResponse)).duplicate, true);

@@ -11,6 +11,7 @@ AUTH_MODE = "twilio"
 AUTH_SESSION_TTL_SECONDS = "43200"
 COLLECTION_ROUTES_INCIDENT_DISPATCH_MODE = "live-internal-pilot"
 ELEVENLABS_AGENT_ID_MAREK = "agent_2601kvtqkte1fdaacwsjh730yjhm"
+KSO_CUSTOMER_MESSAGING_MODE = "off"
 TWILIO_MESSAGING_SERVICE_SID = "MG3709ede950d2b5ebc7b23fe8d9d004ff"
 VITE_ELEVENLABS_AGENT_ID_MAREK = "agent_2601kvtqkte1fdaacwsjh730yjhm"
 VITE_ELEVENLABS_AGENT_ID_SARLOTA = "agent_9401kvtq4zg0e27t99a1bkc9ft01"
@@ -22,6 +23,26 @@ binding = "SMART_ODPADY_DB"
 database_name = "SMART_ODPADY_DB"
 
 [[env.production.d1_databases]]
+database_id = "7babb37a-dc19-4bbc-b4f8-3346f4e1aa23"
+binding = "DB_CORE"
+database_name = "SMART_ODPADY_CORE"
+
+[[env.production.d1_databases]]
+database_id = "8aeb65e8-9f53-4c93-869e-1f58484b1319"
+binding = "DB_MESSAGES"
+database_name = "SMART_ODPADY_MESSAGES"
+
+[[env.production.d1_databases]]
+database_id = "5abc8fa4-c155-4bf0-9c46-2db73d6d98e0"
+binding = "DB_AUDIT"
+database_name = "SMART_ODPADY_AUDIT"
+
+[[env.production.d1_databases]]
+database_id = "b10566be-ebb1-414c-beab-eac03f1a909b"
+binding = "DB_ARCHIVE"
+database_name = "SMART_ODPADY_ARCHIVE"
+
+[[env.production.d1_databases]]
 database_id = "66abaa86-4d34-4f04-9d12-515c365d43fb"
 binding = "COLLECTION_ROUTES_TEST_DB"
 database_name = "smart-odpady-routes-test"
@@ -29,3 +50,7 @@ database_name = "smart-odpady-routes-test"
 [[env.production.r2_buckets]]
 bucket_name = "smart-odpady-documents"
 binding = "SMART_ODPADY_DOCUMENTS"
+
+[[env.production.r2_buckets]]
+bucket_name = "smart-odpady-archive"
+binding = "R2_ARCHIVE"

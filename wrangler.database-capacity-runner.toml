@@ -1,14 +1,7 @@
-name = "kaiser-module-automation-runner"
-main = "workers/module-automation-runner.js"
+name = "kaiser-database-capacity-runner"
+main = "workers/database-capacity-runner.js"
 compatibility_date = "2026-06-26"
-workers_dev = false
-
-[vars]
-MODULE_AUTOMATION_MODULE_KEY = "absence"
-MODULE_AUTOMATION_TIME_ZONE = "Europe/Prague"
-MODULE_AUTOMATION_MODE = "dry-run"
-APP_BASE_URL = "https://smart-odpady.ai"
-D1_CAPACITY_BLOCK_BULK_WRITES = "true"
+workers_dev = true
 
 [[d1_databases]]
 binding = "SMART_ODPADY_DB"
@@ -40,4 +33,4 @@ binding = "R2_ARCHIVE"
 bucket_name = "smart-odpady-archive"
 
 [triggers]
-crons = ["*/5 * * * *", "*/15 * * * *", "15 3 * * *", "7 * * * *"]
+crons = ["*/15 * * * *"]

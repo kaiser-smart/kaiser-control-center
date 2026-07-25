@@ -2662,7 +2662,7 @@ export async function getDataBoxPlusMessage(env, id, options = {}) {
       .bind(messageId)
       .all();
     const notifications = options.includeNotifications
-      ? await listDataBoxRcsNotifications(db, messageId)
+      ? await listDataBoxRcsNotifications(env, messageId)
       : undefined;
     return rowToMessage(
       row,

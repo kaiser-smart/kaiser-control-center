@@ -42,6 +42,10 @@ function database(env) {
   return db;
 }
 
+function bulkWritesBlocked(env) {
+  return cleanString(env?.D1_CAPACITY_BLOCK_BULK_WRITES).toLowerCase() === "true";
+}
+
 function slotIso(now) {
   return new Date(Math.floor(now.getTime() / SLOT_MS) * SLOT_MS).toISOString();
 }
@@ -245,6 +249,23 @@ export async function runCollectionRoutesSnapshotAutomation(env, options = {}) {
   const key = dedupeKey(now);
   const cron = cleanString(options.cron || "*/15 * * * *");
   const triggeredBy = cleanString(options.triggeredBy || "cloudflare-cron");
+
+  if (bulkWritesBlocked(env)) {
+    return {
+      mode: "read-only-snapshot",
+      runner: SNAPSHOT_RUNNER_NAME,
+      runnerRunId: "",
+      moduleKey: MODULE_KEY,
+      status: "blocked",
+      message: "Vistos snapshot je dočasně zablokovaný kapacitní pojistkou D1. Poslední platný snapshot zůstává zachovaný.",
+      dryRunCount: 0,
+      skippedCount: 1,
+      errorCount: 0,
+      cron,
+      dedupeKey: key,
+      capacityGuard: true
+    };
+  }
 
   await insertRunnerRun(db, {
     id: runnerRunId,

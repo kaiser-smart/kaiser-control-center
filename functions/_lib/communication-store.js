@@ -1,4 +1,4 @@
-const DB_BINDING = "SMART_ODPADY_DB";
+import { getMessagesDatabase } from "./databases.js";
 const OFFICIAL_FROM_EMAIL = "sarlota@kaiserservis.cz";
 const OFFICIAL_FROM_NAME = "Šarlota Kaiser";
 const DEFAULT_PROVIDER = "SendGrid";
@@ -14,15 +14,15 @@ export class CommunicationStoreError extends Error {
 }
 
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
-  if (!db && required) {
+  try {
+    return getMessagesDatabase(env, { required });
+  } catch {
     throw new CommunicationStoreError(
-      "Databáze komunikační infrastruktury není nastavená. Chybí Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze komunikační infrastruktury není nastavená. Chybí Cloudflare D1 binding DB_MESSAGES.",
       503,
       "communication_database_missing"
     );
   }
-  return db;
 }
 
 function cleanString(value) {

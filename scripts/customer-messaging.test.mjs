@@ -194,7 +194,7 @@ class FakeD1 {
 
 function env(overrides = {}) {
   return {
-    SMART_ODPADY_DB: new FakeD1(),
+    DB_MESSAGES: new FakeD1(),
     TWILIO_ACCOUNT_SID: "AC00000000000000000000000000000000",
     TWILIO_AUTH_TOKEN: "secret",
     TWILIO_MESSAGING_SERVICE_SID: "MG00000000000000000000000000000000",
@@ -250,9 +250,9 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
   const result = await sendCustomerMessage(testEnv, validInput());
   assert.equal(result.status, "pending");
   assert.equal(result.testMode, true);
-  assert.equal(testEnv.SMART_ODPADY_DB.logs.length, 1);
-  assert.equal(testEnv.SMART_ODPADY_DB.logs[0].phone, "+420777123456");
-  assert.match(testEnv.SMART_ODPADY_DB.logs[0].message_body, /Pro odhlášení odpovězte STOP\./);
+  assert.equal(testEnv.DB_MESSAGES.logs.length, 1);
+  assert.equal(testEnv.DB_MESSAGES.logs[0].phone, "+420777123456");
+  assert.match(testEnv.DB_MESSAGES.logs[0].message_body, /Pro odhlášení odpovězte STOP\./);
 }
 
 {
@@ -262,7 +262,7 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
     Body: "STOP SMS",
     MessageSid: "SMINBOUND"
   });
-  assert.equal(testEnv.SMART_ODPADY_DB.optOuts.length, 1);
+  assert.equal(testEnv.DB_MESSAGES.optOuts.length, 1);
   const result = await sendCustomerMessage(testEnv, validInput({ phone: "+420777123456" }));
   assert.equal(result.status, "opted_out");
   assert.equal(result.sent, false);
@@ -293,7 +293,7 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
       ChannelPrefix: "rcs"
     });
     assert.equal(callback.matched, true);
-    assert.equal(testEnv.SMART_ODPADY_DB.logs[0].status, "delivered");
+    assert.equal(testEnv.DB_MESSAGES.logs[0].status, "delivered");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -320,12 +320,12 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
     assert.equal(result.status, "sent");
     assert.equal(result.providerStatus, "accepted");
     assert.equal(result.channel, "rcs_sms_auto_fallback");
-    assert.equal(testEnv.SMART_ODPADY_DB.logs[0].template_key, "absence_approved");
-    assert.equal(testEnv.SMART_ODPADY_DB.logs[0].used_channel, "rcs_sms_auto_fallback");
-    assert.match(testEnv.SMART_ODPADY_DB.logs[0].message_body, /Pro odhlášení odpovězte STOP\./);
-    assert.equal(testEnv.SMART_ODPADY_DB.notifications[0].type, "absence_approved_rcs");
-    assert.equal(testEnv.SMART_ODPADY_DB.notifications[0].channel, "rcs_sms_auto_fallback");
-    assert.equal(testEnv.SMART_ODPADY_DB.notifications[0].status, "sent");
+    assert.equal(testEnv.DB_MESSAGES.logs[0].template_key, "absence_approved");
+    assert.equal(testEnv.DB_MESSAGES.logs[0].used_channel, "rcs_sms_auto_fallback");
+    assert.match(testEnv.DB_MESSAGES.logs[0].message_body, /Pro odhlášení odpovězte STOP\./);
+    assert.equal(testEnv.DB_MESSAGES.notifications[0].type, "absence_approved_rcs");
+    assert.equal(testEnv.DB_MESSAGES.notifications[0].channel, "rcs_sms_auto_fallback");
+    assert.equal(testEnv.DB_MESSAGES.notifications[0].status, "sent");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -419,7 +419,7 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
   const testEnv = env({ KSO_CUSTOMER_MESSAGING_MODE: "live" });
   const originalFetch = globalThis.fetch;
   const originalConsoleError = console.error;
-  const database = testEnv.SMART_ODPADY_DB;
+  const database = testEnv.DB_MESSAGES;
   const originalRun = database.run.bind(database);
   database.run = (sql, bindings) => {
     if (sql.includes("UPDATE customer_message_log")) throw new Error("audit unavailable");

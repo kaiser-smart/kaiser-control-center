@@ -1,4 +1,4 @@
-const DB_BINDING = "SMART_ODPADY_DB";
+import { getMessagesDatabase } from "./databases.js";
 
 export class CustomerMessageConsentStoreError extends Error {
   constructor(message, status = 400, code = "customer_message_consent_store_error") {
@@ -14,15 +14,15 @@ function cleanString(value) {
 }
 
 function database(env) {
-  const db = env?.[DB_BINDING] || null;
-  if (!db) {
+  try {
+    return getMessagesDatabase(env);
+  } catch {
     throw new CustomerMessageConsentStoreError(
-      "Databáze RCS souhlasů není nastavená.",
+      "Databáze RCS souhlasů není nastavená. Chybí DB_MESSAGES.",
       503,
       "customer_message_consent_database_missing"
     );
   }
-  return db;
 }
 
 function safeJson(value) {

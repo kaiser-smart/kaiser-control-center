@@ -1,6 +1,6 @@
 import { isFullAccessRole, normalizeRole } from "../../src/permissions.js";
+import { getMessagesDatabase } from "./databases.js";
 
-const NOTIFICATION_DB_BINDING = "SMART_ODPADY_DB";
 const CHANNELS = new Set(["email", "sms", "rcs_sms_auto_fallback"]);
 const STATUSES = new Set(["sent", "not_sent", "pending", "failed"]);
 const TYPES = new Set([
@@ -35,17 +35,15 @@ export class NotificationsStoreError extends Error {
 }
 
 function notificationsDatabase(env, required = false) {
-  const db = env?.[NOTIFICATION_DB_BINDING] || null;
-
-  if (!db && required) {
+  try {
+    return getMessagesDatabase(env, { required });
+  } catch {
     throw new NotificationsStoreError(
-      "Databáze notifikací není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze notifikací není nastavená. Přidejte Cloudflare D1 binding DB_MESSAGES.",
       503,
       "notifications_database_missing"
     );
   }
-
-  return db;
 }
 
 async function notificationLogColumns(db) {
