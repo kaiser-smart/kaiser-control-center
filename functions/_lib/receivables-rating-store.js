@@ -1,10 +1,10 @@
+import { getModuleDatabase } from "./databases.js";
 import {
   PAYMENT_RATING_CALCULATION_VERSION,
   calculateCustomerPaymentRating
 } from "./receivables-rating-engine.js";
 import { matchReceivablePayments } from "./receivables-payment-matching.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 
 export class ReceivablesRatingStoreError extends Error {
   constructor(message, status = 400, code = "receivables_rating_store_error") {
@@ -46,7 +46,7 @@ function safeJson(value, fallback) {
 }
 
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "receivables-rating-store", allowedDomains: ["core","messages","audit"], defaultDomain: "core", required: false });
   if (!db && required) {
     throw new ReceivablesRatingStoreError(
       "Databáze Pohledávek není nastavená.",

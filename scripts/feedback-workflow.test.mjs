@@ -71,6 +71,8 @@ class R2Bucket {
 }
 
 const sqlite = new DatabaseSync(":memory:");
+sqlite.exec(readFileSync(new URL("../migrations/modular/core/0001_core_foundation.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../migrations/modular/audit/0001_audit_foundation.sql", import.meta.url), "utf8"));
 for (const migration of [
   "0007_create_module_feedback.sql",
   "0015_create_module_rules.sql",
@@ -82,8 +84,13 @@ for (const migration of [
   sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), "utf8"));
 }
 
+const d1 = new D1Database(sqlite);
 const env = {
-  SMART_ODPADY_DB: new D1Database(sqlite),
+  SMART_ODPADY_DB: d1,
+  DB_CORE: d1,
+  DB_MESSAGES: d1,
+  DB_AUDIT: d1,
+  DB_ARCHIVE: d1,
   SMART_ODPADY_DOCUMENTS: new R2Bucket()
 };
 const reporter = {

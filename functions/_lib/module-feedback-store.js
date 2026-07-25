@@ -1,6 +1,6 @@
+import { getModuleDatabase } from "./databases.js";
 import { hasPermission } from "../../src/permissions.js";
 
-const FEEDBACK_DB_BINDING = "SMART_ODPADY_DB";
 const PRIORITIES = new Set(["Nízká", "Běžná", "Důležitá", "Kritická"]);
 const STATUSES = new Set(["Nová", "Převzato", "V řešení", "Hotovo", "Zamítnuto", "Archiv"]);
 const FINISHED_STATUSES = new Set(["Hotovo", "Zamítnuto", "Archiv"]);
@@ -25,11 +25,11 @@ export class ModuleFeedbackStoreError extends Error {
 }
 
 function feedbackDatabase(env, required = false) {
-  const db = env?.[FEEDBACK_DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "module-feedback-store", allowedDomains: ["core","archive"], defaultDomain: "core", required: false });
 
   if (!db && required) {
     throw new ModuleFeedbackStoreError(
-      "Databáze připomínek není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze připomínek není nastavená. Přidejte Cloudflare D1 binding DB_CORE / DB_ARCHIVE.",
       503,
       "module_feedback_database_missing"
     );
@@ -133,8 +133,7 @@ export function canCreateCentralModuleFeedback(user) {
 
 export async function listModuleFeedback(env, currentUser) {
   const db = feedbackDatabase(env, true);
-  const [result, attachmentResult] = await Promise.all([
-    db.prepare(`
+  const result = await db.prepare(`
       SELECT
         id,
         module_id,
@@ -153,16 +152,16 @@ export async function listModuleFeedback(env, currentUser) {
       ORDER BY created_at DESC
       LIMIT 500
     `)
-      .all(),
-    db.prepare(`
-      SELECT id, case_id, feedback_id, file_name, content_type, size_bytes, created_at
-      FROM self_repair_case_attachments
-      WHERE feedback_id IN (
-        SELECT id FROM module_feedback ORDER BY created_at DESC LIMIT 500
-      )
-      ORDER BY created_at ASC
-    `).all()
-  ]);
+    .all();
+  const feedbackIds = (result.results || []).map((row) => cleanString(row.id)).filter(Boolean);
+  const attachmentResult = feedbackIds.length
+    ? await db.prepare(`
+        SELECT id, case_id, feedback_id, file_name, content_type, size_bytes, created_at
+        FROM self_repair_case_attachments
+        WHERE feedback_id IN (${feedbackIds.map(() => "?").join(", ")})
+        ORDER BY created_at ASC
+      `).bind(...feedbackIds).all()
+    : { results: [] };
   const attachmentsByFeedback = new Map();
   for (const row of attachmentResult.results || []) {
     const attachment = rowToFeedbackAttachment(row);

@@ -1,4 +1,7 @@
-import { archiveCollectionSnapshotChunk } from "../functions/_lib/collection-snapshot-archive.js";
+import {
+  archiveCollectionSnapshotChunk,
+  archiveReceivableSnapshotChunk
+} from "../functions/_lib/collection-snapshot-archive.js";
 
 export default {
   async scheduled(controller, env, ctx) {
@@ -11,12 +14,27 @@ export default {
         LIMIT 1
       `).first().catch(() => null);
       const accelerated = ["archive", "critical", "blocked"].includes(String(capacity?.level || ""));
-      const result = await archiveCollectionSnapshotChunk(env, {
+      const commonOptions = {
         scheduledTime: controller.scheduledTime,
-        batchSize: accelerated ? 1000 : 500,
         retentionDays: 2
+      };
+      const [collection, receivables] = await Promise.all([
+        archiveCollectionSnapshotChunk(env, {
+          ...commonOptions,
+          batchSize: accelerated ? 750 : 300
+        }),
+        archiveReceivableSnapshotChunk(env, {
+          ...commonOptions,
+          batchSize: accelerated ? 250 : 200
+        })
+      ]);
+      console.log("database_archive_runner.completed", {
+        collection,
+        receivables,
+        accelerated,
+        totalSelectedRows: collection.selectedRows + receivables.selectedRows,
+        totalDeletedRows: 0
       });
-      console.log("database_archive_runner.completed", { ...result, accelerated });
     })());
   },
 
@@ -24,7 +42,9 @@ export default {
     return Response.json({
       status: "ready",
       mode: "copy-verify-only",
-      batchSize: 500,
+      normalRowsPerRun: 500,
+      maximumRowsPerRun: 1000,
+      sourceTables: ["collection_import_rows", "receivable_import_rows"],
       sourceDeletion: "disabled",
       automaticOperationalDataDeletion: false
     });

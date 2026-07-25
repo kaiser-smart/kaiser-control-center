@@ -1,10 +1,10 @@
+import { getModuleDatabase } from "./databases.js";
 import {
   invoiceAmounts,
   invoiceFlags,
   invoiceStatus
 } from "./receivables-ledger-sync.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const IMPORT_KIND = "vistos_invoice_incremental";
 const SOURCE = "vistos";
 
@@ -42,7 +42,7 @@ function boundedInteger(value, fallback, max) {
 }
 
 function database(env) {
-  const db = env?.[DB_BINDING];
+  const db = getModuleDatabase(env, { moduleName: "receivables-incremental-ledger-diff", allowedDomains: ["archive","core"], defaultDomain: "archive", required: false });
   if (!db) {
     throw new ReceivablesIncrementalLedgerDiffError(
       "Databáze Pohledávek není nastavená.",

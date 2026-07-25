@@ -1,4 +1,5 @@
 import { json } from "../../_lib/auth.js";
+import { getModuleDatabase } from "../../_lib/databases.js";
 import { rebuildVehicleTrackingAnalytics } from "../../_lib/vehicle-tracking-analytics.js";
 
 function token(request) {
@@ -17,11 +18,17 @@ export async function onRequestPost({ request, env }) {
   const allowed = matches(receivedToken, String(env.VEHICLE_TRACKING_HISTORY_SYNC_TOKEN || "").trim())
     || matches(receivedToken, String(env.DATA_BOX_PLUS_SYNC_TOKEN || "").trim());
   if (!allowed) return json({ error: "Interní přepočet GPS historie není povolen." }, 401);
-  if (!env.SMART_ODPADY_DB) return json({ error: "Chybí D1 binding SMART_ODPADY_DB." }, 503);
+  const db = getModuleDatabase(env, {
+    moduleName: "vehicle-tracking-analytics-sync",
+    allowedDomains: ["archive", "audit"],
+    defaultDomain: "archive",
+    required: false
+  });
+  if (!db) return json({ error: "Chybí DB_ARCHIVE nebo DB_AUDIT." }, 503);
 
   const body = await request.json().catch(() => ({}));
   try {
-    return json(await rebuildVehicleTrackingAnalytics(env.SMART_ODPADY_DB, {
+    return json(await rebuildVehicleTrackingAnalytics(db, {
       days: body.days || 2,
       now: body.scheduledAt || Date.now()
     }));

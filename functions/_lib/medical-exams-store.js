@@ -6,7 +6,8 @@ import {
   normalizeMedicalExamCategory
 } from "../../src/data/medicalExamRules.js";
 
-const MEDICAL_EXAM_DB_BINDING = "SMART_ODPADY_DB";
+import { getCoreDatabase } from "./databases.js";
+
 const REMINDER_STATUSES = new Set(["due_soon", "overdue", "missing_data"]);
 
 export class MedicalExamStoreError extends Error {
@@ -19,11 +20,11 @@ export class MedicalExamStoreError extends Error {
 }
 
 function medicalExamDatabase(env, required = false) {
-  const db = env?.[MEDICAL_EXAM_DB_BINDING] || null;
+  const db = getCoreDatabase(env, { required: false });
 
   if (!db && required) {
     throw new MedicalExamStoreError(
-      "Databáze lékařských prohlídek není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze lékařských prohlídek není nastavená. Chybí Cloudflare D1 binding DB_CORE.",
       503,
       "medical_exam_database_missing"
     );

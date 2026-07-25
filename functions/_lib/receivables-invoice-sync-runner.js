@@ -1,4 +1,5 @@
-const DB_BINDING = "SMART_ODPADY_DB";
+import { getModuleDatabase } from "./databases.js";
+const DB_BINDING = "DB_ARCHIVE / DB_AUDIT";
 const DATABASE_NAME = "smart-odpady";
 const MODULE_KEY = "receivables";
 const RUNNER_NAME = "receivables-vistos-invoice-sync";
@@ -23,7 +24,7 @@ function randomId(prefix) {
 }
 
 function database(env) {
-  const db = env?.[DB_BINDING];
+  const db = getModuleDatabase(env, { moduleName: "receivables-invoice-sync-runner", allowedDomains: ["archive","audit"], defaultDomain: "archive", required: false });
   if (!db) throw new Error(`Cloudflare D1 binding ${DB_BINDING} není dostupný pro Pohledávky runner.`);
   return db;
 }
@@ -150,7 +151,6 @@ async function callPages(env, action, scheduledAt) {
 }
 
 export async function runReceivablesInvoiceSyncAutomation(env, options = {}) {
-  const db = database(env);
   const now = new Date(Number(options.scheduledTime || Date.now()));
   if (bulkWritesBlocked(env)) {
     return {
@@ -162,6 +162,7 @@ export async function runReceivablesInvoiceSyncAutomation(env, options = {}) {
       capacityGuard: true
     };
   }
+  const db = database(env);
   const action = await pendingAction(db) || scheduledReceivablesAction(now);
   if (!action) {
     return { mode: "staging-only", status: "not_scheduled", moduleKey: MODULE_KEY, action: "" };

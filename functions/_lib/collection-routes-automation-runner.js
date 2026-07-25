@@ -1,10 +1,11 @@
+import { getModuleDatabase } from "./databases.js";
+const DB_BINDING = "DB_AUDIT / DB_CORE";
 import {
   createCollectionRoutesVistosKommunalPreview,
   isVistosExecuteConfigured
 } from "./collection-routes-store.js";
 import { prepareCollectionDailyRouteDraftsAutomation } from "./collection-daily-routes-store.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const DATABASE_NAME = "smart-odpady";
 const MODULE_KEY = "collection-routes";
 const SNAPSHOT_RUNNER_NAME = "collection-routes-vistos-snapshot-15m";
@@ -35,7 +36,7 @@ function randomId(prefix) {
 }
 
 function database(env) {
-  const db = env?.[DB_BINDING];
+  const db = getModuleDatabase(env, { moduleName: "collection-routes-automation-runner", allowedDomains: ["audit","core"], defaultDomain: "audit", required: false });
   if (!db) {
     throw new Error(`Cloudflare D1 binding ${DB_BINDING} není dostupný pro Trasy svozu runner.`);
   }
@@ -241,7 +242,6 @@ async function runPagesSnapshot(env, scheduledAt) {
 }
 
 export async function runCollectionRoutesSnapshotAutomation(env, options = {}) {
-  const db = database(env);
   const now = new Date(Number(options.scheduledTime || Date.now()));
   const startedAt = new Date().toISOString();
   const runnerRunId = randomId("module-automation-runner-run");
@@ -267,6 +267,7 @@ export async function runCollectionRoutesSnapshotAutomation(env, options = {}) {
     };
   }
 
+  const db = database(env);
   await insertRunnerRun(db, {
     id: runnerRunId,
     startedAt,

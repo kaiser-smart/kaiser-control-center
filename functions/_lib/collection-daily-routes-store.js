@@ -1,3 +1,5 @@
+import { getModuleDatabase } from "./databases.js";
+import { runCrossDatabaseBatch } from "./cross-database-workflows.js";
 import { getUsers } from "./auth.js";
 import { getLatestCollectionRoutesVistosSnapshot } from "./collection-routes-store.js";
 import { getCollectionRoutesTestSnapshot } from "./collection-routes-test-store.js";
@@ -12,7 +14,6 @@ import {
   matchCollectionDailyRouteHereOptimization
 } from "./collection-daily-route-map.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const TEST_DB_BINDING = "COLLECTION_ROUTES_TEST_DB";
 const DOCUMENT_BUCKET_BINDING = "SMART_ODPADY_DOCUMENTS";
 export const COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION = "production";
@@ -238,8 +239,14 @@ function collectionDailyRouteTestMode(scope, value) {
 
 function database(env, required = false, scopeValue = COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION) {
   const scope = collectionDailyRouteScope(scopeValue);
-  const binding = scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST ? TEST_DB_BINDING : DB_BINDING;
-  const db = env?.[binding] || null;
+  const db = scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST
+    ? env?.[TEST_DB_BINDING] || null
+    : getModuleDatabase(env, {
+      moduleName: "collection-daily-routes-store",
+      allowedDomains: ["core", "audit"],
+      defaultDomain: "core",
+      required: false
+    });
   if (!db && required) {
     throw new CollectionDailyRoutesError(
       scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST
@@ -1111,7 +1118,12 @@ export async function createCollectionDailyRouteDraft(env, user, input = {}) {
         testMode
       })
     );
-    await db.batch([runInsert, ...stopInserts, eventInsert]);
+    await runCrossDatabaseBatch(env, db, [runInsert, ...stopInserts, eventInsert], {
+      workflowType: "collection-daily-route-create",
+      idempotencyKey: `collection-daily-route-create:${runId}`,
+      payload: { runId, stopCount: preview.eligibleCount },
+      compensation: { strategy: "remove_draft_if_audit_cannot_be_retried", runId }
+    });
     return detailFromRow(db, await loadRunRow(db, runId));
   } catch (error) {
     throw dbError(error);
@@ -1308,8 +1320,7 @@ export async function listCollectionDailyRoutes(env, input = {}, user = null) {
       SELECT r.*,
         SUM(CASE WHEN s.status = 'planned' THEN 1 ELSE 0 END) AS planned_count,
         SUM(CASE WHEN s.status = 'done' THEN 1 ELSE 0 END) AS done_count,
-        SUM(CASE WHEN s.status = 'problem' THEN 1 ELSE 0 END) AS problem_count,
-        (SELECT COUNT(*) FROM collection_daily_route_events e WHERE e.run_id = r.id) AS event_count
+        SUM(CASE WHEN s.status = 'problem' THEN 1 ELSE 0 END) AS problem_count
       FROM collection_daily_route_runs r
       LEFT JOIN collection_daily_route_stops s ON s.run_id = r.id
       ${where}
@@ -1317,7 +1328,8 @@ export async function listCollectionDailyRoutes(env, input = {}, user = null) {
       ORDER BY r.route_date DESC, r.vehicle_code ASC, r.created_at DESC
       LIMIT ?
     `).bind(...bindings, limit).all();
-    return (result.results || []).map((row) => rowToRun(row));
+    const rows = await withCollectionDailyRouteEventCounts(db, result.results || []);
+    return rows.map((row) => rowToRun(row));
   } catch (error) {
     throw dbError(error);
   }
@@ -1345,6 +1357,20 @@ function publicTabletTestSession(session = {}, run = null) {
     startedAt: cleanString(session.startedAt),
     expiresAt: cleanString(session.expiresAt)
   };
+}
+
+async function withCollectionDailyRouteEventCounts(db, rows = []) {
+  const ids = rows.map((row) => cleanString(row.id)).filter(Boolean);
+  if (!ids.length) return rows;
+  const placeholders = ids.map(() => "?").join(", ");
+  const result = await db.prepare(`
+    SELECT run_id, COUNT(*) AS event_count
+    FROM collection_daily_route_events
+    WHERE run_id IN (${placeholders})
+    GROUP BY run_id
+  `).bind(...ids).all();
+  const counts = new Map((result.results || []).map((row) => [cleanString(row.run_id), numberValue(row.event_count)]));
+  return rows.map((row) => ({ ...row, event_count: counts.get(cleanString(row.id)) || 0 }));
 }
 
 function voiceIntroSessionKey(run = {}, options = {}) {
@@ -1560,8 +1586,7 @@ async function tabletTestRouteRows(db) {
     SELECT r.*,
       SUM(CASE WHEN s.status = 'planned' THEN 1 ELSE 0 END) AS planned_count,
       SUM(CASE WHEN s.status = 'done' THEN 1 ELSE 0 END) AS done_count,
-      SUM(CASE WHEN s.status = 'problem' THEN 1 ELSE 0 END) AS problem_count,
-      (SELECT COUNT(*) FROM collection_daily_route_events e WHERE e.run_id = r.id) AS event_count
+      SUM(CASE WHEN s.status = 'problem' THEN 1 ELSE 0 END) AS problem_count
     FROM collection_daily_route_runs r
     LEFT JOIN collection_daily_route_stops s ON s.run_id = r.id
     WHERE r.driver_user_id = ?
@@ -1574,7 +1599,7 @@ async function tabletTestRouteRows(db) {
       r.updated_at DESC
     LIMIT 100
   `).bind(COLLECTION_DAILY_ROUTE_TABLET_TEST_DRIVER_ID).all();
-  return result.results || [];
+  return withCollectionDailyRouteEventCounts(db, result.results || []);
 }
 
 export async function getCollectionDailyRouteTabletTestLauncher(env, user) {
@@ -1652,7 +1677,7 @@ export async function startCollectionDailyRouteTabletTestSession(env, user, inpu
       adminTabletTestSession: session
     };
     const actorName = cleanString(user.name || user.email || user.phone);
-    await db.batch([
+    await runCrossDatabaseBatch(env, db, [
       db.prepare(`
         UPDATE collection_daily_route_runs
         SET status = 'active', metadata_json = ?,
@@ -1691,7 +1716,10 @@ export async function startCollectionDailyRouteTabletTestSession(env, user, inpu
           writesProductionRoutes: false
         })
       )
-    ]);
+    ], {
+      workflowType: "collection-tablet-test-start",
+      idempotencyKey: `collection-tablet-test-start:${session.id}`
+    });
     return {
       session: publicTabletTestSession(session, run),
       route: await detailFromRow(db, await loadRunRow(db, run.id))
@@ -1732,7 +1760,7 @@ export async function resetCollectionDailyRouteTabletTestSession(env, user, inpu
         endedByUserId: cleanString(user.id)
       }
     };
-    await db.batch([
+    await runCrossDatabaseBatch(env, db, [
       db.prepare(`
         UPDATE collection_daily_route_runs
         SET status = 'confirmed', metadata_json = ?,
@@ -1765,7 +1793,10 @@ export async function resetCollectionDailyRouteTabletTestSession(env, user, inpu
         changedAt,
         jsonString({ sessionId: session.id, scope: COLLECTION_DAILY_ROUTE_SCOPE_TEST })
       )
-    ]);
+    ], {
+      workflowType: "collection-tablet-test-reset",
+      idempotencyKey: `collection-tablet-test-reset:${sessionId}`
+    });
     return { reset: true, runId: run.id };
   } catch (error) {
     throw dbError(error);
@@ -1904,7 +1935,10 @@ export async function applyCollectionDailyRouteHereOrder(env, user, runId, input
       idempotencyKey, cleanString(user?.id || user?.email), cleanString(user?.name || user?.email || "Uživatel"),
       timestamp, jsonString(optimization)
     ));
-    await db.batch(statements);
+    await runCrossDatabaseBatch(env, db, statements, {
+      workflowType: "collection-route-here-order",
+      idempotencyKey
+    });
     return detailFromRow(db, await loadRunRow(db, runRow.id));
   } catch (error) {
     throw dbError(error);
@@ -1976,7 +2010,7 @@ export async function assignCollectionDailyRouteDriver(env, user, runId, input =
     if (await eventByIdempotency(db, idempotencyKey, run.id)) {
       return detailFromRow(db, await loadRunRow(db, run.id));
     }
-    await db.batch([
+    await runCrossDatabaseBatch(env, db, [
       db.prepare(`
         UPDATE collection_daily_route_runs
         SET driver_user_id = ?, driver_name = ?, metadata_json = ?, updated_at = ?
@@ -1999,7 +2033,10 @@ export async function assignCollectionDailyRouteDriver(env, user, runId, input =
         updatedAt,
         jsonString({ previousDriverUserId: cleanString(run.driver_user_id), driverUserId: driverId, driverName })
       )
-    ]);
+    ], {
+      workflowType: "collection-route-driver-assign",
+      idempotencyKey
+    });
     return detailFromRow(db, await loadRunRow(db, run.id));
   } catch (error) {
     throw dbError(error);
@@ -2252,7 +2289,10 @@ export async function transitionCollectionDailyRoute(env, user, runId, input = {
         })
       )
     );
-    await db.batch(statements);
+    await runCrossDatabaseBatch(env, db, statements, {
+      workflowType: "collection-route-transition",
+      idempotencyKey: idempotencyKey || `${transition.eventType}:${run.id}:${changedAt}`
+    });
     return detailFromRow(db, await loadRunRow(db, run.id));
   } catch (error) {
     throw dbError(error);
@@ -2412,7 +2452,10 @@ export async function recordCollectionDailyRouteStopEvent(env, user, runId, stop
       jsonString(safePayload)
     ));
     statements.push(db.prepare("UPDATE collection_daily_route_runs SET updated_at = ? WHERE id = ?").bind(createdAt, run.id));
-    await db.batch(statements);
+    await runCrossDatabaseBatch(env, db, statements, {
+      workflowType: "collection-route-stop-event",
+      idempotencyKey: idempotencyKey || `${action}:${run.id}:${cleanString(stop?.id) || "route"}:${createdAt}`
+    });
     return detailFromRow(db, await loadRunRow(db, run.id));
   } catch (error) {
     throw dbError(error);
@@ -2568,7 +2611,7 @@ export async function recordCollectionDailyRouteReport(env, user, runId, stopId,
         }
       });
     }
-    await db.batch([
+    await runCrossDatabaseBatch(env, db, [
       db.prepare(`
         UPDATE collection_daily_route_stops
         SET status = 'problem',
@@ -2596,7 +2639,11 @@ export async function recordCollectionDailyRouteReport(env, user, runId, stopId,
         jsonString(payload)
       ),
       db.prepare("UPDATE collection_daily_route_runs SET updated_at = ? WHERE id = ?").bind(createdAt, run.id)
-    ]);
+    ], {
+      workflowType: "collection-route-report",
+      idempotencyKey: `collection-route-report:${reportId}`,
+      payload: { reportId, runId: run.id, stopId: stop.id, photoCount: storedPhotos.length }
+    });
     eventCommitted = true;
     return {
       report: {

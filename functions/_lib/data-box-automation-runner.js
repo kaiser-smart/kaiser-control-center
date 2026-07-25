@@ -1,8 +1,9 @@
+import { getModuleDatabase } from "./databases.js";
+const DB_BINDING = "DB_AUDIT / DB_CORE";
 import { listDataBoxMessages } from "./data-box-store.js";
 import { archiveDataBoxMessage, prepareDataBoxAction } from "./data-box-actions-store.js";
 import { listModuleRules } from "./module-rules-store.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const MODULE_KEY = "data-box";
 const RUNNER_NAME = "data-box-cloud-runner";
 const DEFAULT_CRON = "*/30 * * * *";
@@ -25,7 +26,7 @@ function randomId(prefix) {
 }
 
 function database(env) {
-  const db = env?.[DB_BINDING];
+  const db = getModuleDatabase(env, { moduleName: "data-box-automation-runner", allowedDomains: ["audit","core"], defaultDomain: "audit", required: false });
   if (!db) {
     throw new Error(`Cloudflare D1 binding ${DB_BINDING} není dostupný pro DS runner.`);
   }

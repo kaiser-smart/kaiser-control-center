@@ -1,6 +1,7 @@
 import { recordAiAction } from "./ai-action-log-store.js";
 
-const MEMORY_DB_BINDING = "SMART_ODPADY_DB";
+import { getCoreDatabase } from "./databases.js";
+
 const DEFAULT_ORGANIZATION_ID = "kaiser";
 const MAX_TOPICS = 8;
 
@@ -33,7 +34,7 @@ function safeArray(value) {
 }
 
 function database(env, required = false) {
-  const db = env?.[MEMORY_DB_BINDING] || null;
+  const db = getCoreDatabase(env, { required: false });
   if (!db && required) {
     const error = new Error("Cloudová paměť Šarloty není nastavená.");
     error.status = 503;

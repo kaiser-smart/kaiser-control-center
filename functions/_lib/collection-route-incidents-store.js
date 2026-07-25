@@ -1,3 +1,5 @@
+import { getModuleDatabase } from "./databases.js";
+import { runCrossDatabaseBatch } from "./cross-database-workflows.js";
 import { hasPermission, isUserActive, normalizeRole } from "../../src/permissions.js";
 import {
   COLLECTION_DAILY_ROUTE_SCOPE_PRODUCTION,
@@ -6,7 +8,6 @@ import {
   collectionDailyRouteScope
 } from "./collection-daily-routes-store.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const TEST_DB_BINDING = "COLLECTION_ROUTES_TEST_DB";
 const INCIDENT_STATUSES = new Set(["new", "claimed", "in_progress", "resolved"]);
 const RESOLUTION_CODES = new Set([
@@ -68,8 +69,14 @@ function randomId(prefix) {
 
 function incidentDatabase(env, scopeValue, required = true) {
   const scope = collectionDailyRouteScope(scopeValue);
-  const binding = scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST ? TEST_DB_BINDING : DB_BINDING;
-  const db = env?.[binding] || null;
+  const db = scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST
+    ? env?.[TEST_DB_BINDING] || null
+    : getModuleDatabase(env, {
+      moduleName: "collection-route-incidents-store",
+      allowedDomains: ["audit", "core", "archive"],
+      defaultDomain: "audit",
+      required: false
+    });
   if (!db && required) {
     throw new CollectionRouteIncidentsError(
       scope === COLLECTION_DAILY_ROUTE_SCOPE_TEST
@@ -284,40 +291,61 @@ async function queryIncidentRows(db, { incidentId = "", limit = DEFAULT_LIMIT } 
       e.actor_name,
       e.created_at,
       e.payload_json,
-      r.title AS route_title,
-      r.route_date,
-      r.driver_name,
-      r.vehicle_label,
-      s.customer_name,
-      s.station_name,
-      s.address_text,
-      s.source_summary_json,
-      w.status AS workflow_status,
-      w.assigned_user_id,
-      w.assigned_name,
-      w.assigned_at,
-      w.unresolved_reason,
-      w.next_step,
-      w.responsible_user_id,
-      w.responsible_name,
-      w.follow_up_at,
-      w.resolution_code,
-      w.customer_informed,
-      w.resolution_note,
-      w.resolved_by_name,
-      w.resolved_at,
-      w.reopened_reason,
-      w.updated_at AS workflow_updated_at,
       'daily-route-event' AS source_kind
     FROM collection_daily_route_events e
-    JOIN collection_daily_route_runs r ON r.id = e.run_id
-    JOIN collection_daily_route_stops s ON s.id = e.stop_id AND s.run_id = e.run_id
-    LEFT JOIN collection_route_incident_workflows w ON w.incident_id = e.id
     WHERE ${conditions.join(" AND ")}
     ORDER BY e.created_at DESC
     LIMIT ?
   `).bind(...values).all();
-  return result.results || [];
+  const events = result.results || [];
+  if (!events.length) return [];
+  const runIds = [...new Set(events.map((row) => cleanString(row.run_id)).filter(Boolean))];
+  const stopIds = [...new Set(events.map((row) => cleanString(row.stop_id)).filter(Boolean))];
+  const incidentIds = events.map((row) => cleanString(row.incident_id)).filter(Boolean);
+  const [runs, stops, workflows] = await Promise.all([
+    runIds.length
+      ? db.prepare(`SELECT id, title, route_date, driver_name, vehicle_label FROM collection_daily_route_runs WHERE id IN (${runIds.map(() => "?").join(", ")})`).bind(...runIds).all()
+      : { results: [] },
+    stopIds.length
+      ? db.prepare(`SELECT id, run_id, customer_name, station_name, address_text, source_summary_json FROM collection_daily_route_stops WHERE id IN (${stopIds.map(() => "?").join(", ")})`).bind(...stopIds).all()
+      : { results: [] },
+    db.prepare(`SELECT * FROM collection_route_incident_workflows WHERE incident_id IN (${incidentIds.map(() => "?").join(", ")})`).bind(...incidentIds).all()
+  ]);
+  const runMap = new Map((runs.results || []).map((row) => [cleanString(row.id), row]));
+  const stopMap = new Map((stops.results || []).map((row) => [cleanString(row.id), row]));
+  const workflowMap = new Map((workflows.results || []).map((row) => [cleanString(row.incident_id), row]));
+  return events.map((event) => {
+    const run = runMap.get(cleanString(event.run_id)) || {};
+    const stop = stopMap.get(cleanString(event.stop_id)) || {};
+    const workflow = workflowMap.get(cleanString(event.incident_id)) || {};
+    return {
+      ...event,
+      route_title: run.title,
+      route_date: run.route_date,
+      driver_name: run.driver_name,
+      vehicle_label: run.vehicle_label,
+      customer_name: stop.customer_name,
+      station_name: stop.station_name,
+      address_text: stop.address_text,
+      source_summary_json: stop.source_summary_json,
+      workflow_status: workflow.status,
+      assigned_user_id: workflow.assigned_user_id,
+      assigned_name: workflow.assigned_name,
+      assigned_at: workflow.assigned_at,
+      unresolved_reason: workflow.unresolved_reason,
+      next_step: workflow.next_step,
+      responsible_user_id: workflow.responsible_user_id,
+      responsible_name: workflow.responsible_name,
+      follow_up_at: workflow.follow_up_at,
+      resolution_code: workflow.resolution_code,
+      customer_informed: workflow.customer_informed,
+      resolution_note: workflow.resolution_note,
+      resolved_by_name: workflow.resolved_by_name,
+      resolved_at: workflow.resolved_at,
+      reopened_reason: workflow.reopened_reason,
+      workflow_updated_at: workflow.updated_at
+    };
+  });
 }
 
 async function queryLegacyTestIncidentRows(db, { incidentId = "", limit = DEFAULT_LIMIT } = {}) {
@@ -735,7 +763,16 @@ export async function applyCollectionRouteIncidentAction(env, user, incidentIdVa
       createdAt,
       payload
     }));
-    await db.batch(statements);
+    await runCrossDatabaseBatch(env, db, statements, {
+      workflowType: "collection-route-incident-action",
+      idempotencyKey,
+      payload: { incidentId, action, beforeStatus, afterStatus },
+      compensation: {
+        strategy: "retain_core_and_retry_missing_audit",
+        operation: "replay_incident_audit",
+        incidentId
+      }
+    });
     return { ...(await getCollectionRouteIncident(env, user, incidentId, { scope })), reused: false };
   } catch (error) {
     throw storeError(error);

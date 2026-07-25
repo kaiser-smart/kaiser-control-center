@@ -1,6 +1,11 @@
+import { getModuleDatabase } from "./databases.js";
+import {
+  beginCrossDatabaseWorkflow,
+  recordWorkflowAttempt,
+  updateCrossDatabaseWorkflow
+} from "./cross-database-workflows.js";
 import { receivableToleranceAmount } from "./receivables-payment-matching.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const CONFIRMED_MATCH_STATUSES = new Set(["matched", "auto_matched"]);
 const PROTECTED_INVOICE_STATUSES = new Set(["disputed", "legal_handoff", "insolvency_hold"]);
 
@@ -59,7 +64,7 @@ function boundedInteger(value, fallback, max) {
 }
 
 function database(env) {
-  const db = env?.[DB_BINDING];
+  const db = getModuleDatabase(env, { moduleName: "receivables-payment-reconciliation", allowedDomains: ["core","audit"], defaultDomain: "core", required: false });
   if (!db) {
     throw new ReceivablesPaymentReconciliationError(
       "Databáze Pohledávek není nastavená.",
@@ -274,53 +279,99 @@ function auditPayload(row, fingerprint) {
   };
 }
 
-async function applyRows(db, rows, fingerprint, user) {
-  for (let index = 0; index < rows.length; index += 20) {
-    const statements = [];
-    for (const row of rows.slice(index, index + 20)) {
-      const beforeJson = safeJson(row.before, {});
-      const afterJson = safeJson({ ...row.after, reconciliation: auditPayload(row, fingerprint) }, {});
-      const currentPaidDate = clean(row.before.paidDate);
-      statements.push(
-        db.prepare(`
-          INSERT INTO receivable_audit_log (
-            id, entity_type, entity_id, customer_id, action, actor_user_id, reason, before_json, after_json
-          )
-          SELECT ?, 'receivable_invoice', id, customer_id, 'payment_state_reconciled', ?, ?, ?, ?
-          FROM receivable_invoices
-          WHERE id = ? AND status = ? AND ABS(paid_amount - ?) <= 0.01 AND ABS(open_amount - ?) <= 0.01
-            AND COALESCE(paid_date, '') = ?
-        `).bind(
-          randomId("receivable-audit"),
-          clean(user?.id) || null,
-          `confirmed_matches:${fingerprint}`,
-          beforeJson,
-          afterJson,
-          row.invoiceId,
-          row.before.status,
-          row.before.paidAmount,
-          row.before.openAmount,
-          currentPaidDate
-        ),
-        db.prepare(`
-          UPDATE receivable_invoices
-          SET paid_amount = ?, open_amount = ?, status = ?, paid_date = NULLIF(?, ''), updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND status = ? AND ABS(paid_amount - ?) <= 0.01 AND ABS(open_amount - ?) <= 0.01
-            AND COALESCE(paid_date, '') = ?
-        `).bind(
-          row.after.paidAmount,
-          row.after.openAmount,
-          row.after.status,
-          row.after.paidDate,
-          row.invoiceId,
-          row.before.status,
-          row.before.paidAmount,
-          row.before.openAmount,
-          currentPaidDate
-        )
-      );
+async function applyRows(env, db, rows, fingerprint, user) {
+  for (const row of rows) {
+    const idempotencyKey = `receivables-payment-reconciliation:${fingerprint}:${row.invoiceId}`;
+    const workflow = await beginCrossDatabaseWorkflow(env, {
+      workflowType: "receivables-payment-reconciliation",
+      idempotencyKey,
+      payload: { invoiceId: row.invoiceId, after: row.after },
+      compensation: { invoiceId: row.invoiceId, restore: row.before }
+    });
+    if (workflow.status === "completed") continue;
+
+    const beforeJson = safeJson(row.before, {});
+    const afterJson = safeJson({ ...row.after, reconciliation: auditPayload(row, fingerprint) }, {});
+    const currentPaidDate = clean(row.before.paidDate);
+    try {
+      const update = await db.prepare(`
+        UPDATE receivable_invoices
+        SET paid_amount = ?, open_amount = ?, status = ?, paid_date = NULLIF(?, ''), updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND status = ? AND ABS(paid_amount - ?) <= 0.01 AND ABS(open_amount - ?) <= 0.01
+          AND COALESCE(paid_date, '') = ?
+      `).bind(
+        row.after.paidAmount,
+        row.after.openAmount,
+        row.after.status,
+        row.after.paidDate,
+        row.invoiceId,
+        row.before.status,
+        row.before.paidAmount,
+        row.before.openAmount,
+        currentPaidDate
+      ).run();
+      if (Number(update?.meta?.changes || 0) !== 1) throw new Error("invoice_changed_before_apply");
+      await recordWorkflowAttempt(env, {
+        workflowId: workflow.id,
+        databaseDomain: "core",
+        operationName: "update_receivable_invoice",
+        status: "completed",
+        finishedAt: new Date().toISOString(),
+        metadata: { invoiceId: row.invoiceId }
+      });
+
+      await db.prepare(`
+        INSERT OR IGNORE INTO receivable_audit_log (
+          id, entity_type, entity_id, customer_id, action, actor_user_id, reason, before_json, after_json
+        ) VALUES (?, 'receivable_invoice', ?, ?, 'payment_state_reconciled', ?, ?, ?, ?)
+      `).bind(
+        `receivable-audit-${stableHash(idempotencyKey)}`,
+        row.invoiceId,
+        row.customerId || null,
+        clean(user?.id) || null,
+        `confirmed_matches:${fingerprint}`,
+        beforeJson,
+        afterJson
+      ).run();
+      await recordWorkflowAttempt(env, {
+        workflowId: workflow.id,
+        databaseDomain: "audit",
+        operationName: "insert_receivable_audit",
+        status: "completed",
+        finishedAt: new Date().toISOString(),
+        metadata: { invoiceId: row.invoiceId }
+      });
+      await updateCrossDatabaseWorkflow(env, workflow.id, { status: "completed" });
+    } catch (error) {
+      await db.prepare(`
+        UPDATE receivable_invoices
+        SET paid_amount = ?, open_amount = ?, status = ?, paid_date = NULLIF(?, ''), updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND status = ? AND ABS(paid_amount - ?) <= 0.01 AND ABS(open_amount - ?) <= 0.01
+      `).bind(
+        row.before.paidAmount,
+        row.before.openAmount,
+        row.before.status,
+        row.before.paidDate,
+        row.invoiceId,
+        row.after.status,
+        row.after.paidAmount,
+        row.after.openAmount
+      ).run().catch(() => {});
+      await recordWorkflowAttempt(env, {
+        workflowId: workflow.id,
+        databaseDomain: "core",
+        operationName: "compensate_receivable_invoice",
+        status: "completed",
+        finishedAt: new Date().toISOString(),
+        metadata: { invoiceId: row.invoiceId }
+      }).catch(() => {});
+      await updateCrossDatabaseWorkflow(env, workflow.id, {
+        status: "failed",
+        lastError: clean(error?.message).slice(0, 500),
+        nextAttemptAt: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+      });
+      throw error;
     }
-    await db.batch(statements);
   }
 }
 
@@ -344,7 +395,7 @@ export async function applyReceivablesPaymentReconciliation(env, payload = {}, u
     );
   }
   const db = database(env);
-  await applyRows(db, pendingRows, expectedFingerprint, user);
+  await applyRows(env, db, pendingRows, expectedFingerprint, user);
   const auditCountRow = await db.prepare(`
     SELECT COUNT(*) AS count
     FROM receivable_audit_log

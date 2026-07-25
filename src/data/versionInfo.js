@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.720"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.721"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Databáze: oddělený provoz, komunikace, audit a archiv",
+    text: "Aplikace směruje provozní data do CORE, zprávy včetně RCS/SMS do MESSAGES, technický audit do AUDIT a historii do ARCHIVE/R2. Vícedatabázové zápisy jsou idempotentní a kapacitní monitoring i dávková archivace zůstávají fail-closed bez automatického mazání provozních dat."
+  },
   {
     title: "RCS test: oslovení podle příjemce",
     text: "Ruční test RCS šablony v Nastavení už neposílá ukázkové oslovení Radime automaticky. Před odesláním dohledá telefon v Uživatelích/Zaměstnancích, dosadí ověřené oslovení jako Petře nebo Jarko a bez dohledání či ručního oslovení test zastaví."

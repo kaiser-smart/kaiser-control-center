@@ -1,3 +1,4 @@
+import { getModuleDatabase } from "./databases.js";
 import {
   DataBoxIsdsError,
   dataBoxIsdsAccountFromCredentials,
@@ -274,10 +275,10 @@ function safeJsonParse(value, fallback) {
 }
 
 function dataBoxPlusDatabase(env = {}, required = true) {
-  const db = env.SMART_ODPADY_DB;
+  const db = getModuleDatabase(env, { moduleName: "data-box-plus-store", allowedDomains: ["messages","archive","core","audit"], defaultDomain: "messages", required: false });
   if (!db && required) {
     throw new DataBoxPlusStoreError(
-      "Datove schranky Plus cekaji na D1 binding SMART_ODPADY_DB.",
+      "Datove schranky Plus cekaji na D1 binding DB_MESSAGES / DB_ARCHIVE / DB_CORE / DB_AUDIT.",
       503,
       "data_box_plus_database_missing"
     );
@@ -637,7 +638,8 @@ function fallbackAccountMap(env) {
 
 async function mailboxRowsWithCredentials(db) {
   try {
-    const result = await db
+    const [result, messageStats, archiveStats, backfillStats] = await Promise.all([
+      db
       .prepare(`
         SELECT
           m.*,
@@ -650,16 +652,7 @@ async function mailboxRowsWithCredentials(db) {
           c.active AS credential_active,
           c.updated_at AS credential_updated_at,
           c.last_rotated_at,
-          c.source AS credential_source,
-          (SELECT COUNT(*) FROM data_box_plus_messages am WHERE am.mailbox_id = m.id) AS archive_total_messages,
-          (SELECT COUNT(*) FROM data_box_plus_archive_objects ao WHERE ao.mailbox_id = m.id AND ao.status = 'verified') AS archive_verified_messages,
-          (SELECT COUNT(*) FROM data_box_plus_archive_objects ao WHERE ao.mailbox_id = m.id AND ao.status = 'error') AS archive_error_messages,
-          (SELECT MIN(COALESCE(am.delivered_at, am.received_at, am.stored_at)) FROM data_box_plus_messages am WHERE am.mailbox_id = m.id) AS archive_oldest_message_at,
-          (SELECT COUNT(*) FROM data_box_plus_archive_backfills ab WHERE ab.mailbox_id = m.id) AS archive_jobs_total,
-          (SELECT COUNT(*) FROM data_box_plus_archive_backfills ab WHERE ab.mailbox_id = m.id AND ab.status = 'completed') AS archive_jobs_completed,
-          (SELECT COUNT(*) FROM data_box_plus_archive_backfills ab WHERE ab.mailbox_id = m.id AND ab.status = 'failed') AS archive_jobs_failed,
-          (SELECT COALESCE(SUM(ab.messages_discovered), 0) FROM data_box_plus_archive_backfills ab WHERE ab.mailbox_id = m.id) AS archive_discovered_messages,
-          (SELECT COALESCE(SUM(ab.messages_archived), 0) FROM data_box_plus_archive_backfills ab WHERE ab.mailbox_id = m.id) AS archive_job_archived_messages
+          c.source AS credential_source
         FROM data_box_plus_mailboxes m
         LEFT JOIN data_box_plus_credentials c ON c.mailbox_id = m.id
         LEFT JOIN data_boxes source_box ON source_box.id = CASE
@@ -669,8 +662,36 @@ async function mailboxRowsWithCredentials(db) {
         END
         ORDER BY m.slot ASC, m.name ASC
       `)
-      .all();
-    return result.results || [];
+      .all(),
+      db.prepare(`
+        SELECT mailbox_id, COUNT(*) AS archive_total_messages,
+               MIN(COALESCE(delivered_at, received_at, stored_at)) AS archive_oldest_message_at
+        FROM data_box_plus_messages GROUP BY mailbox_id
+      `).all(),
+      db.prepare(`
+        SELECT mailbox_id,
+               SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) AS archive_verified_messages,
+               SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS archive_error_messages
+        FROM data_box_plus_archive_objects GROUP BY mailbox_id
+      `).all(),
+      db.prepare(`
+        SELECT mailbox_id, COUNT(*) AS archive_jobs_total,
+               SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS archive_jobs_completed,
+               SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS archive_jobs_failed,
+               COALESCE(SUM(messages_discovered), 0) AS archive_discovered_messages,
+               COALESCE(SUM(messages_archived), 0) AS archive_job_archived_messages
+        FROM data_box_plus_archive_backfills GROUP BY mailbox_id
+      `).all()
+    ]);
+    const messageMap = new Map((messageStats.results || []).map((row) => [cleanString(row.mailbox_id), row]));
+    const archiveMap = new Map((archiveStats.results || []).map((row) => [cleanString(row.mailbox_id), row]));
+    const backfillMap = new Map((backfillStats.results || []).map((row) => [cleanString(row.mailbox_id), row]));
+    return (result.results || []).map((row) => ({
+      ...row,
+      ...(messageMap.get(cleanString(row.id)) || {}),
+      ...(archiveMap.get(cleanString(row.id)) || {}),
+      ...(backfillMap.get(cleanString(row.id)) || {})
+    }));
   } catch (error) {
     if (!credentialTableMissing(error)) throw error;
     const result = await db
@@ -706,36 +727,31 @@ async function credentialRows(db) {
 
 async function sourceDataBoxRows(db) {
   try {
-    const result = await db
-      .prepare(`
-        SELECT
-          box.id,
-          box.label,
-          COALESCE(
-            NULLIF(box.isds_id, ''),
-            (
-              SELECT CASE
-                WHEN message.direction = 'sent' THEN message.sender_box_id
-                ELSE message.recipient_box_id
-              END
-              FROM data_box_messages message
-              WHERE message.data_box_id = box.id
-                AND CASE
-                  WHEN message.direction = 'sent' THEN message.sender_box_id
-                  ELSE message.recipient_box_id
-                END <> ''
-              ORDER BY COALESCE(message.delivered_at, message.accepted_at, message.stored_at) DESC
-              LIMIT 1
-            ),
-            ''
-          ) AS isds_id,
-          box.last_sync_at,
-          box.last_sync_status,
-          box.last_sync_message
-        FROM data_boxes box
-      `)
-      .all();
-    return result.results || [];
+    const [boxes, messages] = await Promise.all([
+      db.prepare(`
+        SELECT id, label, isds_id, last_sync_at, last_sync_status, last_sync_message
+        FROM data_boxes
+      `).all(),
+      db.prepare(`
+        SELECT data_box_id, direction, sender_box_id, recipient_box_id
+        FROM data_box_messages
+        WHERE CASE WHEN direction = 'sent' THEN sender_box_id ELSE recipient_box_id END <> ''
+        ORDER BY COALESCE(delivered_at, accepted_at, stored_at) DESC
+      `).all()
+    ]);
+    const fallbackIds = new Map();
+    for (const message of messages.results || []) {
+      const boxId = cleanString(message.data_box_id);
+      if (!fallbackIds.has(boxId)) {
+        fallbackIds.set(boxId, cleanString(message.direction) === "sent"
+          ? cleanString(message.sender_box_id)
+          : cleanString(message.recipient_box_id));
+      }
+    }
+    return (boxes.results || []).map((box) => ({
+      ...box,
+      isds_id: cleanString(box.isds_id) || fallbackIds.get(cleanString(box.id)) || ""
+    }));
   } catch (error) {
     const message = cleanString(error?.message).toLowerCase();
     if (message.includes("data_boxes") && message.includes("no such table")) return [];
@@ -1720,11 +1736,10 @@ async function ensureDataBoxPlusArchiveBackfills(db, env, accounts, rangeTo = ne
 async function archivePendingObjects(db, env, accounts, limit = ARCHIVE_PAGE_LIMIT) {
   const result = await db
     .prepare(`
-      SELECT a.*, m.slot
-      FROM data_box_plus_archive_objects a
-      JOIN data_box_plus_mailboxes m ON m.id = a.mailbox_id
-      WHERE a.status IN ('pending', 'error')
-      ORDER BY CASE WHEN a.status = 'pending' THEN 0 ELSE 1 END, a.updated_at ASC
+      SELECT *
+      FROM data_box_plus_archive_objects
+      WHERE status IN ('pending', 'error')
+      ORDER BY CASE WHEN status = 'pending' THEN 0 ELSE 1 END, updated_at ASC
       LIMIT ?
     `)
     .bind(limit)
@@ -1980,22 +1995,13 @@ export async function getDataBoxPlusStatus(env) {
     const syncRow = await db
       .prepare("SELECT * FROM data_box_plus_sync_runs ORDER BY started_at DESC LIMIT 1")
       .first();
-    const waitingRow = await db
-      .prepare(`
-        SELECT COUNT(*) AS count
-        FROM data_box_plus_recommendations r
-        JOIN data_box_plus_messages m ON m.id = r.message_id
-        WHERE r.status = 'waiting' AND m.direction <> 'sent'
-      `)
-      .first();
-    const confirmedRow = await db
-      .prepare(`
-        SELECT COUNT(*) AS count
-        FROM data_box_plus_recommendations r
-        JOIN data_box_plus_messages m ON m.id = r.message_id
-        WHERE r.status = 'confirmed' AND m.direction <> 'sent'
-      `)
-      .first();
+    const inboundIds = await inboundMessageIdSet(db);
+    const [waitingRecommendations, confirmedRecommendations] = await Promise.all([
+      db.prepare("SELECT message_id FROM data_box_plus_recommendations WHERE status = 'waiting'").all(),
+      db.prepare("SELECT message_id FROM data_box_plus_recommendations WHERE status = 'confirmed'").all()
+    ]);
+    const waitingRow = { count: (waitingRecommendations.results || []).filter((row) => inboundIds.has(cleanString(row.message_id))).length };
+    const confirmedRow = { count: (confirmedRecommendations.results || []).filter((row) => inboundIds.has(cleanString(row.message_id))).length };
     const learnedPatternsRow = await db
       .prepare("SELECT COUNT(*) AS count FROM data_box_plus_rules WHERE type = 'Učící vzor'")
       .first();
@@ -3765,25 +3771,36 @@ export async function getDataBoxPlusAttachmentArchiveFiles(env, messageIds = [])
   return files;
 }
 
+async function inboundMessageIdSet(db) {
+  const result = await db
+    .prepare("SELECT id FROM data_box_plus_messages WHERE direction <> 'sent'")
+    .all();
+  return new Set((result.results || []).map((row) => cleanString(row.id)));
+}
+
 export async function listDataBoxPlusRecommendations(env, filters = {}) {
   const db = dataBoxPlusDatabase(env, true);
   const limit = limitValue(filters.limit, 100);
   const status = cleanString(filters.status || "waiting");
-  const whereSql = status === "all" ? "WHERE m.direction <> 'sent'" : "WHERE r.status = ? AND m.direction <> 'sent'";
+  const whereSql = status === "all" ? "" : "WHERE status = ?";
   const bindings = status === "all" ? [] : [status];
   try {
-    const result = await db
+    const [result, inboundIds] = await Promise.all([
+      db
       .prepare(`
-        SELECT r.*
-        FROM data_box_plus_recommendations r
-        JOIN data_box_plus_messages m ON m.id = r.message_id
+        SELECT *
+        FROM data_box_plus_recommendations
         ${whereSql}
         ORDER BY created_at DESC
         LIMIT ?
       `)
       .bind(...bindings, limit)
-      .all();
-    return (result.results || []).map(rowToRecommendation);
+      .all(),
+      inboundMessageIdSet(db)
+    ]);
+    return (result.results || [])
+      .filter((row) => inboundIds.has(cleanString(row.message_id)))
+      .map(rowToRecommendation);
   } catch (error) {
     if (error instanceof DataBoxPlusStoreError) throw error;
     throw dbError(error);
@@ -3817,13 +3834,18 @@ export async function listDataBoxPlusSyncRuns(env, filters = {}) {
 }
 
 async function recommendationById(db, id) {
-  const row = await db.prepare(`
-    SELECT r.*
-    FROM data_box_plus_recommendations r
-    JOIN data_box_plus_messages m ON m.id = r.message_id
-    WHERE r.id = ? AND m.direction <> 'sent'
-    LIMIT 1
-  `).bind(cleanString(id)).first();
+  const row = await db
+    .prepare("SELECT * FROM data_box_plus_recommendations WHERE id = ? LIMIT 1")
+    .bind(cleanString(id))
+    .first();
+  const message = row?.message_id
+    ? await db.prepare("SELECT direction FROM data_box_plus_messages WHERE id = ? LIMIT 1")
+      .bind(cleanString(row.message_id))
+      .first()
+    : null;
+  if (cleanString(message?.direction) === "sent") {
+    throw new DataBoxPlusStoreError("Návrh Autopilota nebyl nalezen.", 404, "data_box_plus_recommendation_not_found");
+  }
   const recommendation = rowToRecommendation(row);
   if (!recommendation?.id) {
     throw new DataBoxPlusStoreError("Návrh Autopilota nebyl nalezen.", 404, "data_box_plus_recommendation_not_found");
@@ -6073,17 +6095,16 @@ async function rememberDataBoxPlusLearningPattern(db, recommendation, actionInfo
   const plan = actionInfo.instructionPlan || recommendation.instructionPlan || null;
   if (!plan?.learningPattern) return null;
   const message = await db
-    .prepare(`
-      SELECT m.*, b.name AS mailbox_name
-      FROM data_box_plus_messages m
-      LEFT JOIN data_box_plus_mailboxes b ON b.id = m.mailbox_id
-      WHERE m.id = ?
-      LIMIT 1
-    `)
+    .prepare("SELECT * FROM data_box_plus_messages WHERE id = ? LIMIT 1")
     .bind(cleanString(recommendation.messageId))
     .first();
+  const mailbox = message?.mailbox_id
+    ? await db.prepare("SELECT name FROM data_box_plus_mailboxes WHERE id = ? LIMIT 1")
+      .bind(cleanString(message.mailbox_id))
+      .first()
+    : null;
   const ruleId = `dbp-learn-${cleanString(recommendation.id)}`.slice(0, 180);
-  const mailboxName = cleanString(message?.mailbox_name || message?.mailbox_id || "schránka");
+  const mailboxName = cleanString(mailbox?.name || message?.mailbox_id || "schránka");
   const actor = actorName(currentUser);
   await db
     .prepare(`

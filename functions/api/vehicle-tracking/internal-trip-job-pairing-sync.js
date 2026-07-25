@@ -1,4 +1,5 @@
 import { json } from "../../_lib/auth.js";
+import { getModuleDatabase } from "../../_lib/databases.js";
 import { runFleetTripJobPairing } from "../../_lib/fleet-trip-job-pairing.js";
 
 function token(request) {
@@ -17,7 +18,12 @@ export async function onRequestPost({ request, env }) {
   const allowed = matches(receivedToken, String(env.VEHICLE_TRACKING_HISTORY_SYNC_TOKEN || "").trim())
     || matches(receivedToken, String(env.DATA_BOX_PLUS_SYNC_TOKEN || "").trim());
   if (!allowed) return json({ error: "Interní párování GPS jízd není povolené." }, 401);
-  if (!env.SMART_ODPADY_DB) return json({ error: "Chybí D1 binding SMART_ODPADY_DB." }, 503);
+  if (!getModuleDatabase(env, {
+    moduleName: "vehicle-tracking-trip-job-pairing",
+    allowedDomains: ["core", "audit", "archive"],
+    defaultDomain: "core",
+    required: false
+  })) return json({ error: "Chybí DB_CORE, DB_AUDIT nebo DB_ARCHIVE." }, 503);
 
   const body = await request.json().catch(() => ({}));
   try {

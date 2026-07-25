@@ -82,9 +82,10 @@ const fakeDb = {
     };
   }
 };
-const databaseAnalytics = await getOrwiiFuelAnalytics({ SMART_ODPADY_DB: fakeDb }, { period: "7d", now: new Date("2026-07-15T12:00:00.000Z") });
+const modularEnv = { DB_CORE: fakeDb, DB_AUDIT: fakeDb, DB_ARCHIVE: fakeDb };
+const databaseAnalytics = await getOrwiiFuelAnalytics(modularEnv, { period: "7d", now: new Date("2026-07-15T12:00:00.000Z") });
 assert.deepEqual(databaseAnalytics.range, { from: "2026-07-09", to: "2026-07-15" });
 assert.deepEqual(d1Calls[0].params, ["2026-07-09T00:00:00.000Z", "2026-07-16T00:00:00.000Z"]);
 assert.match(d1Calls[0].sql, /json_extract\(source_payload_json, '\$\.vehicle\.name'\) AS vehicle_name/);
-await assert.rejects(() => getOrwiiFuelAnalytics({ SMART_ODPADY_DB: fakeDb }, { period: "invalid" }), /Neplatné období/);
+await assert.rejects(() => getOrwiiFuelAnalytics(modularEnv, { period: "invalid" }), /Neplatné období/);
 console.log("orwii-fuel-store tests passed");

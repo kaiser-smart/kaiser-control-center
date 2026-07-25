@@ -1,3 +1,5 @@
+import { getModuleDatabase } from "./databases.js";
+const DB_BINDING = "DB_CORE / DB_AUDIT";
 import {
   UI_ACTION_AUDIT_CASES,
   auditUiActionContractSources
@@ -14,7 +16,6 @@ import {
 } from "./self-repair-ui-interaction-config.js";
 import { upsertCloudMonitorSelfRepairCase } from "./self-repair-store.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const DATABASE_NAME = "smart-odpady";
 const MAX_MANIFEST_BYTES = 200_000;
 const MAX_APP_BYTES = 8_000_000;
@@ -48,7 +49,7 @@ function randomId(prefix) {
 }
 
 function database(env) {
-  const db = env?.[DB_BINDING];
+  const db = getModuleDatabase(env, { moduleName: "self-repair-ui-interaction-runner", allowedDomains: ["core","audit"], defaultDomain: "core", required: false });
   if (!db) {
     throw new SelfRepairUiInteractionError(
       `Cloudflare D1 binding ${DB_BINDING} není dostupný pro denní UI audit.`,

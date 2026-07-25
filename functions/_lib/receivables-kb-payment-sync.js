@@ -1,10 +1,15 @@
+import { getModuleDatabase } from "./databases.js";
+import {
+  beginCrossDatabaseWorkflow,
+  recordWorkflowAttempt,
+  updateCrossDatabaseWorkflow
+} from "./cross-database-workflows.js";
 import {
   downloadReceivablesKbPayments,
   receivablesKbApiError,
   receivablesKbApiReadiness
 } from "./receivables-kb-api-client.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const MODULE_KEY = "receivables";
 const RULE_ID = "receivables-kb-payment-sync";
 const SOURCE = "kb_api";
@@ -59,7 +64,7 @@ function stableId(prefix, value) {
 }
 
 function database(env, required = true) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "receivables-kb-payment-sync", allowedDomains: ["archive","audit","core"], defaultDomain: "archive", required: false });
   if (!db && required) {
     throw new ReceivablesKbPaymentSyncError(
       "Databáze Pohledávek není nastavená.",
@@ -305,22 +310,22 @@ async function finishRun(db, run, result) {
       result.message,
       safeJson(result.audit || { errorCode: result.errorCode || "" }, {}),
       finishedAt
-    ),
-    db.prepare(`
-      UPDATE module_rules
-      SET last_run_at = ?, next_run_at = ?, last_run_status = ?, last_run_message = ?,
-          updated_by_user_id = ?, updated_at = ?
-      WHERE id = ?
-    `).bind(
-      run.startedAt,
-      nextCronAt(finishedAt),
-      result.status,
-      result.message,
-      "system-kb-payment-sync",
-      finishedAt,
-      RULE_ID
     )
   ]);
+  await db.prepare(`
+    UPDATE module_rules
+    SET last_run_at = ?, next_run_at = ?, last_run_status = ?, last_run_message = ?,
+        updated_by_user_id = ?, updated_at = ?
+    WHERE id = ?
+  `).bind(
+    run.startedAt,
+    nextCronAt(finishedAt),
+    result.status,
+    result.message,
+    "system-kb-payment-sync",
+    finishedAt,
+    RULE_ID
+  ).run();
   return finishedAt;
 }
 
@@ -499,6 +504,31 @@ export async function syncReceivablesKbPayments(env = {}, options = {}) {
     message: `Stahování zaúčtovaných příchozích plateb z KB: ${window.fromDateTime} až ${window.toDateTime}.`,
     window
   };
+  const workflow = await beginCrossDatabaseWorkflow(env, {
+    workflowType: "receivables-kb-payment-sync",
+    idempotencyKey: run.dedupeKey,
+    payload: { runId: run.id, window },
+    compensation: {
+      strategy: "retry_idempotent_upserts",
+      operation: "mark_import_batch_error_and_retry",
+      createsPaymentOrders: false,
+      sendsCustomerCommunication: false
+    }
+  });
+  if (workflow.status === "completed") {
+    return {
+      apiStatus: "ready",
+      status: "completed",
+      mode: "cloud_payment_import",
+      runId: workflow.id,
+      idempotentReplay: true,
+      importsKbPayments: true,
+      writesPaymentTransactions: true,
+      reconcilesInvoicesAutomatically: false,
+      createsPaymentOrders: false,
+      sendsCustomerCommunication: false
+    };
+  }
   try {
     await insertRun(db, run);
   } catch (error) {
@@ -526,6 +556,15 @@ export async function syncReceivablesKbPayments(env = {}, options = {}) {
       message,
       audit: { batchId: persisted.batchId, window, ...persisted.summary }
     });
+    await recordWorkflowAttempt(env, {
+      workflowId: workflow.id,
+      databaseDomain: "archive/core/audit",
+      operationName: "persist_kb_payments",
+      status: "completed",
+      finishedAt,
+      metadata: { batchId: persisted.batchId, insertedCount: persisted.insertedCount }
+    });
+    await updateCrossDatabaseWorkflow(env, workflow.id, { status: "completed" });
     return {
       apiStatus: "ready",
       status: "completed",
@@ -551,6 +590,20 @@ export async function syncReceivablesKbPayments(env = {}, options = {}) {
       errorCode: normalized.code,
       audit: { window, errorCode: normalized.code, details: normalized.details }
     });
+    await recordWorkflowAttempt(env, {
+      workflowId: workflow.id,
+      databaseDomain: "archive/core/audit",
+      operationName: "persist_kb_payments",
+      status: "failed",
+      errorMessage: normalized.message,
+      finishedAt: new Date().toISOString(),
+      metadata: { errorCode: normalized.code }
+    }).catch(() => {});
+    await updateCrossDatabaseWorkflow(env, workflow.id, {
+      status: "failed",
+      lastError: normalized.message,
+      nextAttemptAt: new Date(Date.now() + RATE_LIMIT_WINDOW_MS).toISOString()
+    }).catch(() => {});
     throw normalized;
   }
 }

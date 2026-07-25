@@ -1,7 +1,7 @@
 import { getDataBoxMessage, updateDataBoxMessagesAiStatus } from "./data-box-store.js";
+import { getMessagesDatabase } from "./databases.js";
 import { sendDataBoxForwardNotification } from "./notification-service.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const ACTION_STATUSES = new Set(["prepared", "requires_confirmation", "confirmed", "sent", "archived", "blocked", "failed", "skipped"]);
 const MAX_FORWARDED_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
@@ -15,10 +15,10 @@ export class DataBoxActionError extends Error {
 }
 
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getMessagesDatabase(env, { required: false });
   if (!db && required) {
     throw new DataBoxActionError(
-      "Databáze akcí Datové schránky není dostupná. Chybí Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze akcí Datové schránky není dostupná. Chybí Cloudflare D1 binding DB_MESSAGES.",
       503,
       "data_box_action_database_missing"
     );

@@ -118,7 +118,13 @@ const manager = {
 {
   const { sqlite, d1 } = openDatabase();
   const { sqlite: productionSqlite, d1: productionD1 } = openDatabase();
-  const env = { ...environment(d1), SMART_ODPADY_DB: productionD1 };
+  const env = {
+    ...environment(d1),
+    SMART_ODPADY_DB: productionD1,
+    DB_CORE: productionD1,
+    DB_AUDIT: productionD1,
+    DB_ARCHIVE: productionD1
+  };
   const created = await ensureCollectionRoutesTestDataset(env, manager, {
     confirmation: "create-test-brno-500"
   });

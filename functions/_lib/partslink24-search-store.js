@@ -1,7 +1,7 @@
 import { getFleetVehicleWithAssignment } from "./fleet-vehicles-store.js";
 import { hasPermission, isFullAccessRole, normalizeRole } from "../../src/permissions.js";
+import { getAuditDatabase } from "./databases.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 export const PARTSLINK24_WORKFLOW_URL = "https://github.com/kaiser-smart/kaiser-control-center/actions/workflows/partslink24-vin-pilot.yml";
 const RECENT_REQUEST_WINDOW_MS = 3 * 60 * 1000;
 const PASSENGER_VEHICLE_KINDS = new Set([
@@ -41,10 +41,10 @@ export class Partslink24SearchStoreError extends Error {
 }
 
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getAuditDatabase(env, { required: false });
   if (!db && required) {
     throw new Partslink24SearchStoreError(
-      "Audit partslink24 není nastavený. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Audit partslink24 není nastavený. Chybí Cloudflare D1 binding DB_AUDIT.",
       503,
       "partslink24_database_missing"
     );

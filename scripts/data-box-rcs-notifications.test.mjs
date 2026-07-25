@@ -86,8 +86,10 @@ function openDatabase({ trneckovaPhone = "+420777222333" } = {}) {
 function environment(d1) {
   return {
     SMART_ODPADY_DB: d1,
+    DB_CORE: d1,
     DB_MESSAGES: d1,
     DB_AUDIT: d1,
+    DB_ARCHIVE: d1,
     TWILIO_ACCOUNT_SID: "AC00000000000000000000000000000000",
     TWILIO_AUTH_TOKEN: "secret",
     TWILIO_MESSAGING_SERVICE_SID: "MG00000000000000000000000000000000",

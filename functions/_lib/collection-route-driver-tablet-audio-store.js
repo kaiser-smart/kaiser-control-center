@@ -1,3 +1,4 @@
+import { getModuleDatabase } from "./databases.js";
 import {
   DRIVER_TABLET_AUDIO_EVENT_NAMES,
   DRIVER_TABLET_AUDIO_VERSION,
@@ -11,7 +12,6 @@ import {
   getCollectionDailyRouteTabletTestContext
 } from "./collection-daily-routes-store.js";
 
-const PROD_DB = "SMART_ODPADY_DB";
 const TEST_DB = "COLLECTION_ROUTES_TEST_DB";
 const DEVICE_ID = "blackview-active-7";
 const LOG_EVENT_TYPES = new Set([
@@ -42,7 +42,14 @@ function scopeValue(value) {
 }
 
 function database(env, scope, required = false) {
-  const db = env?.[scope === "test" ? TEST_DB : PROD_DB] || null;
+  const db = scope === "test"
+    ? env?.[TEST_DB] || null
+    : getModuleDatabase(env, {
+      moduleName: "collection-route-driver-tablet-audio-store",
+      allowedDomains: ["core", "audit"],
+      defaultDomain: "core",
+      required: false
+    });
   if (!db && required) {
     throw new CollectionRouteDriverTabletAudioError("Databáze nastavení tabletu není dostupná.", 503, "driver_tablet_audio_database_missing");
   }

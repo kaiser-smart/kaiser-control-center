@@ -151,6 +151,8 @@ assert.match(
 );
 
 const sqlite = new DatabaseSync(":memory:");
+sqlite.exec(readFileSync(new URL("../migrations/modular/core/0001_core_foundation.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../migrations/modular/audit/0001_audit_foundation.sql", import.meta.url), "utf8"));
 applyMigration(sqlite, "0007_create_module_feedback.sql");
 applyMigration(sqlite, "0015_create_module_rules.sql");
 applyMigration(sqlite, "0016_create_module_automation_runner_runs.sql");
@@ -213,8 +215,13 @@ sqlite.exec(`
   WHERE id = 'module-automation-run-6fd7a8dd-212c-4f93-a0fb-5ca16a37fa0a';
 `);
 
+const d1 = new D1Database(sqlite);
 const env = {
-  SMART_ODPADY_DB: new D1Database(sqlite),
+  SMART_ODPADY_DB: d1,
+  DB_CORE: d1,
+  DB_MESSAGES: d1,
+  DB_AUDIT: d1,
+  DB_ARCHIVE: d1,
   APP_BASE_URL: "https://kaiser.test/"
 };
 const firstHour = Date.UTC(2026, 6, 11, 8, 7, 0);

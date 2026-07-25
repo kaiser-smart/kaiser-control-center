@@ -198,7 +198,7 @@ export async function checkIsirCuzkByIco(ico, options = {}) {
 }
 
 export async function previewReceivableCustomerInsolvency(env, customerId, options = {}) {
-  const db = env?.SMART_ODPADY_DB;
+  const db = getCoreDatabase(env, { required: false });
   if (!db) {
     throw new ReceivablesStoreError("Databáze Pohledávek není nastavená.", 503, "receivables_database_missing");
   }
@@ -234,3 +234,4 @@ export async function previewReceivableCustomerInsolvency(env, customerId, optio
     }
   };
 }
+import { getCoreDatabase } from "./databases.js";

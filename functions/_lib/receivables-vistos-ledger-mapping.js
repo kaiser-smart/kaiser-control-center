@@ -1,3 +1,4 @@
+import { getModuleDatabase } from "./databases.js";
 import {
   getVistosPage,
   getVistosSchemaEntity,
@@ -5,7 +6,6 @@ import {
   loginVistosExecute
 } from "./vistos-execute-client.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const SNAPSHOT_IMPORT_KIND = "vistos_invoice_snapshot";
 const SNAPSHOT_SOURCE = "vistos";
 const DEFAULT_LIMIT = 60;
@@ -101,10 +101,10 @@ function boundedOffset(value) {
 }
 
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "receivables-vistos-ledger-mapping", allowedDomains: ["core","archive"], defaultDomain: "core", required: false });
   if (!db && required) {
     throw new ReceivablesVistosLedgerMappingError(
-      "Databáze Pohledávek není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze Pohledávek není nastavená. Přidejte Cloudflare D1 binding DB_CORE / DB_ARCHIVE.",
       503,
       "receivables_database_missing"
     );

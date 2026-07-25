@@ -6,8 +6,8 @@ import {
   CollectionRoutesStoreError,
   createCollectionRoutesVistosKommunalPreviewExport
 } from "./collection-routes-store.js";
+import { getArchiveDatabase } from "./databases.js";
 
-const COLLECTION_ROUTES_DB_BINDING = "SMART_ODPADY_DB";
 export const COLLECTION_ROUTE_SOURCE_MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
 export const COLLECTION_ROUTE_SOURCE_MAX_FILES = 20;
 export const COLLECTION_ROUTE_SOURCE_MAX_ROWS = 5000;
@@ -223,10 +223,10 @@ function nowIso() {
 }
 
 function routeSourcesDatabase(env, required = false) {
-  const db = env?.[COLLECTION_ROUTES_DB_BINDING] || null;
+  const db = getArchiveDatabase(env, { required: false });
   if (!db && required) {
     throw new CollectionRouteSourcesError(
-      "Databáze Tras svozu není nastavená. Chybí D1 binding SMART_ODPADY_DB.",
+      "Archiv zdrojů Tras svozu není nastavený. Chybí D1 binding DB_ARCHIVE.",
       503,
       "collection_route_sources_database_missing"
     );

@@ -1,6 +1,6 @@
+import { getModuleDatabase } from "./databases.js";
 import { isFullAccessRole, normalizeRole } from "../../src/permissions.js";
 
-const EMPLOYEE_DB_BINDING = "SMART_ODPADY_DB";
 export const EMPLOYEE_DOCUMENTS_BUCKET_BINDING = "SMART_ODPADY_DOCUMENTS";
 export const EMPLOYEE_EXCEL_SOURCE = "employee-excel";
 
@@ -70,11 +70,11 @@ export class EmployeeStoreError extends Error {
 }
 
 function employeeDatabase(env, required = false) {
-  const db = env?.[EMPLOYEE_DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "employees-store", allowedDomains: ["core","archive"], defaultDomain: "core", required: false });
 
   if (!db && required) {
     throw new EmployeeStoreError(
-      "Databáze zaměstnanců není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze zaměstnanců není nastavená. Přidejte Cloudflare D1 binding DB_CORE / DB_ARCHIVE.",
       503,
       "employees_database_missing"
     );

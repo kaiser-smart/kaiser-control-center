@@ -1,6 +1,6 @@
+import { getModuleDatabase } from "./databases.js";
 import { PERMISSION_MODULES } from "../../src/permissions.js";
 
-const MODULE_RULES_DB_BINDING = "SMART_ODPADY_DB";
 const RULE_TYPES = new Set(["rule", "automation"]);
 const RULE_STATUSES = new Set(["active", "inactive", "draft", "error"]);
 const TRIGGER_TYPES = new Set(["manual", "time", "event", "webhook"]);
@@ -19,11 +19,11 @@ export class ModuleRulesStoreError extends Error {
 }
 
 function moduleRulesDatabase(env, required = false) {
-  const db = env?.[MODULE_RULES_DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "module-rules-store", allowedDomains: ["audit","core"], defaultDomain: "audit", required: false });
 
   if (!db && required) {
     throw new ModuleRulesStoreError(
-      "Databáze pravidel a automatizací není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze pravidel a automatizací není nastavená. Přidejte Cloudflare D1 binding DB_AUDIT / DB_CORE.",
       503,
       "module_rules_database_missing"
     );

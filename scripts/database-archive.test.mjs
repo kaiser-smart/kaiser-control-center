@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
-import { archiveCollectionSnapshotChunk } from "../functions/_lib/collection-snapshot-archive.js";
+import {
+  archiveCollectionSnapshotChunk,
+  archiveReceivableSnapshotChunk
+} from "../functions/_lib/collection-snapshot-archive.js";
 
 class D1Statement {
   constructor(owner, sql, values = []) {
@@ -76,6 +79,20 @@ sourceSqlite.exec(`
     ('row-1','closed',1,'route','1','preview','{"a":1}','[]','2026-07-20T00:00:01.000Z'),
     ('row-2','closed',2,'route','2','preview','{"a":2}','[]','2026-07-20T00:00:02.000Z'),
     ('row-open','open',1,'route','3','preview','{"a":3}','[]','2026-07-20T00:00:03.000Z');
+  CREATE TABLE receivable_import_batches (
+    id TEXT PRIMARY KEY, status TEXT NOT NULL, updated_at TEXT NOT NULL
+  );
+  CREATE TABLE receivable_import_rows (
+    id TEXT PRIMARY KEY, batch_id TEXT NOT NULL, row_number INTEGER,
+    entity_kind TEXT, preview_status TEXT, confidence REAL, issue_code TEXT,
+    issue_message TEXT, normalized_json TEXT, raw_payload TEXT, created_at TEXT
+  );
+  INSERT INTO receivable_import_batches VALUES
+    ('receivable-closed', 'preview', '2026-07-19T00:00:00.000Z'),
+    ('receivable-recent', 'preview', '2026-07-25T11:30:00.000Z');
+  INSERT INTO receivable_import_rows VALUES
+    ('receivable-row-1','receivable-closed',1,'invoice','ready',1,NULL,NULL,'{"a":1}','{"raw":1}','2026-07-19T00:00:01.000Z'),
+    ('receivable-row-recent','receivable-recent',1,'invoice','ready',1,NULL,NULL,'{"a":2}','{"raw":2}','2026-07-25T11:30:01.000Z');
 `);
 
 const archiveSqlite = new DatabaseSync(":memory:");
@@ -112,5 +129,20 @@ const second = await archiveCollectionSnapshotChunk(env, {
 });
 assert.equal(second.selectedRows, 0);
 assert.equal(sourceSqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_rows").get().count, 3);
+
+const receivables = await archiveReceivableSnapshotChunk(env, {
+  batchSize: 500,
+  retentionDays: 2,
+  scheduledTime: Date.parse("2026-07-25T12:10:00.000Z")
+});
+assert.equal(receivables.sourceTable, "receivable_import_rows");
+assert.equal(receivables.selectedRows, 1);
+assert.equal(receivables.transferredRows, 1);
+assert.equal(receivables.deletedRows, 0);
+assert.equal(sourceSqlite.prepare("SELECT COUNT(*) AS count FROM receivable_import_rows").get().count, 2);
+assert.equal(archiveSqlite.prepare(`
+  SELECT COUNT(*) AS count FROM archive_objects
+  WHERE archive_batch_id LIKE 'receivable-import-%'
+`).get().count, 1);
 
 console.log("database archive tests: ok");

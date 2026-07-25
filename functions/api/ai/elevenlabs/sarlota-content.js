@@ -1,4 +1,5 @@
 import { json, readJson, requireUserPermission } from "../../../_lib/auth.js";
+import { getModuleDatabase } from "../../../_lib/databases.js";
 import {
   contentDocumentId,
   createSarlotaContentVersion,
@@ -26,6 +27,15 @@ const API_BASE = "https://api.elevenlabs.io/v1";
 const REQUEST_TIMEOUT_MS = 15000;
 const MAX_CONTENT_LENGTH = 120000;
 const CONTENT_KINDS = new Set(["prompt", "knowledge_base"]);
+
+function sarlotaContentDatabase(env, required = true) {
+  return getModuleDatabase(env, {
+    moduleName: "sarlota-content",
+    allowedDomains: ["core", "archive", "audit"],
+    defaultDomain: "core",
+    required
+  });
+}
 
 function clean(value) {
   return String(value ?? "").trim();
@@ -302,7 +312,7 @@ async function documentPayload(db, assistantKey, kind, liveContent, live = null)
 }
 
 async function editorPayload(env, assistantConfig) {
-  const db = env?.SMART_ODPADY_DB;
+  const db = sarlotaContentDatabase(env, false);
   if (!db) throw new Error("sarlota_content_db_missing");
   const live = await readLiveContent(env, assistantConfig);
   return {
@@ -323,7 +333,8 @@ async function saveDraft(env, assistantConfig, user, payload) {
   if (!clean(content) || content.length > MAX_CONTENT_LENGTH) return json({ error: "Koncept je prázdný nebo příliš dlouhý." }, 400);
   const baseLiveFingerprint = clean(payload?.baseLiveFingerprint);
   if (!baseLiveFingerprint) return json({ error: "Chybí otisk živé verze. Načti editor znovu." }, 409);
-  const document = await saveSarlotaContentDraft(env.SMART_ODPADY_DB, {
+  const db = sarlotaContentDatabase(env);
+  const document = await saveSarlotaContentDraft(db, {
     assistantKey: assistantConfig.assistantKey,
     kind,
     title: titleForKind(kind),
@@ -333,7 +344,7 @@ async function saveDraft(env, assistantConfig, user, payload) {
     actorId: user?.id || user?.email || "unknown",
     status: "draft"
   });
-  await recordSarlotaContentAudit(env.SMART_ODPADY_DB, {
+  await recordSarlotaContentAudit(db, {
     documentId: document.id,
     assistantKey: assistantConfig.assistantKey,
     kind,
@@ -348,7 +359,7 @@ async function saveDraft(env, assistantConfig, user, payload) {
 async function applyStoredContent(env, assistantConfig, user, payload, mode) {
   const kind = clean(payload?.kind);
   if (!CONTENT_KINDS.has(kind)) return json({ error: "Neznámý typ obsahu." }, 400);
-  const db = env.SMART_ODPADY_DB;
+  const db = sarlotaContentDatabase(env);
   const document = await getSarlotaContentDocument(db, assistantConfig.assistantKey, kind);
   if (!document) return json({ error: "Nejdřív ulož koncept v KSO." }, 409);
   const expectedLiveFingerprint = clean(payload?.expectedLiveFingerprint);
@@ -477,7 +488,7 @@ export async function onRequestPost({ request, env }) {
   try {
     const { user, response } = await requireUserPermission(env, request, "settings", "manage");
     if (response) return response;
-    if (!env?.SMART_ODPADY_DB) return json({ error: "Chybí cloudové úložiště verzí." }, 503);
+    if (!sarlotaContentDatabase(env, false)) return json({ error: "Chybí DB_CORE, DB_ARCHIVE nebo DB_AUDIT pro správu verzí." }, 503);
     const payload = await readJson(request);
     const assistantConfig = resolveElevenLabsAssistantConfig(payload?.assistant || "sarlota", env);
     if (!assistantConfig || assistantConfig.assistantKey !== "sarlota" || !assistantConfig.isProduction) {

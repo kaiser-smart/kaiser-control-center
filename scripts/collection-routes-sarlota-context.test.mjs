@@ -59,7 +59,8 @@ function d1Database(sqlite) {
 const sqlite = new DatabaseSync(":memory:");
 sqlite.exec(readFileSync(new URL("../migrations/0011_create_ai_action_logs.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../migrations/0045_create_sarlota_user_memory.sql", import.meta.url), "utf8"));
-const env = { SMART_ODPADY_DB: d1Database(sqlite), SARLOTA_ORGANIZATION_ID: "kaiser-test" };
+const d1 = d1Database(sqlite);
+const env = { SMART_ODPADY_DB: d1, DB_CORE: d1, DB_AUDIT: d1, SARLOTA_ORGANIZATION_ID: "kaiser-test" };
 
 const rssFixture = `<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0"><channel>

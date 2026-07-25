@@ -1,3 +1,5 @@
+import { getModuleDatabase } from "./databases.js";
+const DB_BINDING = "DB_CORE / DB_AUDIT";
 import {
   SELF_REPAIR_MONITOR_CONCURRENCY,
   SELF_REPAIR_MONITOR_CRON,
@@ -11,7 +13,6 @@ import {
 } from "./self-repair-monitor-config.js";
 import { upsertCloudMonitorSelfRepairCase } from "./self-repair-store.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const DATABASE_NAME = "smart-odpady";
 const ROUTE_MANIFEST_PATH = "/route-manifest.json";
 const MAX_MANIFEST_BYTES = 200_000;
@@ -46,7 +47,7 @@ function randomId(prefix) {
 }
 
 function monitorDatabase(env) {
-  const db = env?.[DB_BINDING];
+  const db = getModuleDatabase(env, { moduleName: "self-repair-monitor-runner", allowedDomains: ["core","audit"], defaultDomain: "core", required: false });
   if (!db) {
     throw new SelfRepairMonitorError(
       `Cloudflare D1 binding ${DB_BINDING} není dostupný pro hodinový monitor.`,

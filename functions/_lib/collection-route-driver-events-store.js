@@ -1,4 +1,4 @@
-const COLLECTION_ROUTES_DB_BINDING = "SMART_ODPADY_DB";
+import { getModuleDatabase } from "./databases.js";
 
 const DRIVER_EVENT_ACTIONS = new Set(["done", "problem", "dump", "break"]);
 
@@ -43,10 +43,10 @@ function nowIso() {
 }
 
 function database(env, required = false) {
-  const db = env?.[COLLECTION_ROUTES_DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "collection-route-driver-events-store", allowedDomains: ["archive","core","audit"], defaultDomain: "archive", required: false });
   if (!db && required) {
     throw new CollectionRouteDriverEventsError(
-      "Databáze řidičských akcí Svozových tras není nastavená. Chybí D1 binding SMART_ODPADY_DB.",
+      "Databáze řidičských akcí Svozových tras není nastavená. Chybí D1 binding DB_ARCHIVE / DB_CORE / DB_AUDIT.",
       503,
       "collection_route_driver_events_database_missing"
     );

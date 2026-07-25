@@ -3,7 +3,8 @@ import {
   normalizeVehicleTrackingPreferences
 } from "../../src/data/vehicleTrackingPreferences.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
+import { getCoreDatabase } from "./databases.js";
+
 
 export class VehicleTrackingPreferencesStoreError extends Error {
   constructor(message, status = 400, code = "vehicle_tracking_preferences_error") {
@@ -15,7 +16,7 @@ export class VehicleTrackingPreferencesStoreError extends Error {
 }
 
 function preferenceDatabase(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getCoreDatabase(env, { required: false });
   if (!db && required) {
     throw new VehicleTrackingPreferencesStoreError(
       "Databáze uživatelského nastavení není dostupná.",

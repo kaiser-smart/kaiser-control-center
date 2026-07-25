@@ -1,6 +1,6 @@
 import { recordAiAction } from "./ai-action-log-store.js";
+import { getAuditDatabase } from "./databases.js";
 
-const ASSISTANT_PROMO_DB_BINDING = "SMART_ODPADY_DB";
 const SARLOTA_PROMO_KEY = "sarlota_intro_2026_06";
 const SARLOTA_PROMO_END_DATE = "2026-06-30";
 const SARLOTA_PROMO_VIDEO_URL = "/avatars/sarlota-intro.mp4";
@@ -17,11 +17,11 @@ export class AssistantPromoStoreError extends Error {
 }
 
 function promoDatabase(env, required = false) {
-  const db = env?.[ASSISTANT_PROMO_DB_BINDING] || null;
+  const db = getAuditDatabase(env, { required: false });
 
   if (!db && required) {
     throw new AssistantPromoStoreError(
-      "Databáze promo videa není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze promo videa není nastavená. Chybí Cloudflare D1 binding DB_AUDIT.",
       503,
       "assistant_promo_database_missing"
     );

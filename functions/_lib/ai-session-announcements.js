@@ -1,7 +1,7 @@
 import { recordAiAction } from "./ai-action-log-store.js";
 import { introAnnouncementFallbackForAi } from "./ai-people-summary.js";
+import { getAuditDatabase } from "./databases.js";
 
-const AI_ACTION_LOG_DB_BINDING = "SMART_ODPADY_DB";
 const ZAORALOVA_ANNOUNCEMENT_KEY = "sarlota_zaoralova_ctp_2026_06";
 const ZAORALOVA_ANNOUNCEMENT_END_DATE = "2026-06-30";
 const ZAORALOVA_ANNOUNCEMENT_MAX_SESSIONS = 3;
@@ -46,7 +46,7 @@ function emptyAnnouncementVariables(currentUser) {
 }
 
 async function announcementSessionCount(env, userId) {
-  const db = env?.[AI_ACTION_LOG_DB_BINDING] || null;
+  const db = getAuditDatabase(env, { required: false });
 
   if (!db) {
     return null;

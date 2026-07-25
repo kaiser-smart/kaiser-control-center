@@ -45,6 +45,8 @@ for (const migration of [
 ]) {
   sqlite.exec(readFileSync(new URL(migration, import.meta.url), "utf8"));
 }
+sqlite.exec(readFileSync(new URL("../migrations/modular/core/0001_core_foundation.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../migrations/modular/audit/0001_audit_foundation.sql", import.meta.url), "utf8"));
 const db = new D1Database(sqlite);
 
 sqlite.prepare(`
@@ -84,7 +86,7 @@ for (let index = 1; index <= 9; index += 1) {
   `).run(`row-${index}`, index, `source-${index}`, JSON.stringify(summary));
 }
 
-const env = { SMART_ODPADY_DB: db };
+const env = { SMART_ODPADY_DB: db, DB_CORE: db, DB_AUDIT: db, DB_ARCHIVE: db };
 const scheduledTime = new Date("2026-07-16T08:05:00.000Z").getTime();
 const first = await runCollectionDailyRoutePreparationAutomation(env, {
   scheduledTime,

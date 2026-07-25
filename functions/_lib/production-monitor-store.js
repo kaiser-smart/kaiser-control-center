@@ -1,6 +1,6 @@
+import { getModuleDatabase } from "./databases.js";
 import { getAuditDatabase } from "./databases.js";
 
-const MONITOR_DB_BINDING = "SMART_ODPADY_DB";
 const DEFAULT_TARGET_URL = "https://smart-odpady.ai/";
 const VALID_STATUS = new Set(["OK", "WARNING", "ERROR", "NEOVĚŘENO"]);
 
@@ -14,11 +14,11 @@ export class ProductionMonitorStoreError extends Error {
 }
 
 function monitorDb(env, required = false) {
-  const db = env?.[MONITOR_DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "production-monitor-store", allowedDomains: ["audit","core","messages"], defaultDomain: "audit", required: false });
 
   if (!db && required) {
     throw new ProductionMonitorStoreError(
-      "Databáze monitoringu není nastavená. Chybí D1 binding SMART_ODPADY_DB.",
+      "Databáze monitoringu není nastavená. Chybí D1 binding DB_AUDIT / DB_CORE / DB_MESSAGES.",
       503,
       "production_monitor_database_missing"
     );
@@ -304,7 +304,7 @@ async function monitorDatabaseItems(env) {
       key: "d1",
       label: "Cloud DB",
       status: "ERROR",
-      message: "D1 binding SMART_ODPADY_DB není dostupný."
+      message: "D1 binding DB_AUDIT / DB_CORE / DB_MESSAGES není dostupný."
     }];
   }
 

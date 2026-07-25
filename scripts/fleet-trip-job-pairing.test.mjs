@@ -114,7 +114,7 @@ sqlite.prepare(`INSERT INTO collection_daily_route_stops (
 ) VALUES (?, 'run-a', '2026-07-15', 'batch-1', ?, ?, 'done', ?)`)
   .run("stop-a2", "source-a2", 2, "2026-07-15T07:00:00.000Z");
 
-const env = { SMART_ODPADY_DB: db };
+const env = { SMART_ODPADY_DB: db, DB_CORE: db, DB_AUDIT: db, DB_ARCHIVE: db };
 const fleetVehicles = [
   { id: "vistos-vehicle-a", vistosVehicleId: "vehicle-a", licensePlate: "3BN 3558" },
   { id: "vistos-vehicle-b", vistosVehicleId: "vehicle-b", licensePlate: "1BP 8373" },

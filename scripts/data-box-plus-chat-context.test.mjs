@@ -44,7 +44,7 @@ const duplicateDb = {
     };
   }
 };
-const duplicateContext = await buildDataBoxPlusChatContext({ SMART_ODPADY_DB: duplicateDb }, context.currentUser);
+const duplicateContext = await buildDataBoxPlusChatContext({ DB_CORE: duplicateDb }, context.currentUser);
 assert.equal(duplicateContext.knownUsers.filter((user) => user.name === "Jan Novák").length, 2);
 assert.ok(duplicateContext.knownUsers.some((user) => user.name === "Eva Bez kontaktu"));
 

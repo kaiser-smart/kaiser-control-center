@@ -97,6 +97,8 @@ for (const migration of [
 ]) {
   sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), "utf8"));
 }
+sqlite.exec(readFileSync(new URL("../migrations/modular/core/0001_core_foundation.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../migrations/modular/audit/0001_audit_foundation.sql", import.meta.url), "utf8"));
 sqlite.prepare("INSERT INTO receivable_customers (id, company_name) VALUES ('customer-1', 'Test s.r.o.')").run();
 sqlite.prepare(`
   INSERT INTO receivable_invoices (
@@ -117,7 +119,8 @@ sqlite.prepare(`
            ('match-2', 'invoice-1', 'payment-2', 'customer-1', 5000, 1, 'variable_symbol_exact', 'matched')
 `).run();
 
-const env = { SMART_ODPADY_DB: new D1Database(sqlite) };
+const d1 = new D1Database(sqlite);
+const env = { SMART_ODPADY_DB: d1, DB_CORE: d1, DB_AUDIT: d1 };
 const preview = await previewReceivablesPaymentReconciliation(env);
 assert.equal(preview.readOnly, true);
 assert.equal(preview.summary.pendingCount, 1);

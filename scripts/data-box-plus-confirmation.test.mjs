@@ -211,8 +211,17 @@ class FakeD1 {
 }
 
 const database = new FakeD1();
+function databaseBindings(db) {
+  return {
+    SMART_ODPADY_DB: db,
+    DB_CORE: db,
+    DB_MESSAGES: db,
+    DB_AUDIT: db,
+    DB_ARCHIVE: db
+  };
+}
 const env = {
-  SMART_ODPADY_DB: database,
+  ...databaseBindings(database),
   OPENAI_API_KEY: "test-openai-key",
   DATA_BOX_PLUS_OPENAI_MODEL: "gpt-test"
 };
@@ -285,7 +294,7 @@ try {
 
   const archiveDatabase = new FakeD1();
   const archived = await executeDataBoxPlusMessageInstruction(
-    { ...env, SMART_ODPADY_DB: archiveDatabase },
+    { ...env, ...databaseBindings(archiveDatabase) },
     archiveDatabase.message.id,
     currentUser,
     { instruction: "archivuj jako informativní" }
@@ -299,7 +308,7 @@ try {
 
   const handoffDatabase = new FakeD1();
   const handoffQuestion = await executeDataBoxPlusMessageInstruction(
-    { ...env, SMART_ODPADY_DB: handoffDatabase },
+    { ...env, ...databaseBindings(handoffDatabase) },
     handoffDatabase.message.id,
     currentUser,
     { instruction: "předej kolegovi" }
@@ -309,7 +318,7 @@ try {
   assert.equal(handoffQuestion.notice, "Chybí adresát. Komu mám zprávu interně předat?");
   assert.equal(openAiRequestCount, 0);
   const handedOff = await executeDataBoxPlusMessageInstruction(
-    { ...env, SMART_ODPADY_DB: handoffDatabase },
+    { ...env, ...databaseBindings(handoffDatabase) },
     handoffDatabase.message.id,
     currentUser,
     { instruction: "Milan Gaží" }
@@ -322,7 +331,7 @@ try {
 
   const noActionDatabase = new FakeD1();
   const noActionResult = await executeDataBoxPlusMessageInstruction(
-    { ...env, SMART_ODPADY_DB: noActionDatabase },
+    { ...env, ...databaseBindings(noActionDatabase) },
     noActionDatabase.message.id,
     currentUser,
     { instruction: "nic" }
@@ -355,7 +364,7 @@ try {
     }
   };
   const orphanYes = await executeDataBoxPlusMessageInstruction(
-    { ...env, SMART_ODPADY_DB: orphanYesDatabase },
+    { ...env, ...databaseBindings(orphanYesDatabase) },
     orphanYesDatabase.message.id,
     currentUser,
     { instruction: "ano" }
@@ -386,7 +395,7 @@ try {
     }
   };
   const greeting = await executeDataBoxPlusMessageInstruction(
-    { ...env, SMART_ODPADY_DB: greetingDatabase },
+    { ...env, ...databaseBindings(greetingDatabase) },
     greetingDatabase.message.id,
     currentUser,
     { instruction: "ahoj" }
@@ -418,7 +427,7 @@ try {
     }
   };
   const selfMail = await executeDataBoxPlusMessageInstruction(
-    { ...env, SMART_ODPADY_DB: selfMailDatabase },
+    { ...env, ...databaseBindings(selfMailDatabase) },
     selfMailDatabase.message.id,
     { id: "radim-oplustil", name: "Radim Opluštil", email: "oplustil@kaiserservis.cz", role: "admin", active: true, status: "active" },
     { instruction: "přeposlal na můj mail" }
@@ -431,7 +440,7 @@ try {
   const emailDatabase = new FakeD1();
   const emailEnv = {
     ...env,
-    SMART_ODPADY_DB: emailDatabase,
+    ...databaseBindings(emailDatabase),
     EMAIL_PROVIDER: "sendgrid",
     SENDGRID_API_KEY: "test-sendgrid-key"
   };
@@ -486,7 +495,7 @@ try {
   const dataBoxDatabase = new FakeD1();
   const dataBoxEnv = {
     ...env,
-    SMART_ODPADY_DB: dataBoxDatabase,
+    ...databaseBindings(dataBoxDatabase),
     DATA_BOX_REPLY_ENDPOINT: "https://data-box.test/reply",
     DATA_BOX_REPLY_API_KEY: "test-data-box-key"
   };
@@ -538,7 +547,7 @@ try {
   const failedDataBoxDatabase = new FakeD1();
   const failedDataBoxEnv = {
     ...dataBoxEnv,
-    SMART_ODPADY_DB: failedDataBoxDatabase
+    ...databaseBindings(failedDataBoxDatabase)
   };
   dataBoxShouldFail = true;
   const failedDataBoxProposal = await executeDataBoxPlusMessageInstruction(
@@ -567,7 +576,7 @@ try {
   dataBoxShouldFail = false;
 
   const failedDatabase = new FakeD1({ failMessageUpdates: true });
-  const failedEnv = { ...env, SMART_ODPADY_DB: failedDatabase };
+  const failedEnv = { ...env, ...databaseBindings(failedDatabase) };
   currentOpenAiPlan = {
     outcome: "ready_for_confirmation",
     intent: "mark_done",

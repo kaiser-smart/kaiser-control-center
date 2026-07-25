@@ -93,6 +93,8 @@ function openDatabase(rowCount) {
   ]) {
     sqlite.exec(readFileSync(new URL(migration, import.meta.url), "utf8"));
   }
+  sqlite.exec(readFileSync(new URL("../migrations/modular/core/0001_core_foundation.sql", import.meta.url), "utf8"));
+  sqlite.exec(readFileSync(new URL("../migrations/modular/audit/0001_audit_foundation.sql", import.meta.url), "utf8"));
 
   sqlite.prepare(`
     INSERT INTO collection_import_batches (
@@ -145,7 +147,7 @@ function openDatabase(rowCount) {
 async function runScaleScenario(rowCount) {
   const { sqlite, sourceRowIds } = openDatabase(rowCount);
   const d1 = new D1Database(sqlite);
-  const env = { SMART_ODPADY_DB: d1 };
+  const env = { SMART_ODPADY_DB: d1, DB_CORE: d1, DB_AUDIT: d1, DB_ARCHIVE: d1 };
   const dispatcher = {
     id: "dispatcher-scale",
     name: "Zátěžový dispečer",
@@ -185,9 +187,9 @@ async function runScaleScenario(rowCount) {
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM collection_daily_route_events").get().count, 1);
 
   const expectedStopInsertStatements = Math.ceil(rowCount / 4);
-  assert.equal(d1.batchSizes.at(-1), expectedStopInsertStatements + 2);
+  assert.deepEqual(d1.batchSizes.slice(-2), [expectedStopInsertStatements + 1, 1]);
   assert.ok(
-    d1.statementExecutions <= expectedStopInsertStatements + 15,
+    d1.statementExecutions <= expectedStopInsertStatements + 25,
     `${rowCount} zastávek použilo příliš mnoho D1 operací: ${d1.statementExecutions}`
   );
   assert.ok(d1.statementExecutions < 300, `${rowCount} zastávek překročilo bezpečný limit 300 D1 operací.`);
@@ -208,7 +210,7 @@ async function assertScaleBatchRollback() {
   const { sqlite, sourceRowIds } = openDatabase(60);
   const d1 = new D1Database(sqlite);
   d1.failBatchStatement = 5;
-  const env = { SMART_ODPADY_DB: d1 };
+  const env = { SMART_ODPADY_DB: d1, DB_CORE: d1, DB_AUDIT: d1, DB_ARCHIVE: d1 };
   const dispatcher = {
     id: "dispatcher-scale",
     name: "Zátěžový dispečer",

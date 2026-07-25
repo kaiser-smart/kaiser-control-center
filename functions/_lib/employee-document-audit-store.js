@@ -1,4 +1,4 @@
-const AUDIT_DB_BINDING = "SMART_ODPADY_DB";
+import { getAuditDatabase } from "./databases.js";
 
 function cleanString(value) {
   return String(value ?? "").trim();
@@ -13,7 +13,7 @@ function randomId(prefix) {
 }
 
 export async function logEmployeeDocumentAction(env, input = {}) {
-  const db = env?.[AUDIT_DB_BINDING] || null;
+  const db = getAuditDatabase(env, { required: false });
   if (!db) {
     return null;
   }

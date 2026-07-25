@@ -83,7 +83,12 @@ function database(test = false) {
 
 const production = database(false);
 const test = database(true);
-const env = { SMART_ODPADY_DB: production.d1, COLLECTION_ROUTES_TEST_DB: test.d1 };
+const env = {
+  SMART_ODPADY_DB: production.d1,
+  DB_CORE: production.d1,
+  DB_AUDIT: production.d1,
+  COLLECTION_ROUTES_TEST_DB: test.d1
+};
 const driver = { id: "driver-1", name: "Řidič Test", role: "ridic", status: "active", active: true };
 
 assert.equal((await readDriverTabletPreferences(env, driver.id, { scope: "production" })).soundMode, "standard");

@@ -1,4 +1,4 @@
-const DB_BINDING = "SMART_ODPADY_DB";
+import { getModuleDatabase } from "./databases.js";
 
 export class VehicleWimStoreError extends Error {
   constructor(message, status = 400, code = "vehicle_wim_error") {
@@ -10,11 +10,11 @@ export class VehicleWimStoreError extends Error {
 }
 
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "vehicle-wim-store", allowedDomains: ["core","audit"], defaultDomain: "core", required: false });
 
   if (!db && required) {
     throw new VehicleWimStoreError(
-      "Databaze WIM vah neni nastavena. Pridejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databaze WIM vah neni nastavena. Pridejte Cloudflare D1 binding DB_CORE / DB_AUDIT.",
       503,
       "vehicle_wim_database_missing"
     );

@@ -5,8 +5,8 @@ import {
   normalizeModuleId,
   normalizeRole
 } from "../../src/permissions.js";
+import { getCoreDatabase } from "./databases.js";
 
-const USER_DB_BINDING = "SMART_ODPADY_DB";
 const DRAFT_USER_PREFIX = "draft-user-";
 
 export class UserStoreError extends Error {
@@ -19,11 +19,11 @@ export class UserStoreError extends Error {
 }
 
 function userDatabase(env, required = false) {
-  const db = env?.[USER_DB_BINDING] || null;
+  const db = getCoreDatabase(env, { required: false });
 
   if (!db && required) {
     throw new UserStoreError(
-      "Databáze uživatelů není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze uživatelů není nastavená. Chybí Cloudflare D1 binding DB_CORE.",
       503,
       "users_database_missing"
     );

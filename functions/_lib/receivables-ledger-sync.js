@@ -1,4 +1,4 @@
-const DB_BINDING = "SMART_ODPADY_DB";
+import { getModuleDatabase } from "./databases.js";
 const VISTOS_IMPORT_KIND = "vistos_invoice_snapshot";
 const BANK_IMPORT_KIND = "bank_transactions";
 
@@ -59,7 +59,7 @@ function randomId(prefix) {
 }
 
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "receivables-ledger-sync", allowedDomains: ["archive","core","audit"], defaultDomain: "archive", required: false });
   if (!db && required) {
     throw new ReceivablesLedgerSyncError("Databáze Pohledávek není nastavená.", 503, "receivables_database_missing");
   }

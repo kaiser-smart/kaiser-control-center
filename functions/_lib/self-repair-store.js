@@ -1,3 +1,5 @@
+import { getModuleDatabase } from "./databases.js";
+import { runCrossDatabaseBatch } from "./cross-database-workflows.js";
 import { targetForSelfRepairReport } from "./self-repair-targets.js";
 import { hasPermission } from "../../src/permissions.js";
 import {
@@ -5,7 +7,6 @@ import {
   SELF_REPAIR_MONITOR_TARGET_URL
 } from "./self-repair-monitor-config.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const ATTACHMENTS_BUCKET_BINDING = "SMART_ODPADY_DOCUMENTS";
 export const SELF_REPAIR_ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 export const SELF_REPAIR_ATTACHMENT_ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.heic,.heif,.txt,.log,.csv,.doc,.docx,.xls,.xlsx";
@@ -81,10 +82,10 @@ export class SelfRepairStoreError extends Error {
 }
 
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "self-repair-store", allowedDomains: ["core","archive","audit"], defaultDomain: "core", required: false });
   if (!db && required) {
     throw new SelfRepairStoreError(
-      "Databáze Samooprav není nastavená. Chybí D1 binding SMART_ODPADY_DB.",
+      "Databáze Samooprav není nastavená. Chybí D1 binding DB_CORE / DB_ARCHIVE / DB_AUDIT.",
       503,
       "self_repair_database_missing"
     );
@@ -782,7 +783,15 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
       ));
     }
 
-    await db.batch(statements);
+    await runCrossDatabaseBatch(env, db, statements, {
+      workflowType: "self-repair-user-report-create",
+      idempotencyKey: `self-repair-user-report:${report.clientRequestId || caseId}`,
+      payload: { caseId, feedbackId, attachmentId: attachment?.id || null },
+      compensation: {
+        strategy: "retain_operational_case_and_retry_audit",
+        r2ObjectKey: attachmentKey || null
+      }
+    });
 
     return { case: createdCase, feedback, attachment };
   } catch (error) {
@@ -1024,7 +1033,7 @@ export async function upsertCloudMonitorSelfRepairCase(env, finding = {}, contex
       : "Případ vytvořen hodinovým read-only monitorem. Prompt je pouze návrh; Codex, repozitář, deploy ani e-mail nebyly spuštěny.";
 
     try {
-      await db.batch([
+      await runCrossDatabaseBatch(env, db, [
         db.prepare(`
           INSERT INTO self_repair_cases (
             id, feedback_id, source, case_type, status, priority, risk_level,
@@ -1108,7 +1117,12 @@ export async function upsertCloudMonitorSelfRepairCase(env, finding = {}, contex
           }),
           auditNote
         )
-      ]);
+      ], {
+        workflowType: "self-repair-monitor-case-create",
+        idempotencyKey: `self-repair-monitor:${normalized.monitorRunId || fingerprint}:${normalized.checkKey}`,
+        payload: { caseId, fingerprint, checkKey: normalized.checkKey },
+        compensation: { strategy: "retain_case_and_retry_audit" }
+      });
     } catch (error) {
       const message = cleanText(error?.message, 1000).toLowerCase();
       if (!message.includes("unique") && !message.includes("constraint")) {
@@ -1246,18 +1260,19 @@ export async function getSelfRepairAttachmentFile(env, currentUser, caseIdValue,
   }
 
   try {
-    const row = await db.prepare(`
-      SELECT a.*, c.reporter_user_id
-      FROM self_repair_case_attachments a
-      JOIN self_repair_cases c ON c.id = a.case_id
-      WHERE a.id = ? AND a.case_id = ?
-      LIMIT 1
-    `).bind(attachmentId, caseId).first();
+    const row = await db
+      .prepare("SELECT * FROM self_repair_case_attachments WHERE id = ? AND case_id = ? LIMIT 1")
+      .bind(attachmentId, caseId)
+      .first();
     if (!row) {
       throw new SelfRepairStoreError("Příloha nebyla nalezena.", 404, "self_repair_attachment_not_found");
     }
 
-    const sameReporter = cleanText(row.reporter_user_id, 200).toLowerCase()
+    const caseRow = await db
+      .prepare("SELECT reporter_user_id FROM self_repair_cases WHERE id = ? LIMIT 1")
+      .bind(caseId)
+      .first();
+    const sameReporter = cleanText(caseRow?.reporter_user_id, 200).toLowerCase()
       === cleanText(currentUser?.id || currentUser?.email, 200).toLowerCase();
     const publicAttachment = cleanText(row.visibility, 40) !== "internal";
     const canRead = hasPermission(currentUser, "self-repair", "view")
@@ -1421,7 +1436,13 @@ export async function updateSelfRepairCase(env, currentUser, id, input = {}) {
       ));
     }
 
-    await db.batch(statements);
+    await runCrossDatabaseBatch(env, db, statements, {
+      workflowType: "self-repair-case-update",
+      idempotencyKey: cleanText(input.idempotencyKey, 300) ||
+        `self-repair-case-update:${caseId}:${status}:${riskLevel}:${priority}:${updatedByUserId}`,
+      payload: { caseId, status, riskLevel, priority, feedbackId: existing.feedbackId || null },
+      compensation: { strategy: "retain_case_state_and_retry_feedback_or_audit" }
+    });
     return updated;
   } catch (error) {
     if (error instanceof SelfRepairStoreError) throw error;

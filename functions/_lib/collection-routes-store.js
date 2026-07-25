@@ -1,4 +1,4 @@
-const COLLECTION_ROUTES_DB_BINDING = "SMART_ODPADY_DB";
+import { getModuleDatabase } from "./databases.js";
 const VISTOS_NOT_CONFIGURED_MESSAGE = "Vistos API není nakonfigurováno";
 export const COLLECTION_ROUTES_MANUAL_IMPORT_MAX_FILE_SIZE_BYTES = 1024 * 1024;
 const COLLECTION_ROUTES_VISTOS_MAX_ROWS = 1000;
@@ -619,11 +619,11 @@ function nowIso() {
 }
 
 function collectionRoutesDatabase(env, required = false) {
-  const db = env?.[COLLECTION_ROUTES_DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "collection-routes-store", allowedDomains: ["archive","core"], defaultDomain: "archive", required: false });
 
   if (!db && required) {
     throw new CollectionRoutesStoreError(
-      "Databáze pilotu Tras svozu není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze pilotu Tras svozu není nastavená. Přidejte Cloudflare D1 binding DB_ARCHIVE / DB_CORE.",
       503,
       "collection_routes_database_missing"
     );

@@ -71,7 +71,10 @@ const sqlite = new DatabaseSync(":memory:");
 sqlite.exec(readFileSync(new URL("../migrations/0050_create_tyres_module.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../migrations/0052_extend_tyres_workflows.sql", import.meta.url), "utf8"));
 sqlite.exec(readFileSync(new URL("../migrations/0053_restore_tyre_vehicle_profiles.sql", import.meta.url), "utf8"));
-const env = { SMART_ODPADY_DB: new D1Database(sqlite) };
+sqlite.exec(readFileSync(new URL("../migrations/modular/core/0001_core_foundation.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../migrations/modular/audit/0001_audit_foundation.sql", import.meta.url), "utf8"));
+const d1 = new D1Database(sqlite);
+const env = { SMART_ODPADY_DB: d1, DB_CORE: d1, DB_AUDIT: d1, DB_ARCHIVE: d1 };
 const manager = { id: "tyres-manager", name: "Testovací správce" };
 const technician = { id: "tyres-technician", name: "Testovací dílna" };
 

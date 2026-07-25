@@ -12,7 +12,6 @@ import {
   vehicleLicensePlateValue
 } from "../../src/data/licensePlate.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 
 export class FleetVehiclesStoreError extends Error {
   constructor(message, status = 400, code = "fleet_vehicles_error") {
@@ -24,11 +23,11 @@ export class FleetVehiclesStoreError extends Error {
 }
 
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getCoreDatabase(env, { required: false });
 
   if (!db && required) {
     throw new FleetVehiclesStoreError(
-      "Databáze vozového parku není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze vozového parku není nastavená. Chybí Cloudflare D1 binding DB_CORE.",
       503,
       "fleet_database_missing"
     );
@@ -1332,3 +1331,4 @@ export async function driverReportVehicleDynamicVariables(env, user) {
 export function fleetVehicleCanEditDriver(user) {
   return hasPermission(user, "fleet", "edit") || ["admin", "management", "garazmistr"].includes(normalizeRole(user?.role));
 }
+import { getCoreDatabase } from "./databases.js";

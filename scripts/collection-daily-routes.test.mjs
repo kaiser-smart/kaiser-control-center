@@ -212,6 +212,8 @@ for (const migration of [
 ]) {
   sqlite.exec(readFileSync(new URL(migration, import.meta.url), "utf8"));
 }
+sqlite.exec(readFileSync(new URL("../migrations/modular/core/0001_core_foundation.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../migrations/modular/audit/0001_audit_foundation.sql", import.meta.url), "utf8"));
 
 sqlite.prepare(`
   INSERT INTO collection_import_batches (
@@ -246,6 +248,9 @@ const otherDriver = { id: "driver-2", name: "Jiný řidič", role: "ridic", stat
 const readonly = { id: "readonly-1", name: "Readonly Test", role: "readonly", status: "active", active: true };
 const env = {
   SMART_ODPADY_DB: new D1Database(sqlite),
+  DB_CORE: new D1Database(sqlite),
+  DB_AUDIT: new D1Database(sqlite),
+  DB_ARCHIVE: new D1Database(sqlite),
   AUTH_USERS_JSON: JSON.stringify([dispatcher, driver, otherDriver, readonly]),
   AUTH_SESSION_SECRET: "collection-daily-routes-test-session-secret"
 };
@@ -741,6 +746,8 @@ for (const migration of [
 ]) {
   isolatedProductionSqlite.exec(readFileSync(new URL(migration, import.meta.url), "utf8"));
 }
+isolatedProductionSqlite.exec(readFileSync(new URL("../migrations/modular/core/0001_core_foundation.sql", import.meta.url), "utf8"));
+isolatedProductionSqlite.exec(readFileSync(new URL("../migrations/modular/audit/0001_audit_foundation.sql", import.meta.url), "utf8"));
 const miroslav = {
   id: "pneumatiky-miroslav-vasek",
   name: "Miroslav Vašek",
@@ -771,6 +778,9 @@ const isolatedAdmin = {
 };
 const isolatedEnv = {
   SMART_ODPADY_DB: new D1Database(isolatedProductionSqlite),
+  DB_CORE: new D1Database(isolatedProductionSqlite),
+  DB_AUDIT: new D1Database(isolatedProductionSqlite),
+  DB_ARCHIVE: new D1Database(isolatedProductionSqlite),
   COLLECTION_ROUTES_TEST_DB: new D1Database(isolatedTestSqlite),
   SMART_ODPADY_DOCUMENTS: new FakeR2Bucket(),
   AUTH_USERS_JSON: JSON.stringify([miroslav, foreignDriver, isolatedManager, isolatedAdmin]),

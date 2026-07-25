@@ -87,6 +87,8 @@ async function productionAssetFetch(input, init = {}) {
 }
 
 const sqlite = new DatabaseSync(":memory:");
+sqlite.exec(readFileSync(new URL("../migrations/modular/core/0001_core_foundation.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../migrations/modular/audit/0001_audit_foundation.sql", import.meta.url), "utf8"));
 for (const migration of [
   "0007_create_module_feedback.sql",
   "0015_create_module_rules.sql",
@@ -106,8 +108,13 @@ assert.equal(JSON.parse(rule.conditions_json).authenticatedProductionSession, fa
 assert.equal(JSON.parse(rule.actions_json).syntheticClicksOnly, true);
 assert.equal(JSON.parse(rule.actions_json).blockBrowserNetwork, true);
 
+const d1 = new D1Database(sqlite);
 const env = {
-  SMART_ODPADY_DB: new D1Database(sqlite),
+  SMART_ODPADY_DB: d1,
+  DB_CORE: d1,
+  DB_MESSAGES: d1,
+  DB_AUDIT: d1,
+  DB_ARCHIVE: d1,
   APP_BASE_URL: "https://smart-odpady.test/"
 };
 const scheduledTime = Date.UTC(2026, 6, 18, 2, 37, 0);

@@ -15,5 +15,25 @@ binding = "SMART_ODPADY_DB"
 database_name = "smart-odpady"
 database_id = "6d9ab099-fa10-4245-b06b-e146b63450a9"
 
+[[d1_databases]]
+binding = "DB_CORE"
+database_name = "SMART_ODPADY_CORE"
+database_id = "7babb37a-dc19-4bbc-b4f8-3346f4e1aa23"
+
+[[d1_databases]]
+binding = "DB_MESSAGES"
+database_name = "SMART_ODPADY_MESSAGES"
+database_id = "8aeb65e8-9f53-4c93-869e-1f58484b1319"
+
+[[d1_databases]]
+binding = "DB_AUDIT"
+database_name = "SMART_ODPADY_AUDIT"
+database_id = "5abc8fa4-c155-4bf0-9c46-2db73d6d98e0"
+
+[[d1_databases]]
+binding = "DB_ARCHIVE"
+database_name = "SMART_ODPADY_ARCHIVE"
+database_id = "b10566be-ebb1-414c-beab-eac03f1a909b"
+
 [triggers]
 crons = ["37 2 * * *"]

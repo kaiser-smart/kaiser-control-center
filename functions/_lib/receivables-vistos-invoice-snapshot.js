@@ -10,8 +10,8 @@ import {
   mapReceivablesVistosInvoice,
   receivablesVistosInvoiceLookbackWindow
 } from "./receivables-vistos-preview.js";
+import { getArchiveDatabase } from "./databases.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const SNAPSHOT_IMPORT_KIND = "vistos_invoice_snapshot";
 const INCREMENTAL_IMPORT_KIND = "vistos_invoice_incremental";
 const SNAPSHOT_SOURCE = "vistos";
@@ -94,10 +94,10 @@ export class ReceivablesVistosInvoiceSnapshotError extends Error {
 }
 
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getArchiveDatabase(env, { required: false });
   if (!db && required) {
     throw new ReceivablesVistosInvoiceSnapshotError(
-      "Databáze Pohledávek není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Archiv importů Pohledávek není nastavený. Chybí Cloudflare D1 binding DB_ARCHIVE.",
       503,
       "receivables_database_missing"
     );

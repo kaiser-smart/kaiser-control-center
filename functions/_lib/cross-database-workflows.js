@@ -79,3 +79,55 @@ export async function recordWorkflowAttempt(env, input = {}) {
     JSON.stringify(input.metadata || {})
   ).run();
 }
+
+export async function runCrossDatabaseBatch(env, db, statements = [], input = {}) {
+  const domains = [...new Set(statements.map((statement) => statement?.databaseDomain).filter(Boolean))];
+  if (domains.length <= 1 || statements.some((statement) => !statement?.databaseDomain)) {
+    return db.batch(statements);
+  }
+  const idempotencyKey = cleanString(input.idempotencyKey);
+  if (!idempotencyKey) throw new TypeError("Cross-database batch vyžaduje idempotency_key.");
+  const workflow = await beginCrossDatabaseWorkflow(env, {
+    workflowType: cleanString(input.workflowType) || "cross-database-batch",
+    idempotencyKey,
+    payload: input.payload || {},
+    compensation: input.compensation || {
+      strategy: "retain_primary_and_retry_failed_domain",
+      operation: "replay_idempotent_statements"
+    }
+  });
+  if (workflow.status === "completed") return [];
+
+  const results = [];
+  for (const domain of domains) {
+    const domainStatements = statements.filter((statement) => statement.databaseDomain === domain);
+    try {
+      results.push(...await db.batch(domainStatements));
+      await recordWorkflowAttempt(env, {
+        workflowId: workflow.id,
+        databaseDomain: domain,
+        operationName: cleanString(input.workflowType) || "cross-database-batch",
+        status: "completed",
+        finishedAt: new Date().toISOString(),
+        metadata: { statementCount: domainStatements.length }
+      });
+    } catch (error) {
+      await updateCrossDatabaseWorkflow(env, workflow.id, {
+        status: "failed",
+        lastError: cleanString(error?.message).slice(0, 500),
+        nextAttemptAt: cleanString(input.nextAttemptAt) || new Date(Date.now() + 5 * 60 * 1000).toISOString()
+      }).catch(() => {});
+      if (domain === "audit" && input.allowAuditDeferred !== false) {
+        console.error("cross_database.audit_deferred", {
+          workflowId: workflow.id,
+          workflowType: cleanString(input.workflowType),
+          message: cleanString(error?.message)
+        });
+        return results;
+      }
+      throw error;
+    }
+  }
+  await updateCrossDatabaseWorkflow(env, workflow.id, { status: "completed" });
+  return results;
+}

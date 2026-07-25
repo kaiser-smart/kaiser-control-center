@@ -1,3 +1,5 @@
+import { getModuleDatabase } from "./databases.js";
+import { runCrossDatabaseBatch } from "./cross-database-workflows.js";
 import { hasPermission } from "../../src/permissions.js";
 import {
   SELF_REPAIR_ATTACHMENT_ACCEPT,
@@ -5,7 +7,6 @@ import {
   SelfRepairStoreError
 } from "./self-repair-store.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const BUCKET_BINDING = "SMART_ODPADY_DOCUMENTS";
 
 export const FEEDBACK_WORKFLOW_STATUSES = Object.freeze({
@@ -72,7 +73,7 @@ const ATTACHMENT_TYPES = new Map([
 ]);
 
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "feedback-case-store", allowedDomains: ["core","messages","archive","audit"], defaultDomain: "core", required: false });
   if (!db && required) {
     throw new SelfRepairStoreError(
       "Databáze hlášení není nastavená.",
@@ -678,7 +679,13 @@ export async function updateFeedbackCase(env, user, caseId, input = {}) {
       ));
     }
 
-    await db.batch(statements);
+    await runCrossDatabaseBatch(env, db, statements, {
+      workflowType: "feedback-case-update",
+      idempotencyKey: cleanText(input.idempotencyKey, 300) ||
+        `feedback-case-update:${caseId}:${workflowStatus}:${existing.workflowStatus}:${publicMessage || detailsQuestion || internalNote}:${actorId}`,
+      payload: { caseId, workflowStatus, feedbackId: next.feedbackId || null },
+      compensation: { strategy: "retain_case_state_and_retry_notification_audit" }
+    });
     return {
       case: caseForUser(next, user),
       previousWorkflowStatus: existing.workflowStatus,
@@ -838,7 +845,15 @@ export async function replyToFeedbackCase(env, user, caseId, input = {}, options
         item.feedbackId
       ));
     }
-    await db.batch(statements);
+    await runCrossDatabaseBatch(env, db, statements, {
+      workflowType: "feedback-case-reply",
+      idempotencyKey: cleanText(input.idempotencyKey, 300) || `feedback-case-reply:${item.id}:${messageId}`,
+      payload: { caseId: item.id, messageId, attachmentId: attachment?.id || null },
+      compensation: {
+        strategy: "retain_message_and_retry_feedback_audit",
+        r2ObjectKey: storageKey || null
+      }
+    });
     return getFeedbackCase(env, user, item.id);
   } catch (error) {
     if (stored) {
@@ -886,7 +901,7 @@ export async function verifyFeedbackCase(env, user, caseId, result, note = "") {
   const now = nowIso();
   const actorId = userIdentity(user);
   const actorName = cleanText(user?.name || user?.email || "Uživatel", 240);
-  await db.batch([
+  await runCrossDatabaseBatch(env, db, [
     db.prepare(`
       UPDATE self_repair_cases
       SET workflow_status = ?, public_message = ?, last_public_update_at = ?,
@@ -944,7 +959,12 @@ export async function verifyFeedbackCase(env, user, caseId, result, note = "") {
         item.feedbackId
       )
     ] : [])
-  ]);
+  ], {
+    workflowType: "feedback-case-verify",
+    idempotencyKey: `feedback-case-verify:${item.id}:${normalizedResult}:${actorId}`,
+    payload: { caseId: item.id, result: normalizedResult, feedbackId: item.feedbackId || null },
+    compensation: { strategy: "retain_verification_and_retry_feedback_audit" }
+  });
   return getFeedbackCase(env, user, item.id);
 }
 
@@ -1081,7 +1101,7 @@ export async function prepareFeedbackCodexJob(env, user, caseId) {
     createdAt: now,
     updatedAt: now
   };
-  await db.batch([
+  await runCrossDatabaseBatch(env, db, [
     db.prepare(`
       INSERT INTO self_repair_codex_jobs (
         id, case_id, status, prompt_text, requested_by_user_id,
@@ -1111,7 +1131,12 @@ export async function prepareFeedbackCodexJob(env, user, caseId) {
       safeJson({ codexJobId: job.id, status: "draft" }, {}),
       "Zadání pro Codex bylo připraveno. Codex zatím nebyl spuštěn."
     )
-  ]);
+  ], {
+    workflowType: "feedback-codex-job-prepare",
+    idempotencyKey: `feedback-codex-job-prepare:${job.id}`,
+    payload: { caseId: item.id, jobId: job.id },
+    compensation: { strategy: "retain_job_and_retry_audit" }
+  });
   return { job, capability: codexCapability(env) };
 }
 
@@ -1210,7 +1235,7 @@ export async function submitFeedbackCodexJob(env, user, caseId, jobId, confirmat
     }
   } catch (error) {
     const message = cleanText(error?.message, 1000) || "Codex runner nevrátil potvrzení.";
-    await db.batch([
+    await runCrossDatabaseBatch(env, db, [
       db.prepare(`
         UPDATE self_repair_codex_jobs
         SET status = 'failed', error_message = ?, updated_at = ?
@@ -1231,7 +1256,12 @@ export async function submitFeedbackCodexJob(env, user, caseId, jobId, confirmat
         safeJson({ codexJobId: job.id, status: "failed" }, {}),
         message
       )
-    ]);
+    ], {
+      workflowType: "feedback-codex-job-failed",
+      idempotencyKey: `feedback-codex-job-failed:${job.id}`,
+      payload: { caseId: item.id, jobId: job.id },
+      compensation: { strategy: "retain_failed_job_and_retry_audit" }
+    });
     throw new SelfRepairStoreError(
       "Předání Codexu selhalo. Zadání nebylo potvrzeně převzato.",
       502,
@@ -1239,7 +1269,7 @@ export async function submitFeedbackCodexJob(env, user, caseId, jobId, confirmat
     );
   }
 
-  await db.batch([
+  await runCrossDatabaseBatch(env, db, [
     db.prepare(`
       UPDATE self_repair_codex_jobs
       SET status = 'submitted', runner_name = ?, external_task_id = ?,
@@ -1273,7 +1303,12 @@ export async function submitFeedbackCodexJob(env, user, caseId, jobId, confirmat
       safeJson({ codexJobId: job.id, status: "submitted", externalTaskId: result.externalTaskId }, {}),
       "Codex runner potvrdil převzetí zadání. Nasazení nebylo spuštěno."
     )
-  ]);
+  ], {
+    workflowType: "feedback-codex-job-submitted",
+    idempotencyKey: `feedback-codex-job-submitted:${job.id}`,
+    payload: { caseId: item.id, jobId: job.id, externalTaskId: result.externalTaskId },
+    compensation: { strategy: "retain_submitted_job_and_retry_case_audit" }
+  });
   return { job: { ...job, ...result, submittedAt: now, updatedAt: now }, capability };
 }
 

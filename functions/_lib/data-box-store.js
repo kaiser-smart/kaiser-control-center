@@ -1,3 +1,4 @@
+import { getModuleDatabase } from "./databases.js";
 import {
   dataBoxIsdsAccountConfigs,
   dataBoxIsdsStatus,
@@ -5,7 +6,6 @@ import {
   fetchDataBoxMessageMetadata
 } from "./data-box-isds-client.js";
 
-const DATA_BOX_DB_BINDING = "SMART_ODPADY_DB";
 const DATA_BOX_DOCUMENTS_BINDING = "SMART_ODPADY_DOCUMENTS";
 const MESSAGE_DIRECTIONS = new Set(["received", "sent"]);
 const MESSAGE_STATUSES = new Set(["new", "read", "archived", "draft", "sent", "failed"]);
@@ -21,11 +21,11 @@ export class DataBoxStoreError extends Error {
 }
 
 function dataBoxDatabase(env, required = false) {
-  const db = env?.[DATA_BOX_DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "data-box-store", allowedDomains: ["core","audit","messages"], defaultDomain: "core", required: false });
 
   if (!db && required) {
     throw new DataBoxStoreError(
-      "Databaze Datove schranky neni nastavena. Pridejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databaze Datove schranky neni nastavena. Pridejte Cloudflare D1 binding DB_CORE / DB_AUDIT / DB_MESSAGES.",
       503,
       "data_box_database_missing"
     );
@@ -857,7 +857,7 @@ export async function getDataBoxStatus(env) {
       isds: isdsStatus,
       dataBox: null,
       summary: { received: 0, sent: 0, attachments: 0, syncRuns: 0, lastSyncAt: "" },
-      message: "Cloud D1 binding SMART_ODPADY_DB zatim neni dostupny."
+      message: "Cloud D1 binding DB_CORE / DB_AUDIT / DB_MESSAGES zatim neni dostupny."
     };
   }
 
@@ -1133,21 +1133,28 @@ export async function listDataBoxMessages(env, filters = {}) {
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   try {
-    const result = await db
+    const [result, boxes] = await Promise.all([
+      db
       .prepare(`
-        SELECT
-          m.*,
-          b.label AS data_box_label,
-          b.isds_id AS data_box_isds_id
+        SELECT *
         FROM data_box_messages m
-        LEFT JOIN data_boxes b ON b.id = m.data_box_id
         ${whereSql}
         ORDER BY COALESCE(m.delivered_at, m.accepted_at, m.stored_at) DESC, m.stored_at DESC
         LIMIT ?
       `)
       .bind(...bindings, limit)
-      .all();
-    return (result.results || []).map(rowToMessage);
+      .all(),
+      db.prepare("SELECT id, label, isds_id FROM data_boxes").all()
+    ]);
+    const boxMap = new Map((boxes.results || []).map((box) => [cleanString(box.id), box]));
+    return (result.results || []).map((row) => {
+      const box = boxMap.get(cleanString(row.data_box_id));
+      return rowToMessage({
+        ...row,
+        data_box_label: box?.label || "",
+        data_box_isds_id: box?.isds_id || ""
+      });
+    });
   } catch (error) {
     throw dbError(error);
   }
@@ -1190,20 +1197,19 @@ export async function getDataBoxMessage(env, id) {
   const messageId = cleanString(id);
 
   try {
-    const row = await db.prepare(`
-      SELECT
-        m.*,
-        b.label AS data_box_label,
-        b.isds_id AS data_box_isds_id
-      FROM data_box_messages m
-      LEFT JOIN data_boxes b ON b.id = m.data_box_id
-      WHERE m.id = ?
-      LIMIT 1
-    `).bind(messageId).first();
+    const row = await db
+      .prepare("SELECT * FROM data_box_messages WHERE id = ? LIMIT 1")
+      .bind(messageId)
+      .first();
     if (!row) {
       throw new DataBoxStoreError("Zprava nebyla nalezena.", 404, "data_box_message_not_found");
     }
 
+    const box = row.data_box_id
+      ? await db.prepare("SELECT label, isds_id FROM data_boxes WHERE id = ? LIMIT 1")
+        .bind(cleanString(row.data_box_id))
+        .first()
+      : null;
     const attachmentsResult = await db
       .prepare("SELECT * FROM data_box_attachments WHERE message_id = ? ORDER BY filename")
       .bind(messageId)
@@ -1214,7 +1220,11 @@ export async function getDataBoxMessage(env, id) {
       .first();
 
     return {
-      ...rowToMessage(row),
+      ...rowToMessage({
+        ...row,
+        data_box_label: box?.label || "",
+        data_box_isds_id: box?.isds_id || ""
+      }),
       attachments: (attachmentsResult.results || []).map(rowToAttachment),
       latestAiEvaluation: rowToAiEvaluation(evaluationRow)
     };
@@ -1273,19 +1283,15 @@ export async function listDataBoxSyncRuns(env, filters = {}) {
   const limit = limitValue(filters.limit, 50, 100);
 
   try {
-    const result = await db
-      .prepare(`
-        SELECT
-          r.*,
-          b.label AS data_box_label
-        FROM data_box_sync_runs r
-        LEFT JOIN data_boxes b ON b.id = r.data_box_id
-        ORDER BY r.started_at DESC
-        LIMIT ?
-      `)
-      .bind(limit)
-      .all();
-    return (result.results || []).map(rowToSyncRun);
+    const [result, boxes] = await Promise.all([
+      db.prepare("SELECT * FROM data_box_sync_runs ORDER BY started_at DESC LIMIT ?").bind(limit).all(),
+      db.prepare("SELECT id, label FROM data_boxes").all()
+    ]);
+    const boxMap = new Map((boxes.results || []).map((box) => [cleanString(box.id), box]));
+    return (result.results || []).map((row) => rowToSyncRun({
+      ...row,
+      data_box_label: boxMap.get(cleanString(row.data_box_id))?.label || ""
+    }));
   } catch (error) {
     throw dbError(error);
   }

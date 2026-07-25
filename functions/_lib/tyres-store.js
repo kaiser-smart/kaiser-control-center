@@ -1,6 +1,11 @@
+import { getModuleDatabase } from "./databases.js";
+import {
+  beginCrossDatabaseWorkflow,
+  recordWorkflowAttempt,
+  updateCrossDatabaseWorkflow
+} from "./cross-database-workflows.js";
 import { normalizeLicensePlate } from "../../src/data/licensePlate.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const TREAD_ALERT_MM = 3.5;
 
 export class TyresStoreError extends Error {
@@ -12,9 +17,9 @@ export class TyresStoreError extends Error {
 }
 
 function database(env) {
-  const db = env?.[DB_BINDING];
+  const db = getModuleDatabase(env, { moduleName: "tyres-store", allowedDomains: ["audit","core","archive"], defaultDomain: "audit", required: false });
   if (!db) {
-    throw new TyresStoreError("Databáze Pneumatik není nastavená. Chybí binding SMART_ODPADY_DB.", 503, "tyres_database_missing");
+    throw new TyresStoreError("Databáze Pneumatik není nastavená. Chybí binding DB_AUDIT / DB_CORE / DB_ARCHIVE.", 503, "tyres_database_missing");
   }
   return db;
 }
@@ -152,10 +157,46 @@ function auditStatement(db, { entityType, entityId, action, user, payload = {}, 
   );
 }
 
-async function executeBatch(db, statements) {
-  if (typeof db.batch === "function") return db.batch(statements);
+async function executeBatch(env, db, statements, workflowInput = {}) {
+  const domains = [...new Set(statements.map((statement) => statement?.databaseDomain).filter(Boolean))];
+  if (domains.length <= 1) return db.batch(statements);
+  const workflow = await beginCrossDatabaseWorkflow(env, {
+    workflowType: cleanString(workflowInput.workflowType || "tyres-write"),
+    idempotencyKey: cleanString(workflowInput.idempotencyKey),
+    payload: workflowInput.payload || {},
+    compensation: {
+      strategy: "retain_core_and_retry_missing_audit",
+      operation: "replay_deterministic_audit_statement",
+      ...(workflowInput.compensation || {})
+    }
+  });
+  if (workflow.status === "completed") return [];
   const results = [];
-  for (const statement of statements) results.push(await statement.run());
+  for (const domain of domains) {
+    const domainStatements = statements.filter((statement) => statement.databaseDomain === domain);
+    try {
+      results.push(...await db.batch(domainStatements));
+      await recordWorkflowAttempt(env, {
+        workflowId: workflow.id,
+        databaseDomain: domain,
+        operationName: cleanString(workflowInput.workflowType || "tyres-write"),
+        status: "completed",
+        finishedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      await updateCrossDatabaseWorkflow(env, workflow.id, {
+        status: "failed",
+        lastError: cleanString(error?.message).slice(0, 500),
+        nextAttemptAt: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+      }).catch(() => {});
+      if (domain === "audit") {
+        console.error("tyres.audit_deferred", { workflowId: workflow.id, message: cleanString(error?.message) });
+        return results;
+      }
+      throw error;
+    }
+  }
+  await updateCrossDatabaseWorkflow(env, workflow.id, { status: "completed" });
   return results;
 }
 
@@ -646,24 +687,26 @@ export async function getTyreDetail(env, tyreId) {
       FROM tyre_inventory i WHERE i.id = ?
     `).bind(recordId).first();
     if (!tyreRow) throw new TyresStoreError("Pneumatika nebyla nalezena.", 404, "tyre_not_found");
-    const [measurements, services, auditResult] = await Promise.all([
+    const [measurements, services] = await Promise.all([
       db.prepare(`SELECT * FROM tyre_measurements WHERE tyre_id = ? ORDER BY measured_at DESC, created_at DESC LIMIT 250`).bind(recordId).all(),
       db.prepare(`
         SELECT s.*, COALESCE((SELECT json_group_array(link.tyre_id) FROM tyre_service_record_tyres link WHERE link.service_record_id = s.id), '[]') AS tyre_ids_json
         FROM tyre_service_records s
         WHERE EXISTS (SELECT 1 FROM tyre_service_record_tyres link WHERE link.service_record_id = s.id AND link.tyre_id = ?)
         ORDER BY s.service_date DESC, s.created_at DESC LIMIT 250
-      `).bind(recordId).all(),
-      db.prepare(`
-        SELECT * FROM tyre_audit_log a
-        WHERE (a.entity_type = 'tyre' AND a.entity_id = ?)
-          OR (a.entity_type = 'measurement' AND json_extract(a.payload_json, '$.tyreId') = ?)
-          OR (a.entity_type = 'service' AND EXISTS (
-            SELECT 1 FROM tyre_service_record_tyres link WHERE link.service_record_id = a.entity_id AND link.tyre_id = ?
-          ))
-        ORDER BY a.created_at DESC LIMIT 250
-      `).bind(recordId, recordId, recordId).all()
+      `).bind(recordId).all()
     ]);
+    const serviceIds = (services.results || []).map((row) => cleanString(row.id)).filter(Boolean);
+    const serviceCondition = serviceIds.length
+      ? ` OR (entity_type = 'service' AND entity_id IN (${serviceIds.map(() => "?").join(", ")}))`
+      : "";
+    const auditResult = await db.prepare(`
+      SELECT * FROM tyre_audit_log
+      WHERE (entity_type = 'tyre' AND entity_id = ?)
+        OR (entity_type = 'measurement' AND json_extract(payload_json, '$.tyreId') = ?)
+        ${serviceCondition}
+      ORDER BY created_at DESC LIMIT 250
+    `).bind(recordId, recordId, ...serviceIds).all();
     const serviceItems = (services.results || []).map(rowToService);
     return {
       apiStatus: "ready",
@@ -761,12 +804,16 @@ export async function fitTyre(env, user, value) {
     const createdAt = nowIso();
     if (action === "dismount") {
       const payload = { tyreId, fromVehicle: cleanString(tyre.vehicle_license_plate), fromPosition: cleanString(tyre.wheel_position) };
-      await executeBatch(db, [
+      await executeBatch(env, db, [
         db.prepare(`
           UPDATE tyre_inventory SET lifecycle_state = 'sklad', vehicle_license_plate = '', wheel_position = '', mounted_at = '', mounted_odometer_km = 0, updated_at = ? WHERE id = ?
         `).bind(createdAt, tyreId),
         auditStatement(db, { entityType: "tyre", entityId: tyreId, action: "dismounted", user, payload, createdAt })
-      ]);
+      ], {
+        workflowType: "tyre-dismount",
+        idempotencyKey: `tyre-dismount:${tyreId}:${createdAt}`,
+        payload
+      });
     } else {
       const vehicle = requirePlate(value.vehicle);
       const position = requireText(value.position, "Pozice kola", 80);
@@ -774,12 +821,16 @@ export async function fitTyre(env, user, value) {
       requireVehiclePosition(vehicleRow, position);
       await requireAvailablePosition(db, vehicle, position, tyreId);
       const payload = { tyreId, vehicle, position, mountedAt: dateOnly(value.mountedAt, createdAt.slice(0, 10)), mountedOdo: cleanNumber(value.mountedOdo, 0, { max: 10000000 }) };
-      await executeBatch(db, [
+      await executeBatch(env, db, [
         db.prepare(`
           UPDATE tyre_inventory SET lifecycle_state = 'na vozidle', vehicle_license_plate = ?, wheel_position = ?, mounted_at = ?, mounted_odometer_km = ?, updated_at = ? WHERE id = ?
         `).bind(payload.vehicle, payload.position, payload.mountedAt, payload.mountedOdo, createdAt, tyreId),
         auditStatement(db, { entityType: "tyre", entityId: tyreId, action: "mounted", user, payload, createdAt })
-      ]);
+      ], {
+        workflowType: "tyre-mount",
+        idempotencyKey: `tyre-mount:${tyreId}:${createdAt}`,
+        payload
+      });
     }
     return rowToTyre(await db.prepare(`SELECT * FROM tyre_inventory WHERE id = ?`).bind(tyreId).first());
   } catch (error) {
@@ -922,7 +973,16 @@ export async function createTyreMeasurements(env, user, values) {
       payloads.push(payload);
     }
     const records = payloads.map((payload) => ({ id: id("tyre-measurement"), payload }));
-    await executeBatch(db, records.flatMap((record) => measurementStatements(db, user, record.payload, record.id, createdAt)));
+    await executeBatch(
+      env,
+      db,
+      records.flatMap((record) => measurementStatements(db, user, record.payload, record.id, createdAt)),
+      {
+        workflowType: "tyre-measurements-create",
+        idempotencyKey: `tyre-measurements:${records.map((record) => record.id).join(",")}`,
+        payload: { measurementIds: records.map((record) => record.id) }
+      }
+    );
     const measurements = [];
     for (const record of records) {
       measurements.push(rowToMeasurement(await db.prepare(`SELECT * FROM tyre_measurements WHERE id = ?`).bind(record.id).first()));
@@ -986,7 +1046,11 @@ export async function createTyreServiceRecord(env, user, value) {
       `).bind(recordId, tyreId, createdAt));
     }
     statements.push(auditStatement(db, { entityType: "service", entityId: recordId, action: "created", user, payload, createdAt }));
-    await executeBatch(db, statements);
+    await executeBatch(env, db, statements, {
+      workflowType: "tyre-service-create",
+      idempotencyKey: `tyre-service:${recordId}`,
+      payload: { serviceRecordId: recordId, tyreIds }
+    });
     return { ...rowToService(await db.prepare(`SELECT * FROM tyre_service_records WHERE id = ?`).bind(recordId).first()), tyreIds };
   } catch (error) {
     throw storeError(error);

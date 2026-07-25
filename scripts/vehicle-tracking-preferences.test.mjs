@@ -33,7 +33,7 @@ const d1 = {
   }
 };
 
-const env = { SMART_ODPADY_DB: d1 };
+const env = { SMART_ODPADY_DB: d1, DB_CORE: d1 };
 const initial = await readVehicleTrackingPreferences(env, "user-1");
 assert.equal(initial.infoStyle, "compact");
 assert.equal(initial.userId, "user-1");

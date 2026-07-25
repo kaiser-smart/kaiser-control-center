@@ -6,6 +6,7 @@ import {
   saveEmployeeHrProfile,
   saveImportedEmployeeCard
 } from "./employees-store.js";
+import { getArchiveDatabase } from "./databases.js";
 
 export const EMPLOYEE_EXCEL_IMPORT_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 
@@ -621,7 +622,7 @@ function randomId(prefix) {
 }
 
 async function writeImportBatch(env, currentUser, preview, results) {
-  const db = env?.SMART_ODPADY_DB;
+  const db = getArchiveDatabase(env, { required: false });
   if (!db) {
     throw new EmployeeStoreError("Databáze zaměstnanců není nastavená.", 503, "employees_database_missing");
   }

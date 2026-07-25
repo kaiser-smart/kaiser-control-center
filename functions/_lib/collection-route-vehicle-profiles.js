@@ -1,4 +1,4 @@
-const FLEET_DB_BINDING = "SMART_ODPADY_DB";
+import { getCoreDatabase } from "./databases.js";
 
 function cleanString(value) {
   return String(value ?? "").trim();
@@ -93,7 +93,7 @@ export function confirmedCollectionRouteVehicleProfile(input = {}) {
 
 export async function loadCollectionRouteVehicleProfile(env = {}, input = {}) {
   const fallback = confirmedCollectionRouteVehicleProfile(input);
-  const db = env?.[FLEET_DB_BINDING] || null;
+  const db = getCoreDatabase(env, { required: false });
   if (!db) return fallback;
   const code = cleanString(input.vehicleCode || input.code).toUpperCase();
   const registration = plateKey(input.vehicleRegistration || input.registration || input.licensePlate);

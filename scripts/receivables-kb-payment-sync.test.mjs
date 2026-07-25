@@ -187,7 +187,10 @@ for (const migration of [
 ]) {
   sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), "utf8"));
 }
-const env = { ...baseEnv, SMART_ODPADY_DB: new D1Database(sqlite) };
+sqlite.exec(readFileSync(new URL("../migrations/modular/core/0001_core_foundation.sql", import.meta.url), "utf8"));
+sqlite.exec(readFileSync(new URL("../migrations/modular/audit/0001_audit_foundation.sql", import.meta.url), "utf8"));
+const d1 = new D1Database(sqlite);
+const env = { ...baseEnv, SMART_ODPADY_DB: d1, DB_CORE: d1, DB_AUDIT: d1, DB_ARCHIVE: d1 };
 const firstFixture = kbFetchFixture();
 const firstSync = await syncReceivablesKbPayments(env, {
   now: "2026-07-22T10:07:00.000Z",

@@ -80,7 +80,7 @@ for (const migration of [
 }
 
 const db = new D1Database(sqlite);
-const env = { SMART_ODPADY_DB: db };
+const env = { SMART_ODPADY_DB: db, DB_CORE: db, DB_MESSAGES: db, DB_AUDIT: db, DB_ARCHIVE: db };
 const user = { id: "test-user" };
 
 sqlite.prepare(`

@@ -1,6 +1,7 @@
+import { getModuleDatabase } from "./databases.js";
+const DB_BINDING = "DB_CORE / DB_AUDIT";
 import { getCoreDatabase } from "./databases.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const DEFAULT_DATABASE_NAME = "smart-odpady";
 const DEFAULT_MODULE_KEY = "absence";
 const DEFAULT_TIME_ZONE = "Europe/Prague";
@@ -35,7 +36,7 @@ function randomId(prefix) {
 }
 
 function database(env) {
-  const db = env?.[DB_BINDING];
+  const db = getModuleDatabase(env, { moduleName: "module-automation-dry-run", allowedDomains: ["core","audit"], defaultDomain: "core", required: false });
   if (!db) {
     throw new Error(`Cloudflare D1 binding ${DB_BINDING} není dostupný pro dry-run runner.`);
   }

@@ -3,7 +3,8 @@ import {
   normalizeThemeSettings
 } from "../../src/data/themeSettings.js";
 
-const THEME_DB_BINDING = "SMART_ODPADY_DB";
+import { getCoreDatabase } from "./databases.js";
+
 const THEME_SETTINGS_ID = "current";
 
 export class ThemeSettingsStoreError extends Error {
@@ -16,11 +17,11 @@ export class ThemeSettingsStoreError extends Error {
 }
 
 function themeDatabase(env, required = false) {
-  const db = env?.[THEME_DB_BINDING] || null;
+  const db = getCoreDatabase(env, { required: false });
 
   if (!db && required) {
     throw new ThemeSettingsStoreError(
-      "Databáze nastavení vzhledu není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze nastavení vzhledu není nastavená. Chybí Cloudflare D1 binding DB_CORE.",
       503,
       "theme_database_missing"
     );

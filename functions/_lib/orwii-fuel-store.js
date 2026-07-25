@@ -1,3 +1,4 @@
+import { getModuleDatabase } from "./databases.js";
 import { loadFleetVehiclesWithAssignments } from "./fleet-vehicles-store.js";
 import {
   loadFleetVehiclesFromAliases,
@@ -5,7 +6,6 @@ import {
 } from "./fleet-vehicle-aliases.js";
 import { licensePlateKey, normalizeLicensePlate, vehicleLicensePlateValue } from "../../src/data/licensePlate.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const ORWII_API_BASE_URL = "https://api007.orwii.com:7080";
 const MAX_TRANSACTIONS = 2_000;
 const SYNC_LOOKBACK_DAYS = 3;
@@ -24,8 +24,8 @@ function numberValue(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
-  if (!db && required) throw new OrwiiFuelStoreError("D1 databáze není nastavená. Přidejte binding SMART_ODPADY_DB a spusťte migraci 0033_create_orwii_fuel_sync.sql.", 503, "orwii_database_missing");
+  const db = getModuleDatabase(env, { moduleName: "orwii-fuel-store", allowedDomains: ["archive","audit","core"], defaultDomain: "archive", required: false });
+  if (!db && required) throw new OrwiiFuelStoreError("D1 databáze není nastavená. Přidejte binding DB_ARCHIVE / DB_AUDIT / DB_CORE a spusťte migraci 0033_create_orwii_fuel_sync.sql.", 503, "orwii_database_missing");
   return db;
 }
 function apiConfig(env = {}) {

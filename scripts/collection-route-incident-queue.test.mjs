@@ -59,6 +59,8 @@ function createDatabase({ includeLegacyTest = false } = {}) {
   sqlite.exec(readFileSync(new URL("../migrations/0017_create_collection_routes_phase1a.sql", import.meta.url), "utf8"));
   sqlite.exec(readFileSync(new URL("../migrations/0038_create_collection_daily_routes.sql", import.meta.url), "utf8"));
   sqlite.exec(readFileSync(new URL("../migrations/0049_create_collection_route_incident_queue.sql", import.meta.url), "utf8"));
+  sqlite.exec(readFileSync(new URL("../migrations/modular/core/0001_core_foundation.sql", import.meta.url), "utf8"));
+  sqlite.exec(readFileSync(new URL("../migrations/modular/audit/0001_audit_foundation.sql", import.meta.url), "utf8"));
   if (includeLegacyTest) {
     sqlite.exec(readFileSync(new URL("../migrations/test/0005_create_collection_route_test_incidents.sql", import.meta.url), "utf8"));
   }
@@ -131,7 +133,13 @@ const readonlyUser = {
 
 const production = createDatabase();
 const test = createDatabase({ includeLegacyTest: true });
-const env = { SMART_ODPADY_DB: production.d1, COLLECTION_ROUTES_TEST_DB: test.d1 };
+const env = {
+  SMART_ODPADY_DB: production.d1,
+  DB_CORE: production.d1,
+  DB_AUDIT: production.d1,
+  DB_ARCHIVE: production.d1,
+  COLLECTION_ROUTES_TEST_DB: test.d1
+};
 
 await assert.rejects(
   listCollectionRouteIncidents(env, readonlyUser, { scope: "production" }),

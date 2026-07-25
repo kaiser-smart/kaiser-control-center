@@ -34,11 +34,12 @@ Aktivní identita, konfigurace a provozní stav:
 - `driver_part_requests`
 - `employee_cards`, `employee_documents`, `employee_document_files`, `employee_hr_profiles`, `employee_medical_exams`
 - `fleet_vehicle_assignments`, `fleet_vehicle_external_aliases`
+- `fleet_vehicle_technical_profiles`
 - `module_feedback`, `module_rules`
 - `receivable_customer_payment_ratings`, `receivable_customers`, `receivable_invoices`, `receivable_insolvency_checks`, `receivable_packages`, `receivable_payment_matches`, `receivable_payment_transactions`, `receivable_promises_to_pay`, `receivable_settings`
 - `sarlota_content_documents`, `sarlota_user_memory`
 - `self_repair_cases`
-- `tyre_inventory`, `tyre_vehicle_profiles`
+- `tyre_inventory`, `tyre_vehicle_profiles`, `tyre_measurements`, `tyre_service_record_tyres`, `tyre_service_records`
 - `vehicle_tracking_user_preferences`
 - `vehicle_wim_devices`, `vehicle_wim_sites`
 
@@ -85,6 +86,8 @@ Technická historie, diagnostika, AI a stavové události:
 - `driver_part_request_events`, `driver_report_partslink24_searches`
 - `employee_document_audit_logs`
 - `fleet_orwii_fuel_sync_runs`, `fleet_trip_job_pairing_runs`
+- `fleet_vehicle_technical_profile_events`
+- `ai_action_logs`
 - `module_automation_runner_runs`, `module_automation_runs`, `module_rule_audit_log`
 - `receivable_ai_decisions`, `receivable_audit_log`
 - `sarlota_content_audit_log`
@@ -114,7 +117,6 @@ Uzavřená historická data a metadata objektů:
 - `receivable_import_batches`, `receivable_import_rows`, `receivable_legal_handoff_packages`
 - `sarlota_content_versions`
 - `self_repair_case_attachments`, `self_repair_case_evidence`
-- `tyre_measurements`, `tyre_service_record_tyres`, `tyre_service_records`
 - `vehicle_tracking_daily_metrics`, `vehicle_tracking_gps_points`, `vehicle_tracking_trip_summaries`
 
 Tabulky `collection_route_incident_communications` patří do MESSAGES; aktuální provozní incident je v CORE. `d1_migrations` zůstává lokální evidencí každé fyzické databáze a nekopíruje se jako provozní tabulka.

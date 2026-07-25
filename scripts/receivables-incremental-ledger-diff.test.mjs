@@ -163,7 +163,8 @@ sqlite.prepare(`
   ) VALUES (?, 'incremental-batch-1', 1, 'vistos_invoice', 'ready', ?)
 `).run("incremental-row-1", stagingRow({ paidAmount: 1000, openAmount: 0, isPaid: true }).normalized_json);
 
-const sqliteEnv = { SMART_ODPADY_DB: new D1Database(sqlite) };
+const sqliteD1 = new D1Database(sqlite);
+const sqliteEnv = { SMART_ODPADY_DB: sqliteD1, DB_CORE: sqliteD1, DB_ARCHIVE: sqliteD1 };
 const integration = await getReceivablesIncrementalLedgerDiff(sqliteEnv, { page: 1, pageSize: 10 });
 assert.equal(integration.apiStatus, "ready");
 assert.equal(integration.summary.changedCount, 1);

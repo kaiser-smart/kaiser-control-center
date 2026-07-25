@@ -1,3 +1,4 @@
+import { getModuleDatabase } from "./databases.js";
 import { getUsers } from "./auth.js";
 import {
   loadFleetVehiclesWithAssignments,
@@ -39,7 +40,6 @@ import {
 } from "./notification-service.js";
 import { hasPermission, isFullAccessRole, normalizeRole } from "../../src/permissions.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const STATUSES = new Set([
   "new_report",
   "waiting_vehicle_vin",
@@ -90,10 +90,10 @@ export class DriverPartRequestsStoreError extends Error {
 }
 
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "driver-part-requests-store", allowedDomains: ["core","audit"], defaultDomain: "core", required: false });
   if (!db && required) {
     throw new DriverPartRequestsStoreError(
-      "Databáze hlášení řidičů není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze hlášení řidičů není nastavená. Přidejte Cloudflare D1 binding DB_CORE / DB_AUDIT.",
       503,
       "driver_part_requests_database_missing"
     );

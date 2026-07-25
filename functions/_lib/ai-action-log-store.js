@@ -1,4 +1,4 @@
-const AI_ACTION_LOG_DB_BINDING = "SMART_ODPADY_DB";
+import { getAuditDatabase } from "./databases.js";
 
 function cleanString(value) {
   return String(value ?? "").trim();
@@ -21,7 +21,7 @@ function randomId() {
 }
 
 export async function recordAiAction(env, currentUser, input = {}) {
-  const db = env?.[AI_ACTION_LOG_DB_BINDING] || null;
+  const db = getAuditDatabase(env, { required: false });
 
   if (!db) {
     return { logged: false, reason: "database_missing" };
@@ -78,4 +78,3 @@ export async function recordAiAction(env, currentUser, input = {}) {
     return { logged: false, reason: "write_failed" };
   }
 }
-

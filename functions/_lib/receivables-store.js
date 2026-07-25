@@ -1,3 +1,4 @@
+import { getModuleDatabase } from "./databases.js";
 import { decideReceivablesNextAction } from "./receivables-ai-decision-engine.js";
 import { buildBankImportPreview, buildInvoiceImportPreview } from "./receivables-import-preview.js";
 import { parseKbBankStatementText } from "./receivables-kb-bank-parser.js";
@@ -5,7 +6,6 @@ import { isKbBankCsvText, kbCsvContentSha256, parseKbBankCsvText } from "./recei
 import { calculateCustomerPaymentRating } from "./receivables-rating-engine.js";
 import { calculateInvoicePaymentState, matchReceivablePayments } from "./receivables-payment-matching.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const DEFAULT_LEGAL_HANDOFF_DAYS = 60;
 
 export class ReceivablesStoreError extends Error {
@@ -18,10 +18,10 @@ export class ReceivablesStoreError extends Error {
 }
 
 function database(env, required = false) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "receivables-store", allowedDomains: ["core","messages","audit","archive"], defaultDomain: "core", required: false });
   if (!db && required) {
     throw new ReceivablesStoreError(
-      "Databáze Pohledávek není nastavená. Přidejte Cloudflare D1 binding SMART_ODPADY_DB.",
+      "Databáze Pohledávek není nastavená. Přidejte Cloudflare D1 binding DB_CORE / DB_MESSAGES / DB_AUDIT / DB_ARCHIVE.",
       503,
       "receivables_database_missing"
     );
@@ -744,21 +744,7 @@ export async function listReceivableCustomers(env, options = {}) {
         r.calculation_version,
         r.source_fingerprint,
         r.variables_json,
-        r.calculated_at,
-        d.id AS decision_id,
-        d.action AS decision_action,
-        d.scheduled_at AS decision_scheduled_at,
-        d.channel AS decision_channel,
-        d.template_key AS decision_template_key,
-        d.tone AS decision_tone,
-        d.reason AS decision_reason,
-        d.confidence AS decision_confidence,
-        d.requires_human_approval AS decision_requires_human_approval,
-        d.marketa_alert AS decision_marketa_alert,
-        d.dry_run AS decision_dry_run,
-        d.blocked_rules_json AS decision_blocked_rules_json,
-        d.message_preview AS decision_message_preview,
-        d.created_at AS decision_created_at
+        r.calculated_at
       FROM receivable_customers c
       LEFT JOIN receivable_packages p ON p.customer_id = c.id
       LEFT JOIN (
@@ -783,20 +769,50 @@ export async function listReceivableCustomers(env, options = {}) {
         ORDER BY calculated_at DESC
         LIMIT 1
       )
-      LEFT JOIN receivable_ai_decisions d ON d.id = (
-        SELECT id FROM receivable_ai_decisions
-        WHERE customer_id = c.id
-        ORDER BY created_at DESC
-        LIMIT 1
-      )
       ORDER BY COALESCE(p.max_days_overdue, invoice_aggregate.max_days_overdue, 0) DESC,
         COALESCE(p.total_open_amount, invoice_aggregate.total_open_amount, 0) DESC,
         c.company_name ASC
       LIMIT ?
     `).bind(limit).all();
 
+    const customerRows = result.results || [];
+    const customerIds = customerRows.map((row) => cleanString(row.id)).filter(Boolean);
+    let decisionMap = new Map();
+    if (customerIds.length) {
+      const placeholders = customerIds.map(() => "?").join(", ");
+      const decisions = await db.prepare(`
+        SELECT * FROM receivable_ai_decisions
+        WHERE customer_id IN (${placeholders})
+        ORDER BY created_at DESC
+      `).bind(...customerIds).all();
+      decisionMap = new Map();
+      for (const decision of decisions.results || []) {
+        const customerId = cleanString(decision.customer_id);
+        if (!decisionMap.has(customerId)) decisionMap.set(customerId, decision);
+      }
+    }
+    const rowsWithDecisions = customerRows.map((row) => {
+      const decision = decisionMap.get(cleanString(row.id));
+      return decision ? {
+        ...row,
+        decision_id: decision.id,
+        decision_action: decision.action,
+        decision_scheduled_at: decision.scheduled_at,
+        decision_channel: decision.channel,
+        decision_template_key: decision.template_key,
+        decision_tone: decision.tone,
+        decision_reason: decision.reason,
+        decision_confidence: decision.confidence,
+        decision_requires_human_approval: decision.requires_human_approval,
+        decision_marketa_alert: decision.marketa_alert,
+        decision_dry_run: decision.dry_run,
+        decision_blocked_rules_json: decision.blocked_rules_json,
+        decision_message_preview: decision.message_preview,
+        decision_created_at: decision.created_at
+      } : row;
+    });
     return {
-      customers: (result.results || []).map(customerListItem),
+      customers: rowsWithDecisions.map(customerListItem),
       total: (result.results || []).length,
       apiStatus: "ready"
     };

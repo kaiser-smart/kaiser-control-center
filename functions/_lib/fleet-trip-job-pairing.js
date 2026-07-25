@@ -1,8 +1,8 @@
+import { getModuleDatabase } from "./databases.js";
 import { COLLECTION_DAILY_ROUTE_VEHICLES } from "./collection-daily-routes-store.js";
 import { loadFleetVehiclesWithAssignments } from "./fleet-vehicles-store.js";
 import { vehicleTrackingPragueDate } from "./vehicle-tracking-analytics.js";
 
-const DB_BINDING = "SMART_ODPADY_DB";
 const PAIRING_RULE_ID = "vehicle-tracking-trip-job-pairing-phase1a";
 const PAIRING_MODULE_KEY = "vehicle-tracking";
 const PAIRING_CRON = "*/15 * * * *";
@@ -88,10 +88,10 @@ function runChanges(result) {
 }
 
 function database(env) {
-  const db = env?.[DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "fleet-trip-job-pairing", allowedDomains: ["core","audit","archive"], defaultDomain: "core", required: false });
   if (!db) {
     throw new FleetTripJobPairingError(
-      "Chybí D1 binding SMART_ODPADY_DB pro párování jízd.",
+      "Chybí D1 binding DB_CORE / DB_AUDIT / DB_ARCHIVE pro párování jízd.",
       503,
       "fleet_trip_job_pairing_database_missing"
     );

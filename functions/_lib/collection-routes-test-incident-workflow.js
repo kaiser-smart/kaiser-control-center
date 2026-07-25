@@ -1,3 +1,4 @@
+import { getModuleDatabase } from "./databases.js";
 import {
   assertCollectionRoutesTestManager,
   collectionRoutesTestDatabase
@@ -19,7 +20,6 @@ import {
 } from "./notification-service.js";
 import { getCoreDatabase } from "./databases.js";
 
-const PRODUCTION_DB_BINDING = "SMART_ODPADY_DB";
 const INCIDENT_BUCKET_BINDING = "SMART_ODPADY_DOCUMENTS";
 const EMAIL_GUARD_KEY = "physical-tablet-test-20260715";
 const LIVE_DISPATCH_GUARD_KEY = "physical-tablet-live-dispatch-20260716";
@@ -169,7 +169,7 @@ function protectedRecipient(env, required = false) {
 }
 
 function productionDatabase(env, required = false) {
-  const db = env?.[PRODUCTION_DB_BINDING] || null;
+  const db = getModuleDatabase(env, { moduleName: "collection-routes-test-incident-workflow", allowedDomains: ["core"], defaultDomain: "core", required: false });
   if (!db && required) {
     throw new CollectionRoutesTestIncidentWorkflowError(
       "Nelze ověřit dostupnou dispečerku v Kartách zaměstnanců.",
@@ -366,7 +366,7 @@ export async function resolveAvailableCollectionRouteDispatcher(env, testDb, opt
     selected: available[0] || null,
     candidates: availability,
     checkedDate: today,
-    source: "SMART_ODPADY_DB.users + employee_cards; DB_CORE.absence_requests"
+    source: "DB_CORE.users + employee_cards; DB_CORE.absence_requests"
   };
 }
 
