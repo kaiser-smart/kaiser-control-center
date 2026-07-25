@@ -1919,3 +1919,270 @@ Pokud uživatel musí přemýšlet, co tlačítko znamená, nebo nevidí celou i
 - Jednoznačný bezpečný interní pokyn, například archivace, označení jako vyřízené, vytvoření interního úkolu nebo interní předání se po odeslání formuláře skutečně provede, zapíše do historie a vrátí přesné `Hotovo.`. Nesmí odpovědět jen `připravím` ani čekat na druhé potvrzení.
 - Odeslání mimo systém (e-mail, SMS, odpověď datovou schránkou) zůstává samostatným návrhem s konkrétním potvrzením.
 - Frontend nesmí přepsat konkrétní serverovou otázku či výsledek obecnou frází. Když u předání chybí adresát, musí se přesně zeptat, komu má být zpráva interně předána.
+
+## 20. D1 kapacita, modulární databáze a uzamčení legacy databáze
+
+### 20.1 Závazná produkční architektura
+
+Produkční datová vrstva Kaiser Smart používá čtyři samostatné modulární D1
+databáze:
+
+- `SMART_ODPADY_CORE` / binding `DB_CORE`,
+- `SMART_ODPADY_MESSAGES` / binding `DB_MESSAGES`,
+- `SMART_ODPADY_AUDIT` / binding `DB_AUDIT`,
+- `SMART_ODPADY_ARCHIVE` / binding `DB_ARCHIVE`.
+
+Původní `SMART_ODPADY_DB` je pouze legacy zdroj pro řízené, auditované čtení.
+Nesmí dostat žádný nový provozní zápis, novou tabulku ani nový index.
+
+Produkční Pages a běžné endpointové Workery nesmějí mít binding
+`SMART_ODPADY_DB`. Legacy binding smí mít pouze výslovně schválený kapacitní
+nebo archivní Worker, který používá centrální fail-closed read-only vrstvu.
+
+Zakázané:
+
+- přímé `env.DB`,
+- přímé `env.SMART_ODPADY_DB`,
+- předání raw legacy D1 objektu modulu,
+- tichý fallback z modulární DB do legacy DB,
+- zápis `INSERT`, `UPDATE`, `DELETE`, `REPLACE`,
+- DDL `CREATE`, `ALTER`, `DROP`, `TRUNCATE`,
+- `VACUUM`, `REINDEX`, `ANALYZE`, `ATTACH`, `DETACH`,
+- transakční příkazy nad legacy DB,
+- zapisující `batch`,
+- `exec` nebo `dump`,
+- vytvoření nového RCS/SMS schématu v CORE nebo legacy DB.
+
+Každý povolený legacy přístup musí jít přes `getLegacyDatabase(env, options)`
+a musí mít:
+
+- neprázdný `moduleName`,
+- konkrétní `purpose`,
+- auditní událost `legacy_database_access` zapsanou před samotným čtením,
+- metodu a typ SQL operace,
+- výsledek `allowed_read` nebo `blocked_write`,
+- SHA-256 hash SQL místo raw SQL a hodnot,
+- fail-closed chování: když nelze zapsat AUDIT, legacy operace se neprovede.
+
+### 20.2 Povolené produkční bindings
+
+- Pages: `DB_CORE`, `DB_MESSAGES`, `DB_AUDIT`, `DB_ARCHIVE`; bez legacy.
+- Module automation: všechny čtyři modulární DB; bez legacy.
+- Self-repair UI runner: všechny čtyři modulární DB; bez legacy.
+- Data-box automation: `DB_CORE`, `DB_AUDIT`; bez legacy.
+- Data-box Plus sync: bez D1 bindingu.
+- ORWII: `DB_CORE`, `DB_AUDIT`, `DB_ARCHIVE`; bez legacy.
+- Capacity Worker: čtyři modulární DB a read-only legacy.
+- Archive Worker: `DB_ARCHIVE`, `DB_AUDIT` a read-only legacy.
+
+Při přidání nového endpointu nebo Workeru je výchozí stav bez legacy bindingu.
+Výjimka vyžaduje nový návrh, potvrzení, konkrétní read-only účel, test runtime
+guardu a produkční audit.
+
+### 20.3 Cross-database operace
+
+D1 neposkytuje společnou SQL transakci přes více databází. Operace přes více
+modulů se nesmí vydávat za atomické. Musí být idempotentní a minimálně
+obsahovat:
+
+- globální UUID,
+- `idempotency_key`,
+- stavy `pending`, `completed`, `failed`,
+- počet pokusů,
+- poslední chybu,
+- datum dalšího pokusu,
+- bezpečné opakování,
+- kompenzační krok.
+
+### 20.4 Retence, archivace a velká data
+
+Archivace musí být dávková, copy-verify-delete:
+
+1. vybrat pouze uzavřené záznamy splňující retenci,
+2. přenést je do `SMART_ODPADY_ARCHIVE` nebo R2,
+3. ověřit počet řádků,
+4. ověřit kontrolní součet nebo ekvivalent integrity,
+5. teprve potom a po samostatném potvrzení odstranit zdroj,
+6. zapsat auditní událost,
+7. při chybě nic nemazat.
+
+Výchozí dávka je nejvýše 500–1 000 záznamů. Velké payloady, PDF, fotografie,
+audio, offline balíčky, exporty a přílohy patří do R2; D1 ukládá metadata a
+`r2_object_key`.
+
+Bez výslovného důkazu přenosu a potvrzení je archivace pouze
+`copy-verify-only` a zdrojová data se nemažou.
+
+### 20.5 Kapacitní monitoring a migrační guard
+
+Kapacitní cron musí pro každou modulární DB i legacy evidovat:
+
+- velikost,
+- počet stránek,
+- volné stránky, pokud je D1 poskytne,
+- největší tabulky a indexy,
+- mezidenní růst,
+- odhad dní do zaplnění,
+- čas měření a pravdivý stav.
+
+Prahy:
+
+- 60 % informace,
+- 70 % upozornění,
+- 80 % omezení neesenciálního technického logování,
+- 85 % zrychlení bezpečné archivace,
+- 90 % kritický incident,
+- 95 % zákaz nových objemných migrací a indexů.
+
+Kapacitní cron nesmí automaticky mazat provozní data.
+
+Před produkční migrací se musí ověřit velikost cíle, rezerva, odhad tabulek a
+indexů, počet existujících řádků, rollback plán a Time Travel bookmark.
+Migrace s odhadem nad 85 % se musí zablokovat pravdivou chybou.
+
+### 20.6 Crony a stale `running`
+
+Každý cloudový běh musí skončit jednoznačným terminálním stavem a mít
+`finished_at`. Stav systému musí počítat neukončené řádky ze všech
+specializovaných tabulek, ne pouze z centrálního runneru.
+
+Při nálezu starého `running`:
+
+1. ověřit skutečný cloudový limit a novější úspěšné běhy,
+2. vytvořit Time Travel bookmark AUDIT DB,
+3. ověřit přesný počet a identifikátory řádků,
+4. změnit pouze stav, `finished_at`, chybu a lidské vysvětlení,
+5. nic nemazat,
+6. zapsat idempotentní audit s bookmarkem a rollback příkazem,
+7. znovu ověřit nulový počet neukončených běhů ve všech zdrojích.
+
+Cloudflare Cron Trigger má pevný maximální wall time 15 minut. Řádek, který je
+starší než tento limit a nemá `finished_at`, už nemůže představovat aktivní
+Cloudflare invokaci; smí být po výše uvedeném ověření auditně uzavřen jako
+selhání. Interní aplikační stale limit může být přísnější jen směrem k větší
+bezpečnostní rezervě.
+
+### 20.7 Povinný Stav systému
+
+Přihlášený modul `/kontrola-systemu/` musí zobrazovat:
+
+- čtyři samostatné modulární databáze,
+- aktuální velikost, využití, čas měření a stav každé z nich,
+- legacy jako samostatný řádek `pouze pro auditované čtení`,
+- pravdivé upozornění, že nové legacy zápisy jsou zablokované,
+- každý cron se stavem, časem ukončení, plánem a zprávou,
+- celkový `WARNING`, pokud některý terminální běh skončil chybou,
+- `NEOVĚŘENO`, pokud nelze stav bezpečně načíst.
+
+Terminální `failed`, `error` nebo `skipped` se nesmí přebarvit na úspěch.
+Uživatel musí poznat rozdíl mezi „ukončeno“ a „úspěšně dokončeno“.
+
+### 20.8 Povinné testy ochrany
+
+Minimálně testovat:
+
+- správný výběr modulární DB,
+- zákaz zápisu messaging dat do CORE,
+- blokování všech legacy zápisů,
+- audit před legacy čtením,
+- fail-closed chování při výpadku AUDIT DB,
+- idempotentní opakování cross-database workflow,
+- částečné selhání a kompenzaci,
+- archivaci bez ztráty dat,
+- blokaci migrace při nedostatečné kapacitě,
+- kapacitní prahy,
+- výpadek jedné modulární DB,
+- zaplnění AUDIT DB,
+- rollback,
+- vypnuté SMS/RCS a Autopilot,
+- zahrnutí všech specializovaných cron tabulek do `nonTerminalCount`.
+
+### 20.9 Ověřený incidentní stav k 25. 7. 2026
+
+Produkční verze:
+
+- URL `https://smart-odpady.ai/`,
+- verze `0.1.724`,
+- commit `3c81c13`,
+- Pages deployment `ff68831d-f6f0-416b-ac1d-d441e5f23b18`.
+
+Kapacitní snapshot z 25. 7. 2026 18:30:
+
+| Databáze | Velikost B | Využití | Stav |
+|---|---:|---:|---|
+| `SMART_ODPADY_CORE` | 188 108 800 | 1,8811 % | `ok` |
+| `SMART_ODPADY_MESSAGES` | 7 360 512 | 0,0736 % | `ok` |
+| `SMART_ODPADY_AUDIT` | 22 437 888 | 0,2244 % | `ok` |
+| `SMART_ODPADY_ARCHIVE` | 177 897 472 | 1,7790 % | `ok` |
+| `SMART_ODPADY_DB` | 9 999 998 976 | 99,99999 % | `blocked` |
+
+Ověřený důkaz legacy ochrany:
+
+- produkční audit od nasazení obsahoval 24 legacy operací,
+- všechny byly `SELECT / allowed_read`,
+- nebyl nalezen žádný produkční legacy zápis,
+- UI ukázalo legacy jako 100% zaplněnou a pouze pro auditované čtení,
+- ruční `Obnovit stav` proběhlo přihlášeným ADMIN uživatelem bez konzolové
+  chyby.
+
+Bez mazání bylo terminálně uzavřeno:
+
+- 33 starých centrálních běhů, z toho 5 self-repair,
+- 4 historické běhy GPS analytiky,
+- 2 historické běhy párování jízd,
+- 1 stale běh Datové schránky Plus po překročení 15minutového limitu.
+
+Závěrečné počty neukončených běhů byly nulové pro:
+
+- module runners,
+- module automations,
+- Datové schránky Plus,
+- GPS historii,
+- GPS analytiku,
+- párování jízd,
+- ORWII,
+- archivace.
+
+Použité Time Travel bookmarky AUDIT DB:
+
+```text
+0000003a-00000126-000050b3-eab2d2107f051f13a8f2bde0668174c0
+0000003a-000001ae-000050b3-e0d1240360ff2078ce1fe01d09ca81cd
+0000003a-00000210-000050b3-b917a2b972698fe2dd21f99cdc719a5d
+```
+
+Rollback konkrétního zásahu:
+
+```bash
+wrangler d1 time-travel restore SMART_ODPADY_AUDIT --bookmark=<BOOKMARK>
+```
+
+Při rollbacku vybrat bookmark bezprostředně před konkrétní opravou. Neobnovovat
+starší bookmark naslepo, protože by mohl vrátit i jiné mezitím vzniklé AUDIT
+záznamy.
+
+Ověřené kontroly:
+
+- `pnpm run test:database-architecture`,
+- `pnpm run test:self-repair`,
+- `pnpm run lint`,
+- `pnpm run typecheck`,
+- `pnpm run build`,
+- produkční deploy guard,
+- `git diff --check`,
+- přihlášená produkční kontrola `/kontrola-systemu/`.
+
+### 20.10 Aktuální omezení
+
+- Legacy DB zůstává fyzicky téměř na 100 % a nesmí se do ní zapisovat.
+- `free_page_count` není v aktuálním D1 runtime dostupný; UI to musí říct
+  pravdivě.
+- Některé crony mohou mít terminální stav `failed`, `error` nebo `skipped`;
+  nulový počet `running` neznamená, že jsou všechny úspěšné.
+- SMS/RCS a Autopilot zůstávají vypnuté, dokud není samostatný messaging tok
+  provozně ověřený.
+- Browserový titulek `/kontrola-systemu/` může uvádět `Přihlášení`, i když
+  chráněný DOM správně ukazuje přihlášeného ADMIN uživatele; titul je známá UI
+  chyba, ne důkaz odhlášení.
+- Legacy tabulky a data se nesmějí mazat ani `DROP TABLE`, dokud není
+  samostatně potvrzený cleanup s copy-verify důkazem a rollbackem.
