@@ -8,6 +8,7 @@ import { runSelfRepairHourlyMonitor } from "../functions/_lib/self-repair-monito
 import { SELF_REPAIR_MONITOR_CRON } from "../functions/_lib/self-repair-monitor-config.js";
 import { runCollectionRouteIncidentReminderAutomation } from "../functions/_lib/collection-routes-incident-reminder-runner.js";
 import { retryFailedAbsenceHistoryWorkflows } from "../functions/_lib/absence-requests-store.js";
+import { runRcsSmsAutopilotRetry } from "../functions/_lib/rcs-sms-autopilot-service.js";
 
 const COLLECTION_ROUTES_CRON = "*/15 * * * *";
 const COLLECTION_ROUTE_INCIDENT_REMINDER_CRON = "*/5 * * * *";
@@ -17,7 +18,7 @@ export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil((async () => {
       if (controller.cron === COLLECTION_ROUTE_INCIDENT_REMINDER_CRON) {
-        const [summary, absenceHistoryRetry] = await Promise.all([
+        const [summary, absenceHistoryRetry, rcsSmsAutopilot] = await Promise.all([
           runCollectionRouteIncidentReminderAutomation(env, {
             scheduledTime: controller.scheduledTime,
             cron: controller.cron,
@@ -32,7 +33,23 @@ export default {
             completed: 0,
             failed: 1,
             error: error?.message || "absence_history_retry_failed"
-          }))
+          })),
+          runRcsSmsAutopilotRetry(env, {
+            scheduledTime: controller.scheduledTime,
+            cron: controller.cron,
+            triggeredBy: "cloudflare-cron"
+          }).catch((error) => {
+            console.error("rcs_sms_autopilot_retry.failed_isolated", {
+              message: String(error?.message || "").slice(0, 300)
+            });
+            return {
+              mode: "off",
+              status: "failed",
+              processedCount: 0,
+              failedCount: 1,
+              skippedCount: 0
+            };
+          })
         ]);
         console.log("collection_route_incident_test_reminder.completed", {
           status: summary.status,
@@ -54,6 +71,14 @@ export default {
           error: absenceHistoryRetry.error || null,
           sms: "disabled",
           rcs: "disabled"
+        });
+        console.log("rcs_sms_autopilot_retry.completed", {
+          mode: rcsSmsAutopilot.mode,
+          status: rcsSmsAutopilot.status,
+          processed: rcsSmsAutopilot.processedCount || 0,
+          failed: rcsSmsAutopilot.failedCount || 0,
+          skipped: rcsSmsAutopilot.skippedCount || 0,
+          outboundEffects: rcsSmsAutopilot.mode === "live" ? "server-gated" : "disabled"
         });
         return;
       }
@@ -230,7 +255,14 @@ export default {
         deployment: "disabled",
         notification: "disabled"
       },
-      message: "Cloud runner čte Trasy svozu, připravuje pouze nepotvrzené denní návrhy, hlídá chráněné TEST připomínky incidentů, ukládá staging-only Vistos faktury Pohledávek, eviduje dry-run automatizace a provádí read-only kontrolu Samooprav."
+      rcsSmsAutopilot: {
+        cron: COLLECTION_ROUTE_INCIDENT_REMINDER_CRON,
+        mode: "RCS_SMS_AUTOPILOT_MODE",
+        defaultMode: "off",
+        phoneAsPermissionSource: false,
+        retryLimit: 3
+      },
+      message: "Cloud runner čte Trasy svozu, připravuje pouze nepotvrzené denní návrhy, hlídá chráněné TEST připomínky incidentů, obnovuje uložené RCS/SMS odpovědi pouze podle režimu Autopilota, ukládá staging-only Vistos faktury Pohledávek, eviduje dry-run automatizace a provádí read-only kontrolu Samooprav."
     });
   }
 };

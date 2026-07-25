@@ -6,6 +6,9 @@ Tato vrstva řeší pouze provozní a transakční komunikaci se zákazníky. Ne
 
 Frontend zprávy neposílá. Odesílání probíhá jen přes backend/API a Cloudflare ENV/secrets.
 
+Centrální příchozí konverzace a serverové návrhy Šarloty jsou popsané v
+`docs/RCS_SMS_AUTOPILOT.md`. Jejich výchozí režim je samostatně `off`.
+
 ## ENV proměnné
 
 Povinné pro ostré odesílání:
@@ -24,6 +27,7 @@ Bezpečný výchozí režim:
 
 ```text
 KSO_CUSTOMER_MESSAGING_MODE=off
+RCS_SMS_AUTOPILOT_MODE=off
 ```
 
 Testovací režim:
@@ -76,6 +80,9 @@ Tyto odpovědi vytvoří opt-out:
 ```text
 STOP
 STOP SMS
+KONEC
+ODHLÁSIT
+NECHCI
 NEPOSILAT
 NEPOSÍLAT
 ```
@@ -93,14 +100,25 @@ Kaiser servis: Odhlášení potvrzeno. Na toto číslo už nebudeme posílat RCS
 Migrace:
 
 ```text
-migrations/0032_create_customer_messaging.sql
+migrations/modular/messages/0001_messages_foundation.sql
+migrations/modular/messages/0002_rcs_sms_autopilot_disabled.sql
+migrations/modular/messages/0006_rcs_sms_webhooks_and_idempotency.sql
+migrations/modular/core/0005_rcs_sms_autopilot_rules_disabled.sql
 ```
+
+Legacy migrace `migrations/0032_create_customer_messaging.sql` je pouze historická
+reference a nesmí se spouštět proti `SMART_ODPADY_DB`.
 
 Tabulky:
 
 - `customer_message_log`
 - `customer_message_opt_out`
 - `customer_message_inbound`
+- `rcs_sms_conversations`
+- `rcs_sms_messages`
+- `rcs_sms_requests`
+- `rcs_sms_tool_runs`
+- `rcs_sms_events`
 
 ## API
 
@@ -131,6 +149,7 @@ DELETE /api/customer-messages/opt-outs/:phone?confirm=remove-opt-out
 - `appointment_changed`
 - `dispatch_message`
 - `missing_information`
+- `autopilot_reply` (interní serverová šablona)
 
 Šablony jsou v `functions/_lib/customer-message-templates.js`.
 
@@ -168,7 +187,8 @@ Nová zákaznická RCS/SMS vrstva je oddělená od interních zaměstnaneckých 
 ## Testování
 
 ```text
-node scripts/customer-messaging.test.mjs
+npm run test:customer-messaging
+npm run test:rcs-sms-autopilot
 npm run lint
 npm run build
 git diff --check

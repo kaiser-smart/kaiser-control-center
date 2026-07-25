@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.724"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.725"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "RCS/SMS konverzace: bezpečný centrální Autopilot Šarlota",
+    text: "Příchozí RCS i SMS odpovědi mají společnou auditovanou schránku v MESSAGES, kontext původní zprávy, pevné STOP a bezpečnostní kontroly před AI, přísně povolené nástroje a lidské převzetí. Výchozí režim i odchozí účinky zůstávají vypnuté; telefon není zdroj oprávnění a bez ověřeného serverového kontextu se změna neprovede."
+  },
   {
     title: "Databáze: legacy je pouze pro auditované čtení",
     text: "Běžné produkční endpointy a nesouvisející Workery už nemají legacy D1 binding. Kapacitní a archivní Worker mohou legacy databázi pouze číst přes fail-closed ochranu, která každou operaci nejdřív zapíše do AUDIT; Stav systému ukazuje čtyři modulární databáze a terminální stav cloudových běhů."

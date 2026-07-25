@@ -97,8 +97,8 @@ const fixedRouteEntries = [
   { path: "/pohledavky/settings", moduleKey: "receivables", label: "Pohledávky – nastavení" },
   { path: "/pohledavky/import", moduleKey: "receivables", label: "Pohledávky – import" },
   { path: "/pohledavky/directory-audit", moduleKey: "receivables", label: "Pohledávky – Vistos Directory audit" },
-  { path: "/receivables", moduleKey: "receivables", label: "Pohledávky – kompatibilní adresa" },
-  { path: "/receivables/settings", moduleKey: "receivables", label: "Pohledávky – kompatibilní nastavení" }
+  // /receivables/* dál obsluhuje wildcard redirect; do 49 route fetchů patří kanonická /pohledavky/settings.
+  { path: "/receivables", moduleKey: "receivables", label: "Pohledávky – kompatibilní adresa" }
 ];
 const routeEntryByPath = new Map();
 

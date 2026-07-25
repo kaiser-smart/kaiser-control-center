@@ -12,6 +12,14 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function safeJson(value) {
+  try {
+    return JSON.stringify(value ?? {});
+  } catch {
+    return "{}";
+  }
+}
+
 function idValue(prefix) {
   const suffix = globalThis.crypto?.randomUUID
     ? globalThis.crypto.randomUUID()
@@ -39,8 +47,14 @@ function dispatchRow(row = {}) {
     idempotencyKey: cleanString(row.idempotency_key),
     eventId: cleanString(row.event_id),
     templateKey: cleanString(row.template_key),
+    recipientPhone: cleanString(row.recipient_phone),
     recipientMasked: cleanString(row.recipient_masked),
     recipientHash: cleanString(row.recipient_hash),
+    userId: cleanString(row.user_id),
+    customerId: cleanString(row.customer_id),
+    relatedEntityType: cleanString(row.related_entity_type),
+    relatedEntityId: cleanString(row.related_entity_id),
+    messageBody: cleanString(row.message_body),
     contentSid: cleanString(row.content_sid),
     twilioMessageSid: cleanString(row.twilio_message_sid),
     requestedChannel: cleanString(row.requested_channel),
@@ -123,17 +137,25 @@ export async function reserveRcsDispatch(env, input = {}) {
   const now = nowIso();
   const result = await db.prepare(`
     INSERT OR IGNORE INTO rcs_message_dispatches (
-      id, idempotency_key, event_id, template_key, recipient_masked,
-      recipient_hash, content_sid, requested_channel, used_channel,
+      id, idempotency_key, event_id, template_key, recipient_phone, recipient_masked,
+      recipient_hash, user_id, customer_id, related_entity_type, related_entity_id,
+      message_body, variables_json, content_sid, requested_channel, used_channel,
       status, error_message, actor_user_id, actor_name, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'rcs', 'rcs_sms_auto_fallback', 'reserved', NULL, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rcs', 'rcs_sms_auto_fallback', 'reserved', NULL, ?, ?, ?, ?)
   `).bind(
     id,
     cleanString(input.idempotencyKey),
     cleanString(input.eventId),
     cleanString(input.templateKey),
+    cleanString(input.recipientPhone) || null,
     cleanString(input.recipientMasked),
     cleanString(input.recipientHash),
+    cleanString(input.userId) || null,
+    cleanString(input.customerId) || null,
+    cleanString(input.relatedEntityType) || null,
+    cleanString(input.relatedEntityId) || null,
+    cleanString(input.messageBody) || null,
+    safeJson(input.variables || {}),
     cleanString(input.contentSid),
     cleanString(input.actorUserId) || null,
     cleanString(input.actorName) || null,
@@ -145,6 +167,50 @@ export async function reserveRcsDispatch(env, input = {}) {
     ? await db.prepare("SELECT * FROM rcs_message_dispatches WHERE id = ?").bind(id).first()
     : await db.prepare("SELECT * FROM rcs_message_dispatches WHERE idempotency_key = ?").bind(cleanString(input.idempotencyKey)).first();
   return { created, dispatch: dispatchRow(row) };
+}
+
+export async function createRcsTaskReplyGrants(env, input = {}) {
+  const db = database(env);
+  const outboundMessageSid = cleanString(input.outboundMessageSid);
+  const phone = cleanString(input.phone);
+  const taskId = cleanString(input.taskId);
+  const createdByUserId = cleanString(input.createdByUserId);
+  const expiresAt = cleanString(input.expiresAt);
+  if (
+    !outboundMessageSid
+    || !/^\+\d{8,15}$/.test(phone)
+    || !taskId
+    || !Number.isFinite(Date.parse(expiresAt))
+    || Date.parse(expiresAt) <= Date.now()
+  ) {
+    throw new Error("Grant odpovědi na úkol nemá úplné serverové vazby.");
+  }
+  const actions = ["accept_task", "decline_task", "add_task_note"];
+  let created = 0;
+  for (const actionName of actions) {
+    const id = idValue("rcs-sms-grant");
+    const idempotencyKey = `rcs-task-reply:${outboundMessageSid}:${actionName}:${taskId}`;
+    const result = await db.prepare(`
+      INSERT OR IGNORE INTO rcs_sms_action_grants (
+        id, outbound_message_sid, phone, action_name, object_type, object_id,
+        arguments_json, status, expires_at, created_by_user_id,
+        idempotency_key, created_at
+      ) VALUES (?, ?, ?, ?, 'task', ?, ?, 'active', ?, ?, ?, ?)
+    `).bind(
+      id,
+      outboundMessageSid,
+      phone,
+      actionName,
+      taskId,
+      safeJson({ taskId }),
+      expiresAt,
+      createdByUserId || null,
+      idempotencyKey,
+      nowIso()
+    ).run();
+    created += Number(result?.meta?.changes ?? result?.changes ?? 0);
+  }
+  return { created, total: actions.length };
 }
 
 export async function updateRcsDispatch(env, id, patch = {}) {
