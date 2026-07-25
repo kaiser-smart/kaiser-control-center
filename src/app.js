@@ -1,5 +1,12 @@
 import { moduleDashboards, modules } from "./data/modules.js";
 import {
+  RCS_SMS_AUTOPILOT_MODULE_KEY,
+  bindRcsSmsAutopilot,
+  ensureRcsSmsAutopilotData,
+  rcsSmsAutopilotContent,
+  rcsSmsAutopilotState
+} from "./rcsSmsAutopilot.js";
+import {
   TYRES_OPTIONAL_COLUMNS,
   TYRES_PAGE_SIZES,
   TYRES_TABS,
@@ -2660,7 +2667,7 @@ const UI_SYSTEM_PILOT_NAV_GROUPS = [
   },
   {
     label: "Hlavní práce",
-    moduleIds: ["quick-absence", "collection-routes", "driver-reports", "vehicle-tracking", "data-box-plus"]
+    moduleIds: ["quick-absence", "collection-routes", "driver-reports", "vehicle-tracking", "data-box-plus", "rcs-sms-autopilot"]
   },
   {
     label: "Vozidla a servis",
@@ -2687,6 +2694,7 @@ const UI_SYSTEM_PILOT_NAV_LABELS = {
   "driver-reports": "Hlášení z vozidel",
   "vehicle-tracking": "Poloha vozidel",
   "data-box-plus": "Datové schránky",
+  "rcs-sms-autopilot": "RCS/SMS konverzace",
   fleet: "Vozidla",
   "service-maintenance": "Servis vozidel",
   tyres: "Pneumatiky",
@@ -4968,6 +4976,66 @@ function moduleEventLogConfig(moduleItem = {}) {
         moduleEventLogDiagnostic("routesChecked", Number(monitor.routesChecked || 0)),
         moduleEventLogDiagnostic("findings", Number(monitor.findings || 0)),
         moduleEventLogDiagnostic("lastError", selfRepairState.error || "bez chyby")
+      ]
+    };
+  }
+
+  if (moduleId === RCS_SMS_AUTOPILOT_MODULE_KEY) {
+    const status = rcsSmsAutopilotState.status || {};
+    const mode = status.mode || "unknown";
+    const asyncActive = status.asyncProcessing?.active === true;
+    const loadedState = rcsSmsAutopilotState.error
+      ? "chyba"
+      : rcsSmsAutopilotState.loaded
+        ? "ověřeno přes API"
+        : "čeká na ověření";
+    const outboundState = status.outboundEffects === "enabled_with_server_gates"
+      ? "serverově řízené"
+      : "vypnuto";
+    return {
+      moduleKey: RCS_SMS_AUTOPILOT_MODULE_KEY,
+      moduleName: "RCS/SMS Autopilot Šarlota",
+      badgeState: rcsSmsAutopilotState.error
+        ? "vyžaduje pozornost"
+        : mode === "live" && asyncActive
+          ? "řízený provoz"
+          : "vypnuto",
+      statuses: [
+        moduleEventLogStatus("Společná schránka", loadedState, rcsSmsAutopilotState.error || "Konverzace se čtou přes chráněné API z D1."),
+        moduleEventLogStatus("OpenAI", status.openAi?.configured ? "nastaveno" : "čeká na ENV", "Model vrací pouze strukturovaný návrh; oprávnění ani akce neřídí."),
+        moduleEventLogStatus("Cloud automatizace", asyncActive ? "aktivní podle režimu a pravidla" : "bez provozního účinku", "Webhook používá waitUntil; retry runner má vlastní pravidlo a nejvýše tři pokusy."),
+        moduleEventLogStatus("Odesílání RCS/SMS", outboundState, outboundState === "serverově řízené" ? "Odpověď prochází stávající messaging vrstvou, opt-outem, deduplikací a auditem." : "ENV režim a asynchronní pravidlo současně nepovolují automatickou odpověď."),
+        moduleEventLogStatus("Oprávnění", "backend KSO", "Telefon slouží jen k nalezení kontextu a nikdy není zdrojem oprávnění.")
+      ],
+      inactiveItems: outboundState === "serverově řízené" ? [
+        "Akce mimo pevný seznam nástrojů.",
+        "Citlivé údaje neznámému kontaktu.",
+        "Zápis založený pouze na telefonním čísle."
+      ] : [
+        "Automatické odpovědi přes Twilio.",
+        "Automatické provedení navržených nástrojů.",
+        "Produkční účinek retry runneru."
+      ],
+      pilotItems: [
+        `Serverový režim: ${mode}.`,
+        "Neověřená nebo nejednoznačná identita se předává člověku."
+      ],
+      events: [
+        status.lastEvent
+          ? moduleEventLogEvent(status.lastEvent.createdAt, status.lastEvent.eventType, status.lastEvent.status, status.lastEvent.detail || "Poslední uložená událost Autopilota.")
+          : moduleEventLogEvent("", "Poslední událost", "čeká na ověření", "Zatím není načtený žádný provozní audit."),
+        moduleEventLogEvent("", "Odesílání mimo systém", outboundState, outboundState === "serverově řízené" ? "Povoleno pouze přes serverové ochrany." : "Automatické odpovědi jsou vypnuté.")
+      ],
+      diagnostics: [
+        moduleEventLogDiagnostic("mode", mode),
+        moduleEventLogDiagnostic("apiStatus", rcsSmsAutopilotState.loaded ? "ready" : "waiting"),
+        moduleEventLogDiagnostic("conversations", status.counts?.conversations || 0),
+        moduleEventLogDiagnostic("humanTakeover", status.counts?.humanTakeover || 0),
+        moduleEventLogDiagnostic("openAI.configured", status.openAi?.configured ? "true" : "false"),
+        moduleEventLogDiagnostic("twilio.configured", status.twilio?.twilioConfigured ? "true" : "false"),
+        moduleEventLogDiagnostic("async.active", asyncActive ? "true" : "false"),
+        moduleEventLogDiagnostic("retry.cron", status.retryRunner?.cron || "*/5 * * * *"),
+        moduleEventLogDiagnostic("lastError", rcsSmsAutopilotState.error || "bez chyby")
       ]
     };
   }
@@ -41154,6 +41222,54 @@ function modulePage(moduleItem, user, isDashboard = false) {
     return selfRepairPage(moduleItem, user);
   }
 
+  if (moduleItem.id === RCS_SMS_AUTOPILOT_MODULE_KEY) {
+    ensureModuleRulesData(RCS_SMS_AUTOPILOT_MODULE_KEY);
+    const rulesHtml = moduleRulesAutomationPanel({
+      moduleKey: RCS_SMS_AUTOPILOT_MODULE_KEY,
+      moduleName: "RCS/SMS Autopilot Šarlota",
+      user,
+      description: "Pevná pravidla, povolené nástroje a cloudové běhy jsou vedené odděleně a auditovaně.",
+      cloudNote: "Webhook nejdřív uloží zprávu. AI, nástroje a odpovědi se spustí pouze při souběhu serverového režimu RCS_SMS_AUTOPILOT_MODE a aktivního pravidla asynchronního zpracování.",
+      humanDetail: true,
+      toggleOnly: true,
+      toggleRuleIds: [
+        "rcs-sms-autopilot-async-processing",
+        "rcs-sms-autopilot-retry-runner"
+      ]
+    });
+    return `
+      <main class="app-shell module-page module-theme-scope rcs-autopilot-page" ${moduleThemeStyleAttribute()}>
+        ${userBar(user)}
+        <nav class="topbar" aria-label="Navigace">
+          <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
+          <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
+        </nav>
+        <section class="module-detail rcs-autopilot-hero" aria-labelledby="rcs-autopilot-title">
+          <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
+          <div class="module-detail__body">
+            <div class="module-detail__eyebrow">SMART ODPADY / KOMUNIKACE</div>
+            <h1 id="rcs-autopilot-title">RCS/SMS Autopilot Šarlota</h1>
+            <p>Společná schránka příchozích odpovědí, bezpečných návrhů a pravdivě provedených nástrojů.</p>
+            <div class="module-detail__status">
+              <span>Provozní režim</span>
+              <strong>${escapeHtml(
+                rcsSmsAutopilotState.status?.outboundEffects === "enabled_with_server_gates"
+                  ? "Řízený live provoz"
+                  : rcsSmsAutopilotState.status?.mode === "review" && rcsSmsAutopilotState.status?.asyncProcessing?.active === true
+                    ? "Pouze návrhy"
+                    : "Automatické odpovědi vypnuté"
+              )}</strong>
+            </div>
+          </div>
+        </section>
+        ${rcsSmsAutopilotContent({
+          canManage: hasPermission(user, RCS_SMS_AUTOPILOT_MODULE_KEY, "manage"),
+          rulesHtml
+        })}
+      </main>
+    `;
+  }
+
   const title = isDashboard ? moduleItem.pageTitle : moduleItem.title;
   const description = moduleItem.description;
   const dashboardLink = !isDashboard && moduleItem.dashboardRoute
@@ -54462,6 +54578,10 @@ function renderAuthenticatedApp(user) {
       ensureSelfRepairData();
       ensureModuleRulesData(SELF_REPAIR_MODULE_KEY);
     }
+    if (moduleItem.id === RCS_SMS_AUTOPILOT_MODULE_KEY) {
+      ensureRcsSmsAutopilotData(apiJson, render);
+      ensureModuleRulesData(RCS_SMS_AUTOPILOT_MODULE_KEY);
+    }
     return;
   }
 
@@ -54689,6 +54809,7 @@ function render() {
     syncCollectionRoutesDriverKioskDocumentState();
     syncCollectionDailyDriverViewportDiagnostics();
     applyUiSystemV2();
+    bindRcsSmsAutopilot(app, { apiJson, render });
     app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
     app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());
     syncAssistantPromoVideo();

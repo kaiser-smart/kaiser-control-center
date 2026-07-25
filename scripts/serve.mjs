@@ -126,6 +126,213 @@ let mockSelfRepairMonitorStatus = "active";
 let mockNotificationLogs = [];
 let mockAssistantDailyPromos = new Map();
 let mockCollectionRouteBatches = [];
+const mockRcsSmsAutopilotRules = [
+  {
+    id: "rcs-sms-autopilot-twilio-signature",
+    moduleKey: "rcs-sms-autopilot",
+    title: "Ověření Twilio webhooku",
+    description: "Každá příchozí odpověď musí projít serverovým ověřením webhooku.",
+    type: "rule",
+    status: "active",
+    conditionsJson: "{\"signatureRequired\":true}",
+    actionsJson: "{\"onFailure\":\"reject_without_processing\"}",
+    isAutomation: false,
+    triggerType: "webhook",
+    scheduleCron: "",
+    eventName: "twilio_inbound",
+    cloudRunner: "functions/_lib/twilio-webhook-auth.js",
+    createdBy: { name: "Systém" },
+    updatedBy: { name: "Systém" },
+    createdAt: "2026-07-25T08:00:00.000Z",
+    updatedAt: "2026-07-25T08:00:00.000Z"
+  },
+  {
+    id: "rcs-sms-autopilot-fixed-rules",
+    moduleKey: "rcs-sms-autopilot",
+    title: "STOP, duplicity a bezpečnost před AI",
+    description: "Pevná pravidla se provedou před OpenAI a nelze je vypnout.",
+    type: "rule",
+    status: "active",
+    conditionsJson: "{\"beforeOpenAI\":true}",
+    actionsJson: "{\"stop\":\"unsubscribe\",\"danger\":\"human_takeover\"}",
+    isAutomation: false,
+    triggerType: "event",
+    scheduleCron: "",
+    eventName: "rcs_sms_received",
+    cloudRunner: "functions/api/twilio/inbound.js",
+    createdBy: { name: "Systém" },
+    updatedBy: { name: "Systém" },
+    createdAt: "2026-07-25T08:00:00.000Z",
+    updatedAt: "2026-07-25T08:00:00.000Z"
+  },
+  {
+    id: "rcs-sms-autopilot-async-processing",
+    moduleKey: "rcs-sms-autopilot",
+    title: "Asynchronní zpracování příchozí odpovědi",
+    description: "Uložená zpráva se zpracuje přes Cloudflare waitUntil pouze podle serverového režimu.",
+    type: "automation",
+    status: "inactive",
+    conditionsJson: "{\"mode\":\"live\"}",
+    actionsJson: "{\"process\":\"classify_validate_execute_reply\"}",
+    isAutomation: true,
+    triggerType: "webhook",
+    scheduleCron: "",
+    eventName: "rcs_sms_received",
+    cloudRunner: "Cloudflare Pages Functions waitUntil",
+    createdBy: { name: "Systém" },
+    updatedBy: { name: "Systém" },
+    createdAt: "2026-07-25T08:00:00.000Z",
+    updatedAt: "2026-07-25T08:00:00.000Z"
+  },
+  {
+    id: "rcs-sms-autopilot-retry-runner",
+    moduleKey: "rcs-sms-autopilot",
+    title: "Obnova nedokončeného zpracování",
+    description: "Cloudový runner obnoví nejvýše tři pokusy a používá idempotentní nástroje.",
+    type: "automation",
+    status: "inactive",
+    conditionsJson: "{\"mode\":\"live\",\"maxAttempts\":3}",
+    actionsJson: "{\"retry\":\"received_or_failed_messages\"}",
+    isAutomation: true,
+    triggerType: "time",
+    scheduleCron: "*/5 * * * *",
+    eventName: "",
+    cloudRunner: "kaiser-module-automation-runner",
+    createdBy: { name: "Systém" },
+    updatedBy: { name: "Systém" },
+    createdAt: "2026-07-25T08:00:00.000Z",
+    updatedAt: "2026-07-25T08:00:00.000Z"
+  }
+];
+const mockRcsSmsAutopilotConversations = [
+  {
+    id: "local-rcs-conversation-employee",
+    phone: "+420604542004",
+    contactType: "employee",
+    userId: "radim-oplustil",
+    employeeId: "",
+    customerId: "",
+    contactName: "Radim Opluštil",
+    channel: "rcs",
+    lastOutboundMessageSid: "SM_LOCAL_TASK_001",
+    lastOutboundTemplateKey: "task_assignment",
+    lastEventId: "task-2026-0725-01",
+    openIntent: "confirmation",
+    awaitingField: "authenticated_kso_confirmation",
+    status: "awaiting_confirmation",
+    humanTakeover: false,
+    consentStatus: "internal_operational",
+    lastActivityAt: "2026-07-25T09:12:00.000Z",
+    createdAt: "2026-07-25T09:10:00.000Z",
+    updatedAt: "2026-07-25T09:12:00.000Z",
+    latestMessage: {
+      id: "local-rcs-message-employee-in",
+      body: "Ano, beru to.",
+      status: "awaiting_confirmation",
+      intent: "confirmation",
+      requiresHuman: true,
+      createdAt: "2026-07-25T09:12:00.000Z"
+    }
+  },
+  {
+    id: "local-rcs-conversation-customer",
+    phone: "+420777123456",
+    contactType: "customer",
+    userId: "",
+    employeeId: "",
+    customerId: "customer-local-1",
+    contactName: "Firma Test s.r.o.",
+    channel: "sms",
+    lastOutboundMessageSid: "SM_LOCAL_CUSTOMER_001",
+    lastOutboundTemplateKey: "dispatch_message",
+    lastEventId: "dispatch-2026-0725-02",
+    openIntent: "missed_collection",
+    awaitingField: "",
+    status: "human_takeover",
+    humanTakeover: true,
+    consentStatus: "inbound_operational_request",
+    lastActivityAt: "2026-07-25T08:42:00.000Z",
+    createdAt: "2026-07-25T08:40:00.000Z",
+    updatedAt: "2026-07-25T08:42:00.000Z",
+    latestMessage: {
+      id: "local-rcs-message-customer-in",
+      body: "Nádoba dnes nebyla vyvezena.",
+      status: "human_takeover",
+      intent: "missed_collection",
+      requiresHuman: true,
+      createdAt: "2026-07-25T08:42:00.000Z"
+    }
+  }
+];
+
+function mockRcsSmsAutopilotDetail(id) {
+  const conversation = mockRcsSmsAutopilotConversations.find((item) => item.id === id);
+  if (!conversation) return null;
+  const employee = conversation.contactType === "employee";
+  const message = conversation.latestMessage;
+  return {
+    conversation,
+    originalOutbound: {
+      twilioMessageSid: conversation.lastOutboundMessageSid,
+      templateKey: conversation.lastOutboundTemplateKey,
+      channel: conversation.channel,
+      body: employee
+        ? "Kaiser servis: Prosím potvrď přijetí úkolu pro dnešní směnu. Pro odhlášení odpovězte STOP."
+        : "Kaiser servis: Posádka přijede dnes mezi 10:00 a 12:00. Pro odhlášení odpovězte STOP.",
+      status: "delivered",
+      relatedEntityType: employee ? "task" : "collection_stop",
+      relatedEntityId: employee ? "task-local-1" : "stop-local-1",
+      eventId: conversation.lastEventId,
+      variables: {},
+      createdAt: employee ? "2026-07-25T09:10:00.000Z" : "2026-07-25T08:40:00.000Z"
+    },
+    messages: [{
+      ...message,
+      conversationId: conversation.id,
+      direction: "inbound",
+      channel: conversation.channel,
+      senderType: conversation.contactType,
+      confidence: employee ? 0.96 : 0.91,
+      responseMode: "human",
+      requestedTool: employee ? "accept_task" : "handoff_to_human",
+      toolArguments: employee ? { taskId: "task-local-1" } : { reason: "Lokální bezpečný náhled." },
+      body: message.body,
+      media: [],
+      createdAt: message.createdAt
+    }],
+    requests: employee ? [] : [{
+      id: "local-rcs-request-1",
+      conversationId: conversation.id,
+      messageId: message.id,
+      requestType: "create_missed_collection_report",
+      status: "open",
+      summary: "Hlášení neprovedeného svozu · Firma Test s.r.o.",
+      createdAt: "2026-07-25T08:42:01.000Z"
+    }],
+    toolRuns: [{
+      id: `local-tool-${conversation.id}`,
+      conversationId: conversation.id,
+      messageId: message.id,
+      toolName: employee ? "accept_task" : "handoff_to_human",
+      executionMode: employee ? "confirmation" : "automatic",
+      status: employee ? "awaiting_confirmation" : "completed",
+      errorMessage: employee ? "Chybí jednorázový serverový grant." : "",
+      startedAt: message.createdAt
+    }],
+    events: [{
+      id: `local-event-${conversation.id}`,
+      conversationId: conversation.id,
+      messageId: message.id,
+      eventType: employee ? "tool_evaluated" : "human_takeover",
+      status: conversation.status,
+      detail: employee
+        ? "Akce čeká na potvrzení oprávněným uživatelem KSO."
+        : "Konverzace byla předaná člověku.",
+      createdAt: message.createdAt
+    }],
+    apiStatus: "ready"
+  };
+}
 const mockTyresLayouts = [
   ["L", "P", "ZL", "ZP"],
   ["L", "P", "HL vnitřní", "HL vnější", "HP vnitřní", "HP vnější"],
@@ -5083,6 +5290,172 @@ async function handleApi(request, response) {
         "Set-Cookie": `${devCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200`
       }
     );
+    return true;
+  }
+
+  if (url.pathname === "/api/rcs-sms-autopilot" && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "rcs-sms-autopilot", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění číst RCS/SMS konverzace." });
+      return true;
+    }
+    const contactType = String(url.searchParams.get("contactType") || "").trim();
+    const status = String(url.searchParams.get("status") || "").trim();
+    const search = String(url.searchParams.get("search") || "").trim().toLocaleLowerCase("cs-CZ");
+    const items = mockRcsSmsAutopilotConversations.filter((item) => (
+      (!contactType || item.contactType === contactType) &&
+      (!status || item.status === status) &&
+      (!search || [
+        item.phone,
+        item.contactName,
+        item.openIntent,
+        item.latestMessage?.body
+      ].join(" ").toLocaleLowerCase("cs-CZ").includes(search))
+    ));
+    sendJson(response, 200, {
+      items,
+      total: items.length,
+      page: 1,
+      pageSize: 50,
+      status: {
+        apiStatus: "ready",
+        moduleKey: "rcs-sms-autopilot",
+        mode: "off",
+        cloudProcessing: "Lokální náhled bez externích účinků",
+        asyncProcessing: {
+          ruleId: "rcs-sms-autopilot-async-processing",
+          active: false
+        },
+        retryRunner: {
+          runner: "rcs-sms-autopilot-retry-5m",
+          cron: "*/5 * * * *",
+          active: false
+        },
+        openAi: { configured: false, model: "gpt-5.4-mini" },
+        twilio: { twilioConfigured: false },
+        permissionsSource: "KSO backend; telefon není zdroj oprávnění",
+        outboundEffects: "disabled",
+        counts: {
+          conversations: mockRcsSmsAutopilotConversations.length,
+          humanTakeover: mockRcsSmsAutopilotConversations.filter((item) => item.humanTakeover).length,
+          unknownContacts: 0,
+          errors: 0,
+          messages: mockRcsSmsAutopilotConversations.length,
+          pendingMessages: 1,
+          repliedMessages: 0,
+          requests: 1,
+          openRequests: 1
+        },
+        lastEvent: {
+          eventType: "local_preview_loaded",
+          createdAt: "2026-07-25T09:12:00.000Z"
+        }
+      },
+      apiStatus: "ready",
+      localPreview: true
+    });
+    return true;
+  }
+
+  const rcsSmsAutopilotDetailMatch = /^\/api\/rcs-sms-autopilot\/([^/]+)$/.exec(url.pathname);
+  if (rcsSmsAutopilotDetailMatch && ["GET", "POST"].includes(request.method)) {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    const id = decodeURIComponent(rcsSmsAutopilotDetailMatch[1]);
+    const conversation = mockRcsSmsAutopilotConversations.find((item) => item.id === id);
+    if (!conversation) {
+      sendJson(response, 404, { error: "RCS/SMS konverzace nebyla nalezena." });
+      return true;
+    }
+    if (request.method === "POST") {
+      if (!hasPermission(user, "rcs-sms-autopilot", "manage")) {
+        sendJson(response, 403, { error: "Nemáte oprávnění spravovat RCS/SMS konverzace." });
+        return true;
+      }
+      const { action } = await readJsonBody(request);
+      if (!["take_over", "release", "close"].includes(action)) {
+        sendJson(response, 400, { error: "Povolené akce jsou take_over, release nebo close." });
+        return true;
+      }
+      conversation.status = action === "take_over"
+        ? "human_takeover"
+        : action === "close"
+          ? "closed"
+          : "open";
+      conversation.humanTakeover = action === "take_over";
+      conversation.awaitingField = "";
+      conversation.updatedAt = new Date().toISOString();
+      conversation.lastActivityAt = conversation.updatedAt;
+    } else if (!hasPermission(user, "rcs-sms-autopilot", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění číst RCS/SMS konverzace." });
+      return true;
+    }
+    sendJson(response, 200, mockRcsSmsAutopilotDetail(id));
+    return true;
+  }
+
+  if (
+    ["/api/modules/rcs-sms-autopilot/rules", "/api/modules/rcs-sms-autopilot/automation-runs"].includes(url.pathname) &&
+    request.method === "GET"
+  ) {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (!hasPermission(user, "rcs-sms-autopilot", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění číst pravidla RCS/SMS Autopilota." });
+      return true;
+    }
+    sendJson(response, 200, url.pathname.endsWith("/automation-runs")
+      ? { runs: [], runnerRuns: [], apiStatus: "ready", localPreview: true }
+      : { rules: mockRcsSmsAutopilotRules, apiStatus: "ready", localPreview: true });
+    return true;
+  }
+
+  const rcsSmsRuleAuditMatch = /^\/api\/modules\/rcs-sms-autopilot\/rules\/([^/]+)\/audit$/.exec(url.pathname);
+  if (rcsSmsRuleAuditMatch && request.method === "GET") {
+    const user = currentDevUser(request);
+    if (!user || !hasPermission(user, "rcs-sms-autopilot", "view")) {
+      sendJson(response, user ? 403 : 401, { error: user ? "Nemáte oprávnění." : "Nepřihlášeno." });
+      return true;
+    }
+    sendJson(response, 200, {
+      auditLog: [{
+        id: `local-audit-${decodeURIComponent(rcsSmsRuleAuditMatch[1])}`,
+        action: "seeded",
+        changedAt: "2026-07-25T08:00:00.000Z",
+        changedByName: "Systém",
+        note: "Lokální bezpečný náhled pravidla."
+      }],
+      apiStatus: "ready"
+    });
+    return true;
+  }
+
+  const rcsSmsRuleToggleMatch = /^\/api\/modules\/rcs-sms-autopilot\/rules\/([^/]+)\/(activate|deactivate)$/.exec(url.pathname);
+  if (rcsSmsRuleToggleMatch && request.method === "POST") {
+    const user = currentDevUser(request);
+    const id = decodeURIComponent(rcsSmsRuleToggleMatch[1]);
+    if (!user || !hasPermission(user, "rcs-sms-autopilot", "manage")) {
+      sendJson(response, user ? 403 : 401, { error: user ? "Nemáte oprávnění." : "Nepřihlášeno." });
+      return true;
+    }
+    if (!["rcs-sms-autopilot-async-processing", "rcs-sms-autopilot-retry-runner"].includes(id)) {
+      sendJson(response, 403, { error: "Pevné bezpečnostní pravidlo nelze změnit.", apiStatus: "ready" });
+      return true;
+    }
+    const rule = mockRcsSmsAutopilotRules.find((item) => item.id === id);
+    rule.status = rcsSmsRuleToggleMatch[2] === "activate" ? "active" : "inactive";
+    rule.updatedAt = new Date().toISOString();
+    sendJson(response, 200, { rule, apiStatus: "ready", localPreview: true });
     return true;
   }
 
