@@ -171,6 +171,8 @@ runVisible("node", ["scripts/sarlota-prompt-sync-plan.test.mjs"]);
 runVisible("node", ["scripts/sarlota-voice-smoke.test.mjs"]);
 runVisible("node", ["scripts/customer-messaging.test.mjs"]);
 runVisible("node", ["scripts/rcs-consent.test.mjs"]);
+runVisible("node", ["scripts/rcs-template-assets.test.mjs"]);
+runVisible("node", ["scripts/rcs-template-center.test.mjs"]);
 runVisible("node", ["scripts/data-box-plus-triage.test.mjs"]);
 runVisible("node", ["scripts/data-box-plus-triage-ui.test.mjs"]);
 runVisible("node", ["scripts/data-box-plus-compose-save-race.test.mjs"]);

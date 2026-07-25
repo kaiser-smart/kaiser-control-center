@@ -13,9 +13,22 @@ Centrální registr obsahuje osm interních klíčů:
 - `critical.alert`
 - `general.info`
 
-Sedm šablon používá přesně dodané schválené PNG bannery v
-`public/rcs/templates/`. Pro `leave.pending` schválený motiv v dodávce chybí,
-proto má stav `asset_missing`, nemá Content SID a nelze ji odeslat.
+Všech osm šablon používá přesně dodané schválené PNG bannery v
+`public/rcs/templates/`. Schválená sada v4 má primární PNG 1200 × 600 px,
+stabilní párování `templateKey -> assetFile` a JPG zálohu pro každý banner.
+Soubor `ds-new-alt.png` je uložený pouze jako neaktivní alternativa a nesmí se
+přiřadit k `ds.new` bez samostatné změny manifestu.
+
+Aktivní párování:
+
+- `general.info` -> `/rcs/templates/general-info.png`
+- `critical.alert` -> `/rcs/templates/critical-alert.png`
+- `vehicle.fault` -> `/rcs/templates/vehicle-fault.png`
+- `task.new` -> `/rcs/templates/task-new.png`
+- `ds.deadline` -> `/rcs/templates/ds-deadline.png`
+- `ds.new` -> `/rcs/templates/ds-new.png`
+- `leave.pending` -> `/rcs/templates/leave-pending.png`
+- `leave.approved` -> `/rcs/templates/leave-approved.png`
 
 Každá aktivní šablona obsahuje současně `twilio/card` a textový
 `twilio/text` fallback. Karta používá `VERTICAL` a `MEDIUM`. Dynamické hodnoty
@@ -76,6 +89,12 @@ Produkční funkčnost vyžaduje:
 3. veřejně dostupné bannery na `https://smart-odpady.ai/rcs/templates/`,
 4. ruční synchronizaci oprávněným administrátorem,
 5. samostatně potvrzené testovací odeslání.
+
+Po změně grafického banneru se existující aktivní Twilio Content definice
+aktualizuje přes ruční synchronizaci v Nastavení. Synchronizace nemění
+`templateKey`, texty, proměnné, tlačítka ani SMS fallback. Pokud Twilio pro
+změněnou definici vyžaduje nový Content SID, KSO uloží nový SID jako aktuální a
+odesílání dál páruje události podle stabilního `templateKey`.
 
 Auth token, API key secret ani webhook token se neukládají do registru,
 databáze, klienta ani dokumentace.

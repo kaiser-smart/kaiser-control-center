@@ -91,10 +91,12 @@ assert.equal(rcsTextLength(shortenedSubject), 45);
 assert.ok(shortenedSubject.endsWith("…"));
 assert.ok(!shortenRcsText("Český vícebajtový řetězec 👩‍🔧 a další text", 20).includes("\uFFFD"));
 assert.equal(shortenRcsText("Text &amp; pokračování", 11), "Text &amp;…");
-assert.throws(
-  () => renderRcsTemplate("leave.pending", RCS_TEMPLATE_REGISTRY["leave.pending"].sampleVariables, env),
-  (error) => error.code === "asset_missing"
+const pendingLeave = renderRcsTemplate(
+  "leave.pending",
+  RCS_TEMPLATE_REGISTRY["leave.pending"].sampleVariables,
+  env
 );
+assert.equal(pendingLeave.bannerUrl, "https://smart-odpady.ai/rcs/templates/leave-pending.png");
 assert.throws(
   () => validateRcsVariables(
     getRcsTemplate("general.info"),
@@ -166,7 +168,7 @@ for (const preview of previews) {
   assert.equal(preview.actions[0].title, action);
   assert.match(preview.sampleFallback, /Pro odhlášení odpovězte STOP\.$/);
 }
-assert.equal(previews.find((item) => item.key === "leave.pending").syncStatus, "asset_missing");
+assert.equal(previews.find((item) => item.key === "leave.pending").syncStatus, "content_sid_missing");
 assert.equal(previews.find((item) => item.key === "leave.pending").enabled, false);
 assert.ok(previews.find((item) => item.key === "leave.pending").sampleBody);
 assert.equal(previews.find((item) => item.key === "ds.new").syncStatus, "content_sid_missing");

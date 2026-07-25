@@ -65,7 +65,7 @@ export const RCS_TEMPLATE_REGISTRY = Object.freeze({
     key: "leave.pending",
     friendlyName: "kaiser_rcs_leave_pending_v2",
     label: "Žádost čeká",
-    assetFilename: "",
+    assetFilename: "leave-pending.png",
     titleTemplate: "Žádost čeká",
     bodyTemplate: "{{bodyPrefix}} {{dateRange}} čeká na schválení.",
     fallbackTemplate: "{{fallbackPrefix}} {{dateRange}} čeká na schválení.",

@@ -1,0 +1,10 @@
+{
+  "general.info": "general-info.png",
+  "critical.alert": "critical-alert.png",
+  "vehicle.fault": "vehicle-fault.png",
+  "task.new": "task-new.png",
+  "ds.deadline": "ds-deadline.png",
+  "ds.new": "ds-new.png",
+  "leave.pending": "leave-pending.png",
+  "leave.approved": "leave-approved.png"
+}

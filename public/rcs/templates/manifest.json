@@ -1,0 +1,218 @@
+{
+  "version": "4.0.0",
+  "name": "Kaiser Smart odpady – RCS banners",
+  "brandColors": {
+    "green": "#75BD25",
+    "darkGray": "#343A40"
+  },
+  "canvas": {
+    "width": 1200,
+    "height": 600,
+    "aspectRatio": "2:1",
+    "colorSpace": "sRGB"
+  },
+  "rules": {
+    "dynamicTextInsideImage": false,
+    "runtimeImageGeneration": false,
+    "canonicalAssetExtension": ".png",
+    "templateKeyIsStable": true
+  },
+  "templates": [
+    {
+      "templateKey": "general.info",
+      "friendlyName": "Zpráva",
+      "assetFile": "general-info.png",
+      "publicUrlPath": "/rcs/templates/general-info.png",
+      "fallbackJpgPath": "/rcs/templates/general-info.jpg",
+      "title": "Zpráva od Šarloty",
+      "buttonLabel": "Zobrazit detail",
+      "orientation": "VERTICAL",
+      "mediaHeight": "MEDIUM",
+      "enabled": true,
+      "asset": {
+        "png": "/rcs/templates/general-info.png",
+        "jpg": "/rcs/templates/general-info.jpg",
+        "svgWrapper": "svg-wrappers/general-info.svg",
+        "width": 1200,
+        "height": 600,
+        "sha256": "99d49d3581a145b89db9f9b01f674f3ce5b14a340f2e2d5e16dbf6c9690b1b78",
+        "pngBytes": 583362,
+        "jpgBytes": 113740
+      }
+    },
+    {
+      "templateKey": "critical.alert",
+      "friendlyName": "Důležité upozornění",
+      "assetFile": "critical-alert.png",
+      "publicUrlPath": "/rcs/templates/critical-alert.png",
+      "fallbackJpgPath": "/rcs/templates/critical-alert.jpg",
+      "title": "Důležité upozornění",
+      "buttonLabel": "Zobrazit detail",
+      "orientation": "VERTICAL",
+      "mediaHeight": "MEDIUM",
+      "enabled": true,
+      "asset": {
+        "png": "/rcs/templates/critical-alert.png",
+        "jpg": "/rcs/templates/critical-alert.jpg",
+        "svgWrapper": "svg-wrappers/critical-alert.svg",
+        "width": 1200,
+        "height": 600,
+        "sha256": "6d6acbfe5c06c5e43032db75ddfb9e3885f90325269aecf58fda8c254c35b6b9",
+        "pngBytes": 678221,
+        "jpgBytes": 121515
+      }
+    },
+    {
+      "templateKey": "vehicle.fault",
+      "friendlyName": "Nové hlášení vozidla",
+      "assetFile": "vehicle-fault.png",
+      "publicUrlPath": "/rcs/templates/vehicle-fault.png",
+      "fallbackJpgPath": "/rcs/templates/vehicle-fault.jpg",
+      "title": "Nové hlášení vozidla",
+      "buttonLabel": "Otevřít hlášení",
+      "orientation": "VERTICAL",
+      "mediaHeight": "MEDIUM",
+      "enabled": true,
+      "asset": {
+        "png": "/rcs/templates/vehicle-fault.png",
+        "jpg": "/rcs/templates/vehicle-fault.jpg",
+        "svgWrapper": "svg-wrappers/vehicle-fault.svg",
+        "width": 1200,
+        "height": 600,
+        "sha256": "06b688fddfcfd8e940f90ecd3886d5e4bb3ea69d83121a58c589c99a7967fa73",
+        "pngBytes": 713780,
+        "jpgBytes": 148911
+      }
+    },
+    {
+      "templateKey": "task.new",
+      "friendlyName": "Nový úkol",
+      "assetFile": "task-new.png",
+      "publicUrlPath": "/rcs/templates/task-new.png",
+      "fallbackJpgPath": "/rcs/templates/task-new.jpg",
+      "title": "Nový úkol",
+      "buttonLabel": "Otevřít úkol",
+      "orientation": "VERTICAL",
+      "mediaHeight": "MEDIUM",
+      "enabled": true,
+      "asset": {
+        "png": "/rcs/templates/task-new.png",
+        "jpg": "/rcs/templates/task-new.jpg",
+        "svgWrapper": "svg-wrappers/task-new.svg",
+        "width": 1200,
+        "height": 600,
+        "sha256": "305d79911ea8ef951b99859852a6b6e869384d61c1634987adc5ff732591dbba",
+        "pngBytes": 552419,
+        "jpgBytes": 106857
+      }
+    },
+    {
+      "templateKey": "ds.deadline",
+      "friendlyName": "Blíží se termín",
+      "assetFile": "ds-deadline.png",
+      "publicUrlPath": "/rcs/templates/ds-deadline.png",
+      "fallbackJpgPath": "/rcs/templates/ds-deadline.jpg",
+      "title": "Blíží se termín",
+      "buttonLabel": "Vyřídit zprávu",
+      "orientation": "VERTICAL",
+      "mediaHeight": "MEDIUM",
+      "enabled": true,
+      "asset": {
+        "png": "/rcs/templates/ds-deadline.png",
+        "jpg": "/rcs/templates/ds-deadline.jpg",
+        "svgWrapper": "svg-wrappers/ds-deadline.svg",
+        "width": 1200,
+        "height": 600,
+        "sha256": "c5296a504feeeda502fb5d95ddc35b6f76a955590f63056f954d16766460a3c9",
+        "pngBytes": 765643,
+        "jpgBytes": 144010
+      }
+    },
+    {
+      "templateKey": "ds.new",
+      "friendlyName": "Nová datová zpráva",
+      "assetFile": "ds-new.png",
+      "publicUrlPath": "/rcs/templates/ds-new.png",
+      "fallbackJpgPath": "/rcs/templates/ds-new.jpg",
+      "title": "Nová datová zpráva",
+      "buttonLabel": "Otevřít zprávu",
+      "orientation": "VERTICAL",
+      "mediaHeight": "MEDIUM",
+      "enabled": true,
+      "asset": {
+        "png": "/rcs/templates/ds-new.png",
+        "jpg": "/rcs/templates/ds-new.jpg",
+        "svgWrapper": "svg-wrappers/ds-new.svg",
+        "width": 1200,
+        "height": 600,
+        "sha256": "380093501a1dbaa92e4f87f8a546035f2f05114b38bf81bc408f3b5421e36ba9",
+        "pngBytes": 749041,
+        "jpgBytes": 139393
+      }
+    },
+    {
+      "templateKey": "leave.pending",
+      "friendlyName": "Žádost čeká",
+      "assetFile": "leave-pending.png",
+      "publicUrlPath": "/rcs/templates/leave-pending.png",
+      "fallbackJpgPath": "/rcs/templates/leave-pending.jpg",
+      "title": "Žádost čeká",
+      "buttonLabel": "Zobrazit žádost",
+      "orientation": "VERTICAL",
+      "mediaHeight": "MEDIUM",
+      "enabled": true,
+      "asset": {
+        "png": "/rcs/templates/leave-pending.png",
+        "jpg": "/rcs/templates/leave-pending.jpg",
+        "svgWrapper": "svg-wrappers/leave-pending.svg",
+        "width": 1200,
+        "height": 600,
+        "sha256": "53aa111b6047e51f19e77dbe3e3e1a8680665f764acbacd50d25a58302a1101d",
+        "pngBytes": 757917,
+        "jpgBytes": 146786
+      }
+    },
+    {
+      "templateKey": "leave.approved",
+      "friendlyName": "Dovolená schválena",
+      "assetFile": "leave-approved.png",
+      "publicUrlPath": "/rcs/templates/leave-approved.png",
+      "fallbackJpgPath": "/rcs/templates/leave-approved.jpg",
+      "title": "Dovolená schválena",
+      "buttonLabel": "Zobrazit detail",
+      "orientation": "VERTICAL",
+      "mediaHeight": "MEDIUM",
+      "enabled": true,
+      "asset": {
+        "png": "/rcs/templates/leave-approved.png",
+        "jpg": "/rcs/templates/leave-approved.jpg",
+        "svgWrapper": "svg-wrappers/leave-approved.svg",
+        "width": 1200,
+        "height": 600,
+        "sha256": "f128e8185023980d206cf7d94ae94944847c4cfabe9aafb86b5640f173e27a53",
+        "pngBytes": 730561,
+        "jpgBytes": 150515
+      }
+    }
+  ],
+  "alternates": [
+    {
+      "templateKey": "ds.new",
+      "friendlyName": "Nová datová zpráva – alternativa",
+      "assetFile": "ds-new-alt.png",
+      "publicUrlPath": "/rcs/templates/ds-new-alt.png",
+      "enabled": false,
+      "note": "Volitelná alternativa. Codex ji nesmí automaticky přiřadit bez změny manifestu.",
+      "asset": {
+        "png": "/rcs/templates/ds-new-alt.png",
+        "jpg": "/rcs/templates/ds-new-alt.jpg",
+        "svgWrapper": "svg-wrappers/ds-new-alt.svg",
+        "width": 1200,
+        "height": 600,
+        "sha256": "7dd450461e383b596c690109af86b14b2e6d3291d3432e0315ccec0e9176bd11",
+        "pngBytes": 673011,
+        "jpgBytes": 125888
+      }
+    }
+  ]
+}

@@ -1256,6 +1256,25 @@ Obecné proměnné zůstávají jen jako fallback pro starší integrace a nesm�
 
 Do repozitáře, dokumentace, screenshotů ani chatu se nesmí ukládat `TWILIO_AUTH_TOKEN`, webhook secret ani jiné citlivé hodnoty. SID hodnoty nejsou Auth Token, ale runtime je má číst z ENV, ne z aplikační logiky.
 
+Schválená grafická sada RCS šablon k 2026-07-25:
+- sada: `Kaiser Smart odpady – RCS banners`, manifest verze `4.0.0`,
+- primární formát: PNG `1200 × 600 px`, cesta `/rcs/templates/`,
+- RCS karta zachovává `orientation: VERTICAL` a `mediaHeight: MEDIUM`,
+- texty, proměnné, tlačítka a SMS fallback se při výměně bannerů nemění,
+- `ds-new-alt.png` je pouze neaktivní alternativa a nesmí být automaticky přiřazená.
+
+Aktivní párování stabilních klíčů:
+- `general.info` -> `/rcs/templates/general-info.png`
+- `critical.alert` -> `/rcs/templates/critical-alert.png`
+- `vehicle.fault` -> `/rcs/templates/vehicle-fault.png`
+- `task.new` -> `/rcs/templates/task-new.png`
+- `ds.deadline` -> `/rcs/templates/ds-deadline.png`
+- `ds.new` -> `/rcs/templates/ds-new.png`
+- `leave.pending` -> `/rcs/templates/leave-pending.png`
+- `leave.approved` -> `/rcs/templates/leave-approved.png`
+
+Před produkční synchronizací Twilio Content API musí projít `npm run test:rcs-templates` a veřejné URL všech aktivních PNG musí vracet `200` s `Content-Type: image/png`.
+
 ## 15. Souběžná práce Radim / Martin / Codex
 
 Na projektu může současně pracovat více lidí nebo více Codex vláken.
