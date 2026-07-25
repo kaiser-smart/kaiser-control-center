@@ -142,10 +142,7 @@ class FakeD1 {
       return { success: true };
     }
 
-    if (sql.includes("INSERT OR IGNORE INTO customer_message_inbound")) {
-      if (this.inbound.some((item) => item.twilio_message_sid === bindings[3])) {
-        return { success: true, meta: { changes: 0 } };
-      }
+    if (sql.includes("INSERT INTO customer_message_inbound")) {
       this.inbound.push({
         id: bindings[0],
         phone: bindings[1],
@@ -154,7 +151,7 @@ class FakeD1 {
         raw_payload: bindings[4],
         created_at: bindings[5]
       });
-      return { success: true, meta: { changes: 1 } };
+      return { success: true };
     }
 
     return { success: true };
@@ -237,7 +234,6 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
     time: "09:00",
     address: "Praha 1",
     message: "Posádka dorazí později.",
-    replyText: "Požadavek jsme přijali.",
     url: "https://example.test/form",
     company: "Test 1 s.r.o.",
     station: "TEST 1 · stanoviště 1",
@@ -274,18 +270,13 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
 
 {
   const testEnv = env();
-  const payload = {
+  const inbound = await processCustomerInboundMessage(testEnv, {
     From: "+420777123456",
     Body: "NEPOSILAT",
     MessageSid: "SMINBOUND2"
-  };
-  const inbound = await processCustomerInboundMessage(testEnv, payload);
+  });
   assert.equal(inbound.stopped, true);
   assert.match(inbound.reply, /Odhlášení potvrzeno/);
-  const duplicate = await processCustomerInboundMessage(testEnv, payload);
-  assert.equal(duplicate.duplicate, true);
-  assert.equal(duplicate.reply, "");
-  assert.equal(testEnv.SMART_ODPADY_DB.inbound.length, 1);
 }
 
 {

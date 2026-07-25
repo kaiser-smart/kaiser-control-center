@@ -174,12 +174,7 @@ export async function sendCustomerMessage(env, input = {}) {
       templateLabel: rendered.label,
       legalBasis: cleanString(input.legalBasis),
       consent: input.consent === true,
-      rcsSenderConfigured: Boolean(config.rcsSenderId),
-      eventId: cleanString(input.eventId),
-      userId: cleanString(input.userId),
-      variables: input.variables && typeof input.variables === "object" && !Array.isArray(input.variables)
-        ? input.variables
-        : {}
+      rcsSenderConfigured: Boolean(config.rcsSenderId)
     }
   };
 
@@ -272,7 +267,7 @@ export function isStopMessage(body) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
     .trim();
-  return /^(stop|stop sms|konec|odhlasit|odhlasit me|nechci|neposilat|neposilat sms)$/i.test(normalized);
+  return /^(stop|stop sms|neposilat|neposilat sms)$/i.test(normalized);
 }
 
 export async function processCustomerInboundMessage(env, payload = {}) {
@@ -280,7 +275,7 @@ export async function processCustomerInboundMessage(env, payload = {}) {
   const body = cleanString(payload.Body || payload.body);
   const messageSid = cleanString(payload.MessageSid || payload.SmsSid || payload.messageSid);
 
-  const inbound = await insertCustomerMessageInbound(env, {
+  await insertCustomerMessageInbound(env, {
     phone: phone || cleanString(payload.From || payload.from),
     body,
     twilioMessageSid: messageSid,
@@ -300,9 +295,8 @@ export async function processCustomerInboundMessage(env, payload = {}) {
     apiStatus: "ready",
     phone,
     stopped,
-    duplicate: inbound.duplicate === true,
     twilioMessageSid: messageSid,
-    reply: stopped && inbound.duplicate !== true ? STOP_CONFIRMATION : ""
+    reply: stopped ? STOP_CONFIRMATION : ""
   };
 }
 

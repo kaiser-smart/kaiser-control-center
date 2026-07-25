@@ -315,9 +315,9 @@ export async function insertCustomerMessageInbound(env, input = {}) {
   const now = cleanString(input.createdAt) || nowIso();
 
   try {
-    const result = await db
+    await db
       .prepare(`
-        INSERT OR IGNORE INTO customer_message_inbound (
+        INSERT INTO customer_message_inbound (
           id,
           phone,
           body,
@@ -335,11 +335,7 @@ export async function insertCustomerMessageInbound(env, input = {}) {
         now
       )
       .run();
-    return {
-      id,
-      createdAt: now,
-      duplicate: Number(result?.meta?.changes ?? result?.changes ?? 1) === 0
-    };
+    return { id, createdAt: now };
   } catch (error) {
     throw dbError(error);
   }

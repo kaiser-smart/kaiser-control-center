@@ -181,18 +181,6 @@ export const modules = [
     order: 10
   },
   {
-    id: "rcs-sms-autopilot",
-    title: "RCS/SMS konverzace",
-    description: "Společná schránka odpovědí, návrhů Šarloty a bezpečně provedených nástrojů.",
-    route: "/rcs-sms-konverzace",
-    icon: ReportsIcon,
-    status: "Výchozí vypnuto",
-    ctaLabel: "Otevřít konverzace",
-    active: true,
-    disabled: false,
-    order: 10.2
-  },
-  {
     id: "absence",
     title: "Nepřítomnosti",
     description: "Dovolené, nemoci, schvalování a přehled kdo dnes chybí.",

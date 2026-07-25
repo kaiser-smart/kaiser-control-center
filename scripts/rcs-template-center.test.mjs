@@ -261,53 +261,6 @@ const syncRow = {
   assert.equal(result.status, "blocked_duplicate");
 }
 
-{
-  let reservedInput = null;
-  let grantInput = null;
-  const result = await sendRcsTemplateMessage(env, {
-    templateKey: "task.new",
-    recipient: "+420777123456",
-    variables: {
-      firstName: "Radime",
-      taskTitle: "Zkontrolovat svozovou trasu",
-      deadline: "31. 7. 2026",
-      detailUrl: "https://smart-odpady.ai/dashboard"
-    },
-    eventId: "task-event-1",
-    userId: "user-1",
-    relatedEntityType: "task",
-    relatedEntityId: "task-1"
-  }, { id: "admin-1", name: "Admin" }, {
-    syncRow: { ...syncRow, templateKey: "task.new" },
-    isOptedOut: async () => false,
-    reserveDispatch: async (_env, input) => {
-      reservedInput = input;
-      return { created: true, dispatch: { id: "dispatch-task-1", ...input } };
-    },
-    updateDispatch: async () => {},
-    createTaskReplyGrants: async (_env, input) => {
-      grantInput = input;
-      return { created: 3, total: 3 };
-    },
-    fetch: async () => new Response(JSON.stringify({
-      sid: "SM_TASK_REPLY_GRANT_TEST",
-      status: "accepted"
-    }), {
-      status: 201,
-      headers: { "content-type": "application/json" }
-    })
-  });
-  assert.equal(result.sent, true);
-  assert.deepEqual(result.replyGrants, { created: 3, total: 3 });
-  assert.equal(reservedInput.recipientPhone, "+420777123456");
-  assert.equal(reservedInput.relatedEntityId, "task-1");
-  assert.equal(reservedInput.variables.taskTitle, "Zkontrolovat svozovou trasu");
-  assert.equal(grantInput.outboundMessageSid, "SM_TASK_REPLY_GRANT_TEST");
-  assert.equal(grantInput.taskId, "task-1");
-  assert.equal(grantInput.createdByUserId, "admin-1");
-  assert.ok(Date.parse(grantInput.expiresAt) > Date.now());
-}
-
 await assert.rejects(
   () => sendRcsTemplateMessage(env, validSend({ recipient: "není telefon" }), {}, { syncRow }),
   /platné telefonní číslo/

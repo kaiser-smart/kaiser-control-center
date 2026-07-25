@@ -1,6 +1,5 @@
 import { json } from "../../_lib/auth.js";
 import { processCustomerInboundMessage } from "../../_lib/customer-messaging-service.js";
-import { ingestAndScheduleRcsSmsAutopilot } from "../../_lib/rcs-sms-autopilot-service.js";
 import { requireTwilioWebhookAuth } from "../../_lib/twilio-webhook-auth.js";
 
 async function readTwilioPayload(request) {
@@ -29,7 +28,7 @@ function twiml(message = "") {
   });
 }
 
-export async function onRequestPost({ request, env, context, waitUntil }) {
+export async function onRequestPost({ request, env }) {
   const { payload, rawBody } = await readTwilioPayload(request);
   const auth = await requireTwilioWebhookAuth(env, request, payload, rawBody);
   if (!auth.ok) {
@@ -38,12 +37,6 @@ export async function onRequestPost({ request, env, context, waitUntil }) {
 
   try {
     const result = await processCustomerInboundMessage(env, payload);
-    const schedule = typeof context?.waitUntil === "function"
-      ? context.waitUntil.bind(context)
-      : typeof waitUntil === "function"
-        ? waitUntil
-        : null;
-    await ingestAndScheduleRcsSmsAutopilot(env, payload, schedule);
     return twiml(result.reply);
   } catch (error) {
     console.error("twilio.customer_inbound_failed", { message: error.message });

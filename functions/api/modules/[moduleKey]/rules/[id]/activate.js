@@ -5,7 +5,6 @@ import {
   setModuleRuleStatus
 } from "../../../../../_lib/module-rules-store.js";
 import { isSelfRepairMonitorRule } from "../../../../../_lib/self-repair-monitor-config.js";
-import { isImmutableRcsSmsAutopilotRule } from "../../../../../_lib/rcs-sms-autopilot-rule-guard.js";
 
 function routeParams(request, params) {
   const parts = new URL(request.url).pathname.split("/").filter(Boolean);
@@ -25,13 +24,6 @@ function moduleRulesError(error) {
 }
 
 function moduleRulesReadOnlyPilotResponse(route) {
-  if (isImmutableRcsSmsAutopilotRule(route.moduleKey, route.id)) {
-    return json({
-      error: "Pevné bezpečnostní pravidlo RCS/SMS Autopilota je trvale aktivní.",
-      apiStatus: "ready"
-    }, 403);
-  }
-
   if (isSelfRepairMonitorRule(route.moduleKey, route.id)) {
     return null;
   }

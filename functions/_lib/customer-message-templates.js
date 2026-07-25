@@ -33,12 +33,6 @@ export const CUSTOMER_MESSAGE_TEMPLATES = {
     internalOnly: true,
     body: "Kaiser servis: {message}"
   },
-  autopilot_reply: {
-    label: "RCS/SMS Autopilot Šarlota",
-    category: "transactional",
-    internalOnly: true,
-    body: "{replyText}"
-  },
   collection_route_test: {
     label: "TEST svozové trasy",
     category: "transactional",

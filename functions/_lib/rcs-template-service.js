@@ -10,7 +10,6 @@ import {
 } from "./rcs-template-registry.js";
 import {
   acquireRcsTemplateSyncLock,
-  createRcsTaskReplyGrants,
   getRcsTemplateSyncRow,
   listRcsDispatches,
   listRcsTemplateSyncRows,
@@ -76,12 +75,6 @@ async function idempotencyKey(eventId, templateKey, phone) {
 
 function providerError(payload = {}, fallback = "") {
   return cleanString(payload.message || payload.error_message || fallback).slice(0, 600);
-}
-
-function taskReplyGrantExpiresAt(env = {}) {
-  const raw = Number(env.RCS_SMS_ACTION_GRANT_TTL_SECONDS || 172800);
-  const ttlSeconds = Math.max(300, Math.min(Number.isFinite(raw) ? raw : 172800, 604800));
-  return new Date(Date.now() + (ttlSeconds * 1000)).toISOString();
 }
 
 async function contentExists(config, contentSid, fetchImpl) {
@@ -215,37 +208,15 @@ async function postMessage(config, phone, contentSid, contentVariables, fetchImp
 }
 
 export async function sendRcsTemplateMessage(env, input = {}, actor = {}, dependencies = {}) {
-  const allowedKeys = [
-    "templateKey",
-    "recipient",
-    "variables",
-    "eventId",
-    "userId",
-    "customerId",
-    "relatedEntityType",
-    "relatedEntityId"
-  ];
+  const allowedKeys = ["templateKey", "recipient", "variables", "eventId"];
   const unknownKeys = Object.keys(input || {}).filter((key) => !allowedKeys.includes(key));
   if (unknownKeys.length) throw new Error(`Odeslání obsahuje nepovolená pole: ${unknownKeys.join(", ")}.`);
 
   const templateKey = cleanString(input.templateKey);
   const eventId = cleanString(input.eventId);
   const phone = normalizeCustomerPhone(input.recipient);
-  const userId = cleanString(input.userId);
-  const customerId = cleanString(input.customerId);
-  const relatedEntityType = cleanString(input.relatedEntityType);
-  const relatedEntityId = cleanString(input.relatedEntityId);
   if (!eventId || eventId.length > 180) throw new Error("Chybí platný eventId.");
   if (!phone) throw new Error("Příjemce nemá platné telefonní číslo.");
-  if ([userId, customerId, relatedEntityType, relatedEntityId].some((value) => value.length > 180)) {
-    throw new Error("Serverová vazba RCS zprávy je příliš dlouhá.");
-  }
-  if (templateKey === "task.new" && relatedEntityId && relatedEntityType !== "task") {
-    throw new Error("RCS úkol může vytvořit odpovědní grant pouze s vazbou typu task.");
-  }
-  if (templateKey === "task.new" && relatedEntityId && !userId) {
-    throw new Error("RCS úkol s odpovědním grantem musí být navázaný na konkrétního uživatele.");
-  }
   const rendered = renderRcsTemplate(templateKey, input.variables, env);
   const sync = dependencies.syncRow || await getRcsTemplateSyncRow(env, templateKey);
   if (!sync?.contentSid || sync.syncStatus !== "ready") throw new Error("Šablona nemá připravený Twilio Content SID.");
@@ -258,15 +229,8 @@ export async function sendRcsTemplateMessage(env, input = {}, actor = {}, depend
     idempotencyKey: key,
     eventId,
     templateKey,
-    recipientPhone: phone,
     recipientMasked: maskRcsRecipient(phone),
     recipientHash: await recipientHash(phone),
-    userId,
-    customerId,
-    relatedEntityType,
-    relatedEntityId,
-    messageBody: rendered.body,
-    variables: rendered.variables,
     contentSid: sync.contentSid,
     actorUserId: actor.id,
     actorName: actor.name
@@ -311,22 +275,6 @@ export async function sendRcsTemplateMessage(env, input = {}, actor = {}, depend
       usedChannel: "rcs_sms_auto_fallback",
       status
     });
-    let replyGrants = null;
-    let auditWarning = "";
-    if (templateKey === "task.new" && relatedEntityType === "task" && relatedEntityId) {
-      try {
-        replyGrants = await (dependencies.createTaskReplyGrants || createRcsTaskReplyGrants)(env, {
-          outboundMessageSid: cleanString(payload.sid),
-          phone,
-          taskId: relatedEntityId,
-          createdByUserId: cleanString(actor.id),
-          expiresAt: taskReplyGrantExpiresAt(env)
-        });
-      } catch (error) {
-        auditWarning = "RCS úkol byl odeslaný, ale nevzniklo oprávnění pro odpověď. Odpověď proto zůstane fail-closed.";
-        console.error("rcs_template.reply_grant_failed", { message: cleanString(error.message) });
-      }
-    }
     return {
       sent: true,
       status,
@@ -334,9 +282,7 @@ export async function sendRcsTemplateMessage(env, input = {}, actor = {}, depend
       contentSid: sync.contentSid,
       channel: "rcs_sms_auto_fallback",
       recipient: maskRcsRecipient(phone),
-      preview: rendered,
-      replyGrants,
-      auditWarning
+      preview: rendered
     };
   } catch (error) {
     await (dependencies.updateDispatch || updateRcsDispatch)(env, reservation.dispatch.id, {
@@ -351,6 +297,5 @@ export const __test = {
   idempotencyKey,
   recipientHash,
   sha256,
-  taskReplyGrantExpiresAt,
   twilioConfig
 };
