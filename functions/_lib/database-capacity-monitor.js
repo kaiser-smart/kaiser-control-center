@@ -46,6 +46,11 @@ const OBJECT_PROBES = Object.freeze({
   ]
 });
 
+function legacyDailyProbeDue(scheduledTime) {
+  const scheduled = new Date(Number(scheduledTime || Date.now()));
+  return scheduled.getUTCHours() === 3 && scheduled.getUTCMinutes() === 15;
+}
+
 function id(prefix) {
   return `${prefix}-${crypto.randomUUID()}`;
 }
@@ -148,10 +153,22 @@ async function persistSnapshot(auditDb, snapshot, objects) {
 
 export async function runDatabaseCapacityMonitor(env, options = {}) {
   const recordedAt = new Date(Number(options.scheduledTime || Date.now())).toISOString();
+  const legacyProbeDue = legacyDailyProbeDue(options.scheduledTime);
   const auditDb = getAuditDatabase(env);
   const results = [];
 
   for (const definition of DATABASES) {
+    if (definition.domain === "legacy" && !legacyProbeDue) {
+      results.push({
+        ok: true,
+        skipped: true,
+        domain: definition.domain,
+        name: definition.name,
+        reason: "legacy_daily_probe_deferred",
+        recordedAt
+      });
+      continue;
+    }
     try {
       const db = definition.get(env);
       const [pages, history, tables, indexes] = await Promise.all([
@@ -193,4 +210,4 @@ export async function runDatabaseCapacityMonitor(env, options = {}) {
   };
 }
 
-export const __test = { DATABASES, OBJECT_PROBES, pageStats };
+export const __test = { DATABASES, OBJECT_PROBES, pageStats, legacyDailyProbeDue };

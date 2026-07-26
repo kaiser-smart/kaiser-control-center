@@ -128,7 +128,36 @@ const second = await archiveCollectionSnapshotChunk(env, {
   scheduledTime: Date.parse("2026-07-25T12:05:00.000Z")
 });
 assert.equal(second.selectedRows, 0);
+assert.equal(second.status, "skipped");
+assert.equal(second.reason, "archive_backlog_empty");
 assert.equal(sourceSqlite.prepare("SELECT COUNT(*) AS count FROM collection_import_rows").get().count, 3);
+
+const legacyReadsAfterEmptyCollection = auditSqlite.prepare(`
+  SELECT COUNT(*) AS count
+  FROM audit_events
+  WHERE event_type = 'legacy_database_access'
+    AND module_key = 'collection-snapshot-archive'
+`).get().count;
+const deferred = await archiveCollectionSnapshotChunk(env, {
+  batchSize: 500,
+  retentionDays: 2,
+  scheduledTime: Date.parse("2026-07-25T12:10:00.000Z")
+});
+assert.equal(deferred.status, "skipped");
+assert.equal(deferred.reason, "archive_backlog_probe_deferred");
+assert.equal(deferred.legacySelectCount, 0);
+assert.equal(auditSqlite.prepare(`
+  SELECT COUNT(*) AS count
+  FROM audit_events
+  WHERE event_type = 'legacy_database_access'
+    AND module_key = 'collection-snapshot-archive'
+`).get().count, legacyReadsAfterEmptyCollection);
+assert.equal(JSON.parse(auditSqlite.prepare(`
+  SELECT metadata_json FROM audit_events
+  WHERE event_type = 'archive_run'
+    AND metadata_json LIKE '%archive_backlog_probe_deferred%'
+  LIMIT 1
+`).get().metadata_json).legacySelectCount, 0);
 
 const receivables = await archiveReceivableSnapshotChunk(env, {
   batchSize: 500,
@@ -144,5 +173,23 @@ assert.equal(archiveSqlite.prepare(`
   SELECT COUNT(*) AS count FROM archive_objects
   WHERE archive_batch_id LIKE 'receivable-import-%'
 `).get().count, 1);
+
+let legacyCallsWithMissingAudit = 0;
+await assert.rejects(
+  () => archiveCollectionSnapshotChunk({
+    ...env,
+    DB_AUDIT: null,
+    SMART_ODPADY_DB: {
+      prepare() {
+        legacyCallsWithMissingAudit += 1;
+        throw new Error("Legacy D1 se nesmí otevřít bez AUDIT bindingu.");
+      }
+    }
+  }, {
+    scheduledTime: Date.parse("2026-07-26T12:00:00.000Z")
+  }),
+  /DB_AUDIT/
+);
+assert.equal(legacyCallsWithMissingAudit, 0);
 
 console.log("database archive tests: ok");
