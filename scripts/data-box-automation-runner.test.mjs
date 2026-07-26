@@ -12,6 +12,7 @@ const runnerSource = readFileSync(new URL("../functions/_lib/data-box-automation
 const actionStoreSource = readFileSync(new URL("../functions/_lib/data-box-actions-store.js", import.meta.url), "utf8");
 const appSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 
+assert.match(runnerSource, /const MODULE_KEY = "data-box-plus"/);
 assert.equal(dataBoxAutomationReceivedMessage({ direction: "received" }), true);
 assert.equal(dataBoxAutomationReceivedMessage({ direction: "sent" }), false);
 assert.equal(dataBoxAutomationReceivedMessage({}), true);

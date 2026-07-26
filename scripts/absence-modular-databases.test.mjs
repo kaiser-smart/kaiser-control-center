@@ -195,7 +195,7 @@ assert.ok(failedCore.workflows[0].next_attempt_at);
 failedAudit.failHistory = false;
 const retry = await retryFailedAbsenceHistoryWorkflows(
   { DB_CORE: failedCore, DB_AUDIT: failedAudit },
-  { now: "2026-07-26T00:00:00.000Z" }
+  { now: new Date(Date.now() + 6 * 60 * 1000).toISOString() }
 );
 assert.equal(retry.status, "completed");
 assert.equal(retry.selected, 1);

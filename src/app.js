@@ -35548,7 +35548,7 @@ function systemCheckCronItems(data) {
   return items.map((item) => {
     const status = String(item.status || "").toLowerCase();
     const displayStatus = !item.terminal
-      ? "ERROR"
+      ? "WARNING"
       : ["error", "failed", "partial_error", "partial_failure"].includes(status)
         ? "WARNING"
         : "OK";
