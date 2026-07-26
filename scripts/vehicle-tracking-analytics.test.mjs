@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
+import { createSessionCookie } from "../functions/_lib/auth.js";
 import {
   analyzeVehicleTrackingPoints,
   loadVehicleTrackingAnalytics,
@@ -11,6 +12,8 @@ import {
   vehicleTrackingHaversineKm,
   vehicleTrackingPragueDate
 } from "../functions/_lib/vehicle-tracking-analytics.js";
+import { onRequestGet as getVehicleTrackingAnalytics } from "../functions/api/vehicle-tracking/analytics.js";
+import { VEHICLE_TRACKING_MANTRA } from "../src/data/vehicleTrackingMantra.js";
 
 class D1Statement {
   constructor(database, sql, values = []) {
@@ -54,6 +57,10 @@ class D1Database {
 assert.equal(vehicleTrackingAnalyticsPeriod("today"), "today");
 assert.equal(vehicleTrackingAnalyticsPeriod("7d"), "7d");
 assert.equal(vehicleTrackingAnalyticsPeriod("unknown"), "30d");
+assert.equal(VEHICLE_TRACKING_MANTRA.status, "Produkční read-only GPS modul");
+assert.ok(VEHICLE_TRACKING_MANTRA.rules.some((rule) => rule.includes("DB_ARCHIVE i DB_AUDIT")));
+assert.ok(VEHICLE_TRACKING_MANTRA.rules.some((rule) => rule.includes("vehicle-tracking:view")));
+assert.ok(VEHICLE_TRACKING_MANTRA.rules.some((rule) => rule.includes("demo režim nezapíná automaticky")));
 assert.equal(vehicleTrackingPragueDate("2026-07-14T22:30:00.000Z"), "2026-07-15");
 assert.equal(vehicleTrackingAnalyticsFromDate("7d", new Date("2026-07-15T10:00:00.000Z")), "2026-07-09");
 
@@ -124,5 +131,106 @@ assert.equal(loaded.apiStatus, "ready");
 assert.equal(loaded.summary.vehicleCount, 1);
 assert.ok(loaded.summary.totalKm > 1.4 && loaded.summary.totalKm < 1.5);
 assert.equal(loaded.vehicles[0].licensePlate, "1AA 0001");
+
+const modularArchive = new DatabaseSync(":memory:");
+const modularAudit = new DatabaseSync(":memory:");
+modularArchive.exec(readFileSync(
+  new URL("../migrations/modular/archive/0002_remaining_archive_schema.sql", import.meta.url),
+  "utf8"
+));
+modularAudit.exec(readFileSync(
+  new URL("../migrations/modular/audit/0003_remaining_audit_schema.sql", import.meta.url),
+  "utf8"
+));
+
+const modularNow = new Date();
+const modularDate = vehicleTrackingPragueDate(modularNow);
+const modularStartedAt = new Date(modularNow.getTime() - 60_000).toISOString();
+const modularFinishedAt = new Date(modularNow.getTime() - 30_000).toISOString();
+modularArchive.prepare(`INSERT INTO vehicle_tracking_daily_metrics (
+  vehicle_key, local_date, license_plate, total_km, trip_count, moving_minutes, point_count,
+  valid_segment_count, rejected_segment_count, coverage_percent, quality_status,
+  first_recorded_at, last_recorded_at, distance_source, calculated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'gps_geometry', ?)`).run(
+  "truck-modular",
+  modularDate,
+  "2BB 0002",
+  12.5,
+  2,
+  45,
+  20,
+  18,
+  2,
+  90,
+  "ready",
+  modularStartedAt,
+  modularFinishedAt,
+  modularFinishedAt
+);
+modularArchive.prepare(`INSERT INTO vehicle_tracking_gps_points (
+  id, vehicle_key, license_plate, latitude, longitude, speed_kmh, recorded_at, received_at, source
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'tcars')`).run(
+  "modular-point",
+  "truck-modular",
+  "2BB 0002",
+  49,
+  16,
+  30,
+  modularFinishedAt,
+  modularFinishedAt
+);
+modularAudit.prepare(`INSERT INTO vehicle_tracking_analytics_runs (
+  id, started_at, finished_at, status, period_from, period_to, vehicles_processed,
+  points_processed, trips_written, daily_rows_written, message
+) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?, ?, ?, ?)`).run(
+  "modular-run",
+  modularStartedAt,
+  modularFinishedAt,
+  modularDate,
+  modularDate,
+  1,
+  20,
+  2,
+  1,
+  "Modulární přepočet dokončen."
+);
+
+const endpointUser = {
+  id: "vehicle-tracking-test-admin",
+  name: "GPS Analytics Test",
+  email: "gps-analytics-test@kaiserservis.cz",
+  role: "admin",
+  status: "active"
+};
+const endpointEnv = {
+  APP_ENV: "test",
+  AUTH_MODE: "mock",
+  AUTH_SESSION_SECRET: "vehicle-tracking-analytics-test-secret",
+  AUTH_USERS_JSON: JSON.stringify([endpointUser]),
+  DB_ARCHIVE: new D1Database(modularArchive),
+  DB_AUDIT: new D1Database(modularAudit)
+};
+const endpointCookie = await createSessionCookie(endpointEnv, endpointUser);
+const endpointResponse = await getVehicleTrackingAnalytics({
+  request: new Request(`https://smart-odpady.test/api/vehicle-tracking/analytics?period=today`, {
+    headers: { Cookie: endpointCookie.split(";")[0] }
+  }),
+  env: endpointEnv
+});
+assert.equal(endpointResponse.status, 200, "read endpoint must combine DB_ARCHIVE and DB_AUDIT");
+const endpointPayload = await endpointResponse.json();
+assert.equal(endpointPayload.apiStatus, "ready");
+assert.equal(endpointPayload.summary.vehicleCount, 1);
+assert.equal(endpointPayload.summary.totalKm, 12.5);
+assert.equal(endpointPayload.lastRun.status, "ok");
+assert.equal(endpointPayload.lastRun.pointsProcessed, 20);
+
+const missingAuditResponse = await getVehicleTrackingAnalytics({
+  request: new Request(`https://smart-odpady.test/api/vehicle-tracking/analytics?period=today`, {
+    headers: { Cookie: endpointCookie.split(";")[0] }
+  }),
+  env: { ...endpointEnv, DB_AUDIT: undefined }
+});
+assert.equal(missingAuditResponse.status, 503, "read endpoint must fail closed without DB_AUDIT");
 
 console.log("vehicle tracking analytics tests: ok");

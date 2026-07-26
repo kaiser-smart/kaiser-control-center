@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.727"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.728"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "GPS analytika: souhrny z oddělených databází",
+    text: "Read-only endpoint načítá GPS body, jízdy a denní metriky z ARCHIVE a stav posledního cloudového přepočtu z AUDIT. Provozní Mantra zakotvuje T-Cars jako GPS zdroj, Vozový park jako evidenci vozidel a zákaz vymyšlených hodnot, automatického demo fallbacku i vedlejších notifikací."
+  },
   {
     title: "Ovládání: tlačítka zůstávají klikací i při chybě GPS souhrnu",
     text: "Neúspěšné načtení historie jízd už nespouští nekonečné překreslování stránky. Chyba zůstane pravdivě zobrazená a nové ověření lze spustit ručně přes Obnovit provoz."
