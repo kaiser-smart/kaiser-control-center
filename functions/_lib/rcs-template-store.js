@@ -20,6 +20,14 @@ function safeJson(value) {
   }
 }
 
+function parseJson(value, fallback = {}) {
+  try {
+    return JSON.parse(value || "");
+  } catch {
+    return fallback;
+  }
+}
+
 function idValue(prefix) {
   const suffix = globalThis.crypto?.randomUUID
     ? globalThis.crypto.randomUUID()
@@ -41,8 +49,8 @@ function syncRow(row = {}) {
   };
 }
 
-function dispatchRow(row = {}) {
-  return {
+function dispatchRow(row = {}, options = {}) {
+  const dispatch = {
     id: cleanString(row.id),
     idempotencyKey: cleanString(row.idempotency_key),
     eventId: cleanString(row.event_id),
@@ -66,6 +74,10 @@ function dispatchRow(row = {}) {
     createdAt: cleanString(row.created_at),
     updatedAt: cleanString(row.updated_at)
   };
+  if (options.includeVariables === true) {
+    dispatch.variables = parseJson(row.variables_json, {});
+  }
+  return dispatch;
 }
 
 export async function listRcsTemplateSyncRows(env) {
@@ -135,13 +147,16 @@ export async function reserveRcsDispatch(env, input = {}) {
   const db = database(env);
   const id = idValue("rcs-dispatch");
   const now = nowIso();
+  const initialStatus = input.initialStatus === "confirmation_pending"
+    ? "confirmation_pending"
+    : "reserved";
   const result = await db.prepare(`
     INSERT OR IGNORE INTO rcs_message_dispatches (
       id, idempotency_key, event_id, template_key, recipient_phone, recipient_masked,
       recipient_hash, user_id, customer_id, related_entity_type, related_entity_id,
       message_body, variables_json, content_sid, requested_channel, used_channel,
       status, error_message, actor_user_id, actor_name, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rcs', 'rcs_sms_auto_fallback', 'reserved', NULL, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'rcs', 'rcs_sms_auto_fallback', ?, NULL, ?, ?, ?, ?)
   `).bind(
     id,
     cleanString(input.idempotencyKey),
@@ -157,6 +172,7 @@ export async function reserveRcsDispatch(env, input = {}) {
     cleanString(input.messageBody) || null,
     safeJson(input.variables || {}),
     cleanString(input.contentSid),
+    initialStatus,
     cleanString(input.actorUserId) || null,
     cleanString(input.actorName) || null,
     now,
@@ -167,6 +183,82 @@ export async function reserveRcsDispatch(env, input = {}) {
     ? await db.prepare("SELECT * FROM rcs_message_dispatches WHERE id = ?").bind(id).first()
     : await db.prepare("SELECT * FROM rcs_message_dispatches WHERE idempotency_key = ?").bind(cleanString(input.idempotencyKey)).first();
   return { created, dispatch: dispatchRow(row) };
+}
+
+export async function getRcsDispatchById(env, id) {
+  const row = await database(env).prepare(`
+    SELECT * FROM rcs_message_dispatches WHERE id = ? LIMIT 1
+  `).bind(cleanString(id)).first();
+  return row ? dispatchRow(row, { includeVariables: true }) : null;
+}
+
+export async function claimRcsSendGrant(env, input = {}) {
+  const now = nowIso();
+  const result = await database(env).prepare(`
+    UPDATE rcs_message_dispatches
+    SET status = 'sending',
+        error_message = NULL,
+        updated_at = ?
+    WHERE id = ?
+      AND status = 'confirmation_pending'
+      AND actor_user_id = ?
+      AND created_at >= ?
+  `).bind(
+    now,
+    cleanString(input.grantId),
+    cleanString(input.actorUserId),
+    cleanString(input.notBefore)
+  ).run();
+  return Number(result?.meta?.changes ?? result?.changes ?? 0) === 1;
+}
+
+export async function expireRcsSendGrant(env, grantId) {
+  const now = nowIso();
+  const result = await database(env).prepare(`
+    UPDATE rcs_message_dispatches
+    SET status = 'expired',
+        error_message = 'Jednorázové oprávnění vypršelo.',
+        updated_at = ?
+    WHERE id = ? AND status = 'confirmation_pending'
+  `).bind(now, cleanString(grantId)).run();
+  return Number(result?.meta?.changes ?? result?.changes ?? 0) === 1;
+}
+
+export async function cancelRcsSendGrant(env, input = {}) {
+  const now = nowIso();
+  const result = await database(env).prepare(`
+    UPDATE rcs_message_dispatches
+    SET status = 'cancelled',
+        error_message = 'Jednorázové oprávnění bylo zrušeno uživatelem.',
+        updated_at = ?
+    WHERE id = ?
+      AND status = 'confirmation_pending'
+      AND actor_user_id = ?
+  `).bind(
+    now,
+    cleanString(input.grantId),
+    cleanString(input.actorUserId)
+  ).run();
+  return Number(result?.meta?.changes ?? result?.changes ?? 0) === 1;
+}
+
+export async function recordRcsSendGrantEvent(env, input = {}) {
+  const id = idValue("rcs-send-grant-event");
+  await database(env).prepare(`
+    INSERT INTO rcs_sms_events (
+      id, conversation_id, message_id, event_type, status,
+      detail, metadata_json, created_at
+    ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    id,
+    cleanString(input.grantId) || null,
+    cleanString(input.eventType),
+    cleanString(input.status || "recorded"),
+    cleanString(input.detail) || null,
+    safeJson(input.metadata || {}),
+    nowIso()
+  ).run();
+  return { id };
 }
 
 export async function createRcsTaskReplyGrants(env, input = {}) {

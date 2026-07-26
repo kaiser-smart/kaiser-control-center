@@ -60,8 +60,13 @@ CSS. U každé karty je proto vidět počet znaků nadpisu a body a stav
 
 - `GET /api/rcs/templates` vrací registr, synchronizační stav a maskovaný audit.
 - `POST /api/rcs/templates` provede pouze ručně potvrzenou synchronizaci.
-- `POST /api/rcs/messages` přijímá výhradně `templateKey`, `recipient`,
-  `variables` a `eventId`.
+- `POST /api/rcs/message-grants` připraví krátké jednorázové oprávnění pro
+  přesný `templateKey`, výsledný obsah a ověřený telefon přihlášeného správce.
+- `DELETE /api/rcs/message-grants?grantId=...` zruší nepoužité oprávnění
+  stejného správce, když fyzické potvrzení odmítne.
+- `POST /api/rcs/messages` přijímá výhradně `grantId` a pevné potvrzení
+  `send-one-rcs-template`. Přímý payload šablony, telefonu ani proměnných
+  odeslat neumí.
 
 Všechny endpointy vyžadují backendové oprávnění `settings:manage`.
 Frontend neposílá vlastní Twilio payload.
@@ -70,11 +75,24 @@ Synchronizace ukládá Content SID a otisk přesné definice do
 `rcs_template_sync`. Pokud platný SID se stejným otiskem existuje, znovu se
 nevytváří. Změněná definice vytvoří nový SID a uloží ho jako jediný aktuální.
 
-Odeslání nejdřív vytvoří rezervaci v `rcs_message_dispatches`. Jedinečný
-SHA-256 idempotency klíč vychází z `eventId + templateKey + normalizovaný
-příjemce`. Opakování stejné události proto poskytovatele znovu nezavolá.
-Telefon se v tomto auditu neukládá; eviduje se pouze maskovaná podoba a
-jednosměrný hash.
+Příprava nejdřív vytvoří v `rcs_message_dispatches` stav
+`confirmation_pending`. Řádek obsahuje přesný serverem vyrenderovaný obsah,
+Content SID, normalizovaný telefon a identitu správce. Klient dostane jen
+náhodné `grantId`; telefon, šablonu ani proměnné už při finálním potvrzení
+neposílá.
+
+Grant standardně platí tři minuty, lze jej atomicky spotřebovat právě jednou a
+jen stejným přihlášeným správcem na jeho vlastní ověřené uživatelské číslo.
+Odmítnutí potvrzovacího okna grant okamžitě zruší; při nedostupnosti API
+zůstane neodeslaný a automaticky vyprší.
+Backend před odesláním znovu ověří opt-out, shodu uloženého textu, aktuální
+Content SID a úplnou Twilio konfiguraci. Vytvoření, spotřeba, odmítnutí i
+výsledek poskytovatele se auditují v `rcs_sms_events`.
+
+Jednorázová cesta funguje pouze při `KSO_CUSTOMER_MESSAGING_MODE=off`.
+Globální `live` okno se pro ruční test centrální RCS šablony nesmí otevírat.
+Jedinečný SHA-256 idempotency klíč nad serverovým `eventId + templateKey +
+normalizovaný příjemce` zůstává další ochranou proti duplicitě.
 
 ## Cloud a automatizace
 
@@ -88,7 +106,8 @@ Produkční funkčnost vyžaduje:
 2. existující Twilio ENV/secrets a Messaging Service,
 3. veřejně dostupné bannery na `https://smart-odpady.ai/rcs/templates/`,
 4. ruční synchronizaci oprávněným administrátorem,
-5. samostatně potvrzené testovací odeslání.
+5. přihlášeného správce s ověřeným uživatelským telefonem,
+6. samostatně potvrzené jednorázové testovací odeslání.
 
 Po změně grafického banneru se existující aktivní Twilio Content definice
 aktualizuje přes ruční synchronizaci v Nastavení. Synchronizace nemění

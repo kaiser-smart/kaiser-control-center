@@ -5503,7 +5503,7 @@ async function handleApi(request, response) {
     return true;
   }
 
-  if (url.pathname === "/api/rcs/messages") {
+  if (url.pathname === "/api/rcs/message-grants" || url.pathname === "/api/rcs/messages") {
     const user = currentDevUser(request);
     if (!user) {
       sendJson(response, 401, { error: "Nepřihlášeno." });
@@ -5514,7 +5514,7 @@ async function handleApi(request, response) {
       return true;
     }
     sendJson(response, 409, {
-      error: "Lokální preview skutečnou RCS zprávu neodesílá.",
+      error: "Lokální preview nevytváří ani nespotřebovává jednorázové RCS oprávnění.",
       apiStatus: "waiting"
     });
     return true;

@@ -42052,7 +42052,7 @@ function rcsTemplateCard(template = {}) {
 
 function rcsTemplateTestForm() {
   const readyTemplates = customerMessagingState.rcsTemplates.filter((template) => template.enabled);
-  const recipients = rcsTestRecipientCandidates();
+  const verifiedPhone = rcsTestNormalizePhone(currentUser()?.phone || "");
   if (!readyTemplates.length) {
     return '<p class="notification-empty">Test bude dostupný po úspěšné synchronizaci alespoň jedné šablony.</p>';
   }
@@ -42065,23 +42065,17 @@ function rcsTemplateTestForm() {
         </select>
       </label>
       <label>
-        <span>Telefon oprávněného administrátora</span>
-        <input name="recipient" value="" placeholder="+420..." autocomplete="tel" list="rcs-test-recipient-list" required />
+        <span>Tvůj ověřený uživatelský telefon</span>
+        <input name="recipient" value="${escapeHtml(verifiedPhone)}" placeholder="Telefon není v uživatelském účtu" autocomplete="tel" readonly required />
       </label>
-      ${recipients.length ? `
-        <datalist id="rcs-test-recipient-list">
-          ${recipients.map((recipient) => `
-            <option value="${escapeHtml(recipient.phone)}">${escapeHtml(`${recipient.firstName} · ${recipient.displayName} · ${recipient.source}`)}</option>
-          `).join("")}
-        </datalist>
-      ` : ""}
       <label>
         <span>Oslovení pro test</span>
         <input name="firstName" value="" placeholder="Petře / Jarko" autocomplete="off" />
       </label>
-      <button class="primary-action" type="submit" ${customerMessagingState.sendingTest ? "disabled" : ""}>
-        ${customerMessagingState.sendingTest ? "Odesílám..." : "Odeslat jednu testovací kartu"}
+      <button class="primary-action" type="submit" ${customerMessagingState.sendingTest || !verifiedPhone ? "disabled" : ""}>
+        ${customerMessagingState.sendingTest ? "Připravuji..." : "Připravit jednu testovací kartu"}
       </button>
+      <small>Backend vytvoří krátké jednorázové oprávnění jen pro vybranou šablonu a tvůj ověřený uživatelský telefon. Zpráva se odešle až po samostatném potvrzení.</small>
     </form>
   `;
 }
@@ -52129,29 +52123,46 @@ async function submitRcsTemplateTest(form) {
     render();
     return;
   }
-  const confirmed = window.confirm(
-    `Odeslat jednu skutečnou testovací kartu „${template.label}“ na ${rcsTestNormalizePhone(recipient)} s oslovením „Ahoj ${firstName}“?`
-  );
-  if (!confirmed) return;
   customerMessagingState.sendingTest = true;
   customerMessagingState.rcsError = "";
   customerMessagingState.rcsMessage = "";
   render();
   try {
-    const result = await apiJson("/api/rcs/messages", {
+    const normalizedRecipient = rcsTestNormalizePhone(recipient);
+    const grant = await apiJson("/api/rcs/message-grants", {
       method: "POST",
       body: JSON.stringify({
         templateKey,
-        recipient: rcsTestNormalizePhone(recipient),
+        recipient: normalizedRecipient,
         variables: {
           ...template.sampleVariables,
           firstName
-        },
-        eventId: `admin-test:${templateKey}:${new Date().toISOString()}`
+        }
+      })
+    });
+    const confirmed = window.confirm(
+      `Odeslat právě jednu skutečnou kartu „${grant.templateLabel || template.label}“ na ${normalizedRecipient}?\n\nPřesný text:\n${grant.preview?.body || template.sampleBody || ""}\n\nOprávnění je jednorázové a platí do ${formatDateTime(grant.expiresAt)}.`
+    );
+    if (!confirmed) {
+      try {
+        await apiJson(`/api/rcs/message-grants?grantId=${encodeURIComponent(grant.grantId)}`, {
+          method: "DELETE"
+        });
+        customerMessagingState.rcsMessage = "Jednorázové oprávnění bylo zrušeno. Nic nebylo odesláno.";
+      } catch {
+        customerMessagingState.rcsMessage = `Nic nebylo odesláno. Zrušení oprávnění se nepodařilo potvrdit; oprávnění automaticky vyprší ${formatDateTime(grant.expiresAt)}.`;
+      }
+      return;
+    }
+    const result = await apiJson("/api/rcs/messages", {
+      method: "POST",
+      body: JSON.stringify({
+        grantId: grant.grantId,
+        confirm: "send-one-rcs-template"
       })
     });
     customerMessagingState.rcsMessage = result.sent
-      ? `Twilio přijalo testovací kartu. Message SID: ${result.twilioMessageSid || "neuvedeno"}`
+      ? `Twilio přijalo testovací kartu. Message SID: ${result.twilioMessageSid || "neuvedeno"}${result.auditWarning ? ` Upozornění: ${result.auditWarning}` : ""}`
       : `Testovací karta nebyla odeslaná: ${result.errorMessage || result.status || "neznámý stav"}`;
     await loadCustomerMessaging({ render: false, force: true });
   } catch (error) {

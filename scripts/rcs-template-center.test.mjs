@@ -16,12 +16,23 @@ import {
 } from "../functions/_lib/rcs-template-registry.js";
 import {
   __test as serviceTest,
+  cancelRcsTemplateSendGrant,
+  confirmRcsTemplateSendGrant,
   maskRcsRecipient,
+  prepareRcsTemplateSendGrant,
   sendRcsTemplateMessage
 } from "../functions/_lib/rcs-template-service.js";
+import {
+  cancelRcsSendGrant,
+  claimRcsSendGrant,
+  recordRcsSendGrantEvent
+} from "../functions/_lib/rcs-template-store.js";
 
 const platformPreviewAppSource = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const platformPreviewStylesSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+const messagesApiSource = readFileSync(new URL("../functions/api/rcs/messages.js", import.meta.url), "utf8");
+const messageGrantsApiSource = readFileSync(new URL("../functions/api/rcs/message-grants.js", import.meta.url), "utf8");
+const templateStoreSource = readFileSync(new URL("../functions/_lib/rcs-template-store.js", import.meta.url), "utf8");
 
 assert.match(platformPreviewAppSource, /data-rcs-preview-platform="android"/);
 assert.match(platformPreviewAppSource, /data-rcs-preview-platform="ios"/);
@@ -218,6 +229,249 @@ const syncRow = {
   syncStatus: "ready"
 };
 
+const offEnv = {
+  ...env,
+  KSO_CUSTOMER_MESSAGING_MODE: "off"
+};
+
+{
+  let reservedInput = null;
+  const events = [];
+  const result = await prepareRcsTemplateSendGrant(offEnv, {
+    templateKey: "general.info",
+    recipient: "+420777123456",
+    variables: validSend().variables
+  }, {
+    id: "admin-1",
+    name: "Admin",
+    phone: "+420777123456"
+  }, {
+    syncRow,
+    isOptedOut: async () => false,
+    reserveDispatch: async (_env, input) => {
+      reservedInput = input;
+      return {
+        created: true,
+        dispatch: {
+          id: "rcs-dispatch-grant-1",
+          createdAt: new Date().toISOString(),
+          ...input
+        }
+      };
+    },
+    recordGrantEvent: async (_env, input) => events.push(input)
+  });
+  assert.equal(result.status, "confirmation_pending");
+  assert.equal(result.grantId, "rcs-dispatch-grant-1");
+  assert.equal(result.templateKey, "general.info");
+  assert.equal(result.recipient, "+420 *** **56");
+  assert.equal(reservedInput.initialStatus, "confirmation_pending");
+  assert.equal(reservedInput.actorUserId, "admin-1");
+  assert.equal(reservedInput.recipientPhone, "+420777123456");
+  assert.equal(events[0].eventType, "rcs_send_grant_created");
+}
+
+await assert.rejects(
+  () => prepareRcsTemplateSendGrant(env, {
+    templateKey: "general.info",
+    recipient: "+420777123456",
+    variables: validSend().variables
+  }, {
+    id: "admin-1",
+    name: "Admin",
+    phone: "+420777123456"
+  }, { syncRow }),
+  /globálním režimu odesílání off/
+);
+
+await assert.rejects(
+  () => prepareRcsTemplateSendGrant(offEnv, {
+    templateKey: "general.info",
+    recipient: "+420777654321",
+    variables: validSend().variables
+  }, {
+    id: "admin-1",
+    name: "Admin",
+    phone: "+420777123456"
+  }, { syncRow }),
+  /ověřený telefon přihlášeného správce/
+);
+
+function activeSendGrant(overrides = {}) {
+  const variables = validSend().variables;
+  return {
+    id: "rcs-dispatch-grant-1",
+    eventId: "admin-test:general.info:grant-1",
+    templateKey: "general.info",
+    recipientPhone: "+420777123456",
+    recipientMasked: "+420 *** **56",
+    messageBody: renderRcsTemplate("general.info", variables, offEnv).body,
+    variables,
+    contentSid: syncRow.contentSid,
+    status: "confirmation_pending",
+    actorUserId: "admin-1",
+    actorName: "Admin",
+    createdAt: new Date().toISOString(),
+    ...overrides
+  };
+}
+
+{
+  const events = [];
+  const result = await cancelRcsTemplateSendGrant(offEnv, {
+    grantId: "rcs-dispatch-grant-1"
+  }, {
+    id: "admin-1",
+    name: "Admin",
+    phone: "+420777123456"
+  }, {
+    getDispatch: async () => activeSendGrant(),
+    cancelGrant: async () => true,
+    recordGrantEvent: async (_env, input) => events.push(input)
+  });
+  assert.equal(result.cancelled, true);
+  assert.equal(result.status, "cancelled");
+  assert.equal(events[0].eventType, "rcs_send_grant_cancelled");
+}
+
+await assert.rejects(
+  () => confirmRcsTemplateSendGrant(offEnv, {
+    grantId: "rcs-dispatch-grant-1",
+    confirm: "send-one-rcs-template",
+    templateKey: "leave.pending",
+    recipient: "+420777123456"
+  }, {
+    id: "admin-1",
+    name: "Admin",
+    phone: "+420777123456"
+  }),
+  /nepovolená pole/
+);
+
+{
+  let providerCalled = false;
+  const events = [];
+  await assert.rejects(
+    () => confirmRcsTemplateSendGrant(env, {
+      grantId: "rcs-dispatch-grant-1",
+      confirm: "send-one-rcs-template"
+    }, {
+      id: "admin-1",
+      name: "Admin",
+      phone: "+420777123456"
+    }, {
+      getDispatch: async () => activeSendGrant(),
+      recordGrantEvent: async (_env, input) => events.push(input),
+      fetch: async () => {
+        providerCalled = true;
+        throw new Error("Provider nesmí být zavolán.");
+      }
+    }),
+    /globální režim není off/
+  );
+  assert.equal(providerCalled, false);
+  assert.equal(events[0].metadata.reason, "global_mode_not_off");
+}
+
+{
+  const events = [];
+  const updates = [];
+  let claimInput = null;
+  let request = null;
+  const result = await confirmRcsTemplateSendGrant(offEnv, {
+    grantId: "rcs-dispatch-grant-1",
+    confirm: "send-one-rcs-template"
+  }, {
+    id: "admin-1",
+    name: "Admin",
+    phone: "+420777123456"
+  }, {
+    getDispatch: async () => activeSendGrant(),
+    syncRow,
+    isOptedOut: async () => false,
+    claimGrant: async (_env, input) => {
+      claimInput = input;
+      return true;
+    },
+    updateDispatch: async (_env, id, patch) => updates.push({ id, patch }),
+    recordGrantEvent: async (_env, input) => events.push(input),
+    fetch: async (url, options) => {
+      request = { url, options };
+      return new Response(JSON.stringify({
+        sid: "SM00000000000000000000000000000000",
+        status: "accepted"
+      }), {
+        status: 201,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  });
+  assert.equal(result.sent, true);
+  assert.equal(result.status, "accepted");
+  assert.equal(claimInput.grantId, "rcs-dispatch-grant-1");
+  assert.equal(claimInput.actorUserId, "admin-1");
+  assert.ok(request.url.endsWith("/Messages.json"));
+  assert.equal(new URLSearchParams(request.options.body).get("To"), "+420777123456");
+  assert.equal(updates.at(-1).patch.status, "accepted");
+  assert.deepEqual(events.map((item) => item.eventType), [
+    "rcs_send_grant_claimed",
+    "rcs_send_grant_provider_result"
+  ]);
+}
+
+{
+  let providerCalled = false;
+  const events = [];
+  await assert.rejects(
+    () => confirmRcsTemplateSendGrant(offEnv, {
+      grantId: "rcs-dispatch-grant-1",
+      confirm: "send-one-rcs-template"
+    }, {
+      id: "admin-2",
+      name: "Jiný správce",
+      phone: "+420777123456"
+    }, {
+      getDispatch: async () => activeSendGrant(),
+      recordGrantEvent: async (_env, input) => events.push(input),
+      fetch: async () => {
+        providerCalled = true;
+        throw new Error("Provider nesmí být zavolán.");
+      }
+    }),
+    /nepatří přihlášenému správci/
+  );
+  assert.equal(providerCalled, false);
+  assert.equal(events[0].metadata.reason, "actor_scope_mismatch");
+}
+
+{
+  let providerCalled = false;
+  const events = [];
+  await assert.rejects(
+    () => confirmRcsTemplateSendGrant(offEnv, {
+      grantId: "rcs-dispatch-grant-1",
+      confirm: "send-one-rcs-template"
+    }, {
+      id: "admin-1",
+      name: "Admin",
+      phone: "+420777123456"
+    }, {
+      getDispatch: async () => activeSendGrant(),
+      syncRow,
+      isOptedOut: async () => false,
+      claimGrant: async () => false,
+      recordGrantEvent: async (_env, input) => events.push(input),
+      fetch: async () => {
+        providerCalled = true;
+        throw new Error("Provider nesmí být zavolán.");
+      }
+    }),
+    /už bylo použito nebo vypršelo/
+  );
+  assert.equal(providerCalled, false);
+  assert.equal(events[0].metadata.reason, "atomic_claim_failed");
+}
+
 {
   const updates = [];
   let request = null;
@@ -333,8 +587,21 @@ assert.match(appSource, /template\.actionStatus === "missing"/);
 assert.match(appSource, /function settingsManagementSection[\s\S]*rcsTemplateCenterSection\(true\)/);
 assert.match(appSource, /rcsTestRecipientForPhone\(recipient\)/);
 assert.match(appSource, /Telefon není dohledaný v Uživatelích\/Zaměstnancích/);
+assert.match(appSource, /currentUser\(\)\?\.phone/);
+assert.match(appSource, /name="recipient"[\s\S]*readonly required/);
 assert.match(appSource, /variables:\s*\{\s*\.\.\.template\.sampleVariables,\s*firstName\s*\}/s);
+assert.match(appSource, /api\/rcs\/message-grants/);
+assert.match(appSource, /method:\s*"DELETE"/);
+assert.match(appSource, /grantId:\s*grant\.grantId/);
+assert.match(appSource, /confirm:\s*"send-one-rcs-template"/);
 assert.doesNotMatch(appSource, /value="\+420604542004"/);
+assert.match(messagesApiSource, /confirmRcsTemplateSendGrant/);
+assert.doesNotMatch(messagesApiSource, /sendRcsTemplateMessage/);
+assert.match(messageGrantsApiSource, /prepareRcsTemplateSendGrant/);
+assert.match(messageGrantsApiSource, /cancelRcsTemplateSendGrant/);
+assert.match(templateStoreSource, /status = 'sending'/);
+assert.match(templateStoreSource, /status = 'confirmation_pending'/);
+assert.match(templateStoreSource, /AND actor_user_id = \?/);
 
 const migration = readFileSync(new URL("../migrations/0062_create_rcs_template_center.sql", import.meta.url), "utf8");
 assert.match(migration, /CREATE UNIQUE INDEX IF NOT EXISTS idx_rcs_message_dispatches_idempotency/);
@@ -344,6 +611,48 @@ assert.match(migration, /content_sid TEXT NOT NULL/);
 
 const database = new DatabaseSync(":memory:");
 database.exec(migration);
+database.exec(`
+  CREATE TABLE rcs_sms_events (
+    id TEXT PRIMARY KEY NOT NULL,
+    conversation_id TEXT,
+    message_id TEXT,
+    event_type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'recorded',
+    detail TEXT,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+class D1StatementAdapter {
+  constructor(statement, bindings = []) {
+    this.statement = statement;
+    this.bindings = bindings;
+  }
+
+  bind(...bindings) {
+    return new D1StatementAdapter(this.statement, bindings);
+  }
+
+  run() {
+    const result = this.statement.run(...this.bindings);
+    return { meta: { changes: Number(result.changes || 0) } };
+  }
+
+  first() {
+    return this.statement.get(...this.bindings) || null;
+  }
+
+  all() {
+    return { results: this.statement.all(...this.bindings) };
+  }
+}
+const d1Env = {
+  DB_MESSAGES: {
+    prepare(sql) {
+      return new D1StatementAdapter(database.prepare(sql));
+    }
+  }
+};
 database.prepare(`
   INSERT INTO rcs_message_dispatches (
     id, idempotency_key, event_id, template_key, recipient_masked,
@@ -356,6 +665,67 @@ assert.throws(() => database.prepare(`
     recipient_hash, content_sid
   ) VALUES (?, ?, ?, ?, ?, ?, ?)
 `).run("dispatch-2", "same-event", "event-1", "general.info", "+420 *** **56", "hash", syncRow.contentSid), /UNIQUE constraint failed/);
+database.prepare(`
+  INSERT INTO rcs_message_dispatches (
+    id, idempotency_key, event_id, template_key, recipient_masked,
+    recipient_hash, content_sid, status, actor_user_id, created_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmation_pending', ?, ?, ?)
+`).run(
+  "grant-atomic-1",
+  "grant-atomic-key-1",
+  "admin-test:general.info:atomic-1",
+  "general.info",
+  "+420 *** **56",
+  "hash-atomic",
+  syncRow.contentSid,
+  "admin-1",
+  new Date().toISOString(),
+  new Date().toISOString()
+);
+const atomicClaimInput = {
+  grantId: "grant-atomic-1",
+  actorUserId: "admin-1",
+  notBefore: new Date(Date.now() - 60_000).toISOString()
+};
+assert.equal(await claimRcsSendGrant(d1Env, atomicClaimInput), true);
+assert.equal(await claimRcsSendGrant(d1Env, atomicClaimInput), false);
+database.prepare(`
+  INSERT INTO rcs_message_dispatches (
+    id, idempotency_key, event_id, template_key, recipient_masked,
+    recipient_hash, content_sid, status, actor_user_id, created_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmation_pending', ?, ?, ?)
+`).run(
+  "grant-cancel-1",
+  "grant-cancel-key-1",
+  "admin-test:general.info:cancel-1",
+  "general.info",
+  "+420 *** **56",
+  "hash-cancel",
+  syncRow.contentSid,
+  "admin-1",
+  new Date().toISOString(),
+  new Date().toISOString()
+);
+assert.equal(await cancelRcsSendGrant(d1Env, {
+  grantId: "grant-cancel-1",
+  actorUserId: "admin-1"
+}), true);
+assert.equal(await claimRcsSendGrant(d1Env, {
+  grantId: "grant-cancel-1",
+  actorUserId: "admin-1",
+  notBefore: new Date(Date.now() - 60_000).toISOString()
+}), false);
+await recordRcsSendGrantEvent(d1Env, {
+  grantId: "grant-atomic-1",
+  eventType: "rcs_send_grant_claimed",
+  status: "sending",
+  detail: "test",
+  metadata: { actorUserId: "admin-1" }
+});
+assert.equal(
+  database.prepare("SELECT COUNT(*) AS total FROM rcs_sms_events WHERE message_id = ?").get("grant-atomic-1").total,
+  1
+);
 database.close();
 
 console.log("rcs-template-center.test.mjs: OK");

@@ -38,6 +38,10 @@ KSO_CUSTOMER_MESSAGING_MODE=test
 
 V test režimu se vytvoří audit/log, ale zpráva se neodešle do Twilia.
 
+Ruční odeslání jedné centrální Content šablony z Nastavení nepoužívá globální
+`live` režim. Běží pouze při `KSO_CUSTOMER_MESSAGING_MODE=off` přes krátké
+jednorázové backendové oprávnění popsané v `docs/RCS_TEMPLATE_CENTER.md`.
+
 ## RCS/SMS fallback
 
 KSO posílá zákaznické zprávy přes `TWILIO_MESSAGING_SERVICE_SID`. V Twiliu musí být ve stejné Messaging Service Sender Poolu:
