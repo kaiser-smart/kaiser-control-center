@@ -27,5 +27,6 @@ assert.match(backend, /allTerminal/);
 assert.match(frontend, /SMART_ODPADY_DB – legacy pouze pro auditované čtení/);
 assert.match(frontend, /Ukončení cloudových cronů/);
 assert.match(frontend, /kontrola \$\{formatDateTime\(database\.recorded_at\)\}/);
+assert.match(frontend, /const displayStatus = !item\.terminal\s*\? "WARNING"/);
 
 console.log("system check modular database and cron status tests: ok");

@@ -4,7 +4,9 @@ import { listDataBoxMessages } from "./data-box-store.js";
 import { archiveDataBoxMessage, prepareDataBoxAction } from "./data-box-actions-store.js";
 import { listModuleRules } from "./module-rules-store.js";
 
-const MODULE_KEY = "data-box";
+// Pravidla Datových schránek jsou autorizována pod kanonickým modulem.
+// "data-box" je jen historický interní prefix pro idempotency klíče.
+const MODULE_KEY = "data-box-plus";
 const RUNNER_NAME = "data-box-cloud-runner";
 const DEFAULT_CRON = "*/30 * * * *";
 const DEFAULT_TIME_ZONE = "Europe/Prague";
