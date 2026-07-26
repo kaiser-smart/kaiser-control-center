@@ -10,6 +10,7 @@ import {
   estimateDaysToFull,
   migrationCapacityPreflight
 } from "../functions/_lib/database-capacity.js";
+import { __test as capacityMonitorTest } from "../functions/_lib/database-capacity-monitor.js";
 import { runCollectionRoutesSnapshotAutomation } from "../functions/_lib/collection-routes-automation-runner.js";
 import { runReceivablesInvoiceSyncAutomation } from "../functions/_lib/receivables-invoice-sync-runner.js";
 
@@ -46,6 +47,10 @@ assert.equal(migrationCapacityPreflight({
   bookmark: "bookmark",
   rollbackCommand: "restore"
 }).allowed, false);
+
+assert.equal(capacityMonitorTest.legacyDailyProbeDue(Date.parse("2026-07-25T03:15:00.000Z")), true);
+assert.equal(capacityMonitorTest.legacyDailyProbeDue(Date.parse("2026-07-25T03:00:00.000Z")), false);
+assert.equal(capacityMonitorTest.legacyDailyProbeDue(Date.parse("2026-07-25T15:15:00.000Z")), false);
 assert.equal(migrationCapacityPreflight({
   currentSizeBytes: 5_000_000_000,
   estimatedTableBytes: 100_000_000,

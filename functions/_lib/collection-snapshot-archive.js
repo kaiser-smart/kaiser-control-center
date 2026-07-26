@@ -2,6 +2,7 @@ import { getArchiveDatabase, getAuditDatabase, getLegacyDatabase } from "./datab
 
 const MAX_BATCH_SIZE = 1000;
 const DEFAULT_BATCH_SIZE = 500;
+const EMPTY_BACKLOG_PROBE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const SOURCE_DOMAIN = "legacy";
 const SOURCES = Object.freeze({
   collection_import_rows: {
@@ -99,6 +100,12 @@ async function selectEligibleRows(sourceDb, source, cursor, cutoffIso, batchSize
 }
 
 async function recordArchiveObjects(archiveDb, archiveBatchId, rows, objectKey, checksum) {
+  const before = await archiveDb.prepare(`
+    SELECT COUNT(*) AS count
+    FROM archive_objects
+    WHERE archive_batch_id = ?
+  `).bind(archiveBatchId).first();
+  const existingRows = Number(before?.count || 0);
   const statements = rows.map((row) => archiveDb.prepare(`
     INSERT INTO archive_objects (
       id, archive_batch_id, source_id, source_created_at, r2_object_key,
@@ -117,6 +124,17 @@ async function recordArchiveObjects(archiveDb, archiveBatchId, rows, objectKey, 
   for (let index = 0; index < statements.length; index += 50) {
     await archiveDb.batch(statements.slice(index, index + 50));
   }
+  const after = await archiveDb.prepare(`
+    SELECT COUNT(*) AS count
+    FROM archive_objects
+    WHERE archive_batch_id = ?
+  `).bind(archiveBatchId).first();
+  const archivedRows = Number(after?.count || 0);
+  return {
+    existingRows,
+    newArchivedRows: Math.max(0, archivedRows - existingRows),
+    archivedRows
+  };
 }
 
 async function recordAudit(auditDb, run, sourceTable) {
@@ -134,10 +152,56 @@ async function recordAudit(auditDb, run, sourceTable) {
     run.transferredRows,
     run.sourceChecksum || null,
     run.targetChecksum || null,
-    run.errorMessage || null,
+    run.errorMessage || run.reason || null,
     run.startedAt,
     run.finishedAt
   ).run();
+  await auditDb.prepare(`
+    INSERT INTO audit_events (
+      id, event_type, module_key, severity, actor_type, actor_id,
+      entity_type, entity_id, idempotency_key, detail, metadata_json, created_at
+    ) VALUES (?, 'archive_run', 'collection-snapshot-archive', ?, 'system',
+      'collection-snapshot-archive', 'archive_run', ?, ?, ?, ?, ?)
+  `).bind(
+    `${run.id}-audit`,
+    run.status === "failed" ? "error" : run.status === "skipped" ? "information" : "warning",
+    run.id,
+    `archive-run:${run.id}`,
+    run.status === "skipped" ? "Archivní běh byl přeskočen." : "Archivní běh byl ukončen.",
+    JSON.stringify({
+      sourceDomain: SOURCE_DOMAIN,
+      sourceTable,
+      status: run.status,
+      reason: run.reason || "",
+      startedAt: run.startedAt,
+      finishedAt: run.finishedAt,
+      durationMs: Math.max(0, Date.parse(run.finishedAt) - Date.parse(run.startedAt)),
+      legacySelectCount: Number(run.legacySelectCount || 0),
+      sourceRowsRead: Number(run.selectedRows || 0),
+      newArchivedRows: Number(run.newArchivedRows || 0),
+      existingRows: Number(run.existingRows || 0),
+      transferredRows: Number(run.transferredRows || 0),
+      checkpoint: run.checkpoint || null,
+      deletedRows: 0
+    }),
+    run.finishedAt
+  ).run();
+}
+
+async function backlogProbeDue(auditDb, sourceTable, scheduledTime, intervalMs) {
+  const lastEmpty = await auditDb.prepare(`
+    SELECT finished_at
+    FROM archive_runs
+    WHERE source_domain = ?
+      AND source_table = ?
+      AND status = 'skipped'
+      AND error_message = 'archive_backlog_empty'
+      AND finished_at IS NOT NULL
+    ORDER BY finished_at DESC
+    LIMIT 1
+  `).bind(SOURCE_DOMAIN, sourceTable).first();
+  if (!lastEmpty?.finished_at) return true;
+  return Number(scheduledTime) - Date.parse(lastEmpty.finished_at) >= intervalMs;
 }
 
 export async function archiveCollectionSnapshotChunk(env, options = {}) {
@@ -149,10 +213,6 @@ export async function archiveReceivableSnapshotChunk(env, options = {}) {
 }
 
 async function archiveSnapshotChunk(env, options = {}) {
-  const sourceDb = getLegacyDatabase(env, {
-    moduleName: "collection-snapshot-archive",
-    purpose: `copy-verify archive source read: ${clean(options.sourceTable)}`
-  });
   const archiveDb = getArchiveDatabase(env);
   const auditDb = getAuditDatabase(env);
   const bucket = env?.R2_ARCHIVE;
@@ -164,25 +224,81 @@ async function archiveSnapshotChunk(env, options = {}) {
   const batchSize = Math.min(MAX_BATCH_SIZE, Math.max(1, Number(options.batchSize || DEFAULT_BATCH_SIZE)));
   const retentionDays = Math.max(1, Number(options.retentionDays || 2));
   const now = new Date(Number(options.scheduledTime || Date.now()));
+  const scheduledTime = now.getTime();
+  const emptyBacklogProbeIntervalMs = Math.max(
+    EMPTY_BACKLOG_PROBE_INTERVAL_MS,
+    Number(options.emptyBacklogProbeIntervalMs || EMPTY_BACKLOG_PROBE_INTERVAL_MS)
+  );
   const cutoffIso = new Date(now.getTime() - retentionDays * 86_400_000).toISOString();
   const startedAt = new Date().toISOString();
   const runId = uuid("archive-run");
   let selectedRows = 0;
   let transferredRows = 0;
+  let existingRows = 0;
+  let newArchivedRows = 0;
   let sourceChecksum = "";
   let targetChecksum = "";
 
   try {
+    if (!await backlogProbeDue(auditDb, sourceTable, scheduledTime, emptyBacklogProbeIntervalMs)) {
+      const finishedAt = new Date().toISOString();
+      await recordAudit(auditDb, {
+        id: runId,
+        status: "skipped",
+        reason: "archive_backlog_probe_deferred",
+        selectedRows: 0,
+        transferredRows: 0,
+        newArchivedRows: 0,
+        existingRows: 0,
+        legacySelectCount: 0,
+        startedAt,
+        finishedAt
+      }, sourceTable);
+      return {
+        status: "skipped",
+        reason: "archive_backlog_probe_deferred",
+        sourceTable,
+        selectedRows: 0,
+        transferredRows: 0,
+        newArchivedRows: 0,
+        existingRows: 0,
+        legacySelectCount: 0,
+        deletedRows: 0,
+        cutoffIso
+      };
+    }
+    const sourceDb = getLegacyDatabase(env, {
+      moduleName: "collection-snapshot-archive",
+      purpose: `copy-verify archive source read: ${sourceTable}`
+    });
     const cursor = await latestCursor(archiveDb, sourceTable);
     const rows = await selectEligibleRows(sourceDb, source, cursor, cutoffIso, batchSize);
     selectedRows = rows.length;
     if (!rows.length) {
       const finishedAt = new Date().toISOString();
       await recordAudit(auditDb, {
-        id: runId, status: "completed", selectedRows: 0, transferredRows: 0,
+        id: runId,
+        status: "skipped",
+        reason: "archive_backlog_empty",
+        selectedRows: 0,
+        transferredRows: 0,
+        newArchivedRows: 0,
+        existingRows: 0,
+        legacySelectCount: 1,
         startedAt, finishedAt
       }, sourceTable);
-      return { status: "completed", sourceTable, selectedRows: 0, transferredRows: 0, deletedRows: 0, cutoffIso };
+      return {
+        status: "skipped",
+        reason: "archive_backlog_empty",
+        sourceTable,
+        selectedRows: 0,
+        transferredRows: 0,
+        newArchivedRows: 0,
+        existingRows: 0,
+        legacySelectCount: 1,
+        deletedRows: 0,
+        cutoffIso
+      };
     }
 
     const encoder = new TextEncoder();
@@ -221,7 +337,9 @@ async function archiveSnapshotChunk(env, options = {}) {
       throw new Error("R2 archiv neprošel kontrolou velikosti a SHA-256.");
     }
 
-    await recordArchiveObjects(archiveDb, archiveBatchId, rows, objectKey, sourceChecksum);
+    const objectResult = await recordArchiveObjects(archiveDb, archiveBatchId, rows, objectKey, sourceChecksum);
+    existingRows = objectResult.existingRows;
+    newArchivedRows = objectResult.newArchivedRows;
     const count = await archiveDb.prepare(`
       SELECT COUNT(*) AS count FROM archive_objects WHERE archive_batch_id = ?
     `).bind(archiveBatchId).first();
@@ -257,6 +375,10 @@ async function archiveSnapshotChunk(env, options = {}) {
       status: "completed",
       selectedRows,
       transferredRows,
+      newArchivedRows,
+      existingRows,
+      legacySelectCount: 1,
+      checkpoint: { createdAt: last.created_at, id: last.id },
       sourceChecksum,
       targetChecksum,
       startedAt,
@@ -269,6 +391,9 @@ async function archiveSnapshotChunk(env, options = {}) {
       objectKey,
       selectedRows,
       transferredRows,
+      newArchivedRows,
+      existingRows,
+      legacySelectCount: 1,
       deletedRows: 0,
       checksum: sourceChecksum,
       cutoffIso
@@ -281,6 +406,9 @@ async function archiveSnapshotChunk(env, options = {}) {
         status: "failed",
         selectedRows,
         transferredRows,
+        newArchivedRows,
+        existingRows,
+        legacySelectCount: 1,
         sourceChecksum,
         targetChecksum,
         errorMessage: String(error?.message || error),
