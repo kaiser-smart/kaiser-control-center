@@ -19,7 +19,9 @@ RCS_SMS_AUTOPILOT_MODE=review
 RCS_SMS_AUTOPILOT_MODE=live
 ```
 
-- `review`: OpenAI uloží strukturovaný návrh, nic neprovede ani neodešle.
+- `review`: OpenAI uloží strukturovaný návrh a automaticky nic neprovede ani
+  neodešle. Admin nebo Management může po kontrole připravit a samostatně
+  fyzicky potvrdit právě jednu odpověď.
 - `live`: server smí po vlastní validaci provést povolený nástroj a odpovědět přes existující zákaznickou messaging vrstvu.
 
 `review` je navíc fail-closed omezený na interní KSO účty uvedené podle
@@ -50,6 +52,13 @@ Samotná aktivace pravidla v UI režim ENV nemění. Pro jakýkoli AI provoz mus
 9. Odpověď jde pouze přes `sendCustomerMessage`; stav Twilia, OpenAI i nástroje se auditují.
 
 Webhook vrací rychlé prázdné TwiML. Další zpracování používá Cloudflare `waitUntil`. Uložené nedokončené zprávy může obnovit cloudový runner nejvýše třikrát.
+
+V režimu `review` je odeslání oddělené od zpracování webhooku. Admin nebo
+Management může upravit návrh a vytvořit krátké jednorázové oprávnění svázané
+s přesnou konverzací, nejnovější příchozí zprávou, příjemcem, kanálem, textem a
+přihlášeným správcem. První krok nic neodesílá. Druhý krok vyžaduje samostatné
+fyzické potvrzení, atomicky oprávnění spotřebuje a pošle jen tuto jednu
+odpověď. Automatický outbound, nástroje i automatický retry zůstávají vypnuté.
 
 ## Pevná pravidla
 
@@ -116,6 +125,7 @@ Migrace:
 ```text
 migrations/modular/messages/0002_rcs_sms_autopilot_disabled.sql
 migrations/modular/messages/0006_rcs_sms_webhooks_and_idempotency.sql
+migrations/modular/messages/0007_rcs_sms_review_send_grants.sql
 migrations/modular/core/0005_rcs_sms_autopilot_rules_disabled.sql
 ```
 
@@ -126,6 +136,7 @@ Tabulky:
 - `rcs_sms_conversations`
 - `rcs_sms_messages`
 - `rcs_sms_action_grants`
+- `rcs_sms_review_send_grants`
 - `rcs_sms_requests`
 - `rcs_sms_tool_runs`
 - `rcs_sms_events`
@@ -136,9 +147,14 @@ Chráněná API:
 GET /api/rcs-sms-autopilot
 GET /api/rcs-sms-autopilot/:id
 POST /api/rcs-sms-autopilot/:id
+POST /api/rcs-sms-autopilot/:id/review-grants
+DELETE /api/rcs-sms-autopilot/:id/review-grants?grantId=...
+POST /api/rcs-sms-autopilot/:id/review-send
 ```
 
 Role `admin` a `management` mají plný přístup. `kancelar` a `dispecer` mohou konverzace spravovat, `garazmistr` má read-only přehled. Řidič a readonly role přístup nemají.
+Jednorázové odeslání review odpovědi je navíc uvnitř backendové služby omezené
+pouze na `admin` a `management`; samotné oprávnění ke správě modulu nestačí.
 
 ## Modul KSO
 
@@ -148,7 +164,11 @@ Trasa:
 /rcs-sms-konverzace
 ```
 
-Modul ukazuje společnou schránku, původní odchozí zprávu, rozpoznaný záměr, stav konverzace, požadavky, nástroje, lidské převzetí, Twilio/OpenAI stav, Event Log a seznam pravidel a automatizací.
+Modul ukazuje společnou schránku, původní odchozí zprávu, rozpoznaný záměr, stav
+konverzace, požadavky, nástroje, lidské převzetí, Twilio/OpenAI stav, Event Log
+a seznam pravidel a automatizací. U `review_ready` návrhu může oprávněný správce
+upravit přesný text, připravit jednorázové oprávnění a v odděleném potvrzení
+zkontrolovat maskovaného příjemce, kanál, plný text a expiraci.
 
 ## Ověření
 

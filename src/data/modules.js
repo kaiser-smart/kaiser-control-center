@@ -186,7 +186,7 @@ export const modules = [
     description: "Společná schránka odpovědí, návrhů Šarloty a bezpečně provedených nástrojů.",
     route: "/rcs-sms-konverzace",
     icon: ReportsIcon,
-    status: "Výchozí vypnuto",
+    status: "Review pilot",
     ctaLabel: "Otevřít konverzace",
     active: true,
     disabled: false,

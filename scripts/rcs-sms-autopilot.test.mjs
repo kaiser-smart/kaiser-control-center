@@ -18,6 +18,12 @@ import {
   processRcsSmsAutopilotMessage,
   runRcsSmsAutopilotRetry
 } from "../functions/_lib/rcs-sms-autopilot-service.js";
+import {
+  RcsSmsReviewSendError,
+  cancelRcsSmsReviewSend,
+  confirmRcsSmsReviewSend,
+  prepareRcsSmsReviewSendGrant
+} from "../functions/_lib/rcs-sms-review-send-service.js";
 import { __test as toolsTest } from "../functions/_lib/rcs-sms-autopilot-tools.js";
 import {
   __test as storeTest,
@@ -316,7 +322,8 @@ assert.equal(storeTest.mediaFromPayload({
     "modular/messages/0001_messages_foundation.sql",
     "modular/messages/0002_rcs_sms_autopilot_disabled.sql",
     "modular/messages/0003_notification_logs_legacy_compatibility.sql",
-    "modular/messages/0006_rcs_sms_webhooks_and_idempotency.sql"
+    "modular/messages/0006_rcs_sms_webhooks_and_idempotency.sql",
+    "modular/messages/0007_rcs_sms_review_send_grants.sql"
   ]) {
     applyMigration(messagesSqlite, migrationName);
   }
@@ -566,6 +573,331 @@ assert.equal(storeTest.mediaFromPayload({
     "SELECT COUNT(*) AS total FROM rcs_sms_messages WHERE direction = 'outbound'"
   ).get().total, 0);
 
+  const reviewActor = {
+    id: "admin-review-test",
+    name: "Admin Review",
+    role: "admin"
+  };
+  await assert.rejects(
+    prepareRcsSmsReviewSendGrant(
+      integrationEnv,
+      allowedReview.conversationId,
+      { replyText: "Tento text se nesmí připravit." },
+      { id: "dispatcher-review-test", name: "Dispečer", role: "dispecer" }
+    ),
+    (error) => (
+      error instanceof RcsSmsReviewSendError
+      && error.code === "rcs_sms_review_approver_forbidden"
+    )
+  );
+  await assert.rejects(
+    prepareRcsSmsReviewSendGrant(
+      integrationEnv,
+      allowedReview.conversationId,
+      { replyText: " " },
+      reviewActor
+    ),
+    (error) => error?.code === "rcs_sms_review_reply_empty"
+  );
+  await assert.rejects(
+    prepareRcsSmsReviewSendGrant(
+      integrationEnv,
+      allowedReview.conversationId,
+      { replyText: "x".repeat(1201) },
+      reviewActor
+    ),
+    (error) => error?.code === "rcs_sms_review_reply_too_long"
+  );
+  await assert.rejects(
+    prepareRcsSmsReviewSendGrant(
+      integrationEnv,
+      allowedReview.conversationId,
+      { replyText: "Bezpečný návrh.", arbitrary: "blocked" },
+      reviewActor
+    ),
+    (error) => error?.code === "rcs_sms_review_payload_invalid"
+  );
+  await assert.rejects(
+    prepareRcsSmsReviewSendGrant(
+      integrationEnv,
+      "conversation-unknown-test",
+      { replyText: "Bezpečný návrh." },
+      reviewActor,
+      {
+        getRuntimeConfig: async () => ({
+          autopilotEnabled: true,
+          outboundEnabled: false
+        }),
+        getCandidate: async () => ({
+          conversation: {
+            id: "conversation-unknown-test",
+            contactType: "unknown",
+            userId: "",
+            phone: "+420700000000",
+            channel: "sms"
+          },
+          message: {
+            id: "message-unknown-test",
+            direction: "inbound",
+            status: "review_ready",
+            senderType: "unknown",
+            channel: "sms"
+          }
+        })
+      }
+    ),
+    (error) => error?.code === "rcs_sms_review_candidate_invalid"
+  );
+
+  const cancelledGrant = await prepareRcsSmsReviewSendGrant(
+    integrationEnv,
+    allowedReview.conversationId,
+    { replyText: "Toto oprávnění bude zrušené." },
+    reviewActor
+  );
+  assert.match(cancelledGrant.preview, /Pro odhlášení odpovězte STOP\.$/);
+  assert.equal(cancelledGrant.toolExecution, "disabled");
+  assert.equal(cancelledGrant.recipient, "+420 *** **56");
+  const cancelled = await cancelRcsSmsReviewSend(
+    integrationEnv,
+    allowedReview.conversationId,
+    { grantId: cancelledGrant.grantId },
+    reviewActor
+  );
+  assert.equal(cancelled.cancelled, true);
+  assert.equal(
+    messagesSqlite.prepare(
+      "SELECT status FROM rcs_sms_review_send_grants WHERE id = ?"
+    ).get(cancelledGrant.grantId).status,
+    "cancelled"
+  );
+
+  const replacedAdminGrant = await prepareRcsSmsReviewSendGrant(
+    integrationEnv,
+    allowedReview.conversationId,
+    { replyText: "První správce připravil tento text." },
+    reviewActor
+  );
+  const managementActor = {
+    id: "management-review-test",
+    name: "Management Review",
+    role: "management"
+  };
+  const replacingManagementGrant = await prepareRcsSmsReviewSendGrant(
+    integrationEnv,
+    allowedReview.conversationId,
+    { replyText: "Druhý správce připravil novější text." },
+    managementActor
+  );
+  assert.equal(messagesSqlite.prepare(
+    "SELECT status FROM rcs_sms_review_send_grants WHERE id = ?"
+  ).get(replacedAdminGrant.grantId).status, "cancelled");
+  assert.equal(messagesSqlite.prepare(
+    "SELECT status FROM rcs_sms_review_send_grants WHERE id = ?"
+  ).get(replacingManagementGrant.grantId).status, "confirmation_pending");
+  await cancelRcsSmsReviewSend(
+    integrationEnv,
+    allowedReview.conversationId,
+    { grantId: replacingManagementGrant.grantId },
+    managementActor
+  );
+
+  const claimedLockGrant = await prepareRcsSmsReviewSendGrant(
+    integrationEnv,
+    allowedReview.conversationId,
+    { replyText: "Odeslání je právě atomicky spotřebované." },
+    reviewActor
+  );
+  messagesSqlite.prepare(`
+    UPDATE rcs_sms_review_send_grants
+    SET status = 'claimed', claimed_at = ?
+    WHERE id = ?
+  `).run(new Date().toISOString(), claimedLockGrant.grantId);
+  await assert.rejects(
+    prepareRcsSmsReviewSendGrant(
+      integrationEnv,
+      allowedReview.conversationId,
+      { replyText: "Současné druhé oprávnění nesmí vzniknout." },
+      managementActor
+    ),
+    (error) => error?.code === "rcs_sms_review_send_in_progress"
+  );
+  messagesSqlite.prepare(`
+    UPDATE rcs_sms_review_send_grants
+    SET status = 'failed', error_message = 'Test lock cleanup.'
+    WHERE id = ?
+  `).run(claimedLockGrant.grantId);
+
+  const tamperedGrant = await prepareRcsSmsReviewSendGrant(
+    integrationEnv,
+    allowedReview.conversationId,
+    { replyText: "Přesný člověkem upravený text." },
+    reviewActor
+  );
+  const tamperedRow = messagesSqlite.prepare(`
+    SELECT conversation_id, inbound_message_id, actor_user_id,
+           recipient_phone_hash, reply_text_hash, status
+    FROM rcs_sms_review_send_grants
+    WHERE id = ?
+  `).get(tamperedGrant.grantId);
+  assert.equal(tamperedRow.conversation_id, allowedReview.conversationId);
+  assert.equal(tamperedRow.inbound_message_id, allowedReview.message.id);
+  assert.equal(tamperedRow.actor_user_id, reviewActor.id);
+  assert.equal(tamperedRow.recipient_phone_hash.length, 64);
+  assert.equal(tamperedRow.reply_text_hash.length, 64);
+  assert.equal(tamperedRow.status, "confirmation_pending");
+  messagesSqlite.prepare(
+    "UPDATE rcs_sms_review_send_grants SET reply_text = ? WHERE id = ?"
+  ).run("Podvržený text.", tamperedGrant.grantId);
+  await assert.rejects(
+    confirmRcsSmsReviewSend(
+      integrationEnv,
+      allowedReview.conversationId,
+      {
+        grantId: tamperedGrant.grantId,
+        confirm: "send-one-reviewed-reply"
+      },
+      reviewActor
+    ),
+    (error) => error?.code === "rcs_sms_review_grant_content_mismatch"
+  );
+
+  const failedGrant = await prepareRcsSmsReviewSendGrant(
+    integrationEnv,
+    allowedReview.conversationId,
+    { replyText: "Odpověď, kterou poskytovatel odmítne." },
+    reviewActor
+  );
+  let providerCalls = 0;
+  await assert.rejects(
+    confirmRcsSmsReviewSend(
+      integrationEnv,
+      allowedReview.conversationId,
+      {
+        grantId: failedGrant.grantId,
+        confirm: "send-one-reviewed-reply"
+      },
+      reviewActor,
+      {
+        claimGrant: async () => false,
+        sendMessage: async () => {
+          providerCalls += 1;
+          return { sent: true };
+        }
+      }
+    ),
+    (error) => error?.code === "rcs_sms_review_atomic_claim_failed"
+  );
+  assert.equal(providerCalls, 0, "Bez atomické spotřeby se Twilio nesmí zavolat.");
+  const failedSend = await confirmRcsSmsReviewSend(
+    integrationEnv,
+    allowedReview.conversationId,
+    {
+      grantId: failedGrant.grantId,
+      confirm: "send-one-reviewed-reply"
+    },
+    reviewActor,
+    {
+      sendMessage: async () => {
+        providerCalls += 1;
+        return {
+          sent: false,
+          status: "failed",
+          errorMessage: "Provider test failure."
+        };
+      }
+    }
+  );
+  assert.equal(failedSend.sent, false);
+  assert.equal(failedSend.retry, "disabled");
+  assert.equal(providerCalls, 1);
+  assert.equal(messagesSqlite.prepare(
+    "SELECT status FROM rcs_sms_messages WHERE id = ?"
+  ).get(allowedReview.message.id).status, "review_ready");
+  assert.equal(messagesSqlite.prepare(
+    "SELECT status FROM rcs_sms_review_send_grants WHERE id = ?"
+  ).get(failedGrant.grantId).status, "failed");
+
+  const sentGrant = await prepareRcsSmsReviewSendGrant(
+    integrationEnv,
+    allowedReview.conversationId,
+    { replyText: "Přesný finální text po lidské kontrole." },
+    reviewActor
+  );
+  await assert.rejects(
+    confirmRcsSmsReviewSend(
+      integrationEnv,
+      allowedReview.conversationId,
+      { grantId: sentGrant.grantId, confirm: "yes" },
+      reviewActor
+    ),
+    (error) => error?.code === "rcs_sms_review_confirmation_required"
+  );
+  let sentPayload = null;
+  const sentResult = await confirmRcsSmsReviewSend(
+    integrationEnv,
+    allowedReview.conversationId,
+    {
+      grantId: sentGrant.grantId,
+      confirm: "send-one-reviewed-reply"
+    },
+    reviewActor,
+    {
+      sendMessage: async (_env, input) => {
+        providerCalls += 1;
+        sentPayload = input;
+        return {
+          sent: true,
+          status: "accepted",
+          twilioMessageSid: "SM_REVIEW_SEND_TEST",
+          messageBody: "Přesný finální text po lidské kontrole. Pro odhlášení odpovězte STOP."
+        };
+      }
+    }
+  );
+  assert.equal(sentResult.sent, true);
+  assert.equal(sentResult.retry, "disabled");
+  assert.equal(sentPayload.template, "autopilot_reply");
+  assert.equal(sentPayload.variables.replyText, "Přesný finální text po lidské kontrole.");
+  assert.equal(sentPayload.channelPreference, "rcs");
+  assert.equal(sentPayload.eventId, `review-send:${sentGrant.grantId}`);
+  assert.equal(messagesSqlite.prepare(`
+    SELECT sender_type, response_mode, status
+    FROM rcs_sms_messages
+    WHERE twilio_message_sid = 'SM_REVIEW_SEND_TEST'
+  `).get().sender_type, "human");
+  assert.equal(messagesSqlite.prepare(
+    "SELECT status, response_mode FROM rcs_sms_messages WHERE id = ?"
+  ).get(allowedReview.message.id).status, "replied");
+  assert.equal(messagesSqlite.prepare(
+    "SELECT status, human_takeover FROM rcs_sms_conversations WHERE id = ?"
+  ).get(allowedReview.conversationId).human_takeover, 0);
+  assert.equal(messagesSqlite.prepare(
+    "SELECT status FROM rcs_sms_review_send_grants WHERE id = ?"
+  ).get(sentGrant.grantId).status, "provider_accepted");
+  await assert.rejects(
+    confirmRcsSmsReviewSend(
+      integrationEnv,
+      allowedReview.conversationId,
+      {
+        grantId: sentGrant.grantId,
+        confirm: "send-one-reviewed-reply"
+      },
+      reviewActor,
+      {
+        sendMessage: async () => {
+          providerCalls += 1;
+          return { sent: true };
+        }
+      }
+    ),
+    (error) => error?.code === "rcs_sms_review_grant_not_pending"
+  );
+  assert.equal(providerCalls, 2, "Spotřebovaný grant nesmí vyvolat druhé odeslání.");
+  assert.equal(messagesSqlite.prepare(
+    "SELECT COUNT(*) AS total FROM rcs_sms_tool_runs"
+  ).get().total, 0, "Ruční review odpověď nesmí provést žádný provozní nástroj.");
+
   messagesSqlite.prepare(`
     UPDATE rcs_sms_runtime_config
     SET autopilot_enabled = 0, outbound_enabled = 0
@@ -578,6 +910,9 @@ assert.equal(storeTest.mediaFromPayload({
   delete integrationEnv.RCS_SMS_AUTOPILOT_OPENAI_API_KEY;
 
   integrationEnv.RCS_SMS_AUTOPILOT_MODE = "live";
+  const outboundBeforeInactiveRule = messagesSqlite.prepare(
+    "SELECT COUNT(*) AS total FROM rcs_sms_messages WHERE direction = 'outbound'"
+  ).get().total;
   const blankPending = [];
   await ingestAndScheduleRcsSmsAutopilot(integrationEnv, {
     From: "+420999123456",
@@ -592,7 +927,7 @@ assert.equal(storeTest.mediaFromPayload({
   assert.equal(blankStored.response_mode, "none");
   assert.equal(
     messagesSqlite.prepare("SELECT COUNT(*) AS total FROM rcs_sms_messages WHERE direction = 'outbound'").get().total,
-    0,
+    outboundBeforeInactiveRule,
     "live ENV bez aktivního asynchronního pravidla nesmí odeslat ani pevnou odpověď"
   );
   integrationEnv.RCS_SMS_AUTOPILOT_MODE = "off";
@@ -663,7 +998,7 @@ assert.equal(hasPermission({ role: "readonly", active: true }, "rcs-sms-autopilo
 
 const moduleItem = modules.find((item) => item.id === "rcs-sms-autopilot");
 assert.equal(moduleItem?.route, "/rcs-sms-konverzace");
-assert.equal(moduleItem?.status, "Výchozí vypnuto");
+assert.equal(moduleItem?.status, "Review pilot");
 assert.equal(uiTest.modeLabel("off"), "Vypnuto");
 assert.equal(uiTest.statusLabel("human_takeover"), "Předáno člověku");
 
@@ -693,19 +1028,73 @@ rcsSmsAutopilotState.status = {
     failClosed: true
   },
   retryRunner: { active: false, cron: "*/5 * * * *" },
-  outboundEffects: "disabled"
+  outboundEffects: "disabled",
+  manualReviewSend: "one_time_admin_grant_only"
 };
 const ui = rcsSmsAutopilotContent({ canManage: true, rulesHtml: "<section>rules</section>" });
 assert.match(ui, /Společná schránka odpovědí/);
 assert.match(ui, /Pravdivý provozní stav/);
 assert.match(ui, /Seznam pravidel|rules/);
-assert.match(ui, /Interní pilot návrhů/);
+assert.match(ui, /Interní pilot s lidským schválením/);
 assert.match(ui, /1 interní účet/);
 assert.doesNotMatch(ui, /<script>alert/);
 assert.match(ui, /&lt;script&gt;alert/);
 
+rcsSmsAutopilotState.selectedId = "conversation-1";
+rcsSmsAutopilotState.detail = {
+  conversation: {
+    id: "conversation-1",
+    phone: "+420777123456",
+    contactName: "Testovací uživatel",
+    contactType: "employee",
+    channel: "rcs",
+    status: "human_takeover",
+    humanTakeover: true
+  },
+  messages: [{
+    id: "message-review-ui",
+    direction: "inbound",
+    channel: "rcs",
+    body: "Prosím o odpověď.",
+    status: "review_ready",
+    replyText: "Návrh <b>ke kontrole</b>.",
+    intent: "general_request",
+    requestedTool: "none"
+  }],
+  requests: [],
+  toolRuns: [],
+  events: [],
+  originalOutbound: null
+};
+rcsSmsAutopilotState.reviewDraft = {
+  conversationId: "conversation-1",
+  messageId: "message-review-ui",
+  originalText: "Návrh <b>ke kontrole</b>.",
+  text: "Návrh <b>ke kontrole</b>.",
+  dirty: false,
+  grant: null
+};
+const reviewUi = rcsSmsAutopilotContent({ canManage: true, canApprove: true });
+assert.match(reviewUi, /Návrh odpovědi ke kontrole/);
+assert.match(reviewUi, /Připravit jednorázové odeslání/);
+assert.doesNotMatch(reviewUi, /Odeslat tuto jednu odpověď/);
+assert.doesNotMatch(reviewUi, /<b>ke kontrole<\/b>/);
+assert.match(reviewUi, /&lt;b&gt;ke kontrole&lt;\/b&gt;/);
+rcsSmsAutopilotState.reviewDraft.grant = {
+  grantId: "grant-ui-test",
+  recipient: "+420 *** **56",
+  channel: "rcs",
+  expiresAt: "2026-07-25T12:03:00.000Z",
+  preview: "Návrh ke kontrole. Pro odhlášení odpovězte STOP."
+};
+const confirmationUi = rcsSmsAutopilotContent({ canManage: true, canApprove: true });
+assert.match(confirmationUi, /Odeslat tuto jednu odpověď/);
+assert.match(confirmationUi, /\+420 \*\*\* \*\*56/);
+assert.match(confirmationUi, /Žádný nástroj se nespustí/);
+
 const [
   messageMigration,
+  reviewGrantMigration,
   ruleMigration,
   inboundSource,
   workerSource,
@@ -714,6 +1103,7 @@ const [
   envExample
 ] = await Promise.all([
   readFile(new URL("../migrations/modular/messages/0002_rcs_sms_autopilot_disabled.sql", import.meta.url), "utf8"),
+  readFile(new URL("../migrations/modular/messages/0007_rcs_sms_review_send_grants.sql", import.meta.url), "utf8"),
   readFile(new URL("../migrations/modular/core/0005_rcs_sms_autopilot_rules_disabled.sql", import.meta.url), "utf8"),
   readFile(new URL("../functions/api/twilio/inbound.js", import.meta.url), "utf8"),
   readFile(new URL("../workers/module-automation-runner.js", import.meta.url), "utf8"),
@@ -733,6 +1123,8 @@ for (const table of [
   assert.match(messageMigration, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
 }
 assert.match(messageMigration, /UNIQUE INDEX IF NOT EXISTS idx_rcs_sms_messages_twilio_sid/);
+assert.match(reviewGrantMigration, /CREATE TABLE IF NOT EXISTS rcs_sms_review_send_grants/);
+assert.match(reviewGrantMigration, /WHERE status IN \('confirmation_pending', 'claimed'\)/);
 assert.match(ruleMigration, /'rcs-sms-autopilot-async-processing'[\s\S]*?'inactive'/);
 assert.match(ruleMigration, /'rcs-sms-autopilot-retry-runner'[\s\S]*?'inactive'/);
 
@@ -747,6 +1139,11 @@ assert.match(appSource, /rcs-sms-autopilot-retry-runner/);
 assert.match(cssSource, /@media \(max-width: 1180px\)/);
 assert.match(cssSource, /@media \(max-width: 900px\)/);
 assert.match(cssSource, /@media \(max-width: 560px\)/);
+assert.match(cssSource, /\.rcs-autopilot-review__confirmation/);
+assert.match(
+  cssSource,
+  /@media \(max-width: 1024px\)[\s\S]*?\.ui-system-v2 \.rcs-autopilot-review button[\s\S]*?min-height: 48px/
+);
 assert.match(envExample, /RCS_SMS_AUTOPILOT_MODE=off/);
 assert.doesNotMatch(envExample, /VITE_RCS_SMS_AUTOPILOT/);
 

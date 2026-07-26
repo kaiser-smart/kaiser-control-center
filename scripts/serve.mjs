@@ -133,6 +133,7 @@ let mockSelfRepairAutomationRuns = [];
 let mockSelfRepairRunnerRuns = [];
 let mockSelfRepairMonitorStatus = "active";
 let mockNotificationLogs = [];
+let mockRcsSmsReviewSendGrants = new Map();
 let mockAssistantDailyPromos = new Map();
 let mockCollectionRouteBatches = [];
 const mockRcsSmsAutopilotRules = [
@@ -227,9 +228,9 @@ const mockRcsSmsAutopilotConversations = [
     lastOutboundTemplateKey: "task_assignment",
     lastEventId: "task-2026-0725-01",
     openIntent: "confirmation",
-    awaitingField: "authenticated_kso_confirmation",
-    status: "awaiting_confirmation",
-    humanTakeover: false,
+    awaitingField: localRcsSmsReviewPilot ? "" : "authenticated_kso_confirmation",
+    status: localRcsSmsReviewPilot ? "human_takeover" : "awaiting_confirmation",
+    humanTakeover: localRcsSmsReviewPilot,
     consentStatus: "internal_operational",
     lastActivityAt: "2026-07-25T09:12:00.000Z",
     createdAt: "2026-07-25T09:10:00.000Z",
@@ -237,9 +238,12 @@ const mockRcsSmsAutopilotConversations = [
     latestMessage: {
       id: "local-rcs-message-employee-in",
       body: "Ano, beru to.",
-      status: "awaiting_confirmation",
+      status: localRcsSmsReviewPilot ? "review_ready" : "awaiting_confirmation",
       intent: "confirmation",
       requiresHuman: true,
+      replyText: localRcsSmsReviewPilot
+        ? "Děkuji za potvrzení. Úkol evidujeme jako převzatý."
+        : "",
       createdAt: "2026-07-25T09:12:00.000Z"
     }
   },
@@ -318,7 +322,7 @@ function mockRcsSmsAutopilotDetail(id) {
       summary: "Hlášení neprovedeného svozu · Firma Test s.r.o.",
       createdAt: "2026-07-25T08:42:01.000Z"
     }],
-    toolRuns: [{
+    toolRuns: localRcsSmsReviewPilot && employee ? [] : [{
       id: `local-tool-${conversation.id}`,
       conversationId: conversation.id,
       messageId: message.id,
@@ -332,10 +336,16 @@ function mockRcsSmsAutopilotDetail(id) {
       id: `local-event-${conversation.id}`,
       conversationId: conversation.id,
       messageId: message.id,
-      eventType: employee ? "tool_evaluated" : "human_takeover",
-      status: conversation.status,
+      eventType: localRcsSmsReviewPilot && employee
+        ? "review_ready"
+        : employee
+          ? "tool_evaluated"
+          : "human_takeover",
+      status: localRcsSmsReviewPilot && employee ? "review_ready" : conversation.status,
       detail: employee
-        ? "Akce čeká na potvrzení oprávněným uživatelem KSO."
+        ? localRcsSmsReviewPilot
+          ? "Šarlota připravila návrh. Nástroj ani zpráva se automaticky neprovedly."
+          : "Akce čeká na potvrzení oprávněným uživatelem KSO."
         : "Konverzace byla předaná člověku.",
       createdAt: message.createdAt
     }],
@@ -5355,6 +5365,9 @@ async function handleApi(request, response) {
         twilio: { twilioConfigured: false },
         permissionsSource: "KSO backend; telefon není zdroj oprávnění",
         outboundEffects: "disabled",
+        manualReviewSend: localRcsSmsReviewPilot
+          ? "one_time_admin_grant_only"
+          : "disabled",
         counts: {
           conversations: mockRcsSmsAutopilotConversations.length,
           humanTakeover: mockRcsSmsAutopilotConversations.filter((item) => item.humanTakeover).length,
@@ -5373,6 +5386,150 @@ async function handleApi(request, response) {
       },
       apiStatus: "ready",
       localPreview: true
+    });
+    return true;
+  }
+
+  const rcsSmsReviewGrantMatch = /^\/api\/rcs-sms-autopilot\/([^/]+)\/review-grants$/.exec(url.pathname);
+  if (rcsSmsReviewGrantMatch && ["POST", "DELETE"].includes(request.method)) {
+    const user = currentDevUser(request);
+    if (!user) {
+      sendJson(response, 401, { error: "Nepřihlášeno." });
+      return true;
+    }
+    if (
+      !hasPermission(user, "rcs-sms-autopilot", "manage")
+      || !["admin", "management"].includes(normalizeRole(user.role))
+    ) {
+      sendJson(response, 403, {
+        error: "Jednorázové odeslání může schválit pouze Admin nebo Management."
+      });
+      return true;
+    }
+    if (!localRcsSmsReviewPilot || localRcsSmsReviewUserCount < 1) {
+      sendJson(response, 409, {
+        error: "Jednorázové odeslání je povolené jen v aktivním review pilotu."
+      });
+      return true;
+    }
+    const conversationId = decodeURIComponent(rcsSmsReviewGrantMatch[1]);
+    const conversation = mockRcsSmsAutopilotConversations.find((item) => item.id === conversationId);
+    if (
+      !conversation
+      || conversation.contactType !== "employee"
+      || conversation.latestMessage?.status !== "review_ready"
+    ) {
+      sendJson(response, 409, {
+        error: "Konverzace nemá aktuální bezpečný návrh z interního review pilotu."
+      });
+      return true;
+    }
+    if (request.method === "DELETE") {
+      const grantId = String(url.searchParams.get("grantId") || "").trim();
+      const grant = mockRcsSmsReviewSendGrants.get(grantId);
+      if (
+        !grant
+        || grant.conversationId !== conversationId
+        || grant.actorUserId !== user.id
+        || grant.status !== "confirmation_pending"
+      ) {
+        sendJson(response, 409, { error: "Jednorázové oprávnění nelze zrušit." });
+        return true;
+      }
+      grant.status = "cancelled";
+      sendJson(response, 200, {
+        cancelled: true,
+        grantId,
+        status: "cancelled",
+        apiStatus: "ready",
+        localPreview: true
+      });
+      return true;
+    }
+    const input = await readJsonBody(request);
+    const unknownKeys = Object.keys(input || {}).filter((key) => key !== "replyText");
+    const replyText = String(input?.replyText || "").trim();
+    if (unknownKeys.length || !replyText || replyText.length > 1200) {
+      sendJson(response, 400, {
+        error: unknownKeys.length
+          ? `Požadavek obsahuje nepovolená pole: ${unknownKeys.join(", ")}.`
+          : "Text jednorázové odpovědi musí mít 1 až 1200 znaků."
+      });
+      return true;
+    }
+    for (const grant of mockRcsSmsReviewSendGrants.values()) {
+      if (
+        grant.conversationId === conversationId
+        && grant.actorUserId === user.id
+        && grant.status === "confirmation_pending"
+      ) {
+        grant.status = "cancelled";
+      }
+    }
+    const grantId = `local-review-send-${randomUUID()}`;
+    const expiresAt = new Date(Date.now() + 180000).toISOString();
+    const grant = {
+      grantId,
+      status: "confirmation_pending",
+      conversationId,
+      inboundMessageId: conversation.latestMessage.id,
+      actorUserId: user.id,
+      recipient: `${conversation.phone.slice(0, 4)} *** **${conversation.phone.slice(-2)}`,
+      channel: conversation.channel,
+      intent: conversation.latestMessage.intent,
+      preview: `${replyText} Pro odhlášení odpovězte STOP.`,
+      replyText,
+      expiresAt,
+      toolExecution: "disabled"
+    };
+    mockRcsSmsReviewSendGrants.set(grantId, grant);
+    sendJson(response, 201, {
+      ...grant,
+      apiStatus: "ready",
+      localPreview: true,
+      externalEffectsDisabled: true
+    });
+    return true;
+  }
+
+  const rcsSmsReviewSendMatch = /^\/api\/rcs-sms-autopilot\/([^/]+)\/review-send$/.exec(url.pathname);
+  if (rcsSmsReviewSendMatch && request.method === "POST") {
+    const user = currentDevUser(request);
+    if (
+      !user
+      || !hasPermission(user, "rcs-sms-autopilot", "manage")
+      || !["admin", "management"].includes(normalizeRole(user.role))
+    ) {
+      sendJson(response, user ? 403 : 401, {
+        error: user
+          ? "Jednorázové odeslání může schválit pouze Admin nebo Management."
+          : "Nepřihlášeno."
+      });
+      return true;
+    }
+    const conversationId = decodeURIComponent(rcsSmsReviewSendMatch[1]);
+    const input = await readJsonBody(request);
+    const grant = mockRcsSmsReviewSendGrants.get(String(input?.grantId || "").trim());
+    if (
+      !grant
+      || grant.conversationId !== conversationId
+      || grant.actorUserId !== user.id
+      || grant.status !== "confirmation_pending"
+      || input?.confirm !== "send-one-reviewed-reply"
+    ) {
+      sendJson(response, 409, { error: "Jednorázové oprávnění není aktivní nebo správně potvrzené." });
+      return true;
+    }
+    grant.status = "failed";
+    sendJson(response, 200, {
+      sent: false,
+      grantId: grant.grantId,
+      status: "local_preview_only",
+      errorMessage: "Lokální náhled: zpráva nebyla odeslána do Twilia.",
+      retry: "disabled",
+      apiStatus: "ready",
+      localPreview: true,
+      externalEffectsDisabled: true
     });
     return true;
   }

@@ -42,6 +42,11 @@ Ruční odeslání jedné centrální Content šablony z Nastavení nepoužívá
 `live` režim. Běží pouze při `KSO_CUSTOMER_MESSAGING_MODE=off` přes krátké
 jednorázové backendové oprávnění popsané v `docs/RCS_TEMPLATE_CENTER.md`.
 
+Jedna člověkem zkontrolovaná odpověď RCS/SMS Autopilotu používá vlastní krátké
+oprávnění svázané s příchozí zprávou, příjemcem, přesným textem a správcem.
+Automatický outbound Autopilotu přitom zůstává vypnutý; podmínky a API popisuje
+`docs/RCS_SMS_AUTOPILOT.md`.
+
 ## RCS/SMS fallback
 
 KSO posílá zákaznické zprávy přes `TWILIO_MESSAGING_SERVICE_SID`. V Twiliu musí být ve stejné Messaging Service Sender Poolu:
@@ -107,6 +112,7 @@ Migrace:
 migrations/modular/messages/0001_messages_foundation.sql
 migrations/modular/messages/0002_rcs_sms_autopilot_disabled.sql
 migrations/modular/messages/0006_rcs_sms_webhooks_and_idempotency.sql
+migrations/modular/messages/0007_rcs_sms_review_send_grants.sql
 migrations/modular/core/0005_rcs_sms_autopilot_rules_disabled.sql
 ```
 
@@ -120,6 +126,7 @@ Tabulky:
 - `customer_message_inbound`
 - `rcs_sms_conversations`
 - `rcs_sms_messages`
+- `rcs_sms_review_send_grants`
 - `rcs_sms_requests`
 - `rcs_sms_tool_runs`
 - `rcs_sms_events`

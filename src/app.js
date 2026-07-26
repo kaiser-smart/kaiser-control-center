@@ -41316,7 +41316,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
                   : rcsSmsAutopilotState.status?.mode === "review"
                     && rcsSmsAutopilotState.status?.asyncProcessing?.active === true
                     && rcsSmsAutopilotState.status?.reviewPilot?.enabled === true
-                    ? "Interní pilot návrhů · bez odesílání"
+                    ? "Interní review · jednotlivá odpověď jen po schválení"
                     : "Automatické odpovědi vypnuté"
               )}</strong>
             </div>
@@ -41324,6 +41324,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
         </section>
         ${rcsSmsAutopilotContent({
           canManage: hasPermission(user, RCS_SMS_AUTOPILOT_MODULE_KEY, "manage"),
+          canApprove: ["admin", "management"].includes(normalizeRole(user?.role)),
           rulesHtml
         })}
       </main>

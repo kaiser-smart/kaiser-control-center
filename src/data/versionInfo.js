@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.729"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.730"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "RCS/SMS konverzace: jedna odpověď po lidské kontrole",
+    text: "Admin nebo Management může upravit návrh Šarloty, připravit krátké jednorázové oprávnění a v samostatném kroku potvrdit přesného příjemce, kanál a plný text. Backend oprávnění atomicky spotřebuje; automatický outbound, provozní nástroje i automatický retry zůstávají vypnuté."
+  },
   {
     title: "RCS test: jednorázové oprávnění bez globálního live režimu",
     text: "Ruční test centrální RCS šablony nejdřív vytvoří krátké backendové oprávnění svázané s přesnou šablonou, obsahem, přihlášeným správcem a jeho ověřeným telefonem. Finální endpoint přijímá už jen jednorázové grantId, atomicky ho spotřebuje a funguje výhradně při globálním režimu off; přímý payload šablony už odeslat nelze."

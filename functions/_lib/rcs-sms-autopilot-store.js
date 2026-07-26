@@ -67,9 +67,12 @@ function nowIso() {
 function dbError(error) {
   if (error instanceof RcsSmsAutopilotStoreError) return error;
   const message = cleanString(error?.message);
-  if (/no such table|no such column.*recipient_phone|rcs_sms_|rcs_message_dispatches/i.test(message)) {
+  if (
+    /no such table.*(?:rcs_sms_|rcs_message_dispatches)|no such column.*recipient_phone/i
+      .test(message)
+  ) {
     return new RcsSmsAutopilotStoreError(
-      "Tabulky RCS/SMS Autopilota nejsou v DB_MESSAGES připravené. Spusťte modulární migrace messages/0001, 0002 a 0006.",
+      "Tabulky RCS/SMS Autopilota nejsou v DB_MESSAGES připravené. Spusťte modulární migrace messages/0001, 0002, 0006 a 0007.",
       503,
       "rcs_sms_autopilot_migration_missing"
     );
@@ -482,6 +485,31 @@ function eventRow(row = {}) {
   };
 }
 
+function reviewSendGrantRow(row = {}) {
+  return {
+    id: cleanString(row.id),
+    conversationId: cleanString(row.conversation_id),
+    inboundMessageId: cleanString(row.inbound_message_id),
+    actorUserId: cleanString(row.actor_user_id),
+    actorName: cleanString(row.actor_name),
+    recipientPhone: cleanString(row.recipient_phone),
+    recipientPhoneHash: cleanString(row.recipient_phone_hash),
+    channel: cleanString(row.channel || "sms"),
+    intent: cleanString(row.intent),
+    replyText: cleanString(row.reply_text),
+    replyTextHash: cleanString(row.reply_text_hash),
+    status: cleanString(row.status),
+    expiresAt: cleanString(row.expires_at),
+    claimedAt: cleanString(row.claimed_at),
+    cancelledAt: cleanString(row.cancelled_at),
+    providerMessageSid: cleanString(row.provider_message_sid),
+    providerStatus: cleanString(row.provider_status),
+    errorMessage: cleanString(row.error_message),
+    createdAt: cleanString(row.created_at),
+    updatedAt: cleanString(row.updated_at)
+  };
+}
+
 export async function appendRcsSmsEvent(env, input = {}) {
   const db = database(env, true);
   const id = cleanString(input.id) || randomId("rcs-sms-event");
@@ -769,7 +797,7 @@ export async function insertRcsSmsOutboundMessage(env, input = {}) {
         id, conversation_id, direction, channel, twilio_message_sid,
         body, status, sender_type, intent, response_mode,
         created_at, updated_at, processed_at
-      ) VALUES (?, ?, 'outbound', ?, ?, ?, ?, 'system', ?, 'automatic', ?, ?, ?)
+      ) VALUES (?, ?, 'outbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       cleanString(input.conversationId),
@@ -777,7 +805,9 @@ export async function insertRcsSmsOutboundMessage(env, input = {}) {
       nullableString(input.twilioMessageSid),
       cleanString(input.body),
       cleanString(input.status || "pending"),
+      cleanString(input.senderType || "system"),
       nullableString(input.intent),
+      cleanString(input.responseMode || "automatic"),
       now,
       now,
       now
@@ -790,6 +820,7 @@ export async function insertRcsSmsOutboundMessage(env, input = {}) {
       twilioMessageSid: cleanString(input.twilioMessageSid),
       body: cleanString(input.body),
       status: cleanString(input.status || "pending"),
+      responseMode: cleanString(input.responseMode || "automatic"),
       createdAt: now,
       duplicate: false
     };
@@ -1104,6 +1135,204 @@ export async function useRcsSmsActionGrant(env, grantId) {
   }
 }
 
+export async function getRcsSmsReviewCandidate(env, conversationId) {
+  const db = database(env, true);
+  try {
+    const conversation = await db
+      .prepare("SELECT * FROM rcs_sms_conversations WHERE id = ? LIMIT 1")
+      .bind(cleanString(conversationId))
+      .first();
+    if (!conversation?.id) {
+      throw new RcsSmsAutopilotStoreError(
+        "RCS/SMS konverzace nebyla nalezena.",
+        404,
+        "rcs_sms_conversation_not_found"
+      );
+    }
+    const message = await db.prepare(`
+      SELECT *
+      FROM rcs_sms_messages
+      WHERE conversation_id = ? AND direction = 'inbound'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).bind(cleanString(conversationId)).first();
+    return {
+      conversation: conversationRow(conversation),
+      message: message?.id ? messageRow(message) : null
+    };
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
+export async function createRcsSmsReviewSendGrant(env, input = {}) {
+  const db = database(env, true);
+  const now = cleanString(input.createdAt) || nowIso();
+  const id = cleanString(input.id) || randomId("rcs-sms-review-send");
+  try {
+    const claimed = await db.prepare(`
+      SELECT id
+      FROM rcs_sms_review_send_grants
+      WHERE conversation_id = ? AND status = 'claimed'
+      LIMIT 1
+    `).bind(cleanString(input.conversationId)).first();
+    if (claimed?.id) {
+      throw new RcsSmsAutopilotStoreError(
+        "Odeslání této konverzace už právě probíhá.",
+        409,
+        "rcs_sms_review_send_in_progress"
+      );
+    }
+    await db.prepare(`
+      UPDATE rcs_sms_review_send_grants
+      SET status = 'cancelled', cancelled_at = ?, updated_at = ?
+      WHERE conversation_id = ?
+        AND status = 'confirmation_pending'
+    `).bind(
+      now,
+      now,
+      cleanString(input.conversationId)
+    ).run();
+    await db.prepare(`
+      INSERT INTO rcs_sms_review_send_grants (
+        id, conversation_id, inbound_message_id, actor_user_id, actor_name,
+        recipient_phone, recipient_phone_hash, channel, intent,
+        reply_text, reply_text_hash, status, expires_at, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmation_pending', ?, ?, ?)
+    `).bind(
+      id,
+      cleanString(input.conversationId),
+      cleanString(input.inboundMessageId),
+      cleanString(input.actorUserId),
+      nullableString(input.actorName),
+      cleanString(input.recipientPhone),
+      cleanString(input.recipientPhoneHash),
+      cleanString(input.channel || "sms"),
+      nullableString(input.intent),
+      cleanString(input.replyText),
+      cleanString(input.replyTextHash),
+      cleanString(input.expiresAt),
+      now,
+      now
+    ).run();
+    return reviewSendGrantRow(await db
+      .prepare("SELECT * FROM rcs_sms_review_send_grants WHERE id = ? LIMIT 1")
+      .bind(id)
+      .first());
+  } catch (error) {
+    if (/unique constraint failed.*rcs_sms_review_send_grants/i.test(cleanString(error?.message))) {
+      throw new RcsSmsAutopilotStoreError(
+        "Odeslání této konverzace už právě probíhá nebo čeká na potvrzení.",
+        409,
+        "rcs_sms_review_send_in_progress"
+      );
+    }
+    throw dbError(error);
+  }
+}
+
+export async function getRcsSmsReviewSendGrant(env, grantId) {
+  const db = database(env, true);
+  try {
+    const row = await db
+      .prepare("SELECT * FROM rcs_sms_review_send_grants WHERE id = ? LIMIT 1")
+      .bind(cleanString(grantId))
+      .first();
+    return row?.id ? reviewSendGrantRow(row) : null;
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
+export async function cancelRcsSmsReviewSendGrant(env, input = {}) {
+  const db = database(env, true);
+  const now = nowIso();
+  try {
+    const result = await db.prepare(`
+      UPDATE rcs_sms_review_send_grants
+      SET status = 'cancelled', cancelled_at = ?, updated_at = ?
+      WHERE id = ?
+        AND actor_user_id = ?
+        AND status = 'confirmation_pending'
+    `).bind(
+      now,
+      now,
+      cleanString(input.grantId),
+      cleanString(input.actorUserId)
+    ).run();
+    return Number(result?.meta?.changes ?? result?.changes ?? 0) === 1;
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
+export async function expireRcsSmsReviewSendGrant(env, grantId) {
+  const db = database(env, true);
+  const now = nowIso();
+  try {
+    const result = await db.prepare(`
+      UPDATE rcs_sms_review_send_grants
+      SET status = 'expired', updated_at = ?
+      WHERE id = ? AND status = 'confirmation_pending'
+    `).bind(now, cleanString(grantId)).run();
+    return Number(result?.meta?.changes ?? result?.changes ?? 0) === 1;
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
+export async function claimRcsSmsReviewSendGrant(env, input = {}) {
+  const db = database(env, true);
+  const now = nowIso();
+  try {
+    const result = await db.prepare(`
+      UPDATE rcs_sms_review_send_grants
+      SET status = 'claimed', claimed_at = ?, updated_at = ?
+      WHERE id = ?
+        AND actor_user_id = ?
+        AND status = 'confirmation_pending'
+        AND expires_at > ?
+    `).bind(
+      now,
+      now,
+      cleanString(input.grantId),
+      cleanString(input.actorUserId),
+      now
+    ).run();
+    return Number(result?.meta?.changes ?? result?.changes ?? 0) === 1;
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
+export async function updateRcsSmsReviewSendGrant(env, grantId, patch = {}) {
+  const db = database(env, true);
+  const now = nowIso();
+  try {
+    await db.prepare(`
+      UPDATE rcs_sms_review_send_grants
+      SET
+        status = COALESCE(?, status),
+        provider_message_sid = COALESCE(?, provider_message_sid),
+        provider_status = COALESCE(?, provider_status),
+        error_message = CASE WHEN ? IS NULL THEN error_message ELSE ? END,
+        updated_at = ?
+      WHERE id = ?
+    `).bind(
+      nullableString(patch.status),
+      nullableString(patch.providerMessageSid),
+      nullableString(patch.providerStatus),
+      patch.errorMessage === undefined ? null : "error",
+      patch.errorMessage === undefined ? null : cleanString(patch.errorMessage),
+      now,
+      cleanString(grantId)
+    ).run();
+    return getRcsSmsReviewSendGrant(env, grantId);
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
 function normalizeListParams(params) {
   const page = Math.max(1, Number.parseInt(params?.get("page") || "1", 10) || 1);
   const pageSize = Math.max(1, Math.min(Number.parseInt(params?.get("pageSize") || "30", 10) || 30, MAX_PAGE_SIZE));
@@ -1340,6 +1569,7 @@ export const __test = {
   messageRow,
   normalizeListParams,
   phoneMatches,
+  reviewSendGrantRow,
   replyToSidFromPayload,
   resolveIdentity,
   resolveLastOutbound,

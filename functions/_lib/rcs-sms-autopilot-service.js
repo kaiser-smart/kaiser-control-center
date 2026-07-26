@@ -798,6 +798,9 @@ export async function rcsSmsAutopilotStatus(env) {
     openAi: rcsSmsAutopilotOpenAiStatus(env),
     twilio: customerMessagingStatus(env),
     permissionsSource: "KSO backend; telefon není zdroj oprávnění",
+    manualReviewSend: reviewPilotEnabled
+      ? "one_time_admin_grant_only"
+      : "disabled",
     outboundEffects: mode === "live" && asyncActive && operational.runtimeConfig?.outboundEnabled
       ? "enabled_with_server_gates"
       : "disabled",

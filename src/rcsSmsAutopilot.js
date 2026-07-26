@@ -11,7 +11,16 @@ export const rcsSmsAutopilotState = {
   loading: false,
   detailLoading: false,
   actionPending: "",
+  reviewDraft: {
+    conversationId: "",
+    messageId: "",
+    originalText: "",
+    text: "",
+    dirty: false,
+    grant: null
+  },
   error: "",
+  detailError: "",
   message: "",
   filters: {
     contactType: "",
@@ -245,7 +254,89 @@ function toolList(detail) {
   `;
 }
 
-function detailPanel(canManage) {
+function latestReviewMessage(detail) {
+  return [...(detail?.messages || [])].reverse().find((item) => (
+    item.direction === "inbound"
+    && item.status === "review_ready"
+    && String(item.replyText || "").trim()
+  )) || null;
+}
+
+function reviewComposer(detail, canApprove) {
+  const candidate = latestReviewMessage(detail);
+  if (!candidate) return "";
+  const draft = rcsSmsAutopilotState.reviewDraft;
+  const grant = draft.grant;
+  const pending = Boolean(rcsSmsAutopilotState.actionPending);
+  const exactText = String(draft.text || candidate.replyText || "");
+  return `
+    <section class="rcs-autopilot-review" aria-labelledby="rcs-autopilot-review-title">
+      <header>
+        <div>
+          <span>Člověk rozhoduje</span>
+          <h3 id="rcs-autopilot-review-title">Návrh odpovědi ke kontrole</h3>
+        </div>
+        ${statusChip("review_ready")}
+      </header>
+      <p>
+        Šarlota připravila text. Žádný navržený nástroj ani provozní změna se tímto krokem
+        neprovede.
+      </p>
+      <div class="rcs-autopilot-review__facts">
+        <div><span>Příjemce</span><strong>${esc(detail.conversation.contactName || detail.conversation.phone)}</strong></div>
+        <div><span>Kanál</span><strong>${esc((candidate.channel || detail.conversation.channel || "sms").toUpperCase())}</strong></div>
+        <div><span>Záměr</span><strong>${esc(candidate.intent || "obecná odpověď")}</strong></div>
+        <div><span>Navržený nástroj</span><strong>${esc(candidate.requestedTool || "žádný")} · neprovede se</strong></div>
+      </div>
+      <label class="rcs-autopilot-review__editor">
+        <span>Přesný text jedné odpovědi</span>
+        <textarea
+          data-rcs-review-draft
+          maxlength="1200"
+          ${grant || !canApprove ? "disabled" : ""}
+        >${esc(exactText)}</textarea>
+        <small>${esc(exactText.length)} / 1200 znaků · STOP větu doplní povinně backend</small>
+      </label>
+      ${!canApprove ? `
+        <p class="rcs-autopilot-review__blocked">
+          Odeslání může připravit a fyzicky potvrdit pouze Admin nebo Management.
+        </p>
+      ` : grant ? `
+        <div class="rcs-autopilot-review__confirmation" role="group" aria-labelledby="rcs-autopilot-review-confirm-title">
+          <span>Krátké jednorázové oprávnění</span>
+          <h4 id="rcs-autopilot-review-confirm-title">Před odesláním zkontroluj přesný účinek</h4>
+          <dl>
+            <div><dt>Komu</dt><dd>${esc(grant.recipient)}</dd></div>
+            <div><dt>Kanál</dt><dd>${esc(String(grant.channel || "sms").toUpperCase())}</dd></div>
+            <div><dt>Platnost</dt><dd>do ${esc(formatDateTime(grant.expiresAt))}</dd></div>
+          </dl>
+          <blockquote>${esc(grant.preview)}</blockquote>
+          <p>Výsledek: odešle se právě tato jedna odpověď. Žádný nástroj se nespustí a oprávnění se atomicky spotřebuje.</p>
+          <div>
+            <button class="secondary-link" type="button" data-rcs-review-cancel ${pending ? "disabled" : ""}>
+              Zrušit oprávnění
+            </button>
+            <button class="primary-action" type="button" data-rcs-review-send ${pending ? "disabled" : ""}>
+              ${rcsSmsAutopilotState.actionPending === "review_send" ? "Odesílám…" : "Odeslat tuto jednu odpověď"}
+            </button>
+          </div>
+        </div>
+      ` : `
+        <div class="rcs-autopilot-review__prepare">
+          <p>
+            První krok nic neodesílá. Backend pouze sváže přesný text, příjemce,
+            příchozí zprávu a přihlášeného správce na nejvýše tři minuty.
+          </p>
+          <button class="primary-action" type="button" data-rcs-review-prepare ${pending || !exactText.trim() ? "disabled" : ""}>
+            ${rcsSmsAutopilotState.actionPending === "review_prepare" ? "Připravuji…" : "Připravit jednorázové odeslání"}
+          </button>
+        </div>
+      `}
+    </section>
+  `;
+}
+
+function detailPanel(canManage, canApprove) {
   if (rcsSmsAutopilotState.detailLoading) {
     return '<section class="rcs-autopilot-detail"><p class="rcs-autopilot-empty">Načítám detail…</p></section>';
   }
@@ -272,6 +363,7 @@ function detailPanel(canManage) {
         ${statusChip(conversation.status)}
       </header>
       ${rcsSmsAutopilotState.message ? `<p class="rcs-autopilot-notice">${esc(rcsSmsAutopilotState.message)}</p>` : ""}
+      ${rcsSmsAutopilotState.detailError ? `<p class="rcs-autopilot-error" role="alert">${esc(rcsSmsAutopilotState.detailError)}</p>` : ""}
       ${canManage ? `
         <div class="rcs-autopilot-actions">
           ${conversation.humanTakeover
@@ -280,6 +372,7 @@ function detailPanel(canManage) {
           ${conversation.status !== "closed" ? `<button class="secondary-link" type="button" data-rcs-autopilot-action="close" ${pending ? "disabled" : ""}>Uzavřít konverzaci</button>` : ""}
         </div>
       ` : ""}
+      ${reviewComposer(detail, canApprove)}
       <div class="rcs-autopilot-context">
         <div><span>Identita</span><strong>${esc(contactTypeLabel(conversation.contactType))}</strong></div>
         <div><span>Zdroj oprávnění</span><strong>KSO backend</strong></div>
@@ -353,7 +446,7 @@ export function rcsSmsAutopilotEventLogHtml() {
         ${statusChip(liveActive ? "open" : reviewActive ? "review_ready" : "autopilot_disabled")}
       </header>
       <div class="rcs-autopilot-event-log__grid">
-        <article><span>Autopilot</span><strong>${esc(liveActive ? modeLabel(mode) : reviewActive ? "Interní pilot návrhů" : "Vypnuto bezpečnostní bránou")}</strong><p>${liveActive ? "AI i odpovědi jsou povolené jen přes serverové ochrany." : reviewActive ? `AI vytváří návrhy pouze pro ${reviewPilotCount} povolený interní účet; nic neodesílá.` : "AI a automatické odpovědi nemají provozní účinek."}</p></article>
+        <article><span>Autopilot</span><strong>${esc(liveActive ? modeLabel(mode) : reviewActive ? "Interní pilot s lidským schválením" : "Vypnuto bezpečnostní bránou")}</strong><p>${liveActive ? "AI i odpovědi jsou povolené jen přes serverové ochrany." : reviewActive ? `AI vytváří návrhy pouze pro ${reviewPilotCount} povolený interní účet; automaticky nic neodesílá. Admin může samostatně schválit právě jednu odpověď.` : "AI a automatické odpovědi nemají provozní účinek."}</p></article>
         <article><span>Twilio</span><strong>${status.twilio?.twilioConfigured ? "Nastavené" : "Čeká na ENV"}</strong><p>Webhook používá podpis nebo serverový secret.</p></article>
         <article><span>OpenAI</span><strong>${status.openAi?.configured ? "Nastavené" : "Čeká na ENV"}</strong><p>Model pouze navrhuje strukturovaný výsledek.</p></article>
         <article><span>Cloud runner</span><strong>${status.retryRunner?.active ? "Aktivní podle režimu" : "Bez provozního účinku"}</strong><p>${esc(status.retryRunner?.cron || "*/5 * * * *")} · nejvýše tři pokusy.</p></article>
@@ -366,7 +459,8 @@ export function rcsSmsAutopilotEventLogHtml() {
           <div><dt>Asynchronní pravidlo</dt><dd>${asyncActive ? "active" : "inactive"}</dd></div>
           <div><dt>Review pilot</dt><dd>${reviewActive ? `${reviewPilotCount} interní účet · fail-closed` : "neaktivní"}</dd></div>
           <div><dt>Oprávnění</dt><dd>${esc(status.permissionsSource || "KSO backend")}</dd></div>
-          <div><dt>Externí účinky</dt><dd>${esc(status.outboundEffects || "disabled")}</dd></div>
+          <div><dt>Automatický outbound</dt><dd>${esc(status.outboundEffects || "disabled")}</dd></div>
+          <div><dt>Ruční review odpověď</dt><dd>${esc(status.manualReviewSend || "disabled")}</dd></div>
           <div><dt>Poslední událost</dt><dd>${lastEvent ? `${esc(lastEvent.eventType)} · ${esc(formatDateTime(lastEvent.createdAt))}` : "Zatím není uložená"}</dd></div>
         </dl>
       </details>
@@ -374,7 +468,7 @@ export function rcsSmsAutopilotEventLogHtml() {
   `;
 }
 
-export function rcsSmsAutopilotContent({ canManage = false, rulesHtml = "" } = {}) {
+export function rcsSmsAutopilotContent({ canManage = false, canApprove = false, rulesHtml = "" } = {}) {
   return `
     <div class="rcs-autopilot" data-rcs-sms-autopilot>
       <section class="rcs-autopilot-overview">
@@ -393,7 +487,7 @@ export function rcsSmsAutopilotContent({ canManage = false, rulesHtml = "" } = {
             <h3>Konverzace <span>${esc(rcsSmsAutopilotState.total)}</span></h3>
             ${conversationList()}
           </section>
-          ${detailPanel(canManage)}
+          ${detailPanel(canManage, canApprove)}
         </div>
       </section>
       ${rcsSmsAutopilotEventLogHtml()}
@@ -446,10 +540,28 @@ export async function loadRcsSmsAutopilotDetail(apiJson, render, id) {
   rcsSmsAutopilotState.selectedId = conversationId;
   rcsSmsAutopilotState.detailLoading = true;
   rcsSmsAutopilotState.error = "";
+  rcsSmsAutopilotState.detailError = "";
   rcsSmsAutopilotState.message = "";
   render();
   try {
-    rcsSmsAutopilotState.detail = await apiJson(`/api/rcs-sms-autopilot/${encodeURIComponent(conversationId)}`);
+    const detail = await apiJson(`/api/rcs-sms-autopilot/${encodeURIComponent(conversationId)}`);
+    rcsSmsAutopilotState.detail = detail;
+    const candidate = latestReviewMessage(detail);
+    rcsSmsAutopilotState.reviewDraft = candidate ? {
+      conversationId,
+      messageId: candidate.id,
+      originalText: String(candidate.replyText || ""),
+      text: String(candidate.replyText || ""),
+      dirty: false,
+      grant: null
+    } : {
+      conversationId,
+      messageId: "",
+      originalText: "",
+      text: "",
+      dirty: false,
+      grant: null
+    };
   } catch (error) {
     rcsSmsAutopilotState.detail = null;
     rcsSmsAutopilotState.error = error?.payload?.error || error?.message || "Detail konverzace se teď nepodařilo načíst.";
@@ -491,10 +603,110 @@ async function runConversationAction(apiJson, render, action) {
   }
 }
 
+async function prepareReviewSend(apiJson, render) {
+  const id = rcsSmsAutopilotState.selectedId;
+  const draft = rcsSmsAutopilotState.reviewDraft;
+  if (!id || !draft.text.trim() || rcsSmsAutopilotState.actionPending) return;
+  rcsSmsAutopilotState.actionPending = "review_prepare";
+  rcsSmsAutopilotState.detailError = "";
+  rcsSmsAutopilotState.message = "";
+  render();
+  try {
+    draft.grant = await apiJson(
+      `/api/rcs-sms-autopilot/${encodeURIComponent(id)}/review-grants`,
+      {
+        method: "POST",
+        body: JSON.stringify({ replyText: draft.text })
+      }
+    );
+    draft.dirty = false;
+    rcsSmsAutopilotState.message = "Jednorázové oprávnění je připravené. Zkontroluj přesný text a samostatně ho odešli.";
+  } catch (error) {
+    rcsSmsAutopilotState.detailError = error?.payload?.error || error?.message || "Jednorázové oprávnění se nepodařilo připravit.";
+  } finally {
+    rcsSmsAutopilotState.actionPending = "";
+    render();
+  }
+}
+
+async function cancelReviewSend(apiJson, render) {
+  const id = rcsSmsAutopilotState.selectedId;
+  const draft = rcsSmsAutopilotState.reviewDraft;
+  const grantId = draft.grant?.grantId;
+  if (!id || !grantId || rcsSmsAutopilotState.actionPending) return;
+  rcsSmsAutopilotState.actionPending = "review_cancel";
+  rcsSmsAutopilotState.detailError = "";
+  render();
+  try {
+    await apiJson(
+      `/api/rcs-sms-autopilot/${encodeURIComponent(id)}/review-grants?grantId=${encodeURIComponent(grantId)}`,
+      { method: "DELETE" }
+    );
+    draft.grant = null;
+    draft.dirty = draft.text !== draft.originalText;
+    rcsSmsAutopilotState.message = "Jednorázové oprávnění bylo zrušené. Nic se neodeslalo.";
+  } catch (error) {
+    rcsSmsAutopilotState.detailError = error?.payload?.error || error?.message || "Jednorázové oprávnění se nepodařilo zrušit.";
+  } finally {
+    rcsSmsAutopilotState.actionPending = "";
+    render();
+  }
+}
+
+async function confirmReviewSend(apiJson, render) {
+  const id = rcsSmsAutopilotState.selectedId;
+  const draft = rcsSmsAutopilotState.reviewDraft;
+  const grantId = draft.grant?.grantId;
+  if (!id || !grantId || rcsSmsAutopilotState.actionPending) return;
+  rcsSmsAutopilotState.actionPending = "review_send";
+  rcsSmsAutopilotState.detailError = "";
+  rcsSmsAutopilotState.message = "";
+  render();
+  try {
+    const result = await apiJson(
+      `/api/rcs-sms-autopilot/${encodeURIComponent(id)}/review-send`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          grantId,
+          confirm: "send-one-reviewed-reply"
+        })
+      }
+    );
+    draft.grant = null;
+    draft.dirty = false;
+    const resultError = !result.sent
+      ? result.errorMessage || "Twilio jednorázovou odpověď nepřijalo. Automatický retry je vypnutý."
+      : "";
+    const resultMessage = result.sent
+      ? `Twilio přijalo právě jednu schválenou odpověď${result.twilioMessageSid ? ` · ${result.twilioMessageSid}` : ""}.`
+      : "";
+    await loadRcsSmsAutopilot(apiJson, render, { renderBefore: false });
+    await loadRcsSmsAutopilotDetail(apiJson, render, id);
+    rcsSmsAutopilotState.detailError = resultError;
+    rcsSmsAutopilotState.message = resultMessage;
+  } catch (error) {
+    rcsSmsAutopilotState.detailError = error?.payload?.error || error?.message || "Jednorázovou odpověď se nepodařilo odeslat.";
+  } finally {
+    rcsSmsAutopilotState.actionPending = "";
+    render();
+  }
+}
+
+let reviewBeforeUnloadBound = false;
+
 export function bindRcsSmsAutopilot(root, { apiJson, render }) {
   const container = root?.querySelector?.("[data-rcs-sms-autopilot]");
   if (!container || container.dataset.bound === "true") return;
   container.dataset.bound = "true";
+  if (!reviewBeforeUnloadBound) {
+    window.addEventListener("beforeunload", (event) => {
+      if (!rcsSmsAutopilotState.reviewDraft.dirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
+    reviewBeforeUnloadBound = true;
+  }
 
   container.addEventListener("submit", (event) => {
     const form = event.target.closest("[data-rcs-autopilot-filters]");
@@ -512,6 +724,14 @@ export function bindRcsSmsAutopilot(root, { apiJson, render }) {
   container.addEventListener("click", (event) => {
     const open = event.target.closest("[data-rcs-autopilot-open]");
     if (open) {
+      const nextId = String(open.dataset.rcsAutopilotOpen || "");
+      if (
+        nextId !== rcsSmsAutopilotState.selectedId
+        && rcsSmsAutopilotState.reviewDraft.dirty
+        && !window.confirm("Zahodit neuloženou úpravu návrhu odpovědi?")
+      ) {
+        return;
+      }
       void loadRcsSmsAutopilotDetail(apiJson, render, open.dataset.rcsAutopilotOpen);
       return;
     }
@@ -527,12 +747,33 @@ export function bindRcsSmsAutopilot(root, { apiJson, render }) {
     const action = event.target.closest("[data-rcs-autopilot-action]");
     if (action) {
       void runConversationAction(apiJson, render, action.dataset.rcsAutopilotAction);
+      return;
     }
+    if (event.target.closest("[data-rcs-review-prepare]")) {
+      void prepareReviewSend(apiJson, render);
+      return;
+    }
+    if (event.target.closest("[data-rcs-review-cancel]")) {
+      void cancelReviewSend(apiJson, render);
+      return;
+    }
+    if (event.target.closest("[data-rcs-review-send]")) {
+      void confirmReviewSend(apiJson, render);
+    }
+  });
+
+  container.addEventListener("input", (event) => {
+    const textarea = event.target.closest("[data-rcs-review-draft]");
+    if (!textarea) return;
+    const draft = rcsSmsAutopilotState.reviewDraft;
+    draft.text = String(textarea.value || "");
+    draft.dirty = draft.text !== draft.originalText;
   });
 }
 
 export const __test = {
   contactTypeLabel,
+  latestReviewMessage,
   modeLabel,
   statusLabel,
   statusTone
