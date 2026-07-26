@@ -97,6 +97,28 @@ import {
   assert.match(appSource, /Tankování za zvolené období/);
   assert.match(styleSource, /\.main-dashboard-economics/);
   assert.match(styleSource, /\.main-dashboard-chart/);
+
+  const analyticsLoaderSource = appSource.slice(
+    appSource.indexOf("async function loadVehicleTrackingAnalytics"),
+    appSource.indexOf("function updateFleetVehicleFilter")
+  );
+  assert.match(analyticsLoaderSource, /attemptedPeriod === period/);
+  assert.match(analyticsLoaderSource, /attemptedPeriod = period/);
+  assert.doesNotMatch(analyticsLoaderSource, /attemptedPeriod = ""/);
+
+  const trackingResetSource = appSource.slice(
+    appSource.indexOf("function resetVehicleTrackingLiveState"),
+    appSource.indexOf("async function loadDataBoxData")
+  );
+  assert.match(trackingResetSource, /vehicleTrackingAnalyticsState\.attemptedPeriod = ""/);
+  assert.match(trackingResetSource, /vehicleTrackingAnalyticsState\.analytics = null/);
+
+  const dashboardRefreshSource = appSource.slice(
+    appSource.indexOf('const mainDashboardRefresh = event.target.closest("[data-main-dashboard-refresh]")'),
+    appSource.indexOf('const dataBoxPlusTriageMailbox = event.target.closest("[data-ds-plus-triage-mailbox]")')
+  );
+  assert.match(dashboardRefreshSource, /loadVehicleTrackingStatus\(\{ force: true, renderAfter: false \}\)/);
+  assert.match(dashboardRefreshSource, /loadVehicleTrackingAnalytics\(\{[\s\S]*force: true,[\s\S]*renderAfter: false/);
 }
 
 console.log("main dashboard tests: ok");

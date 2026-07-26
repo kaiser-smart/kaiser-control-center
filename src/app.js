@@ -2220,6 +2220,7 @@ const mainDashboardUiState = {
 };
 const vehicleTrackingAnalyticsState = {
   loading: false,
+  attemptedPeriod: "",
   loadedPeriod: "",
   analytics: null,
   error: ""
@@ -49986,6 +49987,11 @@ function resetVehicleTrackingLiveState() {
   vehicleTrackingMapConfigState.browserApiKey = "";
   vehicleTrackingMapConfigState.message = "";
   vehicleTrackingMapConfigState.error = "";
+  vehicleTrackingAnalyticsState.loading = false;
+  vehicleTrackingAnalyticsState.attemptedPeriod = "";
+  vehicleTrackingAnalyticsState.loadedPeriod = "";
+  vehicleTrackingAnalyticsState.analytics = null;
+  vehicleTrackingAnalyticsState.error = "";
   vehicleTrackingUiState.search = "";
   vehicleTrackingUiState.filter = "all";
   vehicleTrackingUiState.mapMaximized = false;
@@ -51055,9 +51061,10 @@ async function loadVehicleTrackingAnalytics(options = {}) {
   const renderAfter = options.renderAfter !== false;
   if (vehicleTrackingAnalyticsState.loading) return;
   if (!hasPermission(currentUser(), "vehicle-tracking", "view")) return;
-  if (!force && vehicleTrackingAnalyticsState.loadedPeriod === period && vehicleTrackingAnalyticsState.analytics) return;
+  if (!force && vehicleTrackingAnalyticsState.attemptedPeriod === period) return;
 
   vehicleTrackingAnalyticsState.loading = true;
+  vehicleTrackingAnalyticsState.attemptedPeriod = period;
   vehicleTrackingAnalyticsState.error = "";
   if (vehicleTrackingAnalyticsState.loadedPeriod !== period) vehicleTrackingAnalyticsState.analytics = null;
   try {
@@ -59298,7 +59305,17 @@ document.addEventListener("click", async (event) => {
   const mainDashboardRefresh = event.target.closest("[data-main-dashboard-refresh]");
   if (mainDashboardRefresh) {
     event.preventDefault();
-    await loadVehicleTrackingStatus({ force: true });
+    const loading = Promise.all([
+      loadVehicleTrackingStatus({ force: true, renderAfter: false }),
+      loadVehicleTrackingAnalytics({
+        period: mainDashboardUiState.period,
+        force: true,
+        renderAfter: false
+      })
+    ]);
+    render();
+    await loading;
+    render();
     return;
   }
 
