@@ -159,6 +159,11 @@ Role `admin` a `management` mají plný přístup. `kancelar` a `dispecer` mohou
 Jednorázové odeslání review odpovědi je navíc uvnitř backendové služby omezené
 pouze na `admin` a `management`; samotné oprávnění ke správě modulu nestačí.
 
+`POST /api/rcs-sms-autopilot/:id` zachovává původní stavové akce a navíc
+podporuje bezpečné znovunačtení identity kontaktu podle existujících adresářů
+(`assign_contact`) a auditované zahození neodeslaného návrhu
+(`discard_draft`). Ani jedna z těchto akcí nic neodesílá.
+
 ## Modul KSO
 
 Trasa:
@@ -167,11 +172,16 @@ Trasa:
 /rcs-sms-konverzace
 ```
 
-Modul ukazuje společnou schránku, původní odchozí zprávu, rozpoznaný záměr, stav
-konverzace, požadavky, nástroje, lidské převzetí, Twilio/OpenAI stav, Event Log
-a seznam pravidel a automatizací. U `review_ready` návrhu může oprávněný správce
-upravit přesný text, připravit jednorázové oprávnění a v odděleném potvrzení
-zkontrolovat maskovaného příjemce, kanál, plný text a expiraci.
+Modul ukazuje jednoduchou společnou schránku RCS a SMS: seznam konverzací,
+běžný chat, srozumitelné pracovní stavy, informace o kontaktu v bočním panelu
+a editor odpovědi pevně dole. U `review_ready` návrhu může oprávněný správce
+text upravit, zahodit nebo pokračovat existujícím dvoukrokovým potvrzením
+jediné odpovědi.
+
+Záměr, jistota, nástroje, šablony, webhooky, Twilio/OpenAI stav, interní režimy,
+pravidla a audit se v běžném pracovním pohledu nezobrazují. Zůstávají dostupné
+administrátorovi v `Nastavení → Log událostí → RCS/SMS`; technické podrobnosti
+konkrétní konverzace jsou pro administrátora ve výchozím stavu sbalené.
 
 ## Ověření
 

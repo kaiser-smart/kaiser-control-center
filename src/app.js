@@ -4995,7 +4995,7 @@ function moduleEventLogConfig(moduleItem = {}) {
       : "vypnuto";
     return {
       moduleKey: RCS_SMS_AUTOPILOT_MODULE_KEY,
-      moduleName: "RCS/SMS Autopilot Šarlota",
+      moduleName: "Zprávy RCS a SMS",
       badgeState: rcsSmsAutopilotState.error
         ? "vyžaduje pozornost"
         : mode === "live" && asyncActive
@@ -41281,20 +41281,6 @@ function modulePage(moduleItem, user, isDashboard = false) {
   }
 
   if (moduleItem.id === RCS_SMS_AUTOPILOT_MODULE_KEY) {
-    ensureModuleRulesData(RCS_SMS_AUTOPILOT_MODULE_KEY);
-    const rulesHtml = moduleRulesAutomationPanel({
-      moduleKey: RCS_SMS_AUTOPILOT_MODULE_KEY,
-      moduleName: "RCS/SMS Autopilot Šarlota",
-      user,
-      description: "Pevná pravidla, povolené nástroje a cloudové běhy jsou vedené odděleně a auditovaně.",
-      cloudNote: "Webhook nejdřív uloží zprávu. AI, nástroje a odpovědi se spustí pouze při souběhu serverového režimu RCS_SMS_AUTOPILOT_MODE a aktivního pravidla asynchronního zpracování.",
-      humanDetail: true,
-      toggleOnly: true,
-      toggleRuleIds: [
-        "rcs-sms-autopilot-async-processing",
-        "rcs-sms-autopilot-retry-runner"
-      ]
-    });
     return `
       <main class="app-shell module-page module-theme-scope rcs-autopilot-page" ${moduleThemeStyleAttribute()}>
         ${userBar(user)}
@@ -41303,29 +41289,15 @@ function modulePage(moduleItem, user, isDashboard = false) {
           <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
         </nav>
         <section class="module-detail rcs-autopilot-hero" aria-labelledby="rcs-autopilot-title">
-          <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
           <div class="module-detail__body">
-            <div class="module-detail__eyebrow">SMART ODPADY / KOMUNIKACE</div>
-            <h1 id="rcs-autopilot-title">RCS/SMS Autopilot Šarlota</h1>
-            <p>Společná schránka příchozích odpovědí, bezpečných návrhů a pravdivě provedených nástrojů.</p>
-            <div class="module-detail__status">
-              <span>Provozní režim</span>
-              <strong>${escapeHtml(
-                rcsSmsAutopilotState.status?.outboundEffects === "enabled_with_server_gates"
-                  ? "Řízený live provoz"
-                  : rcsSmsAutopilotState.status?.mode === "review"
-                    && rcsSmsAutopilotState.status?.asyncProcessing?.active === true
-                    && rcsSmsAutopilotState.status?.reviewPilot?.enabled === true
-                    ? "Interní review · jednotlivá odpověď jen po schválení"
-                    : "Automatické odpovědi vypnuté"
-              )}</strong>
-            </div>
+            <h1 id="rcs-autopilot-title">Zprávy RCS a SMS</h1>
+            <p>Odpovědi zákazníků a uživatelů na jednom místě.</p>
           </div>
         </section>
         ${rcsSmsAutopilotContent({
           canManage: hasPermission(user, RCS_SMS_AUTOPILOT_MODULE_KEY, "manage"),
           canApprove: ["admin", "management"].includes(normalizeRole(user?.role)),
-          rulesHtml
+          canViewTechnical: normalizeRole(user?.role) === "admin"
         })}
       </main>
     `;

@@ -3,7 +3,10 @@ import {
   RcsSmsAutopilotStoreError,
   appendRcsSmsEvent,
   getRcsSmsConversationDetail,
-  setRcsSmsConversationState
+  getRcsSmsReviewCandidate,
+  refreshRcsSmsConversationIdentity,
+  setRcsSmsConversationState,
+  setRcsSmsMessageState
 } from "../../_lib/rcs-sms-autopilot-store.js";
 
 function conversationId(request, params) {
@@ -51,26 +54,64 @@ export async function onRequestPost({ request, env, params }) {
       close: { status: "closed", humanTakeover: false, awaitingField: "" }
     };
     const patch = patches[action];
-    if (!patch) {
+    if (!patch && !["assign_contact", "discard_draft"].includes(action)) {
       return json({
-        error: "Povolené akce jsou take_over, release nebo close.",
+        error: "Povolené akce jsou take_over, release, close, assign_contact nebo discard_draft.",
         apiStatus: "ready"
       }, 400);
     }
     await getRcsSmsConversationDetail(env, id);
-    await setRcsSmsConversationState(env, id, patch);
+    const identity = action === "assign_contact"
+      ? await refreshRcsSmsConversationIdentity(env, id)
+      : null;
+    const discarded = action === "discard_draft"
+      ? await getRcsSmsReviewCandidate(env, id)
+      : null;
+    if (action === "discard_draft") {
+      if (!discarded?.message?.id || discarded.message.status !== "review_ready") {
+        return json({
+          error: "Konverzace nemá návrh Šarloty, který by bylo možné zahodit.",
+          apiStatus: "ready"
+        }, 409);
+      }
+      await setRcsSmsMessageState(env, discarded.message.id, {
+        status: "human_takeover",
+        replyText: "",
+        requiresHuman: true,
+        reason: "Návrh odpovědi zahodil oprávněný uživatel KSO.",
+        processed: true
+      });
+      await setRcsSmsConversationState(env, id, {
+        status: "human_takeover",
+        humanTakeover: true,
+        awaitingField: ""
+      });
+    }
+    if (patch) {
+      await setRcsSmsConversationState(env, id, patch);
+    }
     await appendRcsSmsEvent(env, {
       conversationId: id,
       eventType: `human_${action}`,
-      status: patch.status,
+      status: patch?.status || identity?.contactType || "unknown",
       detail: action === "take_over"
         ? "Konverzaci převzal oprávněný uživatel KSO."
         : action === "release"
           ? "Oprávněný uživatel vrátil konverzaci do otevřeného stavu."
-          : "Oprávněný uživatel konverzaci uzavřel.",
+          : action === "close"
+            ? "Oprávněný uživatel konverzaci uzavřel."
+            : action === "discard_draft"
+              ? "Oprávněný uživatel zahodil návrh odpovědi; nic se neodeslalo."
+            : identity?.contactType === "unknown"
+              ? "Telefon se nepodařilo jednoznačně přiřadit ke kontaktu v adresáři."
+              : "Konverzace byla podle telefonu přiřazená k jednoznačnému kontaktu v adresáři.",
       metadata: {
         actorUserId: String(user?.id || ""),
-        actorName: String(user?.name || "")
+        actorName: String(user?.name || ""),
+        ...(identity ? {
+          contactType: identity.contactType,
+          matchReason: identity.matchReason
+        } : {})
       }
     });
     return json({

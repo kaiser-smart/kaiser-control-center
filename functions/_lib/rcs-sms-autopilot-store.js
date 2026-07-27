@@ -933,6 +933,55 @@ export async function setRcsSmsConversationState(env, conversationId, patch = {}
   }
 }
 
+export async function refreshRcsSmsConversationIdentity(env, conversationId) {
+  const db = database(env, true);
+  const id = cleanString(conversationId);
+  try {
+    const conversation = await db
+      .prepare("SELECT id, phone FROM rcs_sms_conversations WHERE id = ? LIMIT 1")
+      .bind(id)
+      .first();
+    if (!conversation?.id) {
+      throw new RcsSmsAutopilotStoreError(
+        "RCS/SMS konverzace nebyla nalezena.",
+        404,
+        "rcs_sms_conversation_not_found"
+      );
+    }
+    const identity = await resolveIdentity(identityDatabase(env), db, cleanString(conversation.phone));
+    const now = nowIso();
+    await db.prepare(`
+      UPDATE rcs_sms_conversations
+      SET
+        contact_type = ?,
+        user_id = ?,
+        employee_id = ?,
+        customer_id = ?,
+        contact_name = ?,
+        consent_status = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).bind(
+      cleanString(identity.senderType || "unknown"),
+      nullableString(identity.userId),
+      nullableString(identity.employeeId),
+      nullableString(identity.customerId),
+      nullableString(identity.contactName),
+      cleanString(identity.consentStatus || "unknown"),
+      now,
+      id
+    ).run();
+    return {
+      conversationId: id,
+      contactType: cleanString(identity.senderType || "unknown"),
+      contactName: cleanString(identity.contactName),
+      matchReason: cleanString(identity.matchReason)
+    };
+  } catch (error) {
+    throw dbError(error);
+  }
+}
+
 export async function createRcsSmsRequest(env, input = {}) {
   const db = database(env, true);
   const idempotencyKey = cleanString(input.idempotencyKey);
@@ -1384,6 +1433,7 @@ export async function listRcsSmsConversations(env, params = new URLSearchParams(
         c.*,
         latest.id AS latest_message_id,
         latest.body AS latest_message_body,
+        latest.direction AS latest_message_direction,
         latest.status AS latest_message_status,
         latest.intent AS latest_message_intent,
         latest.requires_human AS latest_requires_human,
@@ -1406,6 +1456,7 @@ export async function listRcsSmsConversations(env, params = new URLSearchParams(
         latestMessage: {
           id: cleanString(row.latest_message_id),
           body: cleanString(row.latest_message_body),
+          direction: cleanString(row.latest_message_direction),
           status: cleanString(row.latest_message_status),
           intent: cleanString(row.latest_message_intent),
           requiresHuman: Boolean(Number(row.latest_requires_human || 0)),

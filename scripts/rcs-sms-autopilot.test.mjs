@@ -998,9 +998,12 @@ assert.equal(hasPermission({ role: "readonly", active: true }, "rcs-sms-autopilo
 
 const moduleItem = modules.find((item) => item.id === "rcs-sms-autopilot");
 assert.equal(moduleItem?.route, "/rcs-sms-konverzace");
-assert.equal(moduleItem?.status, "Review pilot");
+assert.equal(moduleItem?.title, "Zprávy RCS a SMS");
+assert.equal(moduleItem?.status, "Aktivní");
 assert.equal(uiTest.modeLabel("off"), "Vypnuto");
-assert.equal(uiTest.statusLabel("human_takeover"), "Předáno člověku");
+assert.equal(uiTest.statusLabel("waiting"), "Čeká na odpověď");
+assert.equal(uiTest.conversationUiStatus({ status: "closed" }), "resolved");
+assert.equal(uiTest.conversationUiStatus({ status: "human_takeover" }), "waiting");
 
 rcsSmsAutopilotState.items = [{
   id: "conversation-1",
@@ -1031,12 +1034,11 @@ rcsSmsAutopilotState.status = {
   outboundEffects: "disabled",
   manualReviewSend: "one_time_admin_grant_only"
 };
-const ui = rcsSmsAutopilotContent({ canManage: true, rulesHtml: "<section>rules</section>" });
-assert.match(ui, /Společná schránka odpovědí/);
-assert.match(ui, /Pravdivý provozní stav/);
-assert.match(ui, /Seznam pravidel|rules/);
-assert.match(ui, /Interní pilot s lidským schválením/);
-assert.match(ui, /1 interní účet/);
+const ui = rcsSmsAutopilotContent({ canManage: true });
+assert.match(ui, /Hledat jméno, telefon nebo zprávu/);
+assert.match(ui, /Čekají na odpověď/);
+assert.match(ui, /Vyberte konverzaci vlevo/);
+assert.doesNotMatch(ui, /Pravdivý provozní stav|Seznam pravidel|OpenAI|Cloud runner|cron/);
 assert.doesNotMatch(ui, /<script>alert/);
 assert.match(ui, /&lt;script&gt;alert/);
 
@@ -1075,9 +1077,12 @@ rcsSmsAutopilotState.reviewDraft = {
   grant: null
 };
 const reviewUi = rcsSmsAutopilotContent({ canManage: true, canApprove: true });
-assert.match(reviewUi, /Návrh odpovědi ke kontrole/);
-assert.match(reviewUi, /Připravit jednorázové odeslání/);
-assert.doesNotMatch(reviewUi, /Odeslat tuto jednu odpověď/);
+assert.match(reviewUi, /Šarlota navrhuje odpověď/);
+assert.match(reviewUi, /Napište odpověď/);
+assert.match(reviewUi, /Vložit připravenou odpověď/);
+assert.match(reviewUi, /Odešle se jako/);
+assert.match(reviewUi, /Informace o kontaktu/);
+assert.match(reviewUi, /Označit jako vyřešené/);
 assert.doesNotMatch(reviewUi, /<b>ke kontrole<\/b>/);
 assert.match(reviewUi, /&lt;b&gt;ke kontrole&lt;\/b&gt;/);
 rcsSmsAutopilotState.reviewDraft.grant = {
@@ -1088,9 +1093,9 @@ rcsSmsAutopilotState.reviewDraft.grant = {
   preview: "Návrh ke kontrole. Pro odhlášení odpovězte STOP."
 };
 const confirmationUi = rcsSmsAutopilotContent({ canManage: true, canApprove: true });
-assert.match(confirmationUi, /Odeslat tuto jednu odpověď/);
+assert.match(confirmationUi, /Odeslat tuto odpověď/);
 assert.match(confirmationUi, /\+420 \*\*\* \*\*56/);
-assert.match(confirmationUi, /Žádný nástroj se nespustí/);
+assert.doesNotMatch(confirmationUi, /Žádný nástroj se nespustí/);
 
 const [
   messageMigration,
@@ -1134,15 +1139,21 @@ const autopilotIndex = inboundSource.indexOf("await ingestAndScheduleRcsSmsAutop
 assert.ok(authIndex >= 0 && storeIndex > authIndex && autopilotIndex > storeIndex);
 assert.match(inboundSource, /context\?\.waitUntil/);
 assert.match(workerSource, /rcs_sms_autopilot_retry\.failed_isolated/);
-assert.match(appSource, /toggleOnly: true/);
-assert.match(appSource, /rcs-sms-autopilot-retry-runner/);
+assert.match(appSource, /Zprávy RCS a SMS/);
+assert.match(appSource, /Odpovědi zákazníků a uživatelů na jednom místě/);
+assert.doesNotMatch(appSource.slice(
+  appSource.indexOf('if (moduleItem.id === RCS_SMS_AUTOPILOT_MODULE_KEY)'),
+  appSource.indexOf("const title = isDashboard")
+), /toggleOnly: true|rcs-sms-autopilot-retry-runner|RCS\/SMS Autopilot Šarlota/);
 assert.match(cssSource, /@media \(max-width: 1180px\)/);
 assert.match(cssSource, /@media \(max-width: 900px\)/);
 assert.match(cssSource, /@media \(max-width: 560px\)/);
-assert.match(cssSource, /\.rcs-autopilot-review__confirmation/);
+assert.match(cssSource, /\.rcs-inbox-send-confirmation/);
+assert.match(cssSource, /env\(safe-area-inset-bottom\)/);
+assert.match(cssSource, /\.rcs-inbox-workspace\.has-selection \.rcs-inbox-sidebar/);
 assert.match(
   cssSource,
-  /@media \(max-width: 1024px\)[\s\S]*?\.ui-system-v2 \.rcs-autopilot-review button[\s\S]*?min-height: 48px/
+  /@media \(max-width: 560px\)[\s\S]*?\.rcs-inbox-composer[\s\S]*?position: sticky/
 );
 assert.match(envExample, /RCS_SMS_AUTOPILOT_MODE=off/);
 assert.doesNotMatch(envExample, /VITE_RCS_SMS_AUTOPILOT/);

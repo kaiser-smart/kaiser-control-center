@@ -182,12 +182,12 @@ export const modules = [
   },
   {
     id: "rcs-sms-autopilot",
-    title: "RCS/SMS konverzace",
-    description: "Společná schránka odpovědí, návrhů Šarloty a bezpečně provedených nástrojů.",
+    title: "Zprávy RCS a SMS",
+    description: "Odpovědi zákazníků a uživatelů na jednom místě.",
     route: "/rcs-sms-konverzace",
     icon: ReportsIcon,
-    status: "Review pilot",
-    ctaLabel: "Otevřít konverzace",
+    status: "Aktivní",
+    ctaLabel: "Otevřít zprávy",
     active: true,
     disabled: false,
     order: 10.2
