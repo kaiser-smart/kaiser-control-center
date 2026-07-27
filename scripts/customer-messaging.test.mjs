@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import {
   __test as messagingTest,
   processCustomerInboundMessage,
   processCustomerStatusCallback,
   sendCustomerMessage
 } from "../functions/_lib/customer-messaging-service.js";
-import { requireTwilioWebhookAuth } from "../functions/_lib/twilio-webhook-auth.js";
+import {
+  __test as twilioWebhookAuthTest,
+  requireTwilioWebhookAuth
+} from "../functions/_lib/twilio-webhook-auth.js";
 import {
   CUSTOMER_MESSAGE_TEMPLATES,
   customerTemplateOptions,
@@ -397,6 +400,103 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
   }, request, payload, new URLSearchParams(payload).toString());
   assert.equal(auth.ok, true);
   assert.equal(auth.method, "twilio_signature");
+}
+
+{
+  const url = "https://smart-odpady.ai/api/twilio/inbound";
+  const signedUrl = "https://smart-odpady.ai:443/api/twilio/inbound";
+  const form = new URLSearchParams();
+  form.append("MessageSid", "SM-RCS-UNICODE");
+  form.append("MessagingServiceSid", "MG-RCS-TEST");
+  form.append("From", "rcs:+420604542004");
+  form.append("To", "rcs:kaiser_servis_test_agent");
+  form.append("Body", " Čekám na odpoved ");
+  form.append("ChannelMetadata", JSON.stringify({ type: "rcs", provider: "google" }));
+  form.append("RepeatedValue", "zeta");
+  form.append("RepeatedValue", "alpha");
+  form.append("RepeatedValue", "alpha");
+  const rawBody = form.toString();
+  const { payload, signatureParams } = twilioWebhookAuthTest.parseTwilioFormBody(rawBody);
+  const signatureBase = Object.keys(signatureParams)
+    .sort()
+    .reduce((base, key) => {
+      const values = Array.isArray(signatureParams[key])
+        ? Array.from(new Set(signatureParams[key])).sort()
+        : [signatureParams[key]];
+      return values.reduce((value, item) => `${value}${key}${item}`, base);
+    }, signedUrl);
+  const signature = createHmac("sha1", "kaiser-token").update(signatureBase).digest("base64");
+  const request = new Request(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "x-twilio-signature": signature
+    },
+    body: rawBody
+  });
+  const auth = await requireTwilioWebhookAuth(
+    { TWILIO_KAISER_AUTH_TOKEN: "kaiser-token" },
+    request,
+    payload,
+    rawBody,
+    signatureParams
+  );
+  assert.equal(payload.Body, " Čekám na odpoved ");
+  assert.deepEqual(signatureParams.RepeatedValue, ["zeta", "alpha", "alpha"]);
+  assert.equal(auth.ok, true);
+  assert.equal(auth.method, "twilio_signature");
+}
+
+{
+  const rawBody = JSON.stringify({ MessageSid: "SM-JSON", MessageStatus: "delivered" });
+  const bodyHash = createHash("sha256").update(rawBody).digest("hex");
+  const url = `https://smart-odpady.ai/api/twilio/status?bodySHA256=${bodyHash}`;
+  const signature = createHmac("sha1", "kaiser-token").update(url).digest("base64");
+  const request = new Request(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-twilio-signature": signature
+    },
+    body: rawBody
+  });
+  const payload = JSON.parse(rawBody);
+  const auth = await requireTwilioWebhookAuth(
+    { TWILIO_KAISER_AUTH_TOKEN: "kaiser-token" },
+    request,
+    payload,
+    rawBody,
+    payload
+  );
+  assert.equal(auth.ok, true);
+  assert.equal(auth.method, "twilio_signature");
+}
+
+{
+  const payload = { MessageSid: "SM-RCS-INVALID", Body: "Čekám na odpoved" };
+  const rawBody = new URLSearchParams(payload).toString();
+  const request = new Request("https://smart-odpady.ai/api/twilio/inbound", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-twilio-signature": "invalid-signature"
+    },
+    body: rawBody
+  });
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const auth = await requireTwilioWebhookAuth(
+      { TWILIO_KAISER_AUTH_TOKEN: "kaiser-token" },
+      request,
+      payload,
+      rawBody
+    );
+    assert.equal(auth.ok, false);
+    assert.equal(auth.responseStatus, 401);
+  } finally {
+    console.warn = originalWarn;
+  }
 }
 
 {

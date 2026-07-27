@@ -1,20 +1,24 @@
 import { json } from "../../_lib/auth.js";
 import { processCustomerInboundMessage } from "../../_lib/customer-messaging-service.js";
 import { ingestAndScheduleRcsSmsAutopilot } from "../../_lib/rcs-sms-autopilot-service.js";
-import { requireTwilioWebhookAuth } from "../../_lib/twilio-webhook-auth.js";
+import {
+  parseTwilioFormBody,
+  requireTwilioWebhookAuth
+} from "../../_lib/twilio-webhook-auth.js";
 
 async function readTwilioPayload(request) {
   const rawBody = await request.text();
   const contentType = request.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
     try {
-      return { payload: JSON.parse(rawBody || "{}"), rawBody };
+      const payload = JSON.parse(rawBody || "{}");
+      return { payload, rawBody, signatureParams: payload };
     } catch {
-      return { payload: {}, rawBody };
+      return { payload: {}, rawBody, signatureParams: {} };
     }
   }
 
-  return { payload: Object.fromEntries(new URLSearchParams(rawBody)), rawBody };
+  return { ...parseTwilioFormBody(rawBody), rawBody };
 }
 
 function twiml(message = "") {
@@ -30,8 +34,8 @@ function twiml(message = "") {
 }
 
 export async function onRequestPost({ request, env, context, waitUntil }) {
-  const { payload, rawBody } = await readTwilioPayload(request);
-  const auth = await requireTwilioWebhookAuth(env, request, payload, rawBody);
+  const { payload, rawBody, signatureParams } = await readTwilioPayload(request);
+  const auth = await requireTwilioWebhookAuth(env, request, payload, rawBody, signatureParams);
   if (!auth.ok) {
     return json({ error: auth.error, apiStatus: "waiting" }, auth.responseStatus);
   }

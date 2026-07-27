@@ -72,7 +72,12 @@ Status callback:
 POST /api/twilio/status
 ```
 
-Webhooky validují Twilio podpis `X-Twilio-Signature`, pokud je dostupný. Pokud podpis nejde použít, vyžadují sdílený secret přes `TWILIO_INBOUND_WEBHOOK_SECRET`.
+Webhooky validují Twilio podpis `X-Twilio-Signature` Twilio-kompatibilním
+způsobem: zachovávají přesné hodnoty, opakované parametry, oficiální URL
+varianty s/bez standardního portu a u JSON požadavků také `bodySHA256`. Pokud
+podpis není dostupný, vyžadují sdílený secret přes
+`TWILIO_INBOUND_WEBHOOK_SECRET`. Neplatný podpis bez správného sdíleného secretu
+zůstává fail-closed odmítnutý.
 
 ## Opt-out
 
