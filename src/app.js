@@ -48860,7 +48860,7 @@ function removeCollectionRoutesPrintFrame(frame) {
   }
 }
 
-function printCollectionRoutesHtml(html, errorMessage) {
+function printCollectionRoutesHtml(html, errorMessage, successMessage = "") {
   document.getElementById(COLLECTION_ROUTES_PRINT_FRAME_ID)?.remove();
 
   const frame = document.createElement("iframe");
@@ -48907,6 +48907,11 @@ function printCollectionRoutesHtml(html, errorMessage) {
       frameWindow.onafterprint = cleanup;
       frameWindow.focus();
       frameWindow.print();
+      if (successMessage) {
+        collectionRoutesPilotState.sourceImportError = "";
+        collectionRoutesPilotState.sourceImportMessage = successMessage;
+        render();
+      }
       setTimeout(cleanup, 120000);
     } catch (error) {
       removeCollectionRoutesPrintFrame(frame);
@@ -49140,6 +49145,8 @@ function printCollectionRoutesSourcePdf() {
     return;
   }
 
+  collectionRoutesPilotState.sourceImportError = "";
+  collectionRoutesPilotState.sourceImportMessage = "";
   const summary = collectionRoutesSourceRowsMetrics(rows);
   const isVistosRoute = rows.some((row) => row.sourceKind === "vistos");
   const filters = isVistosRoute ? (collectionRoutesPilotState.vistosRouteFilters || {}) : (collectionRoutesPilotState.sourceFilters || {});
@@ -49246,7 +49253,8 @@ function printCollectionRoutesSourcePdf() {
 
   printCollectionRoutesHtml(
     html,
-    "Tisk PDF se nepodařilo spustit přímo v prohlížeči. Zkus kliknout znovu nebo použij systémový tisk."
+    "Tisk PDF se nepodařilo spustit přímo v prohlížeči. Zkus kliknout znovu nebo použij systémový tisk.",
+    `Detailní PDF s ${rows.length} řádky je připravené v systémovém tisku. Pro uložení zvol Uložit jako PDF. Nevytvořila se ostrá trasa.`
   );
 }
 
@@ -49618,7 +49626,7 @@ function collectionRoutesSourceOfflineFact(label, value) {
 
 function collectionRoutesSourceOfflineStop(row, index) {
   return `
-    <article class="offline-stop">
+    <article class="offline-stop" data-collection-routes-offline-stop>
       <div class="offline-order">${escapeHtml(row.routeOrder || index + 1)}</div>
       <div>
         <h2>${escapeHtml(collectionRoutesSourceDriverStopTitle(row))}</h2>
@@ -49690,7 +49698,11 @@ function collectionRoutesSourceOfflinePackageHtml(rows = collectionRoutesSourceD
 
           <p class="offline-safety">Bez navigace, GPS, T-Cars, potvrzování svozu, SMS/e-mailů, automatizací a ostrých tras. Zdroj: ${escapeHtml(routeSourceLabel)}.</p>
 
-          <section class="offline-list" aria-label="Zastávky offline trasy">
+          <section
+            class="offline-list"
+            aria-label="Zastávky offline trasy"
+            data-collection-routes-offline-row-count="${escapeHtml(rows.length)}"
+          >
             ${rows.map((row, index) => collectionRoutesSourceOfflineStop(row, index)).join("")}
           </section>
 
@@ -49712,7 +49724,7 @@ function collectionRoutesSourceOfflinePackageHtml(rows = collectionRoutesSourceD
               </thead>
               <tbody>
                 ${rows.map((row, index) => `
-                  <tr>
+                  <tr data-collection-routes-offline-source-row>
                     <td>${escapeHtml(row.routeOrder || index + 1)}</td>
                     <td>${escapeHtml(row.customerName || "-")}</td>
                     <td>${escapeHtml(row.addressText || "-")}</td>
@@ -49741,13 +49753,16 @@ function exportCollectionRoutesSourceOfflinePackage() {
     return;
   }
 
-  downloadText(
-    collectionRoutesSourceOfflinePackageFilename(),
-    collectionRoutesSourceOfflinePackageHtml(rows),
-    "text/html;charset=utf-8"
-  );
-  collectionRoutesPilotState.sourceImportError = "";
-  collectionRoutesPilotState.sourceImportMessage = "Offline balíček pro řidiče je stažený jako samostatný HTML soubor. Nevytvořila se ostrá trasa.";
+  const filename = collectionRoutesSourceOfflinePackageFilename();
+  const html = collectionRoutesSourceOfflinePackageHtml(rows);
+  try {
+    downloadText(filename, html, "text/html;charset=utf-8");
+    collectionRoutesPilotState.sourceImportError = "";
+    collectionRoutesPilotState.sourceImportMessage = `Prohlížeč převzal offline balíček ${filename} s ${rows.length} řádky. Nevytvořila se ostrá trasa.`;
+  } catch (error) {
+    collectionRoutesPilotState.sourceImportError = "Offline balíček se nepodařilo předat prohlížeči ke stažení. Zkus akci znovu.";
+    collectionRoutesPilotState.sourceImportMessage = "";
+  }
   render();
 }
 
@@ -55501,6 +55516,12 @@ function downloadText(filename, text, type = "text/plain;charset=utf-8") {
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return {
+    filename,
+    type,
+    size: blob.size,
+    started: true
+  };
 }
 
 function downloadBlob(filename, blob) {
