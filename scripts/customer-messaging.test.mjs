@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import {
   __test as messagingTest,
+  listRecentTwilioInboundMessages,
   processCustomerInboundMessage,
   processCustomerStatusCallback,
   sendCustomerMessage,
@@ -671,5 +672,102 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
   assert.equal(result.status, "blocked");
   assert.match(result.errorMessage, /provozní nebo transakční/);
 }
+
+{
+  let capturedUrl = "";
+  let capturedAuthorization = "";
+  const recent = new Date(Date.now() - 60_000).toISOString();
+  const stale = new Date(Date.now() - (96 * 60 * 60 * 1000)).toISOString();
+  const result = await listRecentTwilioInboundMessages({
+    TWILIO_KAISER_ACCOUNT_SID: "AC_KAISER",
+    TWILIO_KAISER_API_KEY_SID: "SK_KAISER",
+    TWILIO_KAISER_API_KEY_SECRET: "secret-test-only",
+    TWILIO_KAISER_MESSAGING_SERVICE_SID: "MG_KAISER",
+    TWILIO_RCS_SENDER_ID: "rcs:kaiser-agent"
+  }, {
+    lookbackHours: 72,
+    fetchImpl: async (url, init) => {
+      capturedUrl = url;
+      capturedAuthorization = init.headers.Authorization;
+      return new Response(JSON.stringify({
+        messages: [
+          {
+            sid: "SM_RCS_RECENT",
+            direction: "inbound",
+            from: "rcs:+420700000001",
+            to: "rcs:kaiser-agent",
+            body: "RCS odpověď",
+            status: "received",
+            messaging_service_sid: null,
+            date_sent: recent,
+            num_media: "0"
+          },
+          {
+            sid: "SM_SMS_RECENT",
+            direction: "inbound",
+            from: "+420700000002",
+            to: "+420800000000",
+            body: "SMS odpověď",
+            status: "received",
+            messaging_service_sid: "MG_KAISER",
+            date_sent: recent,
+            num_media: "1"
+          },
+          {
+            sid: "SM_OTHER_SERVICE",
+            direction: "inbound",
+            from: "+420700000003",
+            to: "+420800000001",
+            body: "Cizí služba",
+            messaging_service_sid: "MG_OTHER",
+            date_sent: recent
+          },
+          {
+            sid: "SM_OUTBOUND",
+            direction: "outbound-api",
+            from: "+420800000000",
+            to: "+420700000004",
+            body: "Odchozí",
+            messaging_service_sid: "MG_KAISER",
+            date_sent: recent
+          },
+          {
+            sid: "SM_STALE",
+            direction: "inbound",
+            from: "+420700000005",
+            to: "+420800000000",
+            body: "Stará",
+            messaging_service_sid: "MG_KAISER",
+            date_sent: stale
+          }
+        ]
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+  });
+  assert.match(capturedUrl, /Accounts\/AC_KAISER\/Messages\.json/);
+  assert.match(capturedUrl, /PageSize=100/);
+  assert.match(capturedAuthorization, /^Basic /);
+  assert.doesNotMatch(capturedAuthorization, /secret-test-only/);
+  assert.deepEqual(result.map((message) => message.MessageSid), [
+    "SM_RCS_RECENT",
+    "SM_SMS_RECENT"
+  ]);
+  assert.equal(result[0].ChannelPrefix, "rcs");
+  assert.equal(result[1].ChannelPrefix, "sms");
+  assert.equal(result[1].NumMedia, 1);
+}
+
+await assert.rejects(
+  listRecentTwilioInboundMessages({
+    TWILIO_KAISER_ACCOUNT_SID: "AC_KAISER",
+    TWILIO_KAISER_AUTH_TOKEN: "token-test-only",
+    TWILIO_KAISER_MESSAGING_SERVICE_SID: "MG_KAISER"
+  }, {
+    fetchImpl: async () => new Response(JSON.stringify({
+      message: "Provider authorization failed"
+    }), { status: 401, headers: { "Content-Type": "application/json" } })
+  }),
+  /Provider authorization failed/
+);
 
 console.log("customer-messaging.test.mjs: OK");

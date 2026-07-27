@@ -18,6 +18,7 @@ export const rcsSmsAutopilotState = {
   selectedId: "",
   loaded: false,
   loading: false,
+  providerSyncAttempted: false,
   detailLoading: false,
   actionPending: "",
   reviewDraft: EMPTY_REVIEW_DRAFT(),
@@ -140,11 +141,16 @@ function inboxCounts() {
 
 function summaryHtml() {
   const counts = inboxCounts();
+  const assistantReady = Boolean(
+    rcsSmsAutopilotState.status?.openAi?.configured
+    && rcsSmsAutopilotState.status?.reviewPilot?.enabled
+  );
   return `
     <div class="rcs-inbox-summary${counts.new + counts.waiting + counts.resolvedToday === 0 ? " is-empty" : ""}" aria-label="Přehled zpráv">
       <div><strong>${counts.new}</strong><span>Nové zprávy</span></div>
       <div><strong>${counts.waiting}</strong><span>Čekají na odpověď</span></div>
       <div><strong>${counts.resolvedToday}</strong><span>Vyřešené dnes</span></div>
+      ${assistantReady ? '<p class="rcs-inbox-assistant-status"><span></span>Šarlota s OpenAI připravuje návrhy odpovědí</p>' : ""}
     </div>
   `;
 }
@@ -526,7 +532,15 @@ export async function loadRcsSmsAutopilot(apiJson, render, options = {}) {
   rcsSmsAutopilotState.loading = true;
   rcsSmsAutopilotState.error = "";
   if (options.renderBefore !== false) render();
+  let providerSync = null;
   try {
+    if (!rcsSmsAutopilotState.providerSyncAttempted) {
+      rcsSmsAutopilotState.providerSyncAttempted = true;
+      providerSync = apiJson("/api/rcs-sms-autopilot/sync", {
+        method: "POST",
+        body: JSON.stringify({})
+      }).catch(() => null);
+    }
     const result = await apiJson(`/api/rcs-sms-autopilot?${queryString()}`);
     rcsSmsAutopilotState.items = Array.isArray(result.items) ? result.items : [];
     rcsSmsAutopilotState.total = Number(result.total || 0);
@@ -557,6 +571,20 @@ export async function loadRcsSmsAutopilot(apiJson, render, options = {}) {
     if (shouldOpenFirst) {
       void loadRcsSmsAutopilotDetail(apiJson, render, firstConversationId);
     }
+  }
+  if (providerSync) {
+    void providerSync.then(async (syncResult) => {
+      if (Number(syncResult?.imported || 0) > 0) {
+        const selectedId = rcsSmsAutopilotState.selectedId;
+        await loadRcsSmsAutopilot(apiJson, render, {
+          renderBefore: false,
+          openFirst: true
+        });
+        if (selectedId && rcsSmsAutopilotState.selectedId === selectedId) {
+          await loadRcsSmsAutopilotDetail(apiJson, render, selectedId);
+        }
+      }
+    });
   }
 }
 

@@ -62,6 +62,66 @@ function twilioConfig(env = {}) {
   };
 }
 
+export async function listRecentTwilioInboundMessages(env, options = {}) {
+  const config = twilioConfig(env);
+  if (!config.accountSid || !config.authUsername || !config.authPassword) {
+    throw new Error("Twilio účet pro načtení příchozích zpráv není kompletně nastavený.");
+  }
+  const pageSize = Math.max(1, Math.min(Number(options.pageSize || 100), 100));
+  const lookbackHours = Math.max(1, Math.min(Number(options.lookbackHours || 72), 168));
+  const fetchImpl = options.fetchImpl || fetch;
+  const url = new URL(
+    `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(config.accountSid)}/Messages.json`
+  );
+  url.searchParams.set("PageSize", String(pageSize));
+  const response = await fetchImpl(url.toString(), {
+    headers: {
+      Authorization: twilioBasicAuthHeader(config.authUsername, config.authPassword),
+      Accept: "application/json"
+    }
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(cleanString(payload.message || `Twilio ${response.status}`));
+  }
+  const cutoff = Date.now() - (lookbackHours * 60 * 60 * 1000);
+  return (Array.isArray(payload.messages) ? payload.messages : [])
+    .filter((message) => {
+      const direction = lower(message.direction);
+      const sentAt = Date.parse(message.date_sent || message.date_created || "");
+      const messageServiceSid = cleanString(message.messaging_service_sid);
+      const messageRecipient = lower(message.to).replace(/^rcs:/, "");
+      const configuredRcsRecipient = lower(config.rcsSenderId).replace(/^rcs:/, "");
+      const belongsToConfiguredService = Boolean(
+        config.messagingServiceSid
+        && messageServiceSid === config.messagingServiceSid
+      );
+      const belongsToConfiguredRcsSender = Boolean(
+        configuredRcsRecipient
+        && messageRecipient === configuredRcsRecipient
+      );
+      return direction.includes("inbound")
+        && (belongsToConfiguredService || belongsToConfiguredRcsSender)
+        && (!Number.isFinite(sentAt) || sentAt >= cutoff);
+    })
+    .map((message) => ({
+      From: cleanString(message.from),
+      To: cleanString(message.to),
+      Body: cleanString(message.body),
+      MessageSid: cleanString(message.sid),
+      SmsSid: cleanString(message.sid),
+      MessageStatus: cleanString(message.status),
+      SmsStatus: cleanString(message.status),
+      MessagingServiceSid: cleanString(message.messaging_service_sid),
+      NumMedia: Math.max(0, Number(message.num_media || 0)),
+      ChannelPrefix: cleanString(message.from).toLowerCase().startsWith("rcs:") ? "rcs" : "sms",
+      DateSent: cleanString(message.date_sent || message.date_created),
+      ReconciliationSource: "twilio_messages_api"
+    }))
+    .filter((message) => message.From && message.MessageSid)
+    .sort((left, right) => Date.parse(left.DateSent || 0) - Date.parse(right.DateSent || 0));
+}
+
 export function normalizeCustomerPhone(value) {
   const raw = cleanString(value).replace(/[^\d+]/g, "");
   if (!raw) return "";

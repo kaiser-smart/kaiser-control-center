@@ -16,7 +16,8 @@ import {
   ingestAndScheduleRcsSmsAutopilot,
   isRcsSmsStopMessage,
   processRcsSmsAutopilotMessage,
-  runRcsSmsAutopilotRetry
+  runRcsSmsAutopilotRetry,
+  syncRecentTwilioInboundMessages
 } from "../functions/_lib/rcs-sms-autopilot-service.js";
 import {
   RcsSmsReviewSendError,
@@ -188,6 +189,52 @@ assert.equal(serviceTest.effectiveModeFromRuntime(
   { RCS_SMS_AUTOPILOT_MODE: "live" },
   { autopilotEnabled: true, outboundEnabled: true }
 ), "live");
+
+{
+  const calls = [];
+  const syncResult = await syncRecentTwilioInboundMessages({}, {
+    listMessages: async () => [
+      { MessageSid: "SM_SYNC_NEW" },
+      { MessageSid: "SM_SYNC_DUPLICATE" },
+      { MessageSid: "SM_SYNC_FAILED" }
+    ],
+    processInbound: async (_env, payload) => {
+      calls.push(`inbound:${payload.MessageSid}`);
+    },
+    ingestMessage: async (_env, payload) => {
+      calls.push(`ingest:${payload.MessageSid}`);
+      if (payload.MessageSid === "SM_SYNC_FAILED") throw new Error("forced failure");
+      return payload.MessageSid === "SM_SYNC_DUPLICATE"
+        ? { duplicate: true, message: { id: "duplicate" } }
+        : {
+            duplicate: false,
+            conversationId: "conversation-new",
+            message: { id: "message-new" }
+          };
+    },
+    processMessage: async (_env, messageId) => {
+      calls.push(`process:${messageId}`);
+    }
+  });
+  assert.deepEqual(syncResult, {
+    scanned: 3,
+    imported: 1,
+    duplicates: 1,
+    processed: 1,
+    failed: 1,
+    apiStatus: "waiting",
+    outboundEffects: "disabled"
+  });
+  assert.deepEqual(calls, [
+    "inbound:SM_SYNC_NEW",
+    "ingest:SM_SYNC_NEW",
+    "inbound:SM_SYNC_DUPLICATE",
+    "ingest:SM_SYNC_DUPLICATE",
+    "inbound:SM_SYNC_FAILED",
+    "ingest:SM_SYNC_FAILED",
+    "process:message-new"
+  ]);
+}
 
 assert.equal(new Set(RCS_SMS_TOOLS).size, RCS_SMS_TOOLS.length);
 assert.equal(new Set(RCS_SMS_INTENTS).size, RCS_SMS_INTENTS.length);
@@ -966,6 +1013,56 @@ assert.equal(storeTest.mediaFromPayload({
   assert.equal(messagesSqlite.prepare(
     "SELECT COUNT(*) AS total FROM rcs_sms_tool_runs"
   ).get().total, 0, "Ruční review odpověď nesmí provést žádný provozní nástroj.");
+
+  const outboundBeforeTakeoverReview = messagesSqlite.prepare(
+    "SELECT COUNT(*) AS total FROM rcs_sms_messages WHERE direction = 'outbound'"
+  ).get().total;
+  messagesSqlite.prepare(`
+    UPDATE rcs_sms_conversations
+    SET status = 'human_takeover', human_takeover = 1
+    WHERE id = ?
+  `).run(allowedReview.conversationId);
+  const takeoverReview = await ingestAndScheduleRcsSmsAutopilot(integrationEnv, {
+    From: "rcs:+420777123456",
+    Body: "Ještě prosím doplň návrh.",
+    MessageSid: "SM_INBOUND_REVIEW_TAKEOVER",
+    DateSent: "2026-07-27T12:34:56.000Z"
+  });
+  const takeoverResult = await processRcsSmsAutopilotMessage(
+    integrationEnv,
+    takeoverReview.message.id,
+    {
+      fetchImpl: async () => new Response(JSON.stringify({
+        id: "resp-review-takeover",
+        output: [{
+          type: "function_call",
+          call_id: "call-review-takeover",
+          name: "get_conversation_context",
+          arguments: JSON.stringify({
+            intent: "general_question",
+            confidence: 0.91,
+            responseMode: "human",
+            replyText: "Další návrh je připravený k úpravě.",
+            arguments: {},
+            requiresHuman: true,
+            reason: "Review režim připravuje návrh i po převzetí konverzace."
+          })
+        }]
+      }), { status: 200, headers: { "Content-Type": "application/json" } })
+    }
+  );
+  assert.equal(takeoverResult.status, "review_ready");
+  const takeoverStored = messagesSqlite.prepare(`
+    SELECT status, received_at, openai_response_id
+    FROM rcs_sms_messages
+    WHERE twilio_message_sid = ?
+  `).get("SM_INBOUND_REVIEW_TAKEOVER");
+  assert.equal(takeoverStored.status, "review_ready");
+  assert.equal(takeoverStored.received_at, "2026-07-27T12:34:56.000Z");
+  assert.equal(takeoverStored.openai_response_id, "resp-review-takeover");
+  assert.equal(messagesSqlite.prepare(
+    "SELECT COUNT(*) AS total FROM rcs_sms_messages WHERE direction = 'outbound'"
+  ).get().total, outboundBeforeTakeoverReview);
 
   messagesSqlite.prepare(`
     UPDATE rcs_sms_runtime_config

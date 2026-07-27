@@ -894,6 +894,23 @@
   opacity: 0.72;
 }
 
+.rcs-inbox-summary .rcs-inbox-assistant-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 0 auto;
+  color: var(--color-muted, var(--muted));
+  font-size: 0.9rem;
+}
+
+.rcs-inbox-assistant-status > span {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--color-primary, var(--kaiser-green));
+}
+
 .rcs-inbox-workspace {
   display: grid;
   grid-template-columns: clamp(320px, 26vw, 380px) minmax(0, 1fr);
@@ -1596,6 +1613,7 @@
   }
 
   .rcs-inbox-summary {
+    flex-wrap: wrap;
     min-height: 44px;
     gap: 10px;
     justify-content: space-around;
@@ -1614,6 +1632,13 @@
 
   .rcs-inbox-summary span {
     font-size: 0.72rem;
+  }
+
+  .rcs-inbox-summary .rcs-inbox-assistant-status {
+    width: 100%;
+    justify-content: center;
+    margin-left: 0;
+    font-size: 0.78rem;
   }
 
   .rcs-inbox-workspace {

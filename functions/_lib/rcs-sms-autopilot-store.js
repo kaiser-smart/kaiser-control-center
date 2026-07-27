@@ -105,6 +105,11 @@ function mediaFromPayload(payload = {}) {
   }));
 }
 
+function providerInstant(value, fallback) {
+  const date = new Date(cleanString(value));
+  return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+}
+
 function phoneMatches(candidate, phone) {
   return normalizeCustomerPhone(candidate) === phone;
 }
@@ -582,6 +587,10 @@ export async function ingestRcsSmsInbound(env, payload = {}) {
     const messageId = randomId("rcs-sms-message");
     const channel = channelFromPayload(payload);
     const now = nowIso();
+    const receivedAt = providerInstant(
+      payload.DateSent || payload.dateSent || payload.DateCreated || payload.dateCreated,
+      now
+    );
 
     await db.prepare(`
       INSERT INTO rcs_sms_conversations (
@@ -615,7 +624,7 @@ export async function ingestRcsSmsInbound(env, payload = {}) {
       nullableString(lastOutbound.templateKey),
       nullableString(lastOutbound.eventId),
       cleanString(identity.consentStatus || "unknown"),
-      now,
+      receivedAt,
       now,
       now
     ).run();
@@ -635,8 +644,8 @@ export async function ingestRcsSmsInbound(env, payload = {}) {
       body,
       safeJson(mediaFromPayload(payload), []),
       identity.senderType,
-      now,
-      now,
+      receivedAt,
+      receivedAt,
       now
     ).run();
 

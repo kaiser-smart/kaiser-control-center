@@ -1,5 +1,7 @@
 import {
   customerMessagingStatus,
+  listRecentTwilioInboundMessages,
+  processCustomerInboundMessage,
   sendCustomerMessage
 } from "./customer-messaging-service.js";
 import { addCustomerMessageOptOut } from "./customer-message-store.js";
@@ -375,7 +377,7 @@ export async function processRcsSmsAutopilotMessage(env, messageId, options = {}
     });
   }
   if (context.senderType === "opted_out") return stopBeforeAi(env, record, mode);
-  if (context.humanTakeover) {
+  if (context.humanTakeover && mode !== "review") {
     await setRcsSmsMessageState(env, message.id, {
       status: "human_takeover",
       responseMode: "human",
@@ -620,6 +622,60 @@ export async function processRcsSmsAutopilotMessage(env, messageId, options = {}
       retryScheduled: !terminal
     };
   }
+}
+
+export async function syncRecentTwilioInboundMessages(env, options = {}) {
+  const listMessages = options.listMessages || listRecentTwilioInboundMessages;
+  const processInbound = options.processInbound || processCustomerInboundMessage;
+  const ingestMessage = options.ingestMessage || ingestAndScheduleRcsSmsAutopilot;
+  const processMessage = options.processMessage || processRcsSmsAutopilotMessage;
+  const payloads = await listMessages(env, options);
+  const result = {
+    scanned: payloads.length,
+    imported: 0,
+    duplicates: 0,
+    processed: 0,
+    failed: 0
+  };
+  const newestImportedByConversation = new Map();
+  for (const payload of payloads) {
+    try {
+      await processInbound(env, payload);
+      const ingested = await ingestMessage(env, payload);
+      if (ingested.duplicate) {
+        result.duplicates += 1;
+        continue;
+      }
+      result.imported += 1;
+      newestImportedByConversation.set(
+        cleanString(ingested.conversationId || ingested.message?.conversationId),
+        ingested.message.id
+      );
+    } catch (error) {
+      result.failed += 1;
+      console.error("rcs_sms_autopilot.twilio_sync_item_failed", {
+        twilioMessageSid: cleanString(payload.MessageSid),
+        message: cleanString(error?.message).slice(0, 300)
+      });
+    }
+  }
+  for (const messageId of newestImportedByConversation.values()) {
+    try {
+      await processMessage(env, messageId);
+      result.processed += 1;
+    } catch (error) {
+      result.failed += 1;
+      console.error("rcs_sms_autopilot.twilio_sync_processing_failed", {
+        messageId: cleanString(messageId),
+        message: cleanString(error?.message).slice(0, 300)
+      });
+    }
+  }
+  return {
+    ...result,
+    apiStatus: result.failed ? "waiting" : "ready",
+    outboundEffects: "disabled"
+  };
 }
 
 export async function ingestAndScheduleRcsSmsAutopilot(env, payload, waitUntil) {
