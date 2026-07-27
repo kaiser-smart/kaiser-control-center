@@ -178,6 +178,12 @@ a editor odpovědi pevně dole. U `review_ready` návrhu může oprávněný spr
 text upravit, zahodit nebo pokračovat existujícím dvoukrokovým potvrzením
 jediné odpovědi.
 
+Uložený návrh Šarloty zůstává v historii konverzace viditelný i poté, co byla
+odpověď zpracovaná. Na desktopu se po prvním načtení otevře první dostupná
+konverzace; mobil zachovává nejdřív samostatný seznam. Načtení seznamu není
+blokované výpadkem doprovodné technické diagnostiky a chyba detailu nesmaže
+již načtené konverzace.
+
 Záměr, jistota, nástroje, šablony, webhooky, Twilio/OpenAI stav, interní režimy,
 pravidla a audit se v běžném pracovním pohledu nezobrazují. Zůstávají dostupné
 administrátorovi v `Nastavení → Log událostí → RCS/SMS`; technické podrobnosti

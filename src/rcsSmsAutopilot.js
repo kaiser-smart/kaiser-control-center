@@ -251,6 +251,21 @@ function messageAuthor(item, conversation) {
   return "Šarlota";
 }
 
+function savedProposalBubble(item) {
+  if (
+    item.direction !== "inbound"
+    || item.status === "review_ready"
+    || !String(item.replyText || "").trim()
+  ) return "";
+  return `
+    <article class="rcs-inbox-message rcs-inbox-message--sarlota">
+      <span class="rcs-inbox-message__author">Šarlota · návrh odpovědi</span>
+      <p>${esc(item.replyText)}</p>
+      <small>${item.status === "replied" ? "Návrh byl zpracovaný." : "Uložený návrh"}</small>
+    </article>
+  `;
+}
+
 function messageBubble(item, conversation) {
   const outbound = item.direction === "outbound";
   return `
@@ -260,6 +275,7 @@ function messageBubble(item, conversation) {
       <time>${esc(formatDateTime(item.createdAt || item.receivedAt))}</time>
       ${item.errorMessage ? `<small class="rcs-inbox-message__error">${esc(item.errorMessage)}</small>` : ""}
     </article>
+    ${savedProposalBubble(item)}
   `;
 }
 
@@ -405,7 +421,9 @@ function detailPanel(canManage, canApprove, canViewTechnical) {
   if (!detail?.conversation) {
     return `
       <section class="rcs-inbox-detail rcs-inbox-detail--empty">
-        <p>Vyberte konverzaci vlevo.</p>
+        ${rcsSmsAutopilotState.detailError
+          ? `<p class="rcs-inbox-error" role="alert">${esc(rcsSmsAutopilotState.detailError)}</p>`
+          : "<p>Vyberte konverzaci vlevo.</p>"}
       </section>
     `;
   }
@@ -521,6 +539,15 @@ export async function loadRcsSmsAutopilot(apiJson, render, options = {}) {
   } finally {
     rcsSmsAutopilotState.loading = false;
     render();
+    const firstConversationId = String(rcsSmsAutopilotState.items[0]?.id || "");
+    const shouldOpenFirst = options.openFirst !== false
+      && !rcsSmsAutopilotState.selectedId
+      && firstConversationId
+      && typeof window !== "undefined"
+      && window.matchMedia?.("(min-width: 901px)")?.matches;
+    if (shouldOpenFirst) {
+      void loadRcsSmsAutopilotDetail(apiJson, render, firstConversationId);
+    }
   }
 }
 
@@ -548,7 +575,7 @@ export async function loadRcsSmsAutopilotDetail(apiJson, render, id) {
     };
   } catch (error) {
     rcsSmsAutopilotState.detail = null;
-    rcsSmsAutopilotState.error = error?.payload?.error || error?.message || "Konverzaci se teď nepodařilo načíst.";
+    rcsSmsAutopilotState.detailError = error?.payload?.error || error?.message || "Konverzaci se teď nepodařilo načíst.";
   } finally {
     rcsSmsAutopilotState.detailLoading = false;
     render();

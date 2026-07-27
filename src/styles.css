@@ -1230,6 +1230,22 @@
   background: var(--color-primary-softer, #eff8e8);
 }
 
+.rcs-inbox-message--sarlota {
+  align-self: flex-end;
+  border: 1px solid rgba(23, 112, 69, 0.16);
+  border-radius: 17px 17px 5px 17px;
+  background: #f2f7f4;
+}
+
+.rcs-inbox-message--sarlota .rcs-inbox-message__author {
+  color: #176f45;
+}
+
+.rcs-inbox-message--sarlota small {
+  color: #64736b;
+  font-size: 0.78rem;
+}
+
 .rcs-inbox-message__author {
   color: var(--color-primary-dark, var(--kaiser-green-dark));
   font-size: 0.75rem;
@@ -1307,6 +1323,7 @@
 
 .rcs-inbox-composer__bottom .primary-action {
   min-width: 104px;
+  height: 44px;
   min-height: 44px;
 }
 
@@ -1559,6 +1576,11 @@
     padding-inline: 0;
   }
 
+  .rcs-autopilot-page:has(.rcs-inbox-workspace.has-selection) .rcs-autopilot-hero,
+  .rcs-autopilot-page:has(.rcs-inbox-workspace.has-selection) .rcs-inbox-summary {
+    display: none;
+  }
+
   .rcs-autopilot-page .topbar,
   .rcs-autopilot-page > .user-bar,
   .rcs-autopilot-hero {
@@ -1600,6 +1622,18 @@
     border-right: 0;
     border-left: 0;
     border-radius: 0;
+  }
+
+  .rcs-inbox-workspace.has-selection {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  body:has(.rcs-inbox-workspace.has-selection) .ai-assistant-launcher {
+    display: none;
   }
 
   .rcs-inbox-filters {

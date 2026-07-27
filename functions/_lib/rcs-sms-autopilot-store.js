@@ -1487,12 +1487,42 @@ export async function getRcsSmsConversationDetail(env, conversationId) {
         "rcs_sms_conversation_not_found"
       );
     }
-    const [messages, requests, toolRuns, events, originalOutbound] = await Promise.all([
-      db.prepare("SELECT * FROM rcs_sms_messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 200").bind(conversationId).all(),
-      db.prepare("SELECT * FROM rcs_sms_requests WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 100").bind(conversationId).all(),
-      db.prepare("SELECT * FROM rcs_sms_tool_runs WHERE conversation_id = ? ORDER BY started_at DESC LIMIT 100").bind(conversationId).all(),
-      db.prepare("SELECT * FROM rcs_sms_events WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 200").bind(conversationId).all(),
-      resolveOutboundBySid(db, conversation.last_outbound_message_sid)
+    const messages = await db
+      .prepare("SELECT * FROM rcs_sms_messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 200")
+      .bind(conversationId)
+      .all();
+    const optionalPart = async (name, loader, fallback) => {
+      try {
+        return await loader();
+      } catch (error) {
+        console.error("rcs_sms_autopilot.optional_detail_failed", {
+          part: name,
+          message: cleanString(error?.message).slice(0, 300)
+        });
+        return fallback;
+      }
+    };
+    const [requests, toolRuns, events, originalOutbound] = await Promise.all([
+      optionalPart(
+        "requests",
+        () => db.prepare("SELECT * FROM rcs_sms_requests WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 100").bind(conversationId).all(),
+        { results: [] }
+      ),
+      optionalPart(
+        "tool_runs",
+        () => db.prepare("SELECT * FROM rcs_sms_tool_runs WHERE conversation_id = ? ORDER BY started_at DESC LIMIT 100").bind(conversationId).all(),
+        { results: [] }
+      ),
+      optionalPart(
+        "events",
+        () => db.prepare("SELECT * FROM rcs_sms_events WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 200").bind(conversationId).all(),
+        { results: [] }
+      ),
+      optionalPart(
+        "original_outbound",
+        () => resolveOutboundBySid(db, conversation.last_outbound_message_sid),
+        null
+      )
     ]);
     return {
       conversation: conversationRow(conversation),

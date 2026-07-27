@@ -27,6 +27,7 @@ import {
 import { __test as toolsTest } from "../functions/_lib/rcs-sms-autopilot-tools.js";
 import {
   __test as storeTest,
+  getRcsSmsConversationDetail,
   getRcsSmsMessageForProcessing
 } from "../functions/_lib/rcs-sms-autopilot-store.js";
 import {
@@ -44,6 +45,7 @@ import {
 } from "../src/rcsSmsAutopilot.js";
 import { modules } from "../src/data/modules.js";
 import { hasPermission } from "../src/permissions.js";
+import { loadRcsSmsInboxData } from "../functions/api/rcs-sms-autopilot.js";
 
 class D1Statement {
   constructor(database, sql, values = []) {
@@ -81,6 +83,60 @@ class D1Database {
 
 function applyMigration(database, name) {
   database.exec(readFileSync(new URL(`../migrations/${name}`, import.meta.url), "utf8"));
+}
+
+{
+  const minimalMessagesSqlite = new DatabaseSync(":memory:");
+  minimalMessagesSqlite.exec(`
+    CREATE TABLE rcs_sms_conversations (
+      id TEXT PRIMARY KEY,
+      phone TEXT,
+      channel TEXT,
+      status TEXT,
+      last_outbound_message_sid TEXT,
+      created_at TEXT,
+      updated_at TEXT,
+      last_activity_at TEXT
+    );
+    CREATE TABLE rcs_sms_messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT,
+      direction TEXT,
+      channel TEXT,
+      body TEXT,
+      status TEXT,
+      reply_text TEXT,
+      created_at TEXT
+    );
+    INSERT INTO rcs_sms_conversations (
+      id, phone, channel, status, created_at, updated_at, last_activity_at
+    ) VALUES (
+      'conversation-minimal', '+420700000000', 'sms', 'human_takeover',
+      '2026-07-27T10:00:00.000Z', '2026-07-27T10:00:00.000Z', '2026-07-27T10:00:00.000Z'
+    );
+    INSERT INTO rcs_sms_messages (
+      id, conversation_id, direction, channel, body, status, reply_text, created_at
+    ) VALUES (
+      'message-minimal', 'conversation-minimal', 'inbound', 'sms',
+      'Přijatá zpráva', 'replied', 'Uložený návrh', '2026-07-27T10:00:00.000Z'
+    );
+  `);
+  const originalOptionalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const minimalDetail = await getRcsSmsConversationDetail({
+      DB_MESSAGES: new D1Database(minimalMessagesSqlite)
+    }, "conversation-minimal");
+    assert.equal(minimalDetail.messages.length, 1);
+    assert.equal(minimalDetail.messages[0].body, "Přijatá zpráva");
+    assert.equal(minimalDetail.messages[0].replyText, "Uložený návrh");
+    assert.deepEqual(minimalDetail.requests, []);
+    assert.deepEqual(minimalDetail.toolRuns, []);
+    assert.deepEqual(minimalDetail.events, []);
+  } finally {
+    console.error = originalOptionalConsoleError;
+    minimalMessagesSqlite.close();
+  }
 }
 
 for (const message of [
@@ -996,6 +1052,33 @@ assert.equal(hasPermission({ role: "garazmistr", active: true }, "rcs-sms-autopi
 assert.equal(hasPermission({ role: "ridic", active: true }, "rcs-sms-autopilot", "view"), false);
 assert.equal(hasPermission({ role: "readonly", active: true }, "rcs-sms-autopilot", "view"), false);
 
+const originalConsoleError = console.error;
+console.error = () => {};
+try {
+  const inboxWithUnavailableStatus = await loadRcsSmsInboxData(
+    {},
+    new URLSearchParams(),
+    {
+      loadConversations: async () => ({
+        items: [{ id: "conversation-visible" }],
+        total: 1,
+        page: 1,
+        pageSize: 50
+      }),
+      loadStatus: async () => {
+        throw new Error("forced status failure");
+      }
+    }
+  );
+  assert.equal(inboxWithUnavailableStatus.items.length, 1);
+  assert.equal(inboxWithUnavailableStatus.total, 1);
+  assert.equal(inboxWithUnavailableStatus.status, null);
+  assert.equal(inboxWithUnavailableStatus.statusApiStatus, "waiting");
+  assert.equal(inboxWithUnavailableStatus.apiStatus, "ready");
+} finally {
+  console.error = originalConsoleError;
+}
+
 const moduleItem = modules.find((item) => item.id === "rcs-sms-autopilot");
 assert.equal(moduleItem?.route, "/rcs-sms-konverzace");
 assert.equal(moduleItem?.title, "Zprávy RCS a SMS");
@@ -1085,6 +1168,58 @@ assert.match(reviewUi, /Informace o kontaktu/);
 assert.match(reviewUi, /Označit jako vyřešené/);
 assert.doesNotMatch(reviewUi, /<b>ke kontrole<\/b>/);
 assert.match(reviewUi, /&lt;b&gt;ke kontrole&lt;\/b&gt;/);
+
+rcsSmsAutopilotState.detail.messages = [
+  {
+    id: "message-replied-ui",
+    direction: "inbound",
+    channel: "rcs",
+    body: "Přijatá zpráva zákazníka.",
+    status: "replied",
+    replyText: "Uložený návrh Šarloty."
+  },
+  {
+    id: "message-outbound-ui",
+    direction: "outbound",
+    channel: "rcs",
+    body: "Skutečně odeslaná odpověď.",
+    status: "accepted",
+    senderType: "human"
+  }
+];
+rcsSmsAutopilotState.reviewDraft = {
+  conversationId: "conversation-1",
+  messageId: "",
+  originalText: "",
+  text: "",
+  dirty: false,
+  grant: null
+};
+const repliedUi = rcsSmsAutopilotContent({ canManage: true, canApprove: true });
+assert.match(repliedUi, /Přijatá zpráva zákazníka/);
+assert.match(repliedUi, /Šarlota · návrh odpovědi/);
+assert.match(repliedUi, /Uložený návrh Šarloty/);
+assert.match(repliedUi, /Skutečně odeslaná odpověď/);
+assert.doesNotMatch(repliedUi, /Šarlota navrhuje odpověď/);
+
+rcsSmsAutopilotState.detail.messages = [{
+  id: "message-review-ui",
+  direction: "inbound",
+  channel: "rcs",
+  body: "Prosím o odpověď.",
+  status: "review_ready",
+  replyText: "Návrh <b>ke kontrole</b>.",
+  intent: "general_request",
+  requestedTool: "none"
+}];
+rcsSmsAutopilotState.reviewDraft = {
+  conversationId: "conversation-1",
+  messageId: "message-review-ui",
+  originalText: "Návrh <b>ke kontrole</b>.",
+  text: "Návrh <b>ke kontrole</b>.",
+  dirty: false,
+  grant: null
+};
 rcsSmsAutopilotState.reviewDraft.grant = {
   grantId: "grant-ui-test",
   recipient: "+420 *** **56",

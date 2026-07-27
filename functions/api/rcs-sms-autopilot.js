@@ -16,19 +16,35 @@ function errorResponse(error) {
   }, 500);
 }
 
+export async function loadRcsSmsInboxData(env, searchParams, dependencies = {}) {
+  const loadConversations = dependencies.loadConversations || listRcsSmsConversations;
+  const loadStatus = dependencies.loadStatus || rcsSmsAutopilotStatus;
+  const conversations = await loadConversations(env, searchParams);
+  let status = null;
+  let statusApiStatus = "ready";
+
+  try {
+    status = await loadStatus(env);
+  } catch (error) {
+    statusApiStatus = "waiting";
+    console.error("rcs_sms_autopilot.status_failed", {
+      message: String(error?.message || "").slice(0, 300)
+    });
+  }
+
+  return {
+    ...conversations,
+    status,
+    statusApiStatus,
+    apiStatus: "ready"
+  };
+}
+
 export async function onRequestGet({ request, env }) {
   const { response } = await requireUserPermission(env, request, "rcs-sms-autopilot", "view");
   if (response) return response;
   try {
-    const [conversations, status] = await Promise.all([
-      listRcsSmsConversations(env, new URL(request.url).searchParams),
-      rcsSmsAutopilotStatus(env)
-    ]);
-    return json({
-      ...conversations,
-      status,
-      apiStatus: "ready"
-    });
+    return json(await loadRcsSmsInboxData(env, new URL(request.url).searchParams));
   } catch (error) {
     return errorResponse(error);
   }

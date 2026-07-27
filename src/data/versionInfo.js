@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.733"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.734"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Zprávy RCS a SMS: obnovené zprávy a návrhy",
+    text: "Seznam a detail konverzací se načítají nezávisle na technické diagnostice. Uložený návrh Šarloty zůstává viditelný v historii i po zpracování odpovědi."
+  },
   {
     title: "Zprávy RCS a SMS: jednoduchá společná schránka",
     text: "Konverzace mají přehledný seznam, běžný chat, lidské stavy, informace o kontaktu v bočním panelu a editor odpovědi pevně dole. Technická diagnostika zůstává mimo hlavní pracovní pohled; bezpečnost, oprávnění, audit i serverové odesílací brány se nemění."
