@@ -39,13 +39,21 @@ const clickHandlerSource = sourceSlice(
   'const collectionRoutesSourcePrintPdf = event.target.closest("[data-collection-routes-source-print-pdf]")',
   'const collectionRoutesSourceView = event.target.closest("[data-collection-routes-source-view]")'
 );
+const downloadTextSource = sourceSlice(
+  "function downloadText",
+  "function downloadBlob"
+);
 
 for (const marker of [
   "data-collection-routes-source-print-driver",
   "Tisk pro řidiče",
   "data-collection-routes-source-offline-package",
   "Offline balíček",
-  'rows.length ? "" : "disabled"'
+  'rows.length ? "" : "disabled"',
+  "collectionRoutesPilotState.sourceImportMessage",
+  "collectionRoutesPilotState.sourceImportError",
+  'role="status"',
+  'role="alert"'
 ]) {
   assert.ok(routeActionsSource.includes(marker), `Akce trasy postrádají povinný prvek: ${marker}`);
 }
@@ -124,5 +132,12 @@ for (const [name, source] of [
     assert.equal(source.includes(forbidden), false, `${name} nesmí obsahovat zápisový nebo komunikační tok: ${forbidden}`);
   }
 }
+
+assert.ok(
+  downloadTextSource.includes("link.click()")
+    && downloadTextSource.includes("link.remove()")
+    && downloadTextSource.includes("window.setTimeout(() => URL.revokeObjectURL(url), 1000)"),
+  "Blob URL offline exportu se smí zrušit až po předání downloadu prohlížeči."
+);
 
 console.log("Collection routes driver output tests passed.");
