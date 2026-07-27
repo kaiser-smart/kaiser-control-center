@@ -205,9 +205,13 @@ export async function validateTwilioRequestSignature(options = {}) {
 }
 
 export async function requireTwilioWebhookAuth(env, request, payload = {}, rawBody = "", signatureParams = payload) {
-  const authToken = cleanString(env?.TWILIO_KAISER_AUTH_TOKEN || env?.KAISER_TWILIO_AUTH_TOKEN || env?.TWILIO_AUTH_TOKEN);
+  const authTokens = Array.from(new Set([
+    env?.TWILIO_KAISER_AUTH_TOKEN,
+    env?.KAISER_TWILIO_AUTH_TOKEN,
+    env?.TWILIO_AUTH_TOKEN
+  ].map(cleanString).filter(Boolean)));
   const signaturePresent = Boolean(cleanString(request.headers.get("X-Twilio-Signature")));
-  const signatureConfigured = Boolean(authToken && signaturePresent);
+  const signatureConfigured = Boolean(authTokens.length && signaturePresent);
   const expected = cleanString(
     env?.TWILIO_INBOUND_WEBHOOK_SECRET ||
     env?.TWILIO_KAISER_INBOUND_WEBHOOK_TOKEN ||
@@ -217,14 +221,17 @@ export async function requireTwilioWebhookAuth(env, request, payload = {}, rawBo
   );
 
   if (signatureConfigured) {
-    const validation = await validateTwilioRequestSignatureDetails({
-      request,
-      authToken,
-      params: signatureParams,
-      rawBody
-    });
-    if (validation.valid) {
-      return { ok: true, method: "twilio_signature" };
+    let validation = { valid: false, reason: "signature_mismatch", candidateCount: 0 };
+    for (const authToken of authTokens) {
+      validation = await validateTwilioRequestSignatureDetails({
+        request,
+        authToken,
+        params: signatureParams,
+        rawBody
+      });
+      if (validation.valid) {
+        return { ok: true, method: "twilio_signature" };
+      }
     }
 
     console.warn("twilio.webhook_signature_invalid", {
@@ -236,7 +243,7 @@ export async function requireTwilioWebhookAuth(env, request, payload = {}, rawBo
     if (!expected) {
       return { ok: false, responseStatus: 401, error: "Neplatný Twilio podpis." };
     }
-  } else if (authToken && !signaturePresent) {
+  } else if (authTokens.length && !signaturePresent) {
     console.warn("twilio.webhook_signature_missing", {
       path: new URL(request.url).pathname,
       contentType: cleanString(request.headers.get("content-type")).split(";")[0].toLowerCase()

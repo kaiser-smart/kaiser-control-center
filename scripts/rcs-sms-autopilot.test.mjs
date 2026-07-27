@@ -931,6 +931,19 @@ assert.equal(storeTest.mediaFromPayload({
   assert.equal(messagesSqlite.prepare(
     "SELECT status FROM rcs_sms_review_send_grants WHERE id = ?"
   ).get(sentGrant.grantId).status, "provider_accepted");
+  const manualReplyGrant = await prepareRcsSmsReviewSendGrant(
+    integrationEnv,
+    allowedReview.conversationId,
+    { replyText: "Bezpečná ruční odpověď po předchozím vyřízení." },
+    reviewActor
+  );
+  assert.equal(manualReplyGrant.channel, "rcs");
+  await cancelRcsSmsReviewSend(
+    integrationEnv,
+    allowedReview.conversationId,
+    { grantId: manualReplyGrant.grantId },
+    reviewActor
+  );
   await assert.rejects(
     confirmRcsSmsReviewSend(
       integrationEnv,
@@ -1201,6 +1214,12 @@ assert.match(repliedUi, /Šarlota · návrh odpovědi/);
 assert.match(repliedUi, /Uložený návrh Šarloty/);
 assert.match(repliedUi, /Skutečně odeslaná odpověď/);
 assert.doesNotMatch(repliedUi, /Šarlota navrhuje odpověď/);
+assert.match(repliedUi, /aria-label="Napište odpověď"[\s\S]*?<\/textarea>/);
+assert.doesNotMatch(
+  repliedUi.match(/<textarea[\s\S]*?<\/textarea>/)?.[0] || "",
+  /disabled/
+);
+
 
 rcsSmsAutopilotState.detail.messages = [{
   id: "message-review-ui",

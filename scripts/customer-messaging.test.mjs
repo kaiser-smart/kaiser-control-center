@@ -522,6 +522,36 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
 }
 
 {
+  const url = "https://smart-odpady.ai/api/twilio/inbound";
+  const payload = { From: "+420700000000", Body: "Test", MessageSid: "SM-SECONDARY-TOKEN" };
+  const signatureBase = Object.keys(payload)
+    .sort()
+    .reduce((base, key) => `${base}${key}${payload[key]}`, url);
+  const signature = createHmac("sha1", "account-token")
+    .update(signatureBase)
+    .digest("base64");
+  const request = new Request(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "X-Twilio-Signature": signature
+    }
+  });
+  const auth = await requireTwilioWebhookAuth(
+    {
+      TWILIO_KAISER_AUTH_TOKEN: "different-token",
+      TWILIO_AUTH_TOKEN: "account-token"
+    },
+    request,
+    payload,
+    new URLSearchParams(payload).toString(),
+    payload
+  );
+  assert.equal(auth.ok, true);
+  assert.equal(auth.method, "twilio_signature");
+}
+
+{
   const rawBody = JSON.stringify({ MessageSid: "SM-JSON", MessageStatus: "delivered" });
   const bodyHash = createHash("sha256").update(rawBody).digest("hex");
   const url = `https://smart-odpady.ai/api/twilio/status?bodySHA256=${bodyHash}`;

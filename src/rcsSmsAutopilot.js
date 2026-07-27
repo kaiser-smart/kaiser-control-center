@@ -287,6 +287,12 @@ function latestReviewMessage(detail) {
   )) || null;
 }
 
+function latestInboundMessage(detail) {
+  return [...(detail?.messages || [])].reverse().find((item) => (
+    item.direction === "inbound"
+  )) || null;
+}
+
 function openRequest(detail) {
   return (detail?.requests || []).find((item) => item.status === "open") || null;
 }
@@ -364,11 +370,12 @@ function sendConfirmation() {
 
 function composer(detail, canApprove) {
   const candidate = latestReviewMessage(detail);
+  const replyTarget = latestInboundMessage(detail);
   const draft = rcsSmsAutopilotState.reviewDraft;
   const grant = draft.grant;
   const pending = Boolean(rcsSmsAutopilotState.actionPending);
-  const enabled = Boolean(candidate && canApprove && !grant);
-  const channel = candidate?.channel || detail.conversation.channel || "sms";
+  const enabled = Boolean(replyTarget && canApprove && !grant);
+  const channel = replyTarget?.channel || detail.conversation.channel || "sms";
   return `
     <footer class="rcs-inbox-composer">
       ${reviewSuggestion(detail, canApprove)}
@@ -384,7 +391,7 @@ function composer(detail, canApprove) {
         >${esc(draft.text)}</textarea>
         <div class="rcs-inbox-composer__bottom">
           <div>
-            <button type="button" class="rcs-inbox-prepared-reply" data-rcs-suggestion-use ${enabled ? "" : "disabled"}>
+            <button type="button" class="rcs-inbox-prepared-reply" data-rcs-suggestion-use ${enabled && candidate ? "" : "disabled"}>
               Vložit připravenou odpověď
             </button>
             <span>Odešle se jako <strong>${esc(String(channel).toUpperCase())}</strong></span>
@@ -477,10 +484,12 @@ function detailPanel(canManage, canApprove, canViewTechnical) {
 
 export function rcsSmsAutopilotEventLogHtml() {
   const status = rcsSmsAutopilotState.status || {};
+  const openAiReady = Boolean(status.openAi?.configured);
   return `
     <section aria-label="RCS/SMS log událostí">
       <h2>RCS/SMS</h2>
       <p>Stav: ${esc(modeLabel(status.mode))}</p>
+      <p>OpenAI: ${openAiReady ? "zapojené – Šarlota připravuje návrhy odpovědí" : "není dostupné"}</p>
     </section>
   `;
 }
@@ -704,10 +713,11 @@ async function confirmReviewSend(apiJson, render) {
 
 function useSuggestion(render) {
   const candidate = latestReviewMessage(rcsSmsAutopilotState.detail);
-  if (!candidate) return;
   const draft = rcsSmsAutopilotState.reviewDraft;
-  draft.text = String(candidate.replyText || "");
-  draft.dirty = draft.text !== draft.originalText;
+  if (candidate) {
+    draft.text = String(candidate.replyText || "");
+    draft.dirty = draft.text !== draft.originalText;
+  }
   render();
   requestAnimationFrame(() => document.querySelector("[data-rcs-review-draft]")?.focus());
 }
@@ -838,6 +848,7 @@ export function bindRcsSmsAutopilot(root, { apiJson, render }) {
 export const __test = {
   contactTypeLabel,
   conversationUiStatus,
+  latestInboundMessage,
   latestReviewMessage,
   modeLabel,
   statusLabel,

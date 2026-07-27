@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.734"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.735"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Zprávy RCS a SMS: funkční editor a příjem zpráv",
+    text: "Editor umožňuje bezpečně napsat další ruční odpověď i bez nového návrhu Šarloty. Příchozí webhook ověřuje podpis proti všem nakonfigurovaným Twilio účtovým tokenům a Nastavení viditelně potvrzuje zapojení OpenAI."
+  },
   {
     title: "Zprávy RCS a SMS: obnovené zprávy a návrhy",
     text: "Seznam a detail konverzací se načítají nezávisle na technické diagnostice. Uložený návrh Šarloty zůstává viditelný v historii i po zpracování odpovědi."

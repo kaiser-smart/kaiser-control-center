@@ -1202,7 +1202,7 @@ export async function getRcsSmsReviewCandidate(env, conversationId) {
       SELECT *
       FROM rcs_sms_messages
       WHERE conversation_id = ? AND direction = 'inbound'
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, rowid DESC
       LIMIT 1
     `).bind(cleanString(conversationId)).first();
     return {

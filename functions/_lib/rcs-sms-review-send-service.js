@@ -148,7 +148,6 @@ function assertCandidate(env, candidate) {
     !conversation
     || !message
     || message.direction !== "inbound"
-    || message.status !== "review_ready"
     || conversation.contactType !== "employee"
     || !cleanString(conversation.userId)
     || !reviewPilotUserIds(env).includes(cleanString(conversation.userId))
@@ -156,7 +155,7 @@ function assertCandidate(env, candidate) {
     || ["opted_out", "unknown"].includes(cleanString(message.senderType))
   ) {
     throw new RcsSmsReviewSendError(
-      "Konverzace nemá aktuální bezpečný návrh z interního review pilotu.",
+      "Konverzace nemá bezpečnou příchozí zprávu pro odpověď.",
       409,
       "rcs_sms_review_candidate_invalid"
     );
