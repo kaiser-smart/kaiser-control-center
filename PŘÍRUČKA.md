@@ -59,7 +59,15 @@ Pokud jsou Příručka, Mantra, kontrakt, zadání nebo stávající implementac
 
 ### 2. Návrh před implementací
 
-Před implementací musí Codex/vývojář stručně a srozumitelně napsat návrh.
+Před implementací musí Codex/vývojář stručně a srozumitelně vymezit rozsah a rizika změny.
+
+Přímé zadání k bezpečné práci, například `uprav`, `oprav`, `doplň`, `pokračuj` nebo schválené `ano`, je současně potvrzením tohoto uvedeného rozsahu. Codex/vývojář po krátkém vymezení rovnou pokračuje implementací a nečeká na další formální potvrzení.
+
+Samostatný návrh před implementací a následné potvrzení jsou povinné pouze tehdy, když:
+- zadání výslovně požaduje nejdříve návrh,
+- je nutné rozhodnutí o obchodním významu nebo zásadně odlišné produktové variantě,
+- změna zahrnuje DB/migrace, Cloudflare secrets/bindings, produkční data, zákaznickou komunikaci, automatizaci, auth, role, oprávnění nebo jinou níže vyjmenovanou rizikovou akci,
+- rozsah nelze bezpečně určit z repository, logů, provozních dat a této příručky.
 
 Návrh musí obsahovat:
 - pochopení zadání
@@ -73,10 +81,10 @@ Návrh musí obsahovat:
 - rizika
 - testovací plán
 
-Po návrhu musí napsat:
+Pokud je podle předchozích podmínek skutečně nutné potvrzení, po návrhu musí napsat:
 `Čekám na potvrzení před implementací.`
 
-Bez potvrzení Radima/Martina nesmí implementovat.
+Bez takto vyžadovaného potvrzení Radima/Martina nesmí implementovat rizikovou nebo produktově nerozhodnutou část. Všechny ostatní bezpečné a oddělitelné části úkolu musí dokončit.
 
 #### Bezpečný samostatný koridor po potvrzení
 
@@ -127,7 +135,7 @@ Codex/vývojář musí zastavit a znovu chtít potvrzení, pokud narazí na:
 - automatizace, cron, worker, queue nebo ostré trasy,
 - auth, role nebo oprávnění,
 - nejasný zdroj pravdy,
-- konflikt v gitu nebo cizí necommitnuté změny,
+- skutečný neoddělitelný konflikt s cizími změnami po jejich klasifikaci podle kapitoly `Aktivní vývoj, odpovědnost a povinný další postup`,
 - neprošlý test/build,
 - rozpor s touto příručkou.
 
@@ -144,8 +152,8 @@ Pokračuji samostatně v bezpečném koridoru.
 ### 3. Zákaz implementace naslepo
 
 Codex/vývojář nesmí:
-- implementovat bez návrhu
-- měnit soubory bez potvrzení
+- implementovat bez pochopení rozsahu, zdroje pravdy a rizik
+- měnit soubory bez potvrzení pouze tehdy, když změna podle části `2. Návrh před implementací` skutečně vyžaduje samostatné potvrzení
 - mazat soubory bez potvrzení
 - měnit produkční data bez potvrzení
 - měnit Cloudflare secrets bez potvrzení
@@ -1055,7 +1063,7 @@ Na projektu pracují:
 
 Nepřepisuj cizí necommitnuté změny.
 
-Pokud existují cizí změny, zastav se a upozorni.
+Pokud existují cizí změny, nejdříve je klasifikuj a zachovej. Použij selektivní staging nebo samostatný `git worktree` a pokračuj ve všech bezpečně oddělitelných částech úkolu. Zastav se pouze před konkrétním neoddělitelným konfliktem, který nelze vyřešit bez zásahu do cizí práce.
 
 ## 8. Samostatnost
 
@@ -1325,7 +1333,8 @@ Pokud existují necommitnuté změny:
 - nesmí je přepisovat,
 - nesmí je revertovat,
 - musí určit, zda souvisí s aktuálním úkolem,
-- pokud nejsou jeho nebo není jisté vlastnictví, musí se zastavit a upozornit Radima / Martina.
+- pokud nejsou jeho nebo není jisté vlastnictví, musí je zachovat, dohledat historii a pokračovat v samostatném `git worktree` nebo pomocí bezpečně oddělitelného rozsahu,
+- zastavit se musí pouze před konkrétním neoddělitelným úsekem, jehož změna by zasáhla do nejasné cizí práce; ostatní bezpečné části dokončí.
 
 Pro souběžnou práci platí:
 - každý větší úkol má mít vlastní větev,
@@ -1925,6 +1934,8 @@ Pokud uživatel musí přemýšlet, co tlačítko znamená, nebo nevidí celou i
 ## Aktivní vývoj, odpovědnost a povinný další postup
 
 Pravidla platí pro všechny vývojáře, Codex agenty, automatizované nástroje a další osoby pracující na Smart odpady.ai.
+
+Tato kapitola určuje běžný aktivní pracovní postup a výklad pravidel o potvrzování a nečistém repozitáři. Neruší konkrétní bezpečnostní zákazy ani povinné schválení rizikových, nevratných, produkčních nebo obchodně rozhodovacích akcí uvedených výše.
 
 ### 1. Vývojář nesmí být pasivní
 
