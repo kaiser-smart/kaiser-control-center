@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.737"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.738"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Svozové trasy: důkaz obsahu výstupů",
+    text: "Offline HTML uvádí název souboru a přesný počet řádků převzatých prohlížečem; runtime test kontroluje skutečný Blob proti aktivnímu filtru. Detailní PDF po otevření systémového tisku zobrazí vlastní stav a už neponechá starou hlášku jiného výstupu."
+  },
   {
     title: "Svozové trasy: ověřitelný offline balíček",
     text: "Hlavní Vistos pohled po stažení offline HTML pravdivě zobrazí výsledek nebo chybu. Dočasná Blob URL zůstane dostupná dostatečně dlouho pro dokončení downloadu; výstup je nadále read-only a nevytváří ostrou trasu."
