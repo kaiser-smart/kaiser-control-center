@@ -58,7 +58,10 @@ Management může upravit návrh a vytvořit krátké jednorázové oprávnění
 s přesnou konverzací, nejnovější příchozí zprávou, příjemcem, kanálem, textem a
 přihlášeným správcem. První krok nic neodesílá. Druhý krok vyžaduje samostatné
 fyzické potvrzení, atomicky oprávnění spotřebuje a pošle jen tuto jednu
-odpověď. Automatický outbound, nástroje i automatický retry zůstávají vypnuté.
+odpověď. Specializovaná serverová cesta smí obejít pouze obecnou pojistku
+`KSO_CUSTOMER_MESSAGING_MODE=off`; vyžaduje interní `review-send` vazbu a
+současně odmítne globální režim `live`. Běžné `sendCustomerMessage`, automatický
+outbound, nástroje i automatický retry zůstávají vypnuté.
 
 ## Pevná pravidla
 

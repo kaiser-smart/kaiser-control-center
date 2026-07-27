@@ -4,7 +4,8 @@ import {
   __test as messagingTest,
   processCustomerInboundMessage,
   processCustomerStatusCallback,
-  sendCustomerMessage
+  sendCustomerMessage,
+  sendReviewedCustomerMessage
 } from "../functions/_lib/customer-messaging-service.js";
 import {
   __test as twilioWebhookAuthTest,
@@ -260,6 +261,79 @@ for (const key of Object.keys(CUSTOMER_MESSAGE_TEMPLATES)) {
   assert.equal(testEnv.DB_MESSAGES.logs.length, 1);
   assert.equal(testEnv.DB_MESSAGES.logs[0].phone, "+420777123456");
   assert.match(testEnv.DB_MESSAGES.logs[0].message_body, /Pro odhlášení odpovězte STOP\./);
+}
+
+{
+  const testEnv = env({ KSO_CUSTOMER_MESSAGING_MODE: "off" });
+  const reviewInput = validInput({
+    template: "autopilot_reply",
+    variables: { replyText: "Přesný text po lidské kontrole." },
+    relatedEntityType: "rcs_sms_conversation",
+    relatedEntityId: "conversation-review-1",
+    eventId: "review-send:rcs-sms-review-send-test-grant",
+    userId: "user-review-1",
+    reason: "provozní odpověď na příchozí RCS/SMS požadavek",
+    legalBasis: "odpověď na příchozí provozní požadavek",
+    consent: true
+  });
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  globalThis.fetch = async () => {
+    providerCalls += 1;
+    return new Response(JSON.stringify({ sid: "SM-REVIEWED-ONE", status: "accepted" }), { status: 201 });
+  };
+  try {
+    const generic = await sendCustomerMessage(testEnv, reviewInput);
+    assert.equal(generic.sent, false);
+    assert.match(generic.errorMessage, /odesílání je vypnuté/);
+    assert.equal(providerCalls, 0);
+
+    const reviewed = await sendReviewedCustomerMessage(testEnv, reviewInput);
+    assert.equal(reviewed.sent, true);
+    assert.equal(reviewed.twilioMessageSid, "SM-REVIEWED-ONE");
+    assert.equal(providerCalls, 1);
+    assert.match(reviewed.messageBody, /Pro odhlášení odpovězte STOP\./);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+{
+  const testEnv = env({ KSO_CUSTOMER_MESSAGING_MODE: "off" });
+  await assert.rejects(
+    sendReviewedCustomerMessage(testEnv, validInput({
+      template: "autopilot_reply",
+      variables: { replyText: "Neplatný interní rozsah." },
+      relatedEntityType: "rcs_sms_conversation",
+      relatedEntityId: "conversation-review-invalid",
+      eventId: "ordinary-send"
+    })),
+    /nemá platný interní rozsah/
+  );
+}
+
+{
+  const testEnv = env({ KSO_CUSTOMER_MESSAGING_MODE: "live" });
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  globalThis.fetch = async () => {
+    providerCalls += 1;
+    return new Response(JSON.stringify({ sid: "SM-MUST-NOT-SEND", status: "accepted" }), { status: 201 });
+  };
+  try {
+    const result = await sendReviewedCustomerMessage(testEnv, validInput({
+      template: "autopilot_reply",
+      variables: { replyText: "Globální live se nesmí použít pro review grant." },
+      relatedEntityType: "rcs_sms_conversation",
+      relatedEntityId: "conversation-review-live",
+      eventId: "review-send:rcs-sms-review-send-live-mode"
+    }));
+    assert.equal(result.sent, false);
+    assert.match(result.errorMessage, /vyžaduje globální režim off/);
+    assert.equal(providerCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 }
 
 {

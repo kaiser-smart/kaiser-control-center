@@ -96,13 +96,18 @@ function usedChannelForRequest(channel) {
   return channel === "sms" ? "sms" : "rcs_sms_auto_fallback";
 }
 
-function outboundErrorMessage(config, phone, body) {
+function outboundErrorMessage(config, phone, body, policy = {}) {
   if (!phone) return "Chybí validní telefonní číslo.";
   if (!body) return "Zpráva je prázdná.";
   if (!config.accountSid) return "Chybí TWILIO_ACCOUNT_SID.";
   if (!config.authPassword) return "Chybí TWILIO_KAISER_API_KEY_SECRET nebo TWILIO_AUTH_TOKEN.";
   if (!config.messagingServiceSid) return "Chybí TWILIO_MESSAGING_SERVICE_SID.";
-  if (config.mode === "off") return "Zákaznické RCS/SMS odesílání je vypnuté.";
+  if (policy.requireGlobalOff === true && config.mode !== "off") {
+    return "Jednorázové ručně schválené odeslání vyžaduje globální režim off.";
+  }
+  if (config.mode === "off" && policy.allowGlobalOff !== true) {
+    return "Zákaznické RCS/SMS odesílání je vypnuté.";
+  }
   return "";
 }
 
@@ -131,7 +136,7 @@ async function twilioPostMessage(config, { to, body, channel }) {
   return payload;
 }
 
-export async function sendCustomerMessage(env, input = {}) {
+async function sendCustomerMessageWithPolicy(env, input = {}, policy = {}) {
   const config = twilioConfig(env);
   const phone = normalizeCustomerPhone(input.phone);
   const channel = requestedChannel(input.channelPreference);
@@ -183,7 +188,7 @@ export async function sendCustomerMessage(env, input = {}) {
     }
   };
 
-  const staticError = outboundErrorMessage(config, phone, messageBody);
+  const staticError = outboundErrorMessage(config, phone, messageBody, policy);
   if (staticError) {
     const log = await insertCustomerMessageLog(env, { ...baseLog, usedChannel: "blocked", status: "blocked", errorMessage: staticError });
     return { id: log.id, status: "blocked", sent: false, errorMessage: staticError };
@@ -264,6 +269,25 @@ export async function sendCustomerMessage(env, input = {}) {
     messageBody,
     auditWarning
   };
+}
+
+export async function sendCustomerMessage(env, input = {}) {
+  return sendCustomerMessageWithPolicy(env, input);
+}
+
+export async function sendReviewedCustomerMessage(env, input = {}) {
+  const eventId = cleanString(input.eventId);
+  if (
+    input.template !== "autopilot_reply"
+    || input.relatedEntityType !== "rcs_sms_conversation"
+    || !eventId.startsWith("review-send:rcs-sms-review-send-")
+  ) {
+    throw new Error("Jednorázové ručně schválené odeslání nemá platný interní rozsah.");
+  }
+  return sendCustomerMessageWithPolicy(env, input, {
+    allowGlobalOff: true,
+    requireGlobalOff: true
+  });
 }
 
 export function isStopMessage(body) {

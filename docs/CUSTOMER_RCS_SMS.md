@@ -44,6 +44,9 @@ jednorázové backendové oprávnění popsané v `docs/RCS_TEMPLATE_CENTER.md`.
 
 Jedna člověkem zkontrolovaná odpověď RCS/SMS Autopilotu používá vlastní krátké
 oprávnění svázané s příchozí zprávou, příjemcem, přesným textem a správcem.
+Specializovaná serverová cesta dovolí právě toto jednorázové odeslání při
+`KSO_CUSTOMER_MESSAGING_MODE=off`; obecné zákaznické odesílání zůstává
+zablokované a stejná cesta se při globálním `live` režimu fail-closed odmítne.
 Automatický outbound Autopilotu přitom zůstává vypnutý; podmínky a API popisuje
 `docs/RCS_SMS_AUTOPILOT.md`.
 

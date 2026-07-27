@@ -2,7 +2,7 @@ import {
   isCustomerMessageOptedOut
 } from "./customer-message-store.js";
 import {
-  sendCustomerMessage
+  sendReviewedCustomerMessage
 } from "./customer-messaging-service.js";
 import {
   appendRcsSmsEvent,
@@ -183,7 +183,7 @@ function dependencies(overrides = {}) {
     getRuntimeConfig: getRcsSmsRuntimeConfig,
     insertOutbound: insertRcsSmsOutboundMessage,
     isOptedOut: isCustomerMessageOptedOut,
-    sendMessage: sendCustomerMessage,
+    sendMessage: sendReviewedCustomerMessage,
     setConversationState: setRcsSmsConversationState,
     setMessageState: setRcsSmsMessageState,
     updateGrant: updateRcsSmsReviewSendGrant,
