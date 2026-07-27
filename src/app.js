@@ -49366,11 +49366,16 @@ function collectionRoutesSourceOfflineFilenamePart(value) {
     .slice(0, 70) || "trasa";
 }
 
-function collectionRoutesSourceOfflinePackageFilename() {
-  const filters = collectionRoutesPilotState.sourceFilters || {};
+function collectionRoutesSourceOfflinePackageFilename(rows = collectionRoutesCurrentRouteRows()) {
+  const isVistosRoute = rows.some((row) => row.sourceKind === "vistos");
+  const filters = isVistosRoute
+    ? (collectionRoutesPilotState.vistosRouteFilters || {})
+    : (collectionRoutesPilotState.sourceFilters || {});
   const parts = [
     "svozova-trasa-offline",
-    collectionRoutesSourceOfflineFilenamePart(collectionRoutesSourceVehicleLabel(filters.vehicle || "all")),
+    collectionRoutesSourceOfflineFilenamePart(
+      isVistosRoute ? "Vistos" : collectionRoutesSourceVehicleLabel(filters.vehicle || "all")
+    ),
     collectionRoutesSourceOfflineFilenamePart(collectionRoutesSourceDayLabel(filters.day || "all")),
     collectionRoutesSourceOfflineFilenamePart(collectionRoutesSourceWeekLabel(filters.week || "all")),
     new Date().toISOString().slice(0, 10)
@@ -49753,7 +49758,7 @@ function exportCollectionRoutesSourceOfflinePackage() {
     return;
   }
 
-  const filename = collectionRoutesSourceOfflinePackageFilename();
+  const filename = collectionRoutesSourceOfflinePackageFilename(rows);
   const html = collectionRoutesSourceOfflinePackageHtml(rows);
   try {
     downloadText(filename, html, "text/html;charset=utf-8");

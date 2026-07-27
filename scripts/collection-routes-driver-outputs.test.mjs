@@ -32,6 +32,10 @@ const detailPrintSource = sourceSlice(
   "function printCollectionRoutesSourcePdf",
   "function printCollectionRoutesSourceDriverPreview"
 );
+const offlineFilenameSource = sourceSlice(
+  "function collectionRoutesSourceOfflineFilenamePart",
+  "function collectionRoutesSourceOfflinePackageStyles"
+);
 const offlineFactSource = sourceSlice(
   "function collectionRoutesSourceOfflineFact",
   "function collectionRoutesSourceOfflineStop"
@@ -285,6 +289,12 @@ const runtimeContext = {
   collectionRoutesSourceWeekLabel() {
     return "vše";
   },
+  collectionRoutesCurrentRouteRows() {
+    return runtimeRows;
+  },
+  collectionRoutesSourceVehicleLabel() {
+    return "všechna auta";
+  },
   collectionRoutesSourceOfflinePackageStyles() {
     return "";
   },
@@ -312,9 +322,12 @@ const runtimeContext = {
 };
 vm.createContext(runtimeContext);
 vm.runInContext(
-  `${offlineFactSource}\n${offlineStopSource}\n${offlineHtmlSource}\n${downloadTextSource}`,
+  `${offlineFilenameSource}\n${offlineFactSource}\n${offlineStopSource}\n${offlineHtmlSource}\n${downloadTextSource}`,
   runtimeContext
 );
+const runtimeFilename = vm.runInContext("collectionRoutesSourceOfflinePackageFilename(__rows)", runtimeContext);
+assert.match(runtimeFilename, /^svozova-trasa-offline-vistos-/);
+assert.equal(runtimeFilename.includes("vsechna-auta"), false);
 const runtimeHtml = vm.runInContext("collectionRoutesSourceOfflinePackageHtml(__rows)", runtimeContext);
 runtimeContext.__html = runtimeHtml;
 const downloadResult = vm.runInContext(
