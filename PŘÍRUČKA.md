@@ -1,5 +1,7 @@
 # PŘÍRUČKA PROJEKTU KAISER SMART / SMART ODPADY
 
+> Výchozím očekáváním není návrh práce, ale bezpečně provedený, ověřený a pravdivě popsaný výsledek.
+
 ## 1. Hlavní pravidlo
 
 Tento soubor je hlavní pracovní příručka projektu a má přednost před běžným zadáním.
@@ -1919,3 +1921,495 @@ Pokud uživatel musí přemýšlet, co tlačítko znamená, nebo nevidí celou i
 - Jednoznačný bezpečný interní pokyn, například archivace, označení jako vyřízené, vytvoření interního úkolu nebo interní předání se po odeslání formuláře skutečně provede, zapíše do historie a vrátí přesné `Hotovo.`. Nesmí odpovědět jen `připravím` ani čekat na druhé potvrzení.
 - Odeslání mimo systém (e-mail, SMS, odpověď datovou schránkou) zůstává samostatným návrhem s konkrétním potvrzením.
 - Frontend nesmí přepsat konkrétní serverovou otázku či výsledek obecnou frází. Když u předání chybí adresát, musí se přesně zeptat, komu má být zpráva interně předána.
+
+## Aktivní vývoj, odpovědnost a povinný další postup
+
+Pravidla platí pro všechny vývojáře, Codex agenty, automatizované nástroje a další osoby pracující na Smart odpady.ai.
+
+### 1. Vývojář nesmí být pasivní
+
+Vývojář nesmí pouze:
+
+- zopakovat zadání,
+- popsat problém,
+- vyjmenovat možné příčiny,
+- vytvořit další analýzu,
+- oznámit blokaci,
+- předložit plán bez implementace,
+- čekat na potvrzení běžného technického rozhodnutí,
+- vrátit otázku, kterou může vyřešit z repository, logů nebo existujících pravidel,
+- ukončit práci po vytvoření UI bez funkčního napojení.
+
+Po nezbytně krátké analýze musí pokračovat konkrétní prací.
+
+Pokud lze bezpečně provést alespoň část úkolu, musí ji provést.
+
+Za skutečnou blokaci se nepovažuje:
+
+- volba názvu souboru,
+- běžné rozdělení komponent,
+- návrh interního endpointu,
+- drobná nejasnost UI,
+- nutnost přečíst repository,
+- nutnost zkontrolovat logy,
+- nutnost doplnit test,
+- potřeba provést build,
+- potřeba vytvořit commit v pracovní větvi,
+- potřeba otevřít pull request,
+- nečistý pracovní strom, pokud lze změny bezpečně rozlišit,
+- chyba, jejíž příčinu lze zjistit z dostupných dat.
+
+Vývojář se má ptát pouze tehdy, když další krok skutečně vyžaduje:
+
+- rozhodnutí o obchodním významu,
+- zásah do produkčních dat,
+- nevratnou operaci,
+- aktivaci zákaznické komunikace,
+- aktivaci Autopilota,
+- nákup nebo placenou službu,
+- chybějící přístup nebo secret,
+- právní rozhodnutí,
+- změnu mimo schválený rozsah,
+- zásah do jiného projektu nebo systému,
+- dvě zásadně odlišné produktové varianty, mezi nimiž nelze bezpečně rozhodnout.
+
+### 2. Odpovědnost za funkční výsledek
+
+Vývojář neodpovídá pouze za změnu kódu, ale za skutečný výsledek.
+
+Musí ověřit:
+
+- zda funkce skutečně funguje,
+- zda je zapojena do reálného toku aplikace,
+- zda používá pravdivá cloudová data,
+- zda zápis není fake save,
+- zda UI neobsahuje nefunkční tlačítka,
+- zda nedošlo k regresi,
+- zda je chyba zobrazena pravdivě,
+- zda log odpovídá skutečnému provozu,
+- zda byl splněn obchodní a provozní cíl,
+- zda produkční stav odpovídá závěrečnému reportu.
+
+Úkol není hotový pouze proto, že:
+
+- vznikla komponenta,
+- kód se zkompiloval,
+- existuje tlačítko,
+- vznikl endpoint bez zapojení,
+- prošel pouze test nad mock daty,
+- vznikl návrh databáze,
+- otevřel se pull request,
+- zelené CI neověřilo skutečný provoz,
+- změna existuje pouze lokálně.
+
+### 3. Zákaz cyklení
+
+Vývojář nesmí opakovaně:
+
+- opravovat stejný problém bez nalezení příčiny,
+- zkoušet znovu stejný neúspěšný postup,
+- přidávat fallbacky místo opravy zdroje problému,
+- vytvářet další paralelní implementaci,
+- přepisovat funkční část bez důkazu,
+- pouštět stále stejný test bez nové hypotézy,
+- opakovat stejnou blokaci,
+- vracet problém zadavateli bez důkladné diagnostiky.
+
+Po druhém neúspěšném pokusu musí:
+
+1. zastavit slepé opravy,
+2. přesně popsat očekávané a skutečné chování,
+3. určit nejpravděpodobnější kořenovou příčinu,
+4. zkontrolovat logy,
+5. zkontrolovat síťové požadavky,
+6. zkontrolovat databázi,
+7. zkontrolovat konfiguraci a secrets,
+8. zkontrolovat deployment a verzi,
+9. navrhnout nový postup založený na důkazech.
+
+Po třetím neúspěšném pokusu musí vytvořit incidentní záznam:
+
+- co je rozbité,
+- jaký je dopad,
+- co bylo vyzkoušeno,
+- jaké byly výsledky,
+- proč pokusy selhaly,
+- jaké důkazy jsou k dispozici,
+- co je skutečná blokace,
+- jaký konkrétní zásah je nyní potřeba,
+- jaký je rollback nebo bezpečný dočasný stav.
+
+Čtvrtý téměř stejný pokus je zakázán.
+
+### 4. Nejdříve kořenová příčina
+
+Před opravou musí vývojář rozlišit, zda je problém v:
+
+- datech,
+- API,
+- databázi,
+- oprávněních,
+- autentizaci,
+- konfiguraci,
+- secrets,
+- Cloudflare,
+- GitHub Actions,
+- externí službě,
+- business logice,
+- UI,
+- cache,
+- frontě,
+- cronu,
+- webhooku,
+- deploymentu,
+- konkrétní produkční verzi.
+
+Kosmetická úprava nesmí zakrýt systémovou chybu.
+
+Fallback je přípustný pouze tehdy, když:
+
+- má přesně popsaný účel,
+- není vydáván za hlavní řešení,
+- je auditovaný,
+- nezakrývá chybu,
+- nevytváří falešná data,
+- nemění obchodní význam,
+- má podmínky aktivace a ukončení.
+
+### 5. Povinná iniciativa
+
+Vývojář musí aktivně upozornit na:
+
+- rozpor v zadání,
+- rozpor s `PŘÍRUČKA.md`,
+- bezpečnostní riziko,
+- chybějící validaci,
+- nepravdivý provozní stav,
+- matoucí nebo nefunkční UI,
+- duplicitní implementaci,
+- nevyužitý nebo mrtvý kód,
+- chybějící audit,
+- chybějící idempotenci,
+- chybějící rollback,
+- nebezpečný zápis,
+- nejasný zdroj dat,
+- chybějící test,
+- nejbližší logický krok po dokončení aktuální práce.
+
+Vývojář nesmí slepě implementovat zjevně chybné řešení pouze proto, že bylo uvedeno doslovně.
+
+Zároveň nesmí svévolně měnit obchodní záměr.
+
+Odchylku musí:
+
+- jasně označit,
+- vysvětlit,
+- doložit,
+- držet v nejmenším nutném rozsahu.
+
+### 6. Povinný další doporučený postup
+
+Každý konečný report musí obsahovat sekci:
+
+```text
+## Další doporučený postup
+```
+
+Sekce musí obsahovat nejvýše pět konkrétních kroků seřazených podle priority.
+
+Každý krok musí uvádět:
+
+- co přesně se má udělat,
+- proč je to potřeba,
+- zda jde o blokaci, bezpečnostní nutnost, provozní krok nebo další rozvoj,
+- kdo nebo co je potřeba,
+- zda může Codex pokračovat samostatně,
+- co bude následovat po dokončení kroku.
+
+Nepřípustné formulace:
+
+- pokračovat ve vývoji,
+- doplnit další funkce,
+- otestovat aplikaci,
+- rozhodnout o dalším postupu,
+- zvážit nasazení,
+- potvrdit, zda vytvořit commit,
+- potvrdit, zda otevřít PR.
+
+Správný příklad:
+
+```text
+1. Spustit produkční read-only synchronizaci objednávek a porovnat počet záznamů se zdrojem.
+   Důvod: ověřit úplnost synchronizace.
+   Typ: provozní ověření.
+   Potřeba: existující produkční přístup.
+   Codex může pokračovat samostatně.
+   Následuje ověření položek a stavů objednávek.
+```
+
+### 7. Další postup se musí rovnou provést
+
+Pokud další krok:
+
+- nevyžaduje nové rozhodnutí zadavatele,
+- nevyžaduje nový přístup,
+- je bezpečný,
+- je vratný,
+- nepřekračuje rozsah úkolu,
+- není zakázán `PŘÍRUČKA.md`,
+
+vývojář jej nesmí pouze doporučit.
+
+Musí jej rovnou provést.
+
+Sekce `Další doporučený postup` má obsahovat hlavně:
+
+- kroky přesahující současný úkol,
+- skutečné externí blokace,
+- navazující produktové priority,
+- kroky vyžadující součinnost vlastníka.
+
+### 8. Zákaz falešného nebo pasivního dalšího postupu
+
+Sekce `Další doporučený postup` nesmí být záminkou k zastavení práce.
+
+Za porušení se považuje zejména:
+
+- požadovat rozhodnutí, zda vytvořit commit,
+- požadovat rozhodnutí, zda otevřít pull request,
+- požadovat potvrzení běžného Git postupu,
+- uvést jediný krok začínající slovem `rozhodnout`,
+- uvést jediný krok začínající slovem `zvážit`,
+- vrátit zadavateli běžné technické rozhodnutí,
+- označit celý úkol za blokovaný kvůli nečistému repozitáři,
+- uvést pouze administrativní krok bez dalšího produktového pokračování,
+- oznámit blokaci bez dokončení všech ostatních bezpečných částí.
+
+Standardně musí další postup obsahovat 2 až 5 kroků.
+
+Jediný krok je přípustný pouze při jediné skutečné nepřekročitelné externí blokaci.
+
+### 9. Nečistý repozitář není automatická blokace
+
+Pokud repository obsahuje necommitnuté změny, vývojář musí nejdříve zjistit jejich původ.
+
+Použij minimálně:
+
+- `git status`,
+- `git diff`,
+- `git diff --stat`,
+- `git log`,
+- podle potřeby `git blame`,
+- historii aktuálního úkolu.
+
+Rozděl změny na:
+
+1. změny aktuálního úkolu,
+2. předchozí známé a schválené změny projektu,
+3. cizí nebo nejasné změny.
+
+Pokud lze změny bezpečně rozlišit:
+
+- nemaž cizí změny,
+- zachovej je,
+- použij selektivní staging,
+- commitni pouze příslušný rozsah,
+- pokračuj dalšími kontrolami.
+
+Skutečnost, že jsou změny ve stejném souboru, není sama o sobě blokace.
+
+Pokud předchozí změny:
+
+- patří ke stejnému projektu,
+- byly dříve zadány,
+- jsou obsahově správné,
+- projdou kontrolami,
+
+lze je zahrnout do jednoho pravdivě pojmenovaného commitu.
+
+Pokud některou část skutečně nelze oddělit:
+
+- nesmí být smazána,
+- nesmí být přepsána,
+- musí být přesně označen konkrétní neoddělitelný úsek,
+- ve všech ostatních bezpečných částech práce se pokračuje.
+
+### 10. Okamžitý a produktový další krok
+
+Každý závěrečný report musí uvést minimálně:
+
+1. okamžitý provozní nebo publikační krok,
+2. následující konkrétní produktový krok.
+
+Nestačí uvést pouze:
+
+- commit,
+- PR,
+- merge,
+- deployment.
+
+Příklad:
+
+```text
+1. Dokončit PR a ověřit CI.
+2. Po potvrzeném merge ověřit produkční commit.
+3. Pokračovat konkrétní opravou modulu Trasy svozu: zprovoznit Tisk pro řidiče nad ostrými daty.
+```
+
+Produktový krok musí vycházet ze skutečného stavu projektu a nesmí být obecný.
+
+### 11. Povinná kontrola před ukončením úkolu
+
+Před odevzdáním si vývojář musí odpovědět:
+
+1. Splnil jsem skutečný cíl?
+2. Je změna funkčně zapojená?
+3. Je ověřená?
+4. Používá pravdivá data?
+5. Nevytvořil jsem fake funkčnost?
+6. Nezůstal nefunkční prvek?
+7. Neopakoval jsem neúspěšný postup?
+8. Znám příčinu případné chyby?
+9. Provedl jsem všechny bezpečné kroky, které jsem mohl?
+10. Je další postup konkrétní?
+11. Obsahuje provozní i produktový krok?
+12. Odpovídá hlášený stav skutečnosti?
+
+Pokud některá odpověď zní ne, úkol nesmí být bez přesného vysvětlení označen za hotový.
+
+### 12. Povinná struktura závěrečného reportu
+
+Každý závěrečný report musí obsahovat:
+
+```text
+## Výsledek
+```
+
+Jedna jasná věta, co je skutečně hotové.
+
+```text
+## Provedené změny
+```
+
+Konkrétní soubory, funkce a chování.
+
+```text
+## Ověření
+```
+
+Testy, build, skutečné API nebo provozní kontroly.
+
+```text
+## Pravdivý provozní stav
+```
+
+Co je:
+
+- lokální,
+- commitnuté,
+- v PR,
+- nasazené,
+- produkčně ověřené,
+- read-only,
+- vypnuté,
+- blokované.
+
+```text
+## Zbývající problémy
+```
+
+Pouze konkrétní a doložené problémy.
+
+```text
+## Další doporučený postup
+```
+
+Dva až pět konkrétních prioritních kroků.
+
+```text
+## Technické údaje
+```
+
+- větev,
+- commit,
+- PR,
+- deployment,
+- migrace,
+- relevantní provozní identifikátory.
+
+Povinně zachovej také všechny další formální závěrečné věty, které již `PŘÍRUČKA.md` vyžaduje.
+
+### 13. Zakázaná tvrzení bez důkazu
+
+Bez skutečného ověření nepoužívej:
+
+- hotovo,
+- opraveno,
+- plně funkční,
+- produkčně připraveno,
+- bezpečně nasazeno,
+- bez dopadu,
+- synchronizace funguje,
+- integrace dokončena,
+- testy prošly,
+- vše v pořádku.
+
+Použij přesný stav:
+
+- implementováno, ale neověřeno proti produkčnímu API,
+- lokálně ověřeno, nenasazeno,
+- nasazeno, neověřeno v prohlížeči,
+- UI je hotové, backend není připojen,
+- produkční běh selhal,
+- blokováno chybějícím secretem,
+- částečně hotovo.
+
+### 14. Základní pracovní pravidlo
+
+Vývojář se nesmí spokojit s nejmenším možným výstupem.
+
+Musí dodat nejúplnější bezpečné řešení, které lze v daném okamžiku:
+
+- provést,
+- otestovat,
+- ověřit,
+- auditovat,
+- pravdivě popsat.
+
+Nečekej pasivně.
+
+Necykli stejnou chybu.
+
+Nevracej pouze další analýzu.
+
+Najdi kořenovou příčinu.
+
+Proveď bezpečnou opravu.
+
+Ověř skutečný výsledek.
+
+Proveď další bezpečný krok.
+
+Navrhni konkrétní produktové pokračování.
+
+### 15. Tato pravidla použij ihned
+
+Po doplnění `PŘÍRUČKA.md` tato pravidla ihned aplikuj na právě probíhající práci.
+
+Neukončuj úkol novým pasivním reportem.
+
+Proveď:
+
+1. zkontroluj přesný diff `PŘÍRUČKA.md`,
+2. klasifikuj existující změny,
+3. zachovej cizí změny,
+4. spusť povinné kontroly projektu,
+5. bezpečně připrav aktuální změnu k commitu,
+6. vytvoř commit v pracovní větvi, pokud neexistuje skutečná neoddělitelná blokace,
+7. otevři nebo aktualizuj PR, pokud je dostupný GitHub přístup,
+8. navrhni konkrétní následující produktový krok Smart odpady.ai,
+9. pokud další krok nevyžaduje nové rozhodnutí nebo přístup, rovnou v něm pokračuj.
+
+Neptej se zadavatele, zda smíš commitnout bezpečně ověřenou dokumentační změnu do pracovní větve, pokud stávající `PŘÍRUČKA.md` takový postup dovoluje.
+
+Na konci uveď pouze skutečnou externí nebo bezpečnostní blokaci. Běžné technické rozhodnutí není blokace.
