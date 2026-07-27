@@ -22855,6 +22855,16 @@ function collectionRoutesVistosRouteActions(rows = collectionRoutesVistosRouteDi
         Offline balíček
       </button>
     </div>
+    ${collectionRoutesPilotState.sourceImportMessage ? `
+      <p class="module-feedback__notice collection-routes-route-actions__feedback" role="status">
+        ${escapeHtml(collectionRoutesPilotState.sourceImportMessage)}
+      </p>
+    ` : ""}
+    ${collectionRoutesPilotState.sourceImportError ? `
+      <p class="module-feedback__error collection-routes-route-actions__feedback" role="alert">
+        ${escapeHtml(collectionRoutesPilotState.sourceImportError)}
+      </p>
+    ` : ""}
   `;
 }
 
@@ -55490,7 +55500,7 @@ function downloadText(filename, text, type = "text/plain;charset=utf-8") {
   document.body.append(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function downloadBlob(filename, blob) {
