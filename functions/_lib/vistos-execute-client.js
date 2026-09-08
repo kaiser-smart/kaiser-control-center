@@ -4,11 +4,13 @@ const DEFAULT_PAGE_SIZE = 1000;
 const DEFAULT_MAX_PAGES = 20;
 
 export class VistosExecuteError extends Error {
-  constructor(message, status = 400, code = "vistos_execute_error") {
+  constructor(message, status = 400, code = "vistos_execute_error", details = {}) {
     super(message);
     this.name = "VistosExecuteError";
     this.status = status;
     this.code = code;
+    this.upstreamStatus = Number(details.upstreamStatus) || 0;
+    this.upstreamApiStatus = cleanVistosValue(details.upstreamApiStatus);
   }
 }
 
@@ -227,12 +229,18 @@ export async function fetchVistosExecute(env, methodName, payload, cookieHeader 
     }
 
     if (!response.ok || body?.status !== "OK") {
+      const upstreamApiStatus = cleanVistosValue(body?.status);
+      const permissionDenied = response.status === 401
+        || response.status === 403
+        || response.status === 215
+        || /(?:^|\b)215(?:\b|$)|unauthorized/i.test(upstreamApiStatus);
       throw new VistosExecuteError(
-        response.status === 401 || response.status === 403 || response.status === 215
+        permissionDenied
           ? "Vistos API odmítlo přístup pro read-only preview."
           : "Vistos API požadavek se nepodařil.",
         502,
-        "vistos_api_execute_failed"
+        "vistos_api_execute_failed",
+        { upstreamStatus: response.status, upstreamApiStatus }
       );
     }
 
