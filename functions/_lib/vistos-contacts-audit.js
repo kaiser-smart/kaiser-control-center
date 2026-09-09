@@ -1367,7 +1367,7 @@ async function auditDocumentRawBlock(env, session, key, options) {
   if (!definition) throw new Error(`Neznámý Vistos raw document scope ${key}.`);
   const schema = await schemaForEntity(env, session, definition.entityName);
   const columns = key === "invoice"
-    ? invoiceRequestedFields(schema).slice(0, 12)
+    ? availableColumns(schema, ["Id", "Customer_FK", "CustomerManager_FK", "Status_FK"])
     : availableColumns(schema, ["Id", "Status_FK", definition.companyField, ...definition.directContactFields]);
   const range = await readEntityPageRange(env, session, definition.entityName, columns, Math.max(0, Number(options.startPage) || 0), Math.max(1, Number(options.pageCount) || 5));
   return {
