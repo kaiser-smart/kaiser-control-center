@@ -41318,6 +41318,9 @@ function modulePage(moduleItem, user, isDashboard = false) {
   const dashboardLink = !isDashboard && moduleItem.dashboardRoute
     ? `<a class="secondary-link" href="${routeHref(moduleItem.dashboardRoute)}" data-link>Dashboard modulu</a>`
     : "";
+  const vistosAuditLink = !isDashboard && moduleItem.id === "vistos"
+    ? `<a class="secondary-link" href="/api/receivables/vistos/contacts-audit?version=4&amp;scope=contact">Otevřít Contact audit V4</a>`
+    : "";
   const usersPanel = moduleItem.id === "users" && !isDashboard ? usersManagementSection() : "";
   const settingsPanel = moduleItem.id === "settings" && !isDashboard ? settingsManagementSection(user) : "";
   const costsPanel = moduleItem.id === "costs"
@@ -41348,6 +41351,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
           </div>
           <div class="module-actions">
             ${dashboardLink}
+            ${vistosAuditLink}
           </div>
         </div>
       </section>

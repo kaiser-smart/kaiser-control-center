@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { fetchVistosExecute } from "../functions/_lib/vistos-execute-client.js";
 import {
   contactColumnsForSchema,
@@ -130,3 +131,7 @@ await assert.rejects(
   (error) => error.code === "vistos_api_execute_failed" && error.upstreamStatus === 215 && error.upstreamApiStatus === "Unauthorized"
 );
 globalThis.fetch = originalFetch;
+
+const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
+assert.match(appSource, /Otevřít Contact audit V4/);
+assert.match(appSource, /contacts-audit\?version=4&amp;scope=contact/);
