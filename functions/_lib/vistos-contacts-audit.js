@@ -1253,8 +1253,8 @@ async function auditInvoiceV4(env, session, contactLoad) {
   };
 }
 
-async function readEntityPageRange(env, session, entityName, columns, startPage, pageCount) {
-  const pageSize = FULL_AUDIT_PAGE_SIZE;
+async function readEntityPageRange(env, session, entityName, columns, startPage, pageCount, requestedPageSize = FULL_AUDIT_PAGE_SIZE) {
+  const pageSize = Math.max(1, Math.min(Number(requestedPageSize) || FULL_AUDIT_PAGE_SIZE, FULL_AUDIT_PAGE_SIZE));
   const first = await getVistosPage(env, session, entityName, columns, null, startPage * pageSize, pageSize);
   const total = Number(first.filtered || first.total) || first.rows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -1271,7 +1271,15 @@ async function auditServiceListBlock(env, session, contactLoad, options) {
   const definition = DOCUMENT_ENTITY_DEFINITIONS.find((item) => item.key === "serviceList");
   const schema = await schemaForEntity(env, session, definition.entityName);
   const columns = availableColumns(schema, ["Id", "Status_FK", definition.companyField, ...definition.directContactFields]);
-  const range = await readEntityPageRange(env, session, definition.entityName, columns, Math.max(0, Number(options.startPage) || 0), Math.max(1, Number(options.pageCount) || 5));
+  const range = await readEntityPageRange(
+    env,
+    session,
+    definition.entityName,
+    columns,
+    Math.max(0, Number(options.startPage) || 0),
+    Math.max(1, Number(options.pageCount) || 5),
+    key === "invoice" ? 200 : FULL_AUDIT_PAGE_SIZE
+  );
   const indexes = contactIndexes(contactLoad.load.rows);
   const cleanupById = new Map(contactLoad.cleanup.qualityRows.map((quality) => [quality.id, quality]));
   const directIds = new Set();
