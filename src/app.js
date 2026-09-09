@@ -41245,6 +41245,165 @@ async function dismountTyre(tyreId) {
   finally { tyresState.saving = false; render(); }
 }
 
+const vistosAuditV4State = {
+  running: false,
+  progress: "",
+  error: "",
+  result: null
+};
+
+function vistosAuditV4Panel() {
+  if (!vistosAuditV4State.running && !vistosAuditV4State.error && !vistosAuditV4State.result) return "";
+  return `
+    <section class="module-panel" aria-labelledby="vistos-audit-v4-title">
+      <h2 id="vistos-audit-v4-title">Vistos Contact audit V4 · pouze READ</h2>
+      <p data-vistos-audit-v4-progress>${escapeHtml(vistosAuditV4State.progress || "Připraveno")}</p>
+      ${vistosAuditV4State.error ? `<p class="module-feedback__error">${escapeHtml(vistosAuditV4State.error)}</p>` : ""}
+      ${vistosAuditV4State.result ? `<pre data-vistos-audit-v4-result>${escapeHtml(JSON.stringify(vistosAuditV4State.result, null, 2))}</pre>` : ""}
+    </section>
+  `;
+}
+
+function vistosAuditV4Url(scope, params = {}) {
+  const query = new URLSearchParams({ version: "4", scope, ...params });
+  return `/api/receivables/vistos/contacts-audit?${query.toString()}`;
+}
+
+function vistosAuditV4DocumentSummary(payload, domainStatus) {
+  const document = payload?.document || payload?.invoice || null;
+  if (!document) return null;
+  const withDns = (metrics) => ({
+    ...metrics,
+    readyForReview: (metrics?.candidateByDomain || []).reduce((sum, row) => sum + (domainStatus.get(row.domain) === "VALID_DOMAIN" ? Number(row.contacts || 0) : 0), 0)
+  });
+  return { ...document, directContacts: withDns(document.directContacts), companyContacts: withDns(document.companyContacts) };
+}
+
+function vistosAuditV4ServiceMetrics(qualityById, domainStatus) {
+  const rows = [...qualityById.values()];
+  return {
+    contacts: rows.length,
+    contactsWithValidEmail1: rows.filter((row) => row.syntaxValid).length,
+    doNotContact: rows.filter((row) => row.doNotContact).length,
+    nameOk: rows.filter((row) => row.nameOk).length,
+    readyForReview: rows.filter((row) => row.syntaxValid && !row.typo && !row.doNotContact
+      && !row.doNotContactUnknown && !row.duplicate && row.nameOk && domainStatus.get(row.domain) === "VALID_DOMAIN").length
+  };
+}
+
+async function runVistosAuditV4() {
+  if (vistosAuditV4State.running) return;
+  vistosAuditV4State.running = true;
+  vistosAuditV4State.error = "";
+  vistosAuditV4State.result = null;
+  vistosAuditV4State.progress = "Načítám celý Contact dataset a schema…";
+  render();
+  try {
+    const contactPayload = await apiJson(vistosAuditV4Url("contact"));
+    const contact = contactPayload.contact || {};
+    const domainStatus = new Map();
+    const dnsCounts = { VALID_DOMAIN: 0, INVALID_DOMAIN: 0, NO_MX: 0, DNS_ERROR: 0 };
+    const dnsEmailCounts = { VALID_DOMAIN: 0, INVALID_DOMAIN: 0, NO_MX: 0, DNS_ERROR: 0 };
+    let readyForReview = 0;
+    let domainStart = 0;
+    let domainBatches = 0;
+    do {
+      vistosAuditV4State.progress = `Ověřuji DNS/MX domény od ${domainStart} z ${contact.uniqueDomains || "?"}…`;
+      render();
+      const payload = await apiJson(vistosAuditV4Url("domains", { domainStart: String(domainStart), domainLimit: "500" }));
+      const batch = payload.domains;
+      domainBatches += 1;
+      for (const row of batch.results || []) {
+        domainStatus.set(row.domain, row.status);
+        dnsCounts[row.status] = (dnsCounts[row.status] || 0) + Number(row.contactOccurrences || 0);
+        dnsEmailCounts[row.status] = (dnsEmailCounts[row.status] || 0) + Number(row.uniqueEmails || 0);
+        readyForReview += Number(row.readyForReview || 0);
+      }
+      domainStart = Number(batch.nextDomainStart || 0);
+      if (batch.done) break;
+    } while (domainStart > 0);
+
+    let detailStart = 0;
+    let duplicateGroupsAudited = 0;
+    const duplicateReview = { sameLikelyPerson: 0, multiplePeople: 0, multipleCompanies: 0, roleAddress: 0, doNotContactConflict: 0 };
+    do {
+      vistosAuditV4State.progress = `Prověřuji skupiny duplicit od ${detailStart}…`;
+      render();
+      const payload = await apiJson(vistosAuditV4Url("duplicates", { detailStart: String(detailStart), detailLimit: "250" }));
+      for (const group of payload.details || []) {
+        duplicateGroupsAudited += 1;
+        for (const key of Object.keys(duplicateReview)) if (group[key]) duplicateReview[key] += 1;
+      }
+      detailStart = Number(payload.nextDetailStart || 0);
+      if (detailStart >= Number(payload.totalDuplicateGroups || 0)) break;
+    } while (detailStart > 0);
+
+    const scoped = {};
+    for (const scope of ["invoice", "contract", "quote", "order", "gdpr"]) {
+      vistosAuditV4State.progress = `Načítám ${scope}…`;
+      render();
+      scoped[scope] = await apiJson(vistosAuditV4Url(scope));
+    }
+
+    const serviceDirect = new Map();
+    const serviceCompany = new Map();
+    let startPage = 0;
+    let serviceRows = 0;
+    let serviceBlocks = 0;
+    let serviceTotalPages = 0;
+    do {
+      vistosAuditV4State.progress = `Načítám ServiceList blok od stránky ${startPage}…`;
+      render();
+      const payload = await apiJson(vistosAuditV4Url("serviceListBlock", { startPage: String(startPage), pageCount: "10" }));
+      const service = payload.serviceList;
+      serviceBlocks += 1;
+      serviceRows += Number(service.block?.rowsRead || 0);
+      serviceTotalPages = Number(service.block?.totalPages || 0);
+      for (const row of service.directContactQuality || []) serviceDirect.set(row.id, row);
+      for (const row of service.companyContactQuality || []) serviceCompany.set(row.id, row);
+      startPage = Number(service.block?.nextPage || 0);
+      if (service.block?.done) break;
+    } while (startPage > 0);
+
+    vistosAuditV4State.result = {
+      status: contactPayload.status === "complete" ? "COMPLETE" : "PARTIAL",
+      testedAt: new Date().toISOString(),
+      contact: {
+        ...Object.fromEntries(Object.entries(contact).filter(([key]) => !["schema", "relevantCommunicationFields", "doNotContactField", "suspiciousTypoSample", "salutationQaSample", "performance"].includes(key))),
+        schema: contact.schema,
+        relevantCommunicationFields: contact.relevantCommunicationFields,
+        doNotContactField: contact.doNotContactField,
+        suspiciousTypoSampleAudited: (contact.suspiciousTypoSample || []).length,
+        salutationQaSampleAudited: (contact.salutationQaSample || []).length,
+        performance: contact.performance,
+        dnsMx: { domainBatches, domainStatuses: Object.fromEntries(Object.entries(dnsCounts).map(([key, contacts]) => [key, { contacts, uniqueEmails: dnsEmailCounts[key] || 0 }])) },
+        readyForReview
+      },
+      duplicates: { groupsAudited: duplicateGroupsAudited, ...duplicateReview },
+      invoice: vistosAuditV4DocumentSummary(scoped.invoice, domainStatus),
+      contract: vistosAuditV4DocumentSummary(scoped.contract, domainStatus),
+      quote: vistosAuditV4DocumentSummary(scoped.quote, domainStatus),
+      order: vistosAuditV4DocumentSummary(scoped.order, domainStatus),
+      serviceList: {
+        rows: serviceRows,
+        blocks: serviceBlocks,
+        totalPages: serviceTotalPages,
+        directContacts: vistosAuditV4ServiceMetrics(serviceDirect, domainStatus),
+        companyContacts: vistosAuditV4ServiceMetrics(serviceCompany, domainStatus)
+      },
+      gdpr: scoped.gdpr?.gdpr || null,
+      noWriteSafety: { vistosWrites: 0, leadHubWrites: 0, imports: 0, contactsDeleted: 0, emailsSent: 0, smsSent: 0 }
+    };
+    vistosAuditV4State.progress = "READ audit dokončen.";
+  } catch (error) {
+    vistosAuditV4State.error = error?.payload?.error || error?.message || "READ audit selhal.";
+    vistosAuditV4State.progress = "READ audit nebyl dokončen.";
+  } finally {
+    vistosAuditV4State.running = false;
+    render();
+  }
+}
+
 function modulePage(moduleItem, user, isDashboard = false) {
   if (moduleItem.id === "absence") {
     return absenceModulePage(moduleItem, user, isDashboard);
@@ -41319,7 +41478,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
     ? `<a class="secondary-link" href="${routeHref(moduleItem.dashboardRoute)}" data-link>Dashboard modulu</a>`
     : "";
   const vistosAuditLink = !isDashboard && moduleItem.id === "vistos"
-    ? `<a class="secondary-link" href="/api/receivables/vistos/contacts-audit?version=4&amp;scope=contact">Otevřít Contact audit V4</a>`
+    ? `<button class="secondary-link" type="button" data-vistos-audit-v4 ${vistosAuditV4State.running ? "disabled" : ""}>${vistosAuditV4State.running ? "Probíhá READ audit…" : "Spustit celý Contact audit V4"}</button>`
     : "";
   const usersPanel = moduleItem.id === "users" && !isDashboard ? usersManagementSection() : "";
   const settingsPanel = moduleItem.id === "settings" && !isDashboard ? settingsManagementSection(user) : "";
@@ -41360,6 +41519,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
       ${costsPanel}
       ${reportsPanel}
       ${genericSettingsPanel}
+      ${!isDashboard && moduleItem.id === "vistos" ? vistosAuditV4Panel() : ""}
     </main>
   `;
 }
@@ -59110,6 +59270,13 @@ window.addEventListener("offline", () => handleCollectionDailyDriverConnectivity
 window.addEventListener("online", () => handleCollectionDailyDriverConnectivityChange(true));
 
 document.addEventListener("click", async (event) => {
+  const vistosAuditV4Button = event.target.closest("[data-vistos-audit-v4]");
+  if (vistosAuditV4Button) {
+    event.preventDefault();
+    void runVistosAuditV4();
+    return;
+  }
+
   const feedbackNewAnother = event.target.closest("[data-feedback-new-another]");
   if (feedbackNewAnother) {
     event.preventDefault();

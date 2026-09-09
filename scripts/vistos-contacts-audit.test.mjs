@@ -133,5 +133,6 @@ await assert.rejects(
 globalThis.fetch = originalFetch;
 
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
-assert.match(appSource, /Otevřít Contact audit V4/);
-assert.match(appSource, /contacts-audit\?version=4&amp;scope=contact/);
+assert.match(appSource, /Spustit celý Contact audit V4/);
+assert.match(appSource, /data-vistos-audit-v4/);
+assert.match(appSource, /runVistosAuditV4/);

@@ -1286,11 +1286,25 @@ async function auditServiceListBlock(env, session, contactLoad, options) {
   }
   const companyContactIds = new Set();
   for (const companyId of companyIds) for (const contact of indexes.byCompany.get(companyId) || []) companyContactIds.add(clean(contact.Id));
+  const duplicateEmails = new Set(contactLoad.cleanup.duplicates.map((group) => group.normalizedEmail));
+  const compactQuality = (ids) => [...ids].map((id) => cleanupById.get(id)).filter(Boolean).map((quality) => ({
+    id: quality.id,
+    syntaxValid: quality.syntaxValid,
+    doNotContact: quality.doNotContact,
+    doNotContactUnknown: quality.doNotContactUnknown,
+    nameOk: quality.nameOk,
+    typo: Boolean(quality.typo),
+    roleAddress: quality.roleAddress,
+    duplicate: duplicateEmails.has(quality.normalizedEmail),
+    domain: quality.domain
+  }));
   return {
     ok: true,
     block: { totalRows: range.total, totalPages: range.totalPages, pageSize: range.pageSize, startPage: range.startPage, pagesRead: range.pagesRead, rowsRead: range.rows.length, nextPage: range.nextPage, done: range.done },
     directContactIds: [...directIds],
     companyContactIds: [...companyContactIds],
+    directContactQuality: compactQuality(directIds),
+    companyContactQuality: compactQuality(companyContactIds),
     directContacts: contactMetricsForIds(directIds, indexes, cleanupById),
     companyContacts: contactMetricsForIds(companyContactIds, indexes, cleanupById)
   };
@@ -1298,9 +1312,10 @@ async function auditServiceListBlock(env, session, contactLoad, options) {
 
 async function auditDomainBatch(contactLoad, options) {
   const start = Math.max(0, Number(options.domainStart) || 0);
-  const limit = Math.max(1, Math.min(Number(options.domainLimit) || 50, 100));
+  const limit = Math.max(1, Math.min(Number(options.domainLimit) || 50, 500));
   const domains = contactLoad.cleanup.uniqueDomains.slice(start, start + limit);
   const results = await mapConcurrent(domains, 10, async (domain) => ({ domain, ...(await dnsMxStatus(domain)) }));
+  const duplicateEmails = new Set(contactLoad.cleanup.duplicates.map((group) => group.normalizedEmail));
   const byDomain = new Map();
   for (const quality of contactLoad.cleanup.qualityRows) {
     if (!domains.includes(quality.domain)) continue;
@@ -1313,7 +1328,8 @@ async function auditDomainBatch(contactLoad, options) {
     result.contactOccurrences = rows.length;
     result.uniqueEmails = new Set(rows.map((row) => row.normalizedEmail)).size;
     result.readyForReview = result.status === "VALID_DOMAIN"
-      ? rows.filter((row) => row.syntaxValid && !row.typo && !row.doNotContact && !row.doNotContactUnknown && row.nameOk).length
+      ? rows.filter((row) => row.syntaxValid && !row.typo && !row.doNotContact && !row.doNotContactUnknown
+        && !duplicateEmails.has(row.normalizedEmail) && row.nameOk).length
       : 0;
   }
   return { domainStart: start, domainLimit: limit, totalDomains: contactLoad.cleanup.uniqueDomains.length, nextDomainStart: start + domains.length, done: start + domains.length >= contactLoad.cleanup.uniqueDomains.length, results };
