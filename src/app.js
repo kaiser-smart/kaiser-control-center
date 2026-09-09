@@ -41383,7 +41383,7 @@ async function runVistosAuditV4() {
     do {
       vistosAuditV4State.progress = `Načítám InvoiceIssued blok od stránky ${invoiceStartPage}…`;
       render();
-      const payload = await apiJson(vistosAuditV4Url("invoiceBlock", { startPage: String(invoiceStartPage), pageCount: "3" }));
+      const payload = await apiJson(vistosAuditV4Url("invoiceBlock", { startPage: String(invoiceStartPage), pageCount: "5" }));
       const block = payload.rawDocument;
       invoiceSchema ||= block.schema;
       invoiceBlocks += 1;
