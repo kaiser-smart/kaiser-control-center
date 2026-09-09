@@ -1,11 +1,22 @@
 import { json, requireUserPermission } from "../../../_lib/auth.js";
-import { auditVistosContacts, auditVistosContactsFull } from "../../../_lib/vistos-contacts-audit.js";
+import { auditVistosContactCleanupV4, auditVistosContacts, auditVistosContactsFull } from "../../../_lib/vistos-contacts-audit.js";
 
 export async function onRequestGet({ request, env }) {
   const { response } = await requireUserPermission(env, request, "receivables", "manage");
   if (response) return response;
   const url = new URL(request.url);
   try {
+    if (url.searchParams.get("version") === "4") {
+      return json(await auditVistosContactCleanupV4(env, {
+        scope: url.searchParams.get("scope") || "contact",
+        domainStart: url.searchParams.get("domainStart") || "0",
+        domainLimit: url.searchParams.get("domainLimit") || "50",
+        detailStart: url.searchParams.get("detailStart") || "0",
+        detailLimit: url.searchParams.get("detailLimit") || "100",
+        startPage: url.searchParams.get("startPage") || "0",
+        pageCount: url.searchParams.get("pageCount") || "5"
+      }));
+    }
     const full = url.searchParams.get("full") === "1";
     return json(await (full
       ? auditVistosContactsFull(env, { scope: url.searchParams.get("scope") || "all" })

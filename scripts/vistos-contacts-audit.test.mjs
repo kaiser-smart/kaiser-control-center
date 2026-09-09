@@ -4,9 +4,12 @@ import {
   contactColumnsForSchema,
   isSyntacticallyValidEmail,
   normalizeContactEmail,
+  summarizeCleanupContactRows,
   summarizeContactRows,
   summarizeDocumentRows,
   summarizeFullContactRows,
+  suspiciousEmailDomain,
+  vistosSchemaColumnMetadata,
   vistosSchemaColumnNames
 } from "../functions/_lib/vistos-contacts-audit.js";
 
@@ -15,6 +18,34 @@ const columns = vistosSchemaColumnNames({ data: { Columns: [
 ] } });
 assert.deepEqual(columns, ["Email1", "Id", "Modified", "Parent_FK"]);
 assert.deepEqual(contactColumnsForSchema(columns), ["Id", "Email1", "Parent_FK", "Modified"]);
+assert.deepEqual(vistosSchemaColumnMetadata({ data: { Columns: [
+  { ColumnName: "NoSms", Caption: "Neposílat SMS", DataType: "Boolean" },
+  { FieldName: "Email1", DisplayName: "E-mail", Type: "String" }
+] } }), [
+  { field: "Email1", caption: "E-mail", datatype: "String" },
+  { field: "NoSms", caption: "Neposílat SMS", datatype: "Boolean" }
+]);
+assert.deepEqual(suspiciousEmailDomain("gmial.com"), {
+  domain: "gmial.com",
+  probableIntendedDomain: "gmail.com",
+  reason: "Levenshtein distance 2 from known domain gmail.com",
+  confidence: "medium"
+});
+assert.equal(suspiciousEmailDomain("gmail.com"), null);
+
+const cleanup = summarizeCleanupContactRows([
+  { Id: 1, FirstName: "Jan", Email1: " A@GMAIL.COM ", Parent_FK_RecordId: 10, NoSms: false },
+  { Id: 2, LastName: "Novák", Email1: "a@gmail.com", Parent_FK_RecordId: 20, NoSms: true },
+  { Id: 3, Email1: "info@gmial.com", NoSms: false },
+  { Id: 4, FirstName: "Eva" }
+], [{ field: "NoSms", caption: "Neposílat SMS", datatype: "Boolean" }]);
+assert.equal(cleanup.summary.total, 4);
+assert.equal(cleanup.summary.email1Filled, 3);
+assert.equal(cleanup.summary.duplicateEmailOccurrences, 1);
+assert.equal(cleanup.summary.doNotContact, 1);
+assert.equal(cleanup.summary.doNotContactConflictEmails, 1);
+assert.equal(cleanup.suspiciousRows.length, 1);
+assert.equal(cleanup.duplicateGroups[0].doNotContactConflict, true);
 
 assert.deepEqual(summarizeContactRows([
   { Id: 1, FirstName: "A", LastName: "B", Email1: "same@example.test", Phone: "1", Parent_FK_RecordId: 10, Created: "2026-01-01", Modified: "2026-02-01" },
