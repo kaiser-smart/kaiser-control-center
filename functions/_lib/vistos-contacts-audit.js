@@ -342,7 +342,7 @@ async function loadFullDocumentAudit(env, session, definition, contacts) {
         confirmedActive += 1;
       }
     }
-  });
+  }, { concurrency: 2 });
   const companyContactIds = new Set();
   for (const companyId of documentCompanyIds) {
     for (const row of indexes.byCompany.get(companyId) || []) {
@@ -623,15 +623,17 @@ export async function auditVistosContactsFull(env) {
       incomplete: !contactIntegrity.complete || Boolean(contactLoad.missingFields.length)
     }
   };
-  for (const definition of DOCUMENT_ENTITY_DEFINITIONS) {
+  const documentResults = await Promise.all(DOCUMENT_ENTITY_DEFINITIONS.map(async (definition) => {
     try {
       const load = await loadFullDocumentAudit(env, session, definition, contactLoad.rows);
       const incomplete = load.page.capped
         || load.page.rowsRead !== load.page.filtered
         || load.page.duplicateIds > 0
         || load.missingFields.length > 0;
-      if (incomplete) incompleteEntities.push(definition.entityName);
-      documents[definition.key] = {
+      return {
+        definition,
+        incomplete,
+        document: {
         ok: true,
         schema: {
           columnCount: load.schema.columnCount,
@@ -642,8 +644,8 @@ export async function auditVistosContactsFull(env) {
         sourceTotal: load.page.total,
         sourceFiltered: load.page.filtered,
         duplicatePageIds: load.page.duplicateIds
-      };
-      performanceEntities[definition.entityName] = {
+        },
+        performance: {
         pageSize: load.page.pageSize,
         pagesRead: load.page.pagesRead,
         rowsRead: load.page.rowsRead,
@@ -651,11 +653,21 @@ export async function auditVistosContactsFull(env) {
         sourceFiltered: load.page.filtered,
         duplicatePageIds: load.page.duplicateIds,
         incomplete
+        }
       };
     } catch (error) {
-      incompleteEntities.push(definition.entityName);
-      documents[definition.key] = fullEntityError(definition.entityName, error);
+      return {
+        definition,
+        incomplete: true,
+        document: fullEntityError(definition.entityName, error),
+        performance: null
+      };
     }
+  }));
+  for (const result of documentResults) {
+    documents[result.definition.key] = result.document;
+    if (result.performance) performanceEntities[result.definition.entityName] = result.performance;
+    if (result.incomplete) incompleteEntities.push(result.definition.entityName);
   }
 
   let gdpr;
