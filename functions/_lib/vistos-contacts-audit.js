@@ -453,7 +453,7 @@ function foldText(value) {
   return clean(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-const CONTACT_QUALITY_FIELD_PATTERN = /sms|e-?mail|marketing|consent|opt.?out|unsubscribe|gdpr|komunik|kontaktov|nezas[ií]lat|nepos[ií]lat|zakaz.*oslov/i;
+const CONTACT_QUALITY_FIELD_PATTERN = /sms|e-?mail|send.?mail|marketing|consent|agreement|personal.?data|opt.?out|unsubscribe|gdpr|komunik|kontaktov|call.?enabled|do.?not|nezas[ií]lat|nepos[ií]lat|zakaz.*oslov/i;
 const KNOWN_EMAIL_DOMAINS = [
   "gmail.com", "seznam.cz", "centrum.cz", "email.cz", "volny.cz",
   "outlook.com", "hotmail.com", "icloud.com", "yahoo.com"
@@ -1271,15 +1271,7 @@ async function auditServiceListBlock(env, session, contactLoad, options) {
   const definition = DOCUMENT_ENTITY_DEFINITIONS.find((item) => item.key === "serviceList");
   const schema = await schemaForEntity(env, session, definition.entityName);
   const columns = availableColumns(schema, ["Id", "Status_FK", definition.companyField, ...definition.directContactFields]);
-  const range = await readEntityPageRange(
-    env,
-    session,
-    definition.entityName,
-    columns,
-    Math.max(0, Number(options.startPage) || 0),
-    Math.max(1, Number(options.pageCount) || 5),
-    key === "invoice" ? 200 : FULL_AUDIT_PAGE_SIZE
-  );
+  const range = await readEntityPageRange(env, session, definition.entityName, columns, Math.max(0, Number(options.startPage) || 0), Math.max(1, Number(options.pageCount) || 5));
   const indexes = contactIndexes(contactLoad.load.rows);
   const cleanupById = new Map(contactLoad.cleanup.qualityRows.map((quality) => [quality.id, quality]));
   const directIds = new Set();
