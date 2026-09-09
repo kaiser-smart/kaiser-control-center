@@ -562,7 +562,7 @@ export async function auditVistosContacts(env, options = {}) {
   };
 }
 
-export async function auditVistosContactsFull(env) {
+export async function auditVistosContactsFull(env, options = {}) {
   if (!isVistosExecuteConfigured(env)) {
     return {
       status: "not_configured",
@@ -576,8 +576,70 @@ export async function auditVistosContactsFull(env) {
     };
   }
 
+  const requestedScope = clean(options.scope) || "all";
+  const validScopes = new Set(["all", "contact", "contract", "quote", "invoice", "order", "serviceList", "gdpr"]);
+  const scope = validScopes.has(requestedScope) ? requestedScope : "all";
   const session = await loginVistosExecute(env);
   const incompleteEntities = [];
+
+  if (scope === "gdpr") {
+    const performanceEntities = {};
+    let gdpr;
+    try {
+      const discovery = await discoverGdprEntities(env, session);
+      const gdprLoad = await loadFullEntity(env, session, "GdprLegalReasonsDirectoryRow", [
+        "Id", "Name", "Directory_FK", "Created", "Modified"
+      ], { concurrency: 1 });
+      const gdprIntegrity = pageIntegrity(gdprLoad);
+      const incomplete = !gdprIntegrity.complete || Boolean(gdprLoad.missingFields.length);
+      if (incomplete) incompleteEntities.push("GdprLegalReasonsDirectoryRow");
+      gdpr = {
+        ok: true,
+        total: gdprLoad.total,
+        rowsRead: gdprLoad.rows.length,
+        schema: {
+          columnCount: gdprLoad.schema.columnCount,
+          fields: gdprLoad.schema.fields,
+          requestedFields: gdprLoad.columns,
+          missingFields: gdprLoad.missingFields
+        },
+        otherRelevantEntities: discovery.entities.filter((entity) => entity.entityName !== "GdprLegalReasonsDirectoryRow"),
+        newsletterConsentDeterminable: false,
+        consentReason: gdprLoad.rows.length
+          ? "GDPR řádky existují, ale bez jednoznačně potvrzené newsletterové sémantiky nejsou interpretovány jako souhlas."
+          : "GdprLegalReasonsDirectoryRow neobsahuje žádné řádky."
+      };
+      performanceEntities.GdprLegalReasonsDirectoryRow = {
+        pageSize: gdprLoad.pageSize,
+        pagesRead: gdprLoad.pagesRead,
+        rowsRead: gdprLoad.rows.length,
+        sourceTotal: gdprLoad.total,
+        sourceFiltered: gdprLoad.filtered,
+        duplicatePageIds: gdprIntegrity.duplicateIds,
+        incomplete
+      };
+    } catch (error) {
+      incompleteEntities.push("GdprLegalReasonsDirectoryRow");
+      gdpr = { ...fullEntityError("GdprLegalReasonsDirectoryRow", error), newsletterConsentDeterminable: false };
+    }
+    return {
+      status: incompleteEntities.length ? "partial" : "complete",
+      version: 2,
+      scope,
+      source: "vistos",
+      readOnly: true,
+      writesVistos: false,
+      writesD1: false,
+      writesLeadHub: false,
+      imports: false,
+      sendsCommunication: false,
+      contact: null,
+      documents: {},
+      gdpr,
+      performance: { pageSize: FULL_AUDIT_PAGE_SIZE, entities: performanceEntities, incompleteEntities },
+      testedAt: new Date().toISOString()
+    };
+  }
   let contactLoad;
   try {
     contactLoad = await loadFullEntity(env, session, "Contact", [
@@ -623,7 +685,10 @@ export async function auditVistosContactsFull(env) {
       incomplete: !contactIntegrity.complete || Boolean(contactLoad.missingFields.length)
     }
   };
-  const documentResults = await Promise.all(DOCUMENT_ENTITY_DEFINITIONS.map(async (definition) => {
+  const selectedDocumentDefinitions = scope === "all"
+    ? DOCUMENT_ENTITY_DEFINITIONS
+    : DOCUMENT_ENTITY_DEFINITIONS.filter((definition) => definition.key === scope);
+  const documentResults = await Promise.all(selectedDocumentDefinitions.map(async (definition) => {
     try {
       const load = await loadFullDocumentAudit(env, session, definition, contactLoad.rows);
       const incomplete = load.page.capped
@@ -670,8 +735,8 @@ export async function auditVistosContactsFull(env) {
     if (result.incomplete) incompleteEntities.push(result.definition.entityName);
   }
 
-  let gdpr;
-  try {
+  let gdpr = null;
+  if (scope === "all") try {
     const discovery = await discoverGdprEntities(env, session);
     const gdprLoad = await loadFullEntity(env, session, "GdprLegalReasonsDirectoryRow", [
       "Id", "Name", "Directory_FK", "Created", "Modified"
@@ -715,6 +780,7 @@ export async function auditVistosContactsFull(env) {
   return {
     status: uniqueIncompleteEntities.length ? "partial" : "complete",
     version: 2,
+    scope,
     source: "vistos",
     readOnly: true,
     writesVistos: false,

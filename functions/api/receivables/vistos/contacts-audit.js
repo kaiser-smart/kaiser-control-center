@@ -8,7 +8,7 @@ export async function onRequestGet({ request, env }) {
   try {
     const full = url.searchParams.get("full") === "1";
     return json(await (full
-      ? auditVistosContactsFull(env)
+      ? auditVistosContactsFull(env, { scope: url.searchParams.get("scope") || "all" })
       : auditVistosContacts(env, {
           sampleSize: Math.max(1, Math.min(Number(url.searchParams.get("sampleSize")) || 25, 100)),
           knownContactId: url.searchParams.get("knownContactId") || ""
