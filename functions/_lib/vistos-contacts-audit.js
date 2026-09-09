@@ -342,7 +342,7 @@ async function loadFullDocumentAudit(env, session, definition, contacts) {
         confirmedActive += 1;
       }
     }
-  }, { concurrency: 2 });
+  }, { concurrency: definition.entityName === "ServiceList" ? 8 : 2 });
   const companyContactIds = new Set();
   for (const companyId of documentCompanyIds) {
     for (const row of indexes.byCompany.get(companyId) || []) {
