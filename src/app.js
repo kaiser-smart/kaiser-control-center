@@ -41414,8 +41414,8 @@ async function runVistosAuditV4() {
       exactRepeatedOccurrences: invoiceExactRepeatedOccurrences,
       differingRepeatedOccurrences: invoiceDifferingRepeatedOccurrences,
       duplicationReason: invoiceDifferingRepeatedOccurrences
-        ? "Stejné InvoiceIssued Id má v načtené projekci rozdílné hodnoty; prokázáno projekční/JOIN násobení, konkrétní child vazba není z metadat jednoznačná."
-        : invoiceRepeatedOccurrences ? "Opakované řádky jsou ve všech načtených polích shodné; zdroj opakování projekce není jednoznačný." : "Žádná opakovaná Id.",
+        ? "Stejné InvoiceIssued Id má rozdílnou firmu, přímý kontakt nebo stav; prokázáno projekční násobení, konkrétní child vazba není z metadat jednoznačná."
+        : invoiceRepeatedOccurrences ? "Opakované řádky jsou v polích Id, firma, přímý kontakt a stav shodné; přesný zdroj násobení nelze z bezpečné základní projekce určit." : "Žádná opakovaná Id.",
       uniqueCompanies: invoiceCompanies.size,
       statusFkDistribution: [...invoiceStatuses.entries()].map(([key, count]) => { const [id, caption] = key.split("\u001f"); return { id: id || null, caption: caption || null, count }; }).sort((a, b) => b.count - a.count),
       directContacts: vistosAuditV4MetricsForIds(invoiceDirect, qualityById, domainStatus),
