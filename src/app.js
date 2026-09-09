@@ -41291,6 +41291,20 @@ function vistosAuditV4ServiceMetrics(qualityById, domainStatus) {
   };
 }
 
+function vistosAuditV4MetricsForIds(ids, qualityById, domainStatus) {
+  const rows = [...ids].map((id) => qualityById.get(id)).filter(Boolean);
+  return {
+    contacts: ids.size,
+    resolvedContacts: rows.length,
+    contactsWithValidEmail1: rows.filter((row) => row.syntaxValid).length,
+    uniqueValidEmails: new Set(rows.filter((row) => row.syntaxValid).map((row) => row.normalizedEmail)).size,
+    doNotContact: rows.filter((row) => row.doNotContact).length,
+    nameOk: rows.filter((row) => row.nameOk).length,
+    readyForReview: rows.filter((row) => row.syntaxValid && !row.typo && !row.doNotContact
+      && !row.doNotContactUnknown && !row.duplicate && row.nameOk && domainStatus.get(row.domain) === "VALID_DOMAIN").length
+  };
+}
+
 async function runVistosAuditV4() {
   if (vistosAuditV4State.running) return;
   vistosAuditV4State.running = true;
@@ -41301,6 +41315,15 @@ async function runVistosAuditV4() {
   try {
     const contactPayload = await apiJson(vistosAuditV4Url("contact"));
     const contact = contactPayload.contact || {};
+    const compactQuality = contact.compactQuality || [];
+    const qualityById = new Map(compactQuality.map((row) => [row.id, row]));
+    const contactsByCompany = new Map();
+    for (const row of compactQuality) {
+      if (!row.parentId) continue;
+      const ids = contactsByCompany.get(row.parentId) || new Set();
+      ids.add(row.id);
+      contactsByCompany.set(row.parentId, ids);
+    }
     const domainStatus = new Map();
     const dnsCounts = { VALID_DOMAIN: 0, INVALID_DOMAIN: 0, NO_MX: 0, DNS_ERROR: 0 };
     const dnsEmailCounts = { VALID_DOMAIN: 0, INVALID_DOMAIN: 0, NO_MX: 0, DNS_ERROR: 0 };
@@ -41339,14 +41362,69 @@ async function runVistosAuditV4() {
     } while (detailStart > 0);
 
     const scoped = {};
-    for (const scope of ["invoice", "contract", "quote", "order", "gdpr"]) {
+    for (const scope of ["contract", "quote", "order", "gdpr"]) {
       vistosAuditV4State.progress = `Načítám ${scope}…`;
       render();
       scoped[scope] = await apiJson(vistosAuditV4Url(scope));
     }
 
-    const serviceDirect = new Map();
-    const serviceCompany = new Map();
+    const invoiceFirstSignature = new Map();
+    const invoiceRepeatedIds = new Set();
+    const invoiceCompanies = new Set();
+    const invoiceDirect = new Set();
+    const invoiceStatuses = new Map();
+    let invoiceStartPage = 0;
+    let invoiceRows = 0;
+    let invoiceBlocks = 0;
+    let invoiceRepeatedOccurrences = 0;
+    let invoiceExactRepeatedOccurrences = 0;
+    let invoiceDifferingRepeatedOccurrences = 0;
+    let invoiceSchema = null;
+    do {
+      vistosAuditV4State.progress = `Načítám InvoiceIssued blok od stránky ${invoiceStartPage}…`;
+      render();
+      const payload = await apiJson(vistosAuditV4Url("invoiceBlock", { startPage: String(invoiceStartPage), pageCount: "10" }));
+      const block = payload.rawDocument;
+      invoiceSchema ||= block.schema;
+      invoiceBlocks += 1;
+      invoiceRows += Number(block.block?.rowsRead || 0);
+      for (const row of block.rows || []) {
+        if (row.id && invoiceFirstSignature.has(row.id)) {
+          invoiceRepeatedOccurrences += 1;
+          invoiceRepeatedIds.add(row.id);
+          if (invoiceFirstSignature.get(row.id) === row.signature) invoiceExactRepeatedOccurrences += 1;
+          else invoiceDifferingRepeatedOccurrences += 1;
+        } else if (row.id) invoiceFirstSignature.set(row.id, row.signature);
+        if (row.companyId) invoiceCompanies.add(row.companyId);
+        for (const id of row.directContactIds || []) invoiceDirect.add(id);
+        const statusKey = `${row.statusId || ""}\u001f${row.statusCaption || ""}`;
+        invoiceStatuses.set(statusKey, (invoiceStatuses.get(statusKey) || 0) + 1);
+      }
+      invoiceStartPage = Number(block.block?.nextPage || 0);
+      if (block.block?.done) break;
+    } while (invoiceStartPage > 0);
+    const invoiceCompanyContacts = new Set();
+    for (const companyId of invoiceCompanies) for (const id of contactsByCompany.get(companyId) || []) invoiceCompanyContacts.add(id);
+    const invoice = {
+      schema: invoiceSchema,
+      rawRows: invoiceRows,
+      uniqueInvoiceIds: invoiceFirstSignature.size,
+      repeatedIdCount: invoiceRepeatedIds.size,
+      repeatedIdOccurrences: invoiceRepeatedOccurrences,
+      exactRepeatedOccurrences: invoiceExactRepeatedOccurrences,
+      differingRepeatedOccurrences: invoiceDifferingRepeatedOccurrences,
+      duplicationReason: invoiceDifferingRepeatedOccurrences
+        ? "Stejné InvoiceIssued Id má v načtené projekci rozdílné hodnoty; prokázáno projekční/JOIN násobení, konkrétní child vazba není z metadat jednoznačná."
+        : invoiceRepeatedOccurrences ? "Opakované řádky jsou ve všech načtených polích shodné; zdroj opakování projekce není jednoznačný." : "Žádná opakovaná Id.",
+      uniqueCompanies: invoiceCompanies.size,
+      statusFkDistribution: [...invoiceStatuses.entries()].map(([key, count]) => { const [id, caption] = key.split("\u001f"); return { id: id || null, caption: caption || null, count }; }).sort((a, b) => b.count - a.count),
+      directContacts: vistosAuditV4MetricsForIds(invoiceDirect, qualityById, domainStatus),
+      companyContacts: vistosAuditV4MetricsForIds(invoiceCompanyContacts, qualityById, domainStatus),
+      performance: { blocks: invoiceBlocks }
+    };
+
+    const serviceDirect = new Set();
+    const serviceCompanies = new Set();
     let startPage = 0;
     let serviceRows = 0;
     let serviceBlocks = 0;
@@ -41354,22 +41432,26 @@ async function runVistosAuditV4() {
     do {
       vistosAuditV4State.progress = `Načítám ServiceList blok od stránky ${startPage}…`;
       render();
-      const payload = await apiJson(vistosAuditV4Url("serviceListBlock", { startPage: String(startPage), pageCount: "10" }));
-      const service = payload.serviceList;
+      const payload = await apiJson(vistosAuditV4Url("serviceListRawBlock", { startPage: String(startPage), pageCount: "10" }));
+      const service = payload.rawDocument;
       serviceBlocks += 1;
       serviceRows += Number(service.block?.rowsRead || 0);
       serviceTotalPages = Number(service.block?.totalPages || 0);
-      for (const row of service.directContactQuality || []) serviceDirect.set(row.id, row);
-      for (const row of service.companyContactQuality || []) serviceCompany.set(row.id, row);
+      for (const row of service.rows || []) {
+        if (row.companyId) serviceCompanies.add(row.companyId);
+        for (const id of row.directContactIds || []) serviceDirect.add(id);
+      }
       startPage = Number(service.block?.nextPage || 0);
       if (service.block?.done) break;
     } while (startPage > 0);
+    const serviceCompanyContacts = new Set();
+    for (const companyId of serviceCompanies) for (const id of contactsByCompany.get(companyId) || []) serviceCompanyContacts.add(id);
 
     vistosAuditV4State.result = {
       status: contactPayload.status === "complete" ? "COMPLETE" : "PARTIAL",
       testedAt: new Date().toISOString(),
       contact: {
-        ...Object.fromEntries(Object.entries(contact).filter(([key]) => !["schema", "relevantCommunicationFields", "doNotContactField", "suspiciousTypoSample", "salutationQaSample", "performance"].includes(key))),
+        ...Object.fromEntries(Object.entries(contact).filter(([key]) => !["schema", "relevantCommunicationFields", "doNotContactField", "suspiciousTypoSample", "salutationQaSample", "compactQuality", "performance"].includes(key))),
         schema: contact.schema,
         relevantCommunicationFields: contact.relevantCommunicationFields,
         doNotContactField: contact.doNotContactField,
@@ -41380,7 +41462,7 @@ async function runVistosAuditV4() {
         readyForReview
       },
       duplicates: { groupsAudited: duplicateGroupsAudited, ...duplicateReview },
-      invoice: vistosAuditV4DocumentSummary(scoped.invoice, domainStatus),
+      invoice,
       contract: vistosAuditV4DocumentSummary(scoped.contract, domainStatus),
       quote: vistosAuditV4DocumentSummary(scoped.quote, domainStatus),
       order: vistosAuditV4DocumentSummary(scoped.order, domainStatus),
@@ -41388,8 +41470,8 @@ async function runVistosAuditV4() {
         rows: serviceRows,
         blocks: serviceBlocks,
         totalPages: serviceTotalPages,
-        directContacts: vistosAuditV4ServiceMetrics(serviceDirect, domainStatus),
-        companyContacts: vistosAuditV4ServiceMetrics(serviceCompany, domainStatus)
+        directContacts: vistosAuditV4MetricsForIds(serviceDirect, qualityById, domainStatus),
+        companyContacts: vistosAuditV4MetricsForIds(serviceCompanyContacts, qualityById, domainStatus)
       },
       gdpr: scoped.gdpr?.gdpr || null,
       noWriteSafety: { vistosWrites: 0, leadHubWrites: 0, imports: 0, contactsDeleted: 0, emailsSent: 0, smsSent: 0 }

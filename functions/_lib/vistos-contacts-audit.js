@@ -1352,17 +1352,45 @@ async function auditGdprV4(env, session) {
   };
 }
 
+async function auditDocumentRawBlock(env, session, key, options) {
+  const definition = key === "invoice"
+    ? { entityName: "InvoiceIssued", companyField: "Customer_FK", directContactFields: ["CustomerManager_FK"] }
+    : DOCUMENT_ENTITY_DEFINITIONS.find((item) => item.key === key);
+  if (!definition) throw new Error(`Neznámý Vistos raw document scope ${key}.`);
+  const schema = await schemaForEntity(env, session, definition.entityName);
+  const columns = key === "invoice"
+    ? invoiceRequestedFields(schema)
+    : availableColumns(schema, ["Id", "Status_FK", definition.companyField, ...definition.directContactFields]);
+  const range = await readEntityPageRange(env, session, definition.entityName, columns, Math.max(0, Number(options.startPage) || 0), Math.max(1, Number(options.pageCount) || 5));
+  return {
+    entityName: definition.entityName,
+    schema: publicSchema(schema, schema.metadata.filter((column) => columns.includes(column.field))),
+    requestedFields: columns,
+    block: { totalRows: range.total, totalPages: range.totalPages, pageSize: range.pageSize, startPage: range.startPage, pagesRead: range.pagesRead, rowsRead: range.rows.length, nextPage: range.nextPage, done: range.done },
+    rows: range.rows.map((row) => ({
+      id: clean(row?.Id),
+      signature: hashString(columns.map((field) => `${field}=${clean(row?.[field])}|${recordId(row, field)}|${referenceCaption(row, field)}`).join("\u001f")),
+      companyId: recordId(row, definition.companyField) || null,
+      directContactIds: definition.directContactFields.map((field) => recordId(row, field)).filter(Boolean),
+      statusId: recordId(row, "Status_FK") || null,
+      statusCaption: referenceCaption(row, "Status_FK") || null
+    }))
+  };
+}
+
 export async function auditVistosContactCleanupV4(env, options = {}) {
   if (!isVistosExecuteConfigured(env)) return { status: "not_configured", version: 4, readOnly: true };
   const session = await loginVistosExecute(env);
   const scope = clean(options.scope) || "contact";
-  const contactLoad = await loadCleanupContacts(env, session);
   const base = {
     version: 4, scope, source: "vistos", readOnly: true,
     writesVistos: false, writesLeadHub: false, imports: false, sendsEmail: false, sendsSms: false,
     mailboxVerificationAvailable: false,
     mailboxVerificationReason: "V repozitáři nebyla nalezena specializovaná mailbox-verification služba; SendGrid je odesílací provider a pro tento audit nebyl použit."
   };
+  if (scope === "invoiceBlock") return { ...base, status: "complete", rawDocument: await auditDocumentRawBlock(env, session, "invoice", options), testedAt: new Date().toISOString() };
+  if (scope === "serviceListRawBlock") return { ...base, status: "complete", rawDocument: await auditDocumentRawBlock(env, session, "serviceList", options), testedAt: new Date().toISOString() };
+  const contactLoad = await loadCleanupContacts(env, session);
   if (scope === "domains") return { ...base, status: "complete", domains: await auditDomainBatch(contactLoad, options), testedAt: new Date().toISOString() };
   if (scope === "duplicates") {
     const start = Math.max(0, Number(options.detailStart) || 0);
@@ -1385,6 +1413,22 @@ export async function auditVistosContactCleanupV4(env, options = {}) {
       suspiciousTypoCount: contactLoad.cleanup.suspiciousRows.length,
       suspiciousTypoSample: contactLoad.cleanup.suspiciousRows.slice(0, 250),
       salutationQaSample: salutationQaSample(contactLoad.load.rows, 100),
+      compactQuality: (() => {
+        const duplicateEmails = new Set(contactLoad.cleanup.duplicates.map((group) => group.normalizedEmail));
+        return contactLoad.cleanup.qualityRows.map((quality) => ({
+          id: quality.id,
+          parentId: quality.parentId || null,
+          normalizedEmail: quality.normalizedEmail,
+          domain: quality.domain,
+          syntaxValid: quality.syntaxValid,
+          typo: Boolean(quality.typo),
+          doNotContact: quality.doNotContact,
+          doNotContactUnknown: quality.doNotContactUnknown,
+          duplicate: duplicateEmails.has(quality.normalizedEmail),
+          nameOk: quality.nameOk,
+          roleAddress: quality.roleAddress
+        }));
+      })(),
       performance: { pageSize: contactLoad.load.pageSize, pagesRead: contactLoad.load.pagesRead, rowsRead: contactLoad.load.rows.length, sourceTotal: contactLoad.load.total, duplicatePageIds: integrity.duplicateIds }
     },
     testedAt: new Date().toISOString()

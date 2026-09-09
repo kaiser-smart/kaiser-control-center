@@ -136,3 +136,5 @@ const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf
 assert.match(appSource, /Spustit celý Contact audit V4/);
 assert.match(appSource, /data-vistos-audit-v4/);
 assert.match(appSource, /runVistosAuditV4/);
+assert.match(appSource, /invoiceBlock/);
+assert.match(appSource, /serviceListRawBlock/);
