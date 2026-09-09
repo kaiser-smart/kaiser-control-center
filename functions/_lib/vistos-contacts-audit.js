@@ -291,8 +291,9 @@ async function scanAllEntityRows(env, session, entityName, columns, onRows, opti
 }
 
 async function schemaForEntity(env, session, entityName) {
-  const fields = vistosSchemaColumnNames(await getVistosSchemaEntity(env, session, entityName));
-  return { entityName, fields, columnCount: fields.length };
+  const payload = await getVistosSchemaEntity(env, session, entityName);
+  const fields = vistosSchemaColumnNames(payload);
+  return { entityName, fields, metadata: vistosSchemaColumnMetadata(payload), columnCount: fields.length };
 }
 
 function availableColumns(schema, requested) {
@@ -416,6 +417,263 @@ export function vistosSchemaColumnNames(payload) {
   };
   visit(payload);
   return [...names].sort((left, right) => left.localeCompare(right, "cs"));
+}
+
+function firstMetadataValue(value, keys) {
+  for (const key of keys) {
+    if (value?.[key] !== undefined && value?.[key] !== null && clean(value[key])) return clean(value[key]);
+  }
+  return "";
+}
+
+export function vistosSchemaColumnMetadata(payload) {
+  const columns = new Map();
+  const visit = (value) => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    const explicitName = firstMetadataValue(value, ["ColumnName", "columnName", "FieldName", "fieldName"]);
+    if (explicitName) {
+      const current = columns.get(explicitName) || { field: explicitName, caption: null, datatype: null };
+      const caption = firstMetadataValue(value, ["Caption", "caption", "ColumnCaption", "columnCaption", "DisplayName", "displayName", "Label", "label", "Title", "title"]);
+      const datatype = firstMetadataValue(value, ["DataType", "dataType", "Datatype", "datatype", "Type", "type", "ColumnType", "columnType"]);
+      if (caption) current.caption = caption;
+      if (datatype) current.datatype = datatype;
+      columns.set(explicitName, current);
+    }
+    for (const nested of Object.values(value)) visit(nested);
+  };
+  visit(payload);
+  return [...columns.values()].sort((left, right) => left.field.localeCompare(right.field, "cs"));
+}
+
+function foldText(value) {
+  return clean(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+const CONTACT_QUALITY_FIELD_PATTERN = /sms|e-?mail|marketing|consent|opt.?out|unsubscribe|gdpr|komunik|kontaktov|nezas[ií]lat|nepos[ií]lat|zakaz.*oslov/i;
+const KNOWN_EMAIL_DOMAINS = [
+  "gmail.com", "seznam.cz", "centrum.cz", "email.cz", "volny.cz",
+  "outlook.com", "hotmail.com", "icloud.com", "yahoo.com"
+];
+const ROLE_LOCAL_PARTS = new Set([
+  "info", "obchod", "fakturace", "office", "recepce", "sekretariat", "sekretariát",
+  "servis", "objednavky", "objednávky", "kontakt", "accounting", "billing", "sales"
+]);
+
+function levenshtein(left, right) {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= left.length; i += 1) {
+    let diagonal = previous[0];
+    previous[0] = i;
+    for (let j = 1; j <= right.length; j += 1) {
+      const above = previous[j];
+      previous[j] = Math.min(previous[j] + 1, previous[j - 1] + 1, diagonal + (left[i - 1] === right[j - 1] ? 0 : 1));
+      diagonal = above;
+    }
+  }
+  return previous[right.length];
+}
+
+export function suspiciousEmailDomain(domainValue) {
+  const domain = foldText(domainValue);
+  if (!domain || KNOWN_EMAIL_DOMAINS.includes(domain)) return null;
+  let best = null;
+  for (const intended of KNOWN_EMAIL_DOMAINS) {
+    const distance = levenshtein(domain, intended);
+    const maxDistance = Math.max(domain.length, intended.length) <= 7 ? 1 : 2;
+    if (distance <= maxDistance && (!best || distance < best.distance)) best = { intended, distance };
+  }
+  if (!best) return null;
+  return {
+    domain,
+    probableIntendedDomain: best.intended,
+    reason: `Levenshtein distance ${best.distance} from known domain ${best.intended}`,
+    confidence: best.distance === 1 ? "high" : "medium"
+  };
+}
+
+function normalizedBoolean(value) {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0) return false;
+  const normalized = foldText(value);
+  if (["true", "ano", "yes", "1"].includes(normalized)) return true;
+  if (["false", "ne", "no", "0", ""].includes(normalized)) return false;
+  return null;
+}
+
+function isRoleAddress(email) {
+  const local = normalizeContactEmail(email).split("@")[0] || "";
+  return ROLE_LOCAL_PARTS.has(foldText(local));
+}
+
+function contactQualitySchema(schemaMetadata) {
+  return schemaMetadata.filter((column) => CONTACT_QUALITY_FIELD_PATTERN.test(`${column.field} ${column.caption || ""}`));
+}
+
+function confirmedDoNotContactField(schemaMetadata) {
+  const matches = schemaMetadata.filter((column) => foldText(column.caption).replace(/[^a-z0-9]+/g, " ").trim() === "neposilat sms");
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function valueDistribution(rows, field) {
+  const counts = new Map();
+  for (const row of rows) {
+    const raw = row?.[field];
+    const key = raw === null || raw === undefined || raw === "" ? "(empty)" : clean(raw);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return [...counts.entries()].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count || a.value.localeCompare(b.value, "cs"));
+}
+
+function contactQualityRecord(row, dncField) {
+  const originalEmail = clean(row?.Email1);
+  const normalizedEmail = normalizeContactEmail(originalEmail);
+  const syntaxValid = isSyntacticallyValidEmail(normalizedEmail);
+  const domain = syntaxValid ? normalizedEmail.split("@")[1] : "";
+  const typo = domain ? suspiciousEmailDomain(domain) : null;
+  const dncValue = dncField ? normalizedBoolean(row?.[dncField.field]) : false;
+  const firstName = clean(row?.FirstName);
+  const lastName = clean(row?.LastName);
+  const nameOk = Boolean(firstName || lastName);
+  return {
+    id: clean(row?.Id), originalEmail, normalizedEmail, syntaxValid, domain, typo,
+    doNotContact: dncValue === true, doNotContactUnknown: dncValue === null,
+    firstName, lastName, nameOk, roleAddress: syntaxValid && isRoleAddress(normalizedEmail),
+    parentId: recordId(row, "Parent_FK")
+  };
+}
+
+function duplicateGroups(rows, qualityRows) {
+  const byEmail = new Map();
+  qualityRows.forEach((quality, index) => {
+    if (!quality.syntaxValid) return;
+    const members = byEmail.get(quality.normalizedEmail) || [];
+    members.push({ row: rows[index], quality });
+    byEmail.set(quality.normalizedEmail, members);
+  });
+  return [...byEmail.entries()].filter(([, members]) => members.length > 1).map(([email, members]) => {
+    const parentIds = new Set(members.map(({ quality }) => quality.parentId).filter(Boolean));
+    const names = new Set(members.map(({ quality }) => `${foldText(quality.firstName)}|${foldText(quality.lastName)}`));
+    const dncStates = new Set(members.map(({ quality }) => quality.doNotContact));
+    return {
+      normalizedEmail: email,
+      count: members.length,
+      contactIds: members.map(({ quality }) => quality.id),
+      records: members.map(({ row, quality }) => ({
+        contactId: quality.id,
+        firstName: quality.firstName,
+        lastName: quality.lastName,
+        parentFk: quality.parentId || null,
+        company: referenceCaption(row, "Parent_FK") || null,
+        doNotContact: quality.doNotContact,
+        phone: firstValue(row, ["Phone", "PhoneNumber", "Mobile"]) || null,
+        created: clean(row?.Created) || null,
+        modified: clean(row?.Modified) || null
+      })),
+      sameLikelyPerson: names.size === 1 && ![...names][0].startsWith("|"),
+      multiplePeople: names.size > 1,
+      multipleCompanies: parentIds.size > 1,
+      roleAddress: members.some(({ quality }) => quality.roleAddress),
+      doNotContactConflict: dncStates.size > 1 || members.some(({ quality }) => quality.doNotContact)
+    };
+  }).sort((a, b) => b.count - a.count || a.normalizedEmail.localeCompare(b.normalizedEmail));
+}
+
+function summarizeCleanupContacts(rows, schemaMetadata) {
+  const dncField = confirmedDoNotContactField(schemaMetadata);
+  const qualityRows = rows.map((row) => contactQualityRecord(row, dncField));
+  const duplicates = duplicateGroups(rows, qualityRows);
+  const duplicateEmails = new Set(duplicates.map((group) => group.normalizedEmail));
+  const dncConflictEmails = new Set(duplicates.filter((group) => group.doNotContactConflict).map((group) => group.normalizedEmail));
+  const validRows = qualityRows.filter((row) => row.syntaxValid);
+  const uniqueDomains = [...new Set(validRows.map((row) => row.domain))].sort();
+  const candidateBeforeDns = qualityRows.filter((row) => row.syntaxValid && !row.typo && !row.doNotContact
+    && !row.doNotContactUnknown && !duplicateEmails.has(row.normalizedEmail) && row.nameOk);
+  const suspiciousRows = qualityRows.filter((row) => row.typo).map((quality) => ({
+    contactId: quality.id,
+    originalEmail: quality.originalEmail,
+    normalizedEmail: quality.normalizedEmail,
+    suspiciousDomain: quality.domain,
+    probableIntendedDomain: quality.typo.probableIntendedDomain,
+    reason: quality.typo.reason,
+    confidence: quality.typo.confidence
+  }));
+  return {
+    qualityRows,
+    duplicates,
+    uniqueDomains,
+    summary: {
+      total: rows.length,
+      email1Filled: qualityRows.filter((row) => row.normalizedEmail).length,
+      email1Empty: qualityRows.filter((row) => !row.normalizedEmail).length,
+      syntaxValid: validRows.length,
+      uniqueSyntaxValid: new Set(validRows.map((row) => row.normalizedEmail)).size,
+      invalidSyntax: qualityRows.filter((row) => row.normalizedEmail && !row.syntaxValid).length,
+      duplicateEmailOccurrences: validRows.length - new Set(validRows.map((row) => row.normalizedEmail)).size,
+      duplicateEmailGroups: duplicates.length,
+      doNotContact: qualityRows.filter((row) => row.doNotContact).length,
+      doNotContactWithEmail1: qualityRows.filter((row) => row.doNotContact && row.normalizedEmail).length,
+      doNotContactWithValidEmail1: qualityRows.filter((row) => row.doNotContact && row.syntaxValid).length,
+      doNotContactUnknownValues: qualityRows.filter((row) => row.doNotContactUnknown).length,
+      doNotContactConflictEmails: dncConflictEmails.size,
+      contactsWithFirstName: qualityRows.filter((row) => row.firstName).length,
+      contactsWithLastName: qualityRows.filter((row) => row.lastName).length,
+      contactsWithBothNames: qualityRows.filter((row) => row.firstName && row.lastName).length,
+      nameOk: qualityRows.filter((row) => row.nameOk).length,
+      nameMissing: qualityRows.filter((row) => !row.nameOk).length,
+      roleAddress: qualityRows.filter((row) => row.roleAddress).length,
+      salutationOk: 0,
+      salutationReview: qualityRows.filter((row) => row.nameOk).length,
+      salutationMissing: qualityRows.filter((row) => !row.nameOk).length,
+      candidateBeforeDns: candidateBeforeDns.length,
+      uniqueDomains: uniqueDomains.length
+    },
+    suspiciousRows
+  };
+}
+
+export function summarizeCleanupContactRows(rows = [], schemaMetadata = []) {
+  const result = summarizeCleanupContacts(rows, schemaMetadata);
+  return {
+    summary: result.summary,
+    doNotContactField: confirmedDoNotContactField(schemaMetadata),
+    duplicateGroups: result.duplicates,
+    suspiciousRows: result.suspiciousRows,
+    uniqueDomains: result.uniqueDomains
+  };
+}
+
+async function dnsMxStatus(domain) {
+  try {
+    const response = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=MX`, {
+      headers: { Accept: "application/dns-json" }
+    });
+    if (!response.ok) return { status: "DNS_ERROR", dnsStatus: response.status, mx: [] };
+    const body = await response.json();
+    const mx = Array.isArray(body.Answer) ? body.Answer.filter((answer) => Number(answer.type) === 15).map((answer) => clean(answer.data)) : [];
+    if (Number(body.Status) === 3) return { status: "INVALID_DOMAIN", dnsStatus: 3, mx: [] };
+    if (Number(body.Status) !== 0) return { status: "DNS_ERROR", dnsStatus: Number(body.Status), mx: [] };
+    return { status: mx.length ? "VALID_DOMAIN" : "NO_MX", dnsStatus: 0, mx };
+  } catch {
+    return { status: "DNS_ERROR", dnsStatus: null, mx: [] };
+  }
+}
+
+async function mapConcurrent(values, concurrency, mapper) {
+  const results = new Array(values.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < values.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(values[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker));
+  return results;
 }
 
 export function contactColumnsForSchema(schemaColumns = []) {
@@ -795,6 +1053,323 @@ export async function auditVistosContactsFull(env, options = {}) {
       pageSize: FULL_AUDIT_PAGE_SIZE,
       entities: performanceEntities,
       incompleteEntities: uniqueIncompleteEntities
+    },
+    testedAt: new Date().toISOString()
+  };
+}
+
+function unique(values) {
+  return [...new Set(values.map(clean).filter(Boolean))];
+}
+
+async function loadCleanupContacts(env, session) {
+  const schema = await schemaForEntity(env, session, "Contact");
+  const qualityFields = contactQualitySchema(schema.metadata);
+  const requested = unique([
+    "Id", "FirstName", "LastName", "MiddleName", "Email1", "EmailInvoicing",
+    "Phone", "PhoneNumber", "Mobile", "Parent_FK", "Status_FK", "Created", "Modified",
+    ...qualityFields.map((column) => column.field)
+  ]);
+  const load = await loadAllEntityRows(env, session, "Contact", availableColumns(schema, requested), { concurrency: 4 });
+  const cleanup = summarizeCleanupContacts(load.rows, schema.metadata);
+  const dncField = confirmedDoNotContactField(schema.metadata);
+  return { schema, qualityFields, requestedFields: availableColumns(schema, requested), load, cleanup, dncField };
+}
+
+function publicSchema(schema, relevantMetadata = schema.metadata) {
+  return {
+    columnCount: schema.columnCount,
+    fields: schema.fields,
+    relevantFields: relevantMetadata
+  };
+}
+
+function dncFieldReport(contactLoad) {
+  const field = contactLoad.dncField;
+  if (!field) {
+    return {
+      confirmed: false, field: null, caption: null, datatype: null, values: [],
+      trueInterpretation: null, falseInterpretation: null, unknownValues: [], confidence: "none"
+    };
+  }
+  const values = valueDistribution(contactLoad.load.rows, field.field);
+  return {
+    confirmed: true,
+    field: field.field,
+    caption: field.caption,
+    datatype: field.datatype,
+    values,
+    trueInterpretation: "boolean true / 1 / ano / yes => DO_NOT_CONTACT",
+    falseInterpretation: "boolean false / 0 / ne / no / empty => not flagged by this field",
+    unknownValues: values.filter(({ value }) => value !== "(empty)" && normalizedBoolean(value) === null),
+    confidence: "high: exact schema caption Neposílat SMS"
+  };
+}
+
+function salutationQaSample(rows, limit = 100) {
+  return rows.filter((row) => clean(row?.FirstName) || clean(row?.LastName)).slice(0, limit).map((row) => ({
+    contactId: clean(row?.Id),
+    firstName: clean(row?.FirstName) || null,
+    lastName: clean(row?.LastName) || null,
+    status: "SALUTATION_REVIEW",
+    candidate: null,
+    reason: "Rod ani český vokativ nejsou ve Vistos datech jednoznačně potvrzené; automatické oslovení nebylo vytvořeno."
+  }));
+}
+
+function hashString(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function invoiceRequestedFields(schema) {
+  const core = ["Id", "Customer_FK", "CustomerManager_FK", "Status_FK", "Created", "Modified"];
+  const pattern = /invoice|cislo|č[ií]slo|number|symbol|customer|status|date|datum|due|splat|paid|uhrad|amount|price|castk|částk|celkem|dph|currency|mena|měna|created|modified/i;
+  const discovered = schema.metadata.filter((column) => pattern.test(`${column.field} ${column.caption || ""}`)).map((column) => column.field);
+  return availableColumns(schema, unique([...core, ...discovered])).slice(0, 40);
+}
+
+function contactMetricsForIds(ids, indexes, cleanupById) {
+  const rows = [...ids].map((id) => indexes.byId.get(id)).filter(Boolean);
+  const qualities = rows.map((row) => cleanupById.get(clean(row?.Id))).filter(Boolean);
+  const emailCounts = new Map();
+  for (const quality of cleanupById.values()) {
+    if (quality.syntaxValid) emailCounts.set(quality.normalizedEmail, (emailCounts.get(quality.normalizedEmail) || 0) + 1);
+  }
+  const candidateRows = qualities.filter((quality) => quality.syntaxValid && !quality.typo && !quality.doNotContact
+    && !quality.doNotContactUnknown && quality.nameOk && emailCounts.get(quality.normalizedEmail) === 1);
+  const candidateByDomain = new Map();
+  for (const quality of candidateRows) candidateByDomain.set(quality.domain, (candidateByDomain.get(quality.domain) || 0) + 1);
+  return {
+    contacts: ids.size,
+    resolvedContacts: rows.length,
+    contactsWithValidEmail1: qualities.filter((quality) => quality.syntaxValid).length,
+    uniqueValidEmails: new Set(qualities.filter((quality) => quality.syntaxValid).map((quality) => quality.normalizedEmail)).size,
+    doNotContact: qualities.filter((quality) => quality.doNotContact).length,
+    nameOk: qualities.filter((quality) => quality.nameOk).length,
+    candidateBeforeDns: candidateRows.length,
+    candidateByDomain: [...candidateByDomain.entries()].map(([domain, contacts]) => ({ domain, contacts })).sort((a, b) => a.domain.localeCompare(b.domain))
+  };
+}
+
+async function auditDocumentV4(env, session, contactLoad, key) {
+  const definition = DOCUMENT_ENTITY_DEFINITIONS.find((item) => item.key === key);
+  if (!definition) throw new Error(`Neznámý Vistos document scope ${key}.`);
+  const schema = await schemaForEntity(env, session, definition.entityName);
+  const columns = availableColumns(schema, ["Id", "Status_FK", definition.companyField, ...definition.directContactFields]);
+  const indexes = contactIndexes(contactLoad.load.rows);
+  const cleanupById = new Map(contactLoad.cleanup.qualityRows.map((quality) => [quality.id, quality]));
+  const directIds = new Set();
+  const companyIds = new Set();
+  const statusCounts = new Map();
+  let includedDocuments = 0;
+  const page = await scanAllEntityRows(env, session, definition.entityName, columns, (rows) => {
+    addStatusRows(statusCounts, rows);
+    for (const row of rows) {
+      if (definition.confirmedActiveStatusId && recordId(row, "Status_FK") !== definition.confirmedActiveStatusId) continue;
+      includedDocuments += 1;
+      const companyId = recordId(row, definition.companyField);
+      if (companyId) companyIds.add(companyId);
+      for (const field of definition.directContactFields) {
+        const id = recordId(row, field);
+        if (id) directIds.add(id);
+      }
+    }
+  }, { concurrency: 2 });
+  const companyContactIds = new Set();
+  for (const companyId of companyIds) for (const contact of indexes.byCompany.get(companyId) || []) companyContactIds.add(clean(contact.Id));
+  return {
+    ok: true,
+    entityName: definition.entityName,
+    allDocuments: page.rowsRead,
+    includedDocuments,
+    inclusionRule: definition.confirmedActiveStatusId ? `Status_FK=${definition.confirmedActiveStatusId}` : "all rows; no active status inferred",
+    statusFkDistribution: sortedStatusDistribution(statusCounts),
+    uniqueCompanies: companyIds.size,
+    directContacts: contactMetricsForIds(directIds, indexes, cleanupById),
+    companyContacts: contactMetricsForIds(companyContactIds, indexes, cleanupById),
+    overlapDirectCompany: [...directIds].filter((id) => companyContactIds.has(id)).length,
+    performance: page
+  };
+}
+
+async function auditInvoiceV4(env, session, contactLoad) {
+  const schema = await schemaForEntity(env, session, "InvoiceIssued");
+  const columns = invoiceRequestedFields(schema);
+  const indexes = contactIndexes(contactLoad.load.rows);
+  const cleanupById = new Map(contactLoad.cleanup.qualityRows.map((quality) => [quality.id, quality]));
+  const directIds = new Set();
+  const companyIds = new Set();
+  const statusCounts = new Map();
+  const firstHashById = new Map();
+  const repeatedIds = new Set();
+  let repeatedOccurrences = 0;
+  let exactRepeatedOccurrences = 0;
+  let differingRepeatedOccurrences = 0;
+  const page = await scanAllEntityRows(env, session, "InvoiceIssued", columns, (rows) => {
+    addStatusRows(statusCounts, rows);
+    for (const row of rows) {
+      const id = clean(row?.Id);
+      const signature = hashString(columns.map((field) => `${field}=${clean(row?.[field])}|${recordId(row, field)}|${referenceCaption(row, field)}`).join("\u001f"));
+      if (id && firstHashById.has(id)) {
+        repeatedOccurrences += 1;
+        repeatedIds.add(id);
+        if (firstHashById.get(id) === signature) exactRepeatedOccurrences += 1;
+        else differingRepeatedOccurrences += 1;
+      } else if (id) firstHashById.set(id, signature);
+      const companyId = recordId(row, "Customer_FK");
+      if (companyId) companyIds.add(companyId);
+      const directId = recordId(row, "CustomerManager_FK");
+      if (directId) directIds.add(directId);
+    }
+  }, { concurrency: 2 });
+  const companyContactIds = new Set();
+  for (const companyId of companyIds) for (const contact of indexes.byCompany.get(companyId) || []) companyContactIds.add(clean(contact.Id));
+  const duplicationReason = differingRepeatedOccurrences
+    ? "Stejné InvoiceIssued Id se vrací s rozdílnými hodnotami alespoň v jednom načteném poli; to dokládá projekční/JOIN násobení, nikoli prosté identické kopie. Přesná child vazba nebyla bez dalšího metadata důkazu určena."
+    : repeatedOccurrences
+      ? "Opakované řádky jsou ve všech načtených polích shodné; zdroj opakování nelze z této projekce určit."
+      : "Žádná opakovaná Id.";
+  return {
+    ok: true,
+    schema: publicSchema(schema, schema.metadata.filter((column) => columns.includes(column.field))),
+    requestedFields: columns,
+    rawRows: page.rowsRead,
+    uniqueInvoiceIds: firstHashById.size,
+    repeatedIdCount: repeatedIds.size,
+    repeatedIdOccurrences: repeatedOccurrences,
+    exactRepeatedOccurrences,
+    differingRepeatedOccurrences,
+    duplicationReason,
+    uniqueCompanies: companyIds.size,
+    statusFkDistribution: sortedStatusDistribution(statusCounts),
+    directContacts: contactMetricsForIds(directIds, indexes, cleanupById),
+    companyContacts: contactMetricsForIds(companyContactIds, indexes, cleanupById),
+    performance: page
+  };
+}
+
+async function readEntityPageRange(env, session, entityName, columns, startPage, pageCount) {
+  const pageSize = FULL_AUDIT_PAGE_SIZE;
+  const first = await getVistosPage(env, session, entityName, columns, null, startPage * pageSize, pageSize);
+  const total = Number(first.filtered || first.total) || first.rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const count = Math.max(1, Math.min(Number(pageCount) || 5, 10, Math.max(1, totalPages - startPage)));
+  const pages = [first.rows];
+  for (let offset = 1; offset < count && startPage + offset < totalPages; offset += 1) {
+    const result = await getVistosPage(env, session, entityName, columns, null, (startPage + offset) * pageSize, pageSize);
+    pages.push(result.rows);
+  }
+  return { rows: pages.flat(), total, totalPages, pageSize, startPage, pagesRead: pages.length, nextPage: startPage + pages.length, done: startPage + pages.length >= totalPages };
+}
+
+async function auditServiceListBlock(env, session, contactLoad, options) {
+  const definition = DOCUMENT_ENTITY_DEFINITIONS.find((item) => item.key === "serviceList");
+  const schema = await schemaForEntity(env, session, definition.entityName);
+  const columns = availableColumns(schema, ["Id", "Status_FK", definition.companyField, ...definition.directContactFields]);
+  const range = await readEntityPageRange(env, session, definition.entityName, columns, Math.max(0, Number(options.startPage) || 0), Math.max(1, Number(options.pageCount) || 5));
+  const indexes = contactIndexes(contactLoad.load.rows);
+  const cleanupById = new Map(contactLoad.cleanup.qualityRows.map((quality) => [quality.id, quality]));
+  const directIds = new Set();
+  const companyIds = new Set();
+  for (const row of range.rows) {
+    const companyId = recordId(row, definition.companyField);
+    if (companyId) companyIds.add(companyId);
+    for (const field of definition.directContactFields) {
+      const id = recordId(row, field);
+      if (id) directIds.add(id);
+    }
+  }
+  const companyContactIds = new Set();
+  for (const companyId of companyIds) for (const contact of indexes.byCompany.get(companyId) || []) companyContactIds.add(clean(contact.Id));
+  return {
+    ok: true,
+    block: { totalRows: range.total, totalPages: range.totalPages, pageSize: range.pageSize, startPage: range.startPage, pagesRead: range.pagesRead, rowsRead: range.rows.length, nextPage: range.nextPage, done: range.done },
+    directContactIds: [...directIds],
+    companyContactIds: [...companyContactIds],
+    directContacts: contactMetricsForIds(directIds, indexes, cleanupById),
+    companyContacts: contactMetricsForIds(companyContactIds, indexes, cleanupById)
+  };
+}
+
+async function auditDomainBatch(contactLoad, options) {
+  const start = Math.max(0, Number(options.domainStart) || 0);
+  const limit = Math.max(1, Math.min(Number(options.domainLimit) || 50, 100));
+  const domains = contactLoad.cleanup.uniqueDomains.slice(start, start + limit);
+  const results = await mapConcurrent(domains, 10, async (domain) => ({ domain, ...(await dnsMxStatus(domain)) }));
+  const byDomain = new Map();
+  for (const quality of contactLoad.cleanup.qualityRows) {
+    if (!domains.includes(quality.domain)) continue;
+    const rows = byDomain.get(quality.domain) || [];
+    rows.push(quality);
+    byDomain.set(quality.domain, rows);
+  }
+  for (const result of results) {
+    const rows = byDomain.get(result.domain) || [];
+    result.contactOccurrences = rows.length;
+    result.uniqueEmails = new Set(rows.map((row) => row.normalizedEmail)).size;
+    result.readyForReview = result.status === "VALID_DOMAIN"
+      ? rows.filter((row) => row.syntaxValid && !row.typo && !row.doNotContact && !row.doNotContactUnknown && row.nameOk).length
+      : 0;
+  }
+  return { domainStart: start, domainLimit: limit, totalDomains: contactLoad.cleanup.uniqueDomains.length, nextDomainStart: start + domains.length, done: start + domains.length >= contactLoad.cleanup.uniqueDomains.length, results };
+}
+
+async function auditGdprV4(env, session) {
+  const entities = [];
+  for (const entityName of ["GdprLegalReasons", "GdprLegalReasonsDirectoryRow"]) {
+    const schema = await schemaForEntity(env, session, entityName);
+    const requested = availableColumns(schema, unique(["Id", "Name", "Directory_FK", "StartDate", "EndDate", "Created", "Modified", ...schema.metadata.map((column) => column.field)]));
+    const load = await loadAllEntityRows(env, session, entityName, requested, { concurrency: 1 });
+    const usedValues = {};
+    for (const field of requested) usedValues[field] = valueDistribution(load.rows, field);
+    entities.push({ entityName, rows: load.rows.length, sourceTotal: load.total, schema: publicSchema(schema), usedValues });
+  }
+  return {
+    entities,
+    newsletterConsentDeterminable: false,
+    consentReason: "Žádné pole ani hodnota nebyly bez jednoznačného právního významu interpretovány jako newsletterový souhlas."
+  };
+}
+
+export async function auditVistosContactCleanupV4(env, options = {}) {
+  if (!isVistosExecuteConfigured(env)) return { status: "not_configured", version: 4, readOnly: true };
+  const session = await loginVistosExecute(env);
+  const scope = clean(options.scope) || "contact";
+  const contactLoad = await loadCleanupContacts(env, session);
+  const base = {
+    version: 4, scope, source: "vistos", readOnly: true,
+    writesVistos: false, writesLeadHub: false, imports: false, sendsEmail: false, sendsSms: false,
+    mailboxVerificationAvailable: false,
+    mailboxVerificationReason: "V repozitáři nebyla nalezena specializovaná mailbox-verification služba; SendGrid je odesílací provider a pro tento audit nebyl použit."
+  };
+  if (scope === "domains") return { ...base, status: "complete", domains: await auditDomainBatch(contactLoad, options), testedAt: new Date().toISOString() };
+  if (scope === "duplicates") {
+    const start = Math.max(0, Number(options.detailStart) || 0);
+    const limit = Math.max(1, Math.min(Number(options.detailLimit) || 100, 250));
+    return { ...base, status: "complete", totalDuplicateGroups: contactLoad.cleanup.duplicates.length, detailStart: start, nextDetailStart: start + Math.min(limit, Math.max(0, contactLoad.cleanup.duplicates.length - start)), details: contactLoad.cleanup.duplicates.slice(start, start + limit), testedAt: new Date().toISOString() };
+  }
+  if (scope === "invoice") return { ...base, status: "complete", invoice: await auditInvoiceV4(env, session, contactLoad), testedAt: new Date().toISOString() };
+  if (["contract", "quote", "order"].includes(scope)) return { ...base, status: "complete", document: await auditDocumentV4(env, session, contactLoad, scope), testedAt: new Date().toISOString() };
+  if (scope === "gdpr") return { ...base, status: "complete", gdpr: await auditGdprV4(env, session), testedAt: new Date().toISOString() };
+  if (scope === "serviceListBlock") return { ...base, status: "complete", serviceList: await auditServiceListBlock(env, session, contactLoad, options), testedAt: new Date().toISOString() };
+  const integrity = pageIntegrity(contactLoad.load);
+  return {
+    ...base,
+    status: integrity.complete ? "complete" : "partial",
+    contact: {
+      schema: publicSchema(contactLoad.schema),
+      relevantCommunicationFields: contactLoad.qualityFields.map((column) => ({ ...column, values: valueDistribution(contactLoad.load.rows, column.field) })),
+      doNotContactField: dncFieldReport(contactLoad),
+      ...contactLoad.cleanup.summary,
+      suspiciousTypoCount: contactLoad.cleanup.suspiciousRows.length,
+      suspiciousTypoSample: contactLoad.cleanup.suspiciousRows.slice(0, 250),
+      salutationQaSample: salutationQaSample(contactLoad.load.rows, 100),
+      performance: { pageSize: contactLoad.load.pageSize, pagesRead: contactLoad.load.pagesRead, rowsRead: contactLoad.load.rows.length, sourceTotal: contactLoad.load.total, duplicatePageIds: integrity.duplicateIds }
     },
     testedAt: new Date().toISOString()
   };
