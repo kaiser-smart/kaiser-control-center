@@ -27,35 +27,22 @@ const r2 = new MemoryR2({
   [`protected-audits/vistos-contact-cleanup-v4/${baselineRunId}/dns-state.json`]: JSON.stringify(baselineDns)
 });
 const originalFetch = globalThis.fetch;
-globalThis.fetch = async (url) => {
-  if (String(url).includes("/profiles/email-address/")) return Response.json({ error_code: "profile_not_found" }, { status: 404 });
-  if (String(url).includes("/subscriptions/email-address/")) return Response.json({ error_code: "profile_not_found" }, { status: 404 });
-  if (String(url).endsWith("/interest-lists")) return Response.json([]);
-  throw new Error(`unexpected init URL ${url}`);
-};
+let initializationFetches = 0;
+globalThis.fetch = async () => { initializationFetches += 1; throw new Error("initialization must not call LeadHub"); };
 const initialized = await runVistosLeadHubProfileSync({ R2_ARCHIVE: r2, LEADHUB_API_TOKEN: "test-api-token" }, { scheduledAt: "2026-09-10T10:00:00Z" });
 globalThis.fetch = originalFetch;
 assert.equal(initialized.syncStatus, "ACTIVE");
 assert.equal(initialized.checkpoint, "2026-09-10T10:00:00.000Z");
 assert.equal(initialized.historicalProfilesImported, 0, "initial checkpoint must not bulk-import the baseline");
-assert.deepEqual(initialized.apiReadValidation, {
-  profilesRead: true,
-  subscriptionsRead: true,
-  interestListsRead: true
-}, "missing profiles must still prove the read scopes without creating a profile");
+assert.equal(initializationFetches, 0);
+assert.equal(initialized.apiReadValidation.status, "deferred_until_first_profile_delta");
 
 const preparedR2 = new MemoryR2({
   "protected-audits/vistos-contact-cleanup-v4/latest.json": JSON.stringify({ runId: baselineRunId }),
   "protected-sync/vistos-leadhub-profiles/contact-snapshot.json": JSON.stringify(baselineSnapshot),
   "protected-sync/vistos-leadhub-profiles/dns-state.json": JSON.stringify(baselineDns)
 });
-globalThis.fetch = async (url) => {
-  if (String(url).includes("/profiles/email-address/") || String(url).includes("/subscriptions/email-address/")) {
-    return Response.json({ error_code: "profile_not_found" }, { status: 404 });
-  }
-  if (String(url).endsWith("/interest-lists")) return Response.json([]);
-  throw new Error(`unexpected prepared init URL ${url}`);
-};
+globalThis.fetch = async () => { throw new Error("prepared initialization must not call LeadHub"); };
 const preparedInitialization = await runVistosLeadHubProfileSync({ R2_ARCHIVE: preparedR2, LEADHUB_API_TOKEN: "test-api-token" }, { scheduledAt: "2026-09-10T10:01:00Z" });
 globalThis.fetch = originalFetch;
 assert.equal(preparedInitialization.historicalProfilesImported, 0);

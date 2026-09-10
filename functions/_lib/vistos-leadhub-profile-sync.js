@@ -263,12 +263,6 @@ function exclusionReasons(cleanup, contactId, email) {
 
 async function initializeState(env, scheduledAt) {
   const storage = bucket(env);
-  const probeEmail = `esmart-sync-scope-probe-${Date.now()}@invalid.example`;
-  const [profileProbe, subscriptionProbe, interestListsProbe] = await Promise.all([
-    leadHubRequest(env, `/profiles/email-address/${encodeURIComponent(probeEmail)}`, { allow404: true }),
-    leadHubRequest(env, `/subscriptions/email-address/${encodeURIComponent(probeEmail)}`, { allow404: true }),
-    leadHubRequest(env, "/interest-lists")
-  ]);
   const latest = await getJson(storage, AUDIT_LATEST_KEY);
   if (!latest?.runId) {
     const error = new Error("Chybí dokončený chráněný Contact/DNS snapshot.");
@@ -297,9 +291,10 @@ async function initializeState(env, scheduledAt) {
     profiles: {},
     totals: { created: 0, updated: 0, deactivated: 0, subscriptionChanges: 0, messagesSent: 0 },
     apiReadValidation: {
-      profilesRead: [200, 404].includes(profileProbe.status),
-      subscriptionsRead: [200, 404].includes(subscriptionProbe.status),
-      interestListsRead: interestListsProbe.status === 200
+      profilesRead: null,
+      subscriptionsRead: null,
+      validatedAt: null,
+      status: "deferred_until_first_profile_delta"
     },
     lastRun: { status: "checkpoint_initialized", finishedAt: checkpoint, sourceRows: 0, created: 0, updated: 0, deactivated: 0, readbackConfirmed: 0 }
   };
@@ -430,6 +425,14 @@ export async function runVistosLeadHubProfileSync(env, options = {}) {
       subscriptions: result.subscriptions,
       suppressed: result.suppressed,
       lastSyncedAt: scheduledAt
+    };
+  }
+  if (current.length) {
+    state.apiReadValidation = {
+      profilesRead: true,
+      subscriptionsRead: true,
+      validatedAt: scheduledAt,
+      status: "validated_by_profile_readback"
     };
   }
   state.pending = remaining;
