@@ -38,23 +38,37 @@ assert.equal(suspiciousEmailDomain("gmail.com"), null);
 
 const cleanup = summarizeCleanupContactRows([
   { Id: 1, FirstName: "Jan", Email1: " A@GMAIL.COM ", Parent_FK_RecordId: 10, Kontaktovatsms: true, SendMailEnabled: true, CallEnabled: true, DoNotWorkCompany: false },
-  { Id: 2, LastName: "Novák", Email1: "a@gmail.com", Parent_FK_RecordId: 20, Kontaktovatsms: false, SendMailEnabled: true, CallEnabled: true, DoNotWorkCompany: false },
+  { Id: 2, LastName: "Novák", Email1: "a@gmail.com", Parent_FK_RecordId: 20, Kontaktovatsms: false, SendMailEnabled: true, CallEnabled: true, DoNotWorkCompany: true },
   { Id: 3, Email1: "info@gmial.com", Kontaktovatsms: true, SendMailEnabled: true, CallEnabled: true, DoNotWorkCompany: false },
-  { Id: 4, FirstName: "Eva" }
+  { Id: 4, FirstName: "Eva" },
+  { Id: 5, FirstName: "Petr", Email1: "petr@example.cz", Kontaktovatsms: true, SendMailEnabled: true, CallEnabled: true, DoNotWorkCompany: true },
+  { Id: 6, FirstName: "Pavel", Email1: "pavel@example.cz", Kontaktovatsms: true, SendMailEnabled: true, CallEnabled: true, DoNotWorkCompany: null }
 ], [
   { field: "Kontaktovatsms", caption: "Kontaktovat SMS", datatype: "Boolean" },
   { field: "SendMailEnabled", caption: "Povolit e-mail", datatype: "Boolean" },
   { field: "CallEnabled", caption: "Povolit volání", datatype: "Boolean" },
-  { field: "DoNotWorkCompany", caption: "Nespolupracovat s firmou", datatype: "Boolean" }
+  { field: "DoNotWorkCompany", caption: "Už nepracuje ve firmě", datatype: "Boolean" }
 ]);
-assert.equal(cleanup.summary.total, 4);
-assert.equal(cleanup.summary.email1Filled, 3);
+assert.equal(cleanup.summary.total, 6);
+assert.equal(cleanup.summary.email1Filled, 5);
 assert.equal(cleanup.summary.duplicateEmailOccurrences, 1);
 assert.equal(cleanup.summary.doNotContact, 1);
 assert.equal(cleanup.summary.doNotContactConflictEmails, 1);
 assert.equal(cleanup.suspiciousRows.length, 1);
 assert.equal(cleanup.duplicateGroups[0].doNotContactConflict, true);
 assert.equal(cleanup.summary.doNotContactUnknownValues, 1);
+assert.equal(cleanup.doNotContactMappings.some((mapping) => mapping.field === "DoNotWorkCompany"), false);
+assert.equal(cleanup.leftCompanyField.field, "DoNotWorkCompany");
+assert.equal(cleanup.leftCompanyField.uiCaption, "Už nepracuje ve firmě");
+assert.equal(cleanup.summary.leftCompanyTrue, 2);
+assert.equal(cleanup.summary.leftCompanyFalse, 2);
+assert.equal(cleanup.summary.leftCompanyUnknown, 2);
+assert.equal(cleanup.summary.leftCompanyUniqueEmails, 2);
+assert.equal(cleanup.summary.employmentConflictReviewEmails, 1);
+assert.equal(cleanup.summary.employmentConflictReviewContacts, 2);
+assert.equal(cleanup.duplicateGroups[0].employmentConflictReview, true);
+assert.equal(cleanup.summary.newlyExcludedByLeftCompany, 1);
+assert.equal(cleanup.summary.alreadyBlockedByOtherFilter, 1);
 
 const unknownDnc = summarizeCleanupContactRows([
   { Id: 1, FirstName: "Jan", Email1: "jan@example.cz", Kontaktovatsms: true }
@@ -180,3 +194,4 @@ assert.match(appSource, /data-vistos-audit-v4/);
 assert.match(appSource, /runVistosAuditV4/);
 assert.match(appSource, /invoiceBlock/);
 assert.match(appSource, /serviceListRawBlock/);
+assert.match(appSource, /row\.leftCompanyState === "FALSE"/);

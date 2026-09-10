@@ -41287,7 +41287,8 @@ function vistosAuditV4ServiceMetrics(qualityById, domainStatus) {
     doNotContact: rows.filter((row) => row.doNotContact).length,
     nameOk: rows.filter((row) => row.nameOk).length,
     readyForReview: rows.filter((row) => row.syntaxValid && !row.typo && !row.doNotContact
-      && !row.doNotContactUnknown && !row.duplicate && row.nameOk && domainStatus.get(row.domain) === "VALID_DOMAIN").length
+      && !row.doNotContactUnknown && row.leftCompanyState === "FALSE"
+      && !row.duplicate && row.nameOk && domainStatus.get(row.domain) === "VALID_DOMAIN").length
   };
 }
 
@@ -41301,7 +41302,8 @@ function vistosAuditV4MetricsForIds(ids, qualityById, domainStatus) {
     doNotContact: rows.filter((row) => row.doNotContact).length,
     nameOk: rows.filter((row) => row.nameOk).length,
     readyForReview: rows.filter((row) => row.syntaxValid && !row.typo && !row.doNotContact
-      && !row.doNotContactUnknown && !row.duplicate && row.nameOk && domainStatus.get(row.domain) === "VALID_DOMAIN").length
+      && !row.doNotContactUnknown && row.leftCompanyState === "FALSE"
+      && !row.duplicate && row.nameOk && domainStatus.get(row.domain) === "VALID_DOMAIN").length
   };
 }
 
@@ -41495,10 +41497,11 @@ async function runVistosAuditV4() {
         && invoiceReproducibility.reproducible && serviceReproducibility.reproducible ? "COMPLETE" : "PARTIAL",
       testedAt: new Date().toISOString(),
       contact: {
-        ...Object.fromEntries(Object.entries(contact).filter(([key]) => !["schema", "relevantCommunicationFields", "doNotContactField", "suspiciousTypoSample", "salutationQaSample", "compactQuality", "performance"].includes(key))),
+        ...Object.fromEntries(Object.entries(contact).filter(([key]) => !["schema", "relevantCommunicationFields", "doNotContactField", "leftCompanyField", "suspiciousTypoSample", "salutationQaSample", "compactQuality", "performance"].includes(key))),
         schema: contact.schema,
         relevantCommunicationFields: contact.relevantCommunicationFields,
         doNotContactField: contact.doNotContactField,
+        leftCompanyField: contact.leftCompanyField,
         suspiciousTypoSampleAudited: (contact.suspiciousTypoSample || []).length,
         salutationQaSampleAudited: (contact.salutationQaSample || []).length,
         performance: contact.performance,

@@ -534,17 +534,19 @@ const DNC_FIELD_DEFINITIONS = [
     falseMeaning: "telefonické kontaktování zakázáno",
     trueDnc: false,
     falseDnc: true
-  },
-  {
-    field: "DoNotWorkCompany",
-    owner: "company",
-    acceptedCaptions: ["nespolupracovat s firmou", "nepracovat s firmou"],
-    trueMeaning: "firma je blokovaná pro spolupráci",
-    falseMeaning: "firma tímto polem není blokovaná",
-    trueDnc: true,
-    falseDnc: false
   }
 ];
+
+const LEFT_COMPANY_FIELD = {
+  field: "DoNotWorkCompany",
+  entity: "Contact",
+  uiCaption: "Už nepracuje ve firmě",
+  uiTooltip: "Pokud kontakt ve firmě nepracuje nastav ANO.",
+  trueMeaning: "LEFT_COMPANY",
+  falseMeaning: "kontakt není označen jako bývalý pracovník",
+  emptyMeaning: "UNKNOWN",
+  evidence: "Vistos UI #/Contact/edit/<id>: data-validation-name=ValidationMessage.Contact.DoNotWorkCompany; read-only DOM inspection 2026-09-10"
+};
 
 function normalizeCaption(value) {
   return foldText(value).replace(/[^a-z0-9]+/g, " ").trim();
@@ -584,6 +586,11 @@ function dncStateForRow(row, mappings) {
     hasFalse = true;
   }
   return hasUnknown ? "UNKNOWN" : hasFalse ? "FALSE" : "UNKNOWN";
+}
+
+function leftCompanyStateForRow(row) {
+  const value = normalizedBoolean(row?.[LEFT_COMPANY_FIELD.field]);
+  return value === true ? "TRUE" : value === false ? "FALSE" : "UNKNOWN";
 }
 
 function isRoleAddress(email) {
@@ -656,6 +663,7 @@ function contactQualityRecord(row, dncMappings) {
   const domain = syntaxValid ? normalizedEmail.split("@")[1] : "";
   const typo = domain ? suspiciousEmailDomain(domain) : null;
   const dncState = dncStateForRow(row, dncMappings);
+  const leftCompanyState = leftCompanyStateForRow(row);
   const firstName = clean(row?.FirstName);
   const lastName = clean(row?.LastName);
   const nameOk = humanNameValue(firstName) || humanNameValue(lastName);
@@ -664,6 +672,7 @@ function contactQualityRecord(row, dncMappings) {
   return {
     id: clean(row?.Id), originalEmail, normalizedEmail, syntaxValid, domain, typo,
     doNotContactState: dncState, doNotContact: dncState === "TRUE", doNotContactUnknown: dncState === "UNKNOWN",
+    leftCompanyState, leftCompany: leftCompanyState === "TRUE", leftCompanyUnknown: leftCompanyState === "UNKNOWN",
     firstName, lastName, nameOk, roleAddress, salutation,
     parentId: recordId(row, "Parent_FK")
   };
@@ -681,6 +690,7 @@ function duplicateGroups(rows, qualityRows) {
     const parentIds = new Set(members.map(({ quality }) => quality.parentId).filter(Boolean));
     const names = new Set(members.map(({ quality }) => `${foldText(quality.firstName)}|${foldText(quality.lastName)}`));
     const dncStates = new Set(members.map(({ quality }) => quality.doNotContactState));
+    const employmentStates = new Set(members.map(({ quality }) => quality.leftCompanyState));
     return {
       normalizedEmail: email,
       count: members.length,
@@ -692,6 +702,7 @@ function duplicateGroups(rows, qualityRows) {
         parentFk: quality.parentId || null,
         company: referenceCaption(row, "Parent_FK") || null,
         doNotContact: quality.doNotContactState,
+        leftCompany: quality.leftCompanyState,
         phone: firstValue(row, ["Phone", "PhoneNumber", "Mobile"]) || null,
         created: clean(row?.Created) || null,
         modified: clean(row?.Modified) || null
@@ -700,7 +711,9 @@ function duplicateGroups(rows, qualityRows) {
       multiplePeople: names.size > 1,
       multipleCompanies: parentIds.size > 1,
       roleAddress: members.some(({ quality }) => quality.roleAddress),
-      doNotContactConflict: dncStates.has("TRUE") || dncStates.has("UNKNOWN")
+      doNotContactConflict: dncStates.has("TRUE") || dncStates.has("UNKNOWN"),
+      employmentConflictReview: employmentStates.has("TRUE") && employmentStates.has("FALSE"),
+      employmentUnknownConflictReview: employmentStates.has("TRUE") && employmentStates.has("UNKNOWN")
     };
   }).sort((a, b) => b.count - a.count || a.normalizedEmail.localeCompare(b.normalizedEmail));
 }
@@ -711,10 +724,17 @@ function summarizeCleanupContacts(rows, schemaMetadata) {
   const duplicates = duplicateGroups(rows, qualityRows);
   const duplicateEmails = new Set(duplicates.map((group) => group.normalizedEmail));
   const dncConflictEmails = new Set(duplicates.filter((group) => group.doNotContactConflict).map((group) => group.normalizedEmail));
+  const employmentConflictEmails = new Set(duplicates.filter((group) => group.employmentConflictReview).map((group) => group.normalizedEmail));
+  const employmentUnknownConflictEmails = new Set(duplicates.filter((group) => group.employmentUnknownConflictReview).map((group) => group.normalizedEmail));
   const validRows = qualityRows.filter((row) => row.syntaxValid);
   const uniqueDomains = [...new Set(validRows.map((row) => row.domain))].sort();
   const candidateBeforeDns = qualityRows.filter((row) => row.syntaxValid && !row.typo && !row.doNotContact
-    && !row.doNotContactUnknown && !duplicateEmails.has(row.normalizedEmail) && row.nameOk);
+    && !row.doNotContactUnknown && row.leftCompanyState === "FALSE"
+    && !duplicateEmails.has(row.normalizedEmail) && !employmentConflictEmails.has(row.normalizedEmail)
+    && !employmentUnknownConflictEmails.has(row.normalizedEmail) && row.nameOk);
+  const leftCompanyRows = qualityRows.filter((row) => row.leftCompany);
+  const leftCompanyUniqueEmails = new Set(leftCompanyRows.filter((row) => row.normalizedEmail).map((row) => row.normalizedEmail));
+  const leftCompanyUniqueValidEmails = new Set(leftCompanyRows.filter((row) => row.syntaxValid).map((row) => row.normalizedEmail));
   const suspiciousRows = qualityRows.filter((row) => row.typo).map((quality) => ({
     contactId: quality.id,
     originalEmail: quality.originalEmail,
@@ -742,6 +762,20 @@ function summarizeCleanupContacts(rows, schemaMetadata) {
       doNotContactWithValidEmail1: qualityRows.filter((row) => row.doNotContact && row.syntaxValid).length,
       doNotContactUnknownValues: qualityRows.filter((row) => row.doNotContactUnknown).length,
       doNotContactConflictEmails: dncConflictEmails.size,
+      leftCompanyTrue: leftCompanyRows.length,
+      leftCompanyFalse: qualityRows.filter((row) => row.leftCompanyState === "FALSE").length,
+      leftCompanyUnknown: qualityRows.filter((row) => row.leftCompanyState === "UNKNOWN").length,
+      leftCompanyWithEmail1: leftCompanyRows.filter((row) => row.normalizedEmail).length,
+      leftCompanyUniqueEmails: leftCompanyUniqueEmails.size,
+      leftCompanyUniqueValidEmails: leftCompanyUniqueValidEmails.size,
+      employmentConflictReviewEmails: employmentConflictEmails.size,
+      employmentConflictReviewContacts: qualityRows.filter((row) => employmentConflictEmails.has(row.normalizedEmail)).length,
+      employmentUnknownConflictReviewEmails: employmentUnknownConflictEmails.size,
+      employmentUnknownConflictReviewContacts: qualityRows.filter((row) => employmentUnknownConflictEmails.has(row.normalizedEmail)).length,
+      newlyExcludedByLeftCompany: leftCompanyRows.filter((row) => row.syntaxValid && !row.typo
+        && row.doNotContactState === "FALSE" && !duplicateEmails.has(row.normalizedEmail) && row.nameOk).length,
+      alreadyBlockedByOtherFilter: leftCompanyRows.filter((row) => !(row.syntaxValid && !row.typo
+        && row.doNotContactState === "FALSE" && !duplicateEmails.has(row.normalizedEmail) && row.nameOk)).length,
       contactsWithFirstName: qualityRows.filter((row) => row.firstName).length,
       contactsWithLastName: qualityRows.filter((row) => row.lastName).length,
       contactsWithBothNames: qualityRows.filter((row) => row.firstName && row.lastName).length,
@@ -756,7 +790,8 @@ function summarizeCleanupContacts(rows, schemaMetadata) {
       uniqueDomains: uniqueDomains.length
     },
     suspiciousRows,
-    dncMappings
+    dncMappings,
+    leftCompanyField: LEFT_COMPANY_FIELD
   };
 }
 
@@ -766,6 +801,7 @@ export function summarizeCleanupContactRows(rows = [], schemaMetadata = []) {
     summary: result.summary,
     doNotContactField: confirmedDoNotContactField(schemaMetadata),
     doNotContactMappings: result.dncMappings,
+    leftCompanyField: result.leftCompanyField,
     duplicateGroups: result.duplicates,
     suspiciousRows: result.suspiciousRows,
     uniqueDomains: result.uniqueDomains
@@ -1267,6 +1303,23 @@ function dncFieldReport(contactLoad) {
   };
 }
 
+function leftCompanyFieldReport(contactLoad) {
+  return {
+    confirmed: true,
+    field: LEFT_COMPANY_FIELD.field,
+    entity: LEFT_COMPANY_FIELD.entity,
+    uiCaption: LEFT_COMPANY_FIELD.uiCaption,
+    uiTooltip: LEFT_COMPANY_FIELD.uiTooltip,
+    datatype: contactLoad.schema.metadata.find((column) => column.field === LEFT_COMPANY_FIELD.field)?.datatype || null,
+    trueMeaning: LEFT_COMPANY_FIELD.trueMeaning,
+    falseMeaning: LEFT_COMPANY_FIELD.falseMeaning,
+    emptyMeaning: LEFT_COMPANY_FIELD.emptyMeaning,
+    values: valueDistribution(contactLoad.load.rows, LEFT_COMPANY_FIELD.field),
+    evidence: LEFT_COMPANY_FIELD.evidence,
+    scope: "contact-only; the flag does not apply to other contacts of the same company"
+  };
+}
+
 function salutationQaSample(qualityRows, limit = 100) {
   const selected = [];
   for (const status of ["SALUTATION_CANDIDATE", "SALUTATION_REVIEW", "SALUTATION_MISSING"]) {
@@ -1317,7 +1370,8 @@ function contactMetricsForIds(ids, indexes, cleanupById) {
     if (quality.syntaxValid) emailCounts.set(quality.normalizedEmail, (emailCounts.get(quality.normalizedEmail) || 0) + 1);
   }
   const candidateRows = qualities.filter((quality) => quality.syntaxValid && !quality.typo && !quality.doNotContact
-    && !quality.doNotContactUnknown && quality.nameOk && emailCounts.get(quality.normalizedEmail) === 1);
+    && !quality.doNotContactUnknown && quality.leftCompanyState === "FALSE"
+    && quality.nameOk && emailCounts.get(quality.normalizedEmail) === 1);
   const candidateByDomain = new Map();
   for (const quality of candidateRows) candidateByDomain.set(quality.domain, (candidateByDomain.get(quality.domain) || 0) + 1);
   return {
@@ -1326,6 +1380,8 @@ function contactMetricsForIds(ids, indexes, cleanupById) {
     contactsWithValidEmail1: qualities.filter((quality) => quality.syntaxValid).length,
     uniqueValidEmails: new Set(qualities.filter((quality) => quality.syntaxValid).map((quality) => quality.normalizedEmail)).size,
     doNotContact: qualities.filter((quality) => quality.doNotContact).length,
+    leftCompany: qualities.filter((quality) => quality.leftCompany).length,
+    leftCompanyUnknown: qualities.filter((quality) => quality.leftCompanyUnknown).length,
     nameOk: qualities.filter((quality) => quality.nameOk).length,
     candidateBeforeDns: candidateRows.length,
     candidateByDomain: [...candidateByDomain.entries()].map(([domain, contacts]) => ({ domain, contacts })).sort((a, b) => a.domain.localeCompare(b.domain))
@@ -1468,6 +1524,9 @@ async function auditServiceListBlock(env, session, contactLoad, options) {
     syntaxValid: quality.syntaxValid,
     doNotContact: quality.doNotContact,
     doNotContactUnknown: quality.doNotContactUnknown,
+    leftCompanyState: quality.leftCompanyState,
+    leftCompany: quality.leftCompany,
+    leftCompanyUnknown: quality.leftCompanyUnknown,
     nameOk: quality.nameOk,
     typo: Boolean(quality.typo),
     roleAddress: quality.roleAddress,
@@ -1505,7 +1564,7 @@ async function auditDomainBatch(contactLoad, options) {
     result.uniqueEmails = new Set(rows.map((row) => row.normalizedEmail)).size;
     result.readyForReview = result.status === "VALID_DOMAIN"
       ? rows.filter((row) => row.syntaxValid && !row.typo && !row.doNotContact && !row.doNotContactUnknown
-        && !duplicateEmails.has(row.normalizedEmail) && row.nameOk).length
+        && row.leftCompanyState === "FALSE" && !duplicateEmails.has(row.normalizedEmail) && row.nameOk).length
       : 0;
   }
   return { domainStart: start, domainLimit: limit, totalDomains: contactLoad.cleanup.uniqueDomains.length, nextDomainStart: start + domains.length, done: start + domains.length >= contactLoad.cleanup.uniqueDomains.length, results };
@@ -1585,6 +1644,7 @@ export async function auditVistosContactCleanupV4(env, options = {}) {
       schema: publicSchema(contactLoad.schema),
       relevantCommunicationFields: contactLoad.qualityFields.map((column) => ({ ...column, values: valueDistribution(contactLoad.load.rows, column.field) })),
       doNotContactField: dncFieldReport(contactLoad),
+      leftCompanyField: leftCompanyFieldReport(contactLoad),
       ...contactLoad.cleanup.summary,
       suspiciousTypoCount: contactLoad.cleanup.suspiciousRows.length,
       suspiciousTypoSample: contactLoad.cleanup.suspiciousRows.slice(0, 250),
@@ -1601,6 +1661,9 @@ export async function auditVistosContactCleanupV4(env, options = {}) {
           doNotContact: quality.doNotContact,
           doNotContactUnknown: quality.doNotContactUnknown,
           doNotContactState: quality.doNotContactState,
+          leftCompanyState: quality.leftCompanyState,
+          leftCompany: quality.leftCompany,
+          leftCompanyUnknown: quality.leftCompanyUnknown,
           duplicate: duplicateEmails.has(quality.normalizedEmail),
           nameOk: quality.nameOk,
           roleAddress: quality.roleAddress,
