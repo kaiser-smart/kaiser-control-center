@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.757"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.758"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vistos → LeadHub: checkpoint bez síťové závislosti",
+    text: "Výchozí checkpoint vzniká pouze nad chráněným R2 stavem a nečeká na externí API. LeadHub READ scopes a zpětné čtení se potvrdí při prvním skutečně změněném profilu; bez změny se nic do LeadHubu nezapisuje."
+  },
   {
     title: "Vistos → LeadHub: bezpečný kompaktní checkpoint",
     text: "První plánovaný běh umí převzít předem připravený chráněný Contact/DNS snapshot bez načtení velkého auditu do paměti. Stále vytvoří jen checkpoint, ověří READ scopes a neimportuje žádný historický profil."
