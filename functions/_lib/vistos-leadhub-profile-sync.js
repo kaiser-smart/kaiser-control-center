@@ -276,12 +276,14 @@ async function initializeState(env, scheduledAt) {
     error.code = "vistos_leadhub_baseline_missing";
     throw error;
   }
-  const sourceSnapshot = await getJson(storage, `${AUDIT_PREFIX}/${latest.runId}/contact-snapshot.json`);
-  const sourceDns = await getJson(storage, `${AUDIT_PREFIX}/${latest.runId}/dns-state.json`);
-  if (!sourceSnapshot || !sourceDns) {
-    const error = new Error("Chráněný Contact snapshot nebo DNS mapa nejsou dostupné.");
+  const [preparedSnapshot, preparedDns] = await Promise.all([
+    storage.head(SYNC_SNAPSHOT_KEY),
+    storage.head(SYNC_DNS_KEY)
+  ]);
+  if (Boolean(preparedSnapshot) !== Boolean(preparedDns)) {
+    const error = new Error("Připravený synchronizační Contact snapshot a DNS mapa nejsou konzistentní.");
     error.status = 409;
-    error.code = "vistos_leadhub_baseline_incomplete";
+    error.code = "vistos_leadhub_prepared_baseline_incomplete";
     throw error;
   }
   const checkpoint = (validDate(scheduledAt) || new Date()).toISOString();
@@ -301,11 +303,23 @@ async function initializeState(env, scheduledAt) {
     },
     lastRun: { status: "checkpoint_initialized", finishedAt: checkpoint, sourceRows: 0, created: 0, updated: 0, deactivated: 0, readbackConfirmed: 0 }
   };
-  await Promise.all([
-    putJson(storage, SYNC_SNAPSHOT_KEY, sourceSnapshot),
-    putJson(storage, SYNC_DNS_KEY, sourceDns),
-    putJson(storage, SYNC_STATE_KEY, state)
-  ]);
+  if (preparedSnapshot && preparedDns) {
+    await putJson(storage, SYNC_STATE_KEY, state);
+  } else {
+    const sourceSnapshot = await getJson(storage, `${AUDIT_PREFIX}/${latest.runId}/contact-snapshot.json`);
+    const sourceDns = await getJson(storage, `${AUDIT_PREFIX}/${latest.runId}/dns-state.json`);
+    if (!sourceSnapshot || !sourceDns) {
+      const error = new Error("Chráněný Contact snapshot nebo DNS mapa nejsou dostupné.");
+      error.status = 409;
+      error.code = "vistos_leadhub_baseline_incomplete";
+      throw error;
+    }
+    await Promise.all([
+      putJson(storage, SYNC_SNAPSHOT_KEY, sourceSnapshot),
+      putJson(storage, SYNC_DNS_KEY, sourceDns),
+      putJson(storage, SYNC_STATE_KEY, state)
+    ]);
+  }
   return { ...state.lastRun, syncStatus: "ACTIVE", checkpoint, historicalProfilesImported: 0, apiReadValidation: state.apiReadValidation };
 }
 

@@ -10,6 +10,7 @@ class MemoryR2 {
     const value = this.values.get(key);
     return value === undefined ? null : { json: async () => JSON.parse(value) };
   }
+  async head(key) { return this.values.has(key) ? { key } : null; }
   async put(key, value) { this.values.set(key, String(value)); }
 }
 
@@ -42,6 +43,23 @@ assert.deepEqual(initialized.apiReadValidation, {
   subscriptionsRead: true,
   interestListsRead: true
 }, "missing profiles must still prove the read scopes without creating a profile");
+
+const preparedR2 = new MemoryR2({
+  "protected-audits/vistos-contact-cleanup-v4/latest.json": JSON.stringify({ runId: baselineRunId }),
+  "protected-sync/vistos-leadhub-profiles/contact-snapshot.json": JSON.stringify(baselineSnapshot),
+  "protected-sync/vistos-leadhub-profiles/dns-state.json": JSON.stringify(baselineDns)
+});
+globalThis.fetch = async (url) => {
+  if (String(url).includes("/profiles/email-address/") || String(url).includes("/subscriptions/email-address/")) {
+    return Response.json({ error_code: "profile_not_found" }, { status: 404 });
+  }
+  if (String(url).endsWith("/interest-lists")) return Response.json([]);
+  throw new Error(`unexpected prepared init URL ${url}`);
+};
+const preparedInitialization = await runVistosLeadHubProfileSync({ R2_ARCHIVE: preparedR2, LEADHUB_API_TOKEN: "test-api-token" }, { scheduledAt: "2026-09-10T10:01:00Z" });
+globalThis.fetch = originalFetch;
+assert.equal(preparedInitialization.historicalProfilesImported, 0);
+assert.ok(preparedR2.values.has("protected-sync/vistos-leadhub-profiles/state.json"));
 
 assert.doesNotThrow(() => __test.assertModifiedWindow(
   [{ Id: "2", Modified: "2026-09-10T10:01:00Z" }],
