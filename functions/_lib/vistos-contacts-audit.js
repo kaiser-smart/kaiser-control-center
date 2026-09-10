@@ -808,6 +808,121 @@ export function summarizeCleanupContactRows(rows = [], schemaMetadata = []) {
   };
 }
 
+const ACCEPTED_MAIL_ROUTE_STATUS = "VALID_DOMAIN";
+
+function normalizedDomainStatuses(value) {
+  if (value instanceof Map) return value;
+  return new Map(Object.entries(value && typeof value === "object" ? value : {}));
+}
+
+function mailRouteExclusionReason(status) {
+  if (status === "NULL_MX") return "NULL_MX";
+  if (["NXDOMAIN", "NO_MAIL_ROUTE"].includes(status)) return "INVALID_DOMAIN_OR_ROUTE";
+  if (status === "INVALID_MX_TARGET") return "INVALID_MAIL_ROUTE";
+  if (status === "A_AAAA_FALLBACK_REVIEW") return "DNS_FALLBACK_REVIEW";
+  return "DNS_UNKNOWN";
+}
+
+export function buildLeadHubDataOnlySelection(rows = [], schemaMetadata = [], options = {}) {
+  const cleanup = summarizeCleanupContacts(rows, schemaMetadata);
+  const domainStatuses = normalizedDomainStatuses(options.domainStatuses);
+  const duplicateEmails = new Set(cleanup.duplicates.map((group) => group.normalizedEmail));
+  const employmentConflictEmails = new Set(cleanup.duplicates
+    .filter((group) => group.employmentConflictReview || group.employmentUnknownConflictReview)
+    .map((group) => group.normalizedEmail));
+  const reasons = new Map();
+  const excludedRecordIds = new Set();
+  const excludedEmails = new Set();
+  const addReason = (quality, reason) => {
+    const bucket = reasons.get(reason) || { contactRecordIds: new Set(), normalizedEmails: new Set() };
+    if (quality.id) bucket.contactRecordIds.add(quality.id);
+    if (quality.normalizedEmail) bucket.normalizedEmails.add(quality.normalizedEmail);
+    reasons.set(reason, bucket);
+  };
+  const technicalClean = [];
+  for (const quality of cleanup.qualityRows) {
+    const technicalReasons = [];
+    if (!quality.normalizedEmail) technicalReasons.push("NO_EMAIL1");
+    else if (!quality.syntaxValid) technicalReasons.push("INVALID_SYNTAX");
+    if (quality.syntaxValid) {
+      if (quality.typo) technicalReasons.push("SUSPICIOUS_TYPO");
+      if (duplicateEmails.has(quality.normalizedEmail)) technicalReasons.push("DUPLICATE_OR_CONFLICT_EMAIL");
+      if (employmentConflictEmails.has(quality.normalizedEmail)) technicalReasons.push("EMPLOYMENT_CONFLICT_EMAIL");
+      if (quality.domain === "kaiserservis.cz") technicalReasons.push("KAISERSERVIS_DOMAIN");
+      const routeStatus = domainStatuses.get(quality.domain) || "UNKNOWN";
+      if (routeStatus !== ACCEPTED_MAIL_ROUTE_STATUS) technicalReasons.push(mailRouteExclusionReason(routeStatus));
+    }
+    if (quality.leftCompanyState === "TRUE") technicalReasons.push("LEFT_COMPANY_TRUE");
+    if (quality.leftCompanyState === "UNKNOWN") technicalReasons.push("LEFT_COMPANY_UNKNOWN");
+    if (!quality.nameOk) technicalReasons.push("NAME_MISSING_OR_UNUSABLE");
+    if (quality.roleAddress) technicalReasons.push("ROLE_ADDRESS");
+    if (quality.salutation.status !== "SALUTATION_CANDIDATE") technicalReasons.push("SALUTATION_UNRELIABLE");
+    for (const reason of new Set(technicalReasons)) addReason(quality, reason);
+    if (!technicalReasons.length) technicalClean.push(quality);
+  }
+  const dataOnly = [];
+  const communication = { confirmedForbidden: new Set(), unknown: new Set(), documentedPermission: new Set() };
+  for (const quality of technicalClean) {
+    const target = quality.doNotContactState === "TRUE"
+      ? communication.confirmedForbidden
+      : quality.doNotContactState === "FALSE"
+        ? communication.documentedPermission
+        : communication.unknown;
+    target.add(quality.normalizedEmail);
+    if (quality.doNotContactState === "TRUE") {
+      addReason(quality, "CONFIRMED_DO_NOT_CONTACT");
+      continue;
+    }
+    dataOnly.push({
+      contactId: quality.id,
+      normalizedEmail: quality.normalizedEmail,
+      firstName: quality.firstName || null,
+      lastName: quality.lastName || null,
+      salutationCandidate: quality.salutation.candidate,
+      communicationStatus: quality.doNotContactState === "FALSE" ? "DNC_ALLOWED_ONLY" : "UNKNOWN",
+      newsletterPermission: "UNKNOWN"
+    });
+  }
+  for (const bucket of reasons.values()) {
+    for (const id of bucket.contactRecordIds) excludedRecordIds.add(id);
+    for (const email of bucket.normalizedEmails) excludedEmails.add(email);
+  }
+  const technicalCleanEmails = new Set(technicalClean.map((quality) => quality.normalizedEmail));
+  const dataOnlyEmails = new Set(dataOnly.map((row) => row.normalizedEmail));
+  return {
+    status: "COMPLETE",
+    cleaningPolicy: "fail-closed; missing or inconclusive evidence is excluded instead of queued for manual review",
+    grain: { source: "CONTACT_RECORDS", selection: "UNIQUE_EMAILS" },
+    sourceContactRecords: cleanup.summary.total,
+    contactRecordsWithEmail1: cleanup.summary.email1Filled,
+    uniqueSyntaxValidEmails: cleanup.summary.uniqueSyntaxValid,
+    domainEvidence: {
+      suppliedDomains: domainStatuses.size,
+      requiredStatus: ACCEPTED_MAIL_ROUTE_STATUS,
+      missingEvidenceExcluded: domainStatuses.size === 0
+    },
+    exclusionReasons: Object.fromEntries([...reasons.entries()].map(([reason, bucket]) => [reason, {
+      contactRecords: bucket.contactRecordIds.size,
+      uniqueEmails: bucket.normalizedEmails.size
+    }])),
+    excludedContactRecordsWithoutDoubleCount: excludedRecordIds.size,
+    excludedUniqueEmailsWithoutDoubleCount: excludedEmails.size,
+    technicallyCleanContactRecords: technicalClean.length,
+    technicallyCleanUniqueEmails: technicalCleanEmails.size,
+    communicationStatus: {
+      confirmedForbiddenUniqueEmails: communication.confirmedForbidden.size,
+      unknownUniqueEmails: communication.unknown.size,
+      documentedDncPermissionUniqueEmails: communication.documentedPermission.size,
+      newsletterPermissionConfirmedUniqueEmails: 0
+    },
+    dataOnlyContactRecords: dataOnly.length,
+    dataOnlyUniqueEmails: dataOnlyEmails.size,
+    readyForImport: false,
+    sendAllowed: false,
+    dataOnly
+  };
+}
+
 async function dnsQuery(name, type, attempts = 2) {
   let last = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -1626,6 +1741,24 @@ export async function auditVistosContactCleanupV4(env, options = {}) {
   if (scope === "invoiceBlock") return { ...base, status: "complete", rawDocument: await auditDocumentRawBlock(env, session, "invoice", options), testedAt: new Date().toISOString() };
   if (scope === "serviceListRawBlock") return { ...base, status: "complete", rawDocument: await auditDocumentRawBlock(env, session, "serviceList", options), testedAt: new Date().toISOString() };
   const contactLoad = await loadCleanupContacts(env, session);
+  if (scope === "leadHubDataOnly") {
+    const cleanup = buildLeadHubDataOnlySelection(contactLoad.load.rows, contactLoad.schema.metadata, { domainStatuses: {} });
+    return {
+      ...base,
+      status: cleanup.status.toLowerCase(),
+      cleanup,
+      documentTargeting: "UNVERIFIED_NOT_USED",
+      dnsRepeated: false,
+      performance: {
+        pageSize: contactLoad.load.pageSize,
+        pagesRead: contactLoad.load.pagesRead,
+        rowsRead: contactLoad.load.rows.length,
+        sourceTotal: contactLoad.load.total,
+        duplicatePageIds: pageIntegrity(contactLoad.load).duplicateIds
+      },
+      testedAt: new Date().toISOString()
+    };
+  }
   if (scope === "domains") return { ...base, status: "complete", domains: await auditDomainBatch(contactLoad, options), testedAt: new Date().toISOString() };
   if (scope === "duplicates") {
     const start = Math.max(0, Number(options.detailStart) || 0);

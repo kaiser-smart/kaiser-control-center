@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fetchVistosExecute } from "../functions/_lib/vistos-execute-client.js";
 import {
+  buildLeadHubDataOnlySelection,
   buildSalutationCandidate,
   contactColumnsForSchema,
   dnsMailRouteStatus,
@@ -76,6 +77,63 @@ const unknownDnc = summarizeCleanupContactRows([
 assert.equal(unknownDnc.summary.doNotContact, 0);
 assert.equal(unknownDnc.summary.doNotContactUnknownValues, 1);
 assert.equal(unknownDnc.summary.candidateBeforeDns, 0);
+
+const confirmedCommunicationSchema = [
+  { field: "Kontaktovatsms", caption: "Kontaktovat SMS", datatype: "Boolean" },
+  { field: "SendMailEnabled", caption: "Povolit e-mail", datatype: "Boolean" },
+  { field: "CallEnabled", caption: "Povolit volání", datatype: "Boolean" },
+  { field: "DoNotWorkCompany", caption: "Už nepracuje ve firmě", datatype: "Boolean" }
+];
+const allowed = { FirstName: "Radim", Kontaktovatsms: true, SendMailEnabled: true, CallEnabled: true, DoNotWorkCompany: false };
+const dataOnlySelection = buildLeadHubDataOnlySelection([
+  { Id: 1, ...allowed, Email1: "unknown-dnc@example.cz", CallEnabled: null },
+  { Id: 2, ...allowed, Email1: "forbidden@example.cz", Kontaktovatsms: false },
+  { Id: 3, ...allowed, Email1: "allowed@example.cz" },
+  { Id: 4, ...allowed, Email1: "duplicate@example.cz" },
+  { Id: 5, ...allowed, Email1: " DUPLICATE@example.cz " },
+  { Id: 6, ...allowed, Email1: "left@example.cz", DoNotWorkCompany: true },
+  { Id: 7, ...allowed, Email1: "left-unknown@example.cz", DoNotWorkCompany: null },
+  { Id: 8, ...allowed, Email1: "employee@kaiserservis.cz" },
+  { Id: 9, Email1: "nameless@example.cz", Kontaktovatsms: true, SendMailEnabled: true, CallEnabled: true, DoNotWorkCompany: false },
+  { Id: 10, FirstName: "Xavier", Email1: "salutation@example.cz", Kontaktovatsms: true, SendMailEnabled: true, CallEnabled: true, DoNotWorkCompany: false },
+  { Id: 11, ...allowed, Email1: "info@example.cz" },
+  { Id: 12, ...allowed, Email1: "bad()<local@example.cz" },
+  { Id: 13, ...allowed, Email1: "radim@gmial.com" },
+  { Id: 14, ...allowed, Email1: "radim@null.example" },
+  { Id: 15, ...allowed, Email1: "radim@fallback.example" },
+  { Id: 16, ...allowed, Email1: "radim@unknown.example" },
+  { Id: 17, ...allowed, Email1: "" }
+], confirmedCommunicationSchema, { domainStatuses: {
+  "example.cz": "VALID_DOMAIN",
+  "kaiserservis.cz": "VALID_DOMAIN",
+  "gmial.com": "VALID_DOMAIN",
+  "null.example": "NULL_MX",
+  "fallback.example": "A_AAAA_FALLBACK_REVIEW",
+  "unknown.example": "UNKNOWN"
+} });
+assert.equal(dataOnlySelection.status, "COMPLETE");
+assert.equal(dataOnlySelection.technicallyCleanContactRecords, 3);
+assert.equal(dataOnlySelection.technicallyCleanUniqueEmails, 3);
+assert.equal(dataOnlySelection.dataOnlyContactRecords, 2);
+assert.equal(dataOnlySelection.dataOnlyUniqueEmails, 2);
+assert.equal(dataOnlySelection.communicationStatus.confirmedForbiddenUniqueEmails, 1);
+assert.equal(dataOnlySelection.communicationStatus.unknownUniqueEmails, 1);
+assert.equal(dataOnlySelection.communicationStatus.documentedDncPermissionUniqueEmails, 1);
+for (const reason of [
+  "NO_EMAIL1", "INVALID_SYNTAX", "SUSPICIOUS_TYPO", "DUPLICATE_OR_CONFLICT_EMAIL",
+  "LEFT_COMPANY_TRUE", "LEFT_COMPANY_UNKNOWN", "KAISERSERVIS_DOMAIN",
+  "NAME_MISSING_OR_UNUSABLE", "ROLE_ADDRESS", "SALUTATION_UNRELIABLE",
+  "NULL_MX", "DNS_FALLBACK_REVIEW", "DNS_UNKNOWN", "CONFIRMED_DO_NOT_CONTACT"
+]) assert.ok(dataOnlySelection.exclusionReasons[reason]?.contactRecords > 0, `${reason} must exclude an otherwise eligible fixture`);
+assert.equal(dataOnlySelection.readyForImport, false);
+assert.equal(dataOnlySelection.sendAllowed, false);
+
+const noDnsEvidence = buildLeadHubDataOnlySelection([
+  { Id: 1, ...allowed, Email1: "radim@example.cz" }
+], confirmedCommunicationSchema);
+assert.equal(noDnsEvidence.status, "COMPLETE");
+assert.equal(noDnsEvidence.technicallyCleanUniqueEmails, 0);
+assert.equal(noDnsEvidence.exclusionReasons.DNS_UNKNOWN.uniqueEmails, 1);
 
 assert.deepEqual(summarizeContactRows([
   { Id: 1, FirstName: "A", LastName: "B", Email1: "same@example.test", Phone: "1", Parent_FK_RecordId: 10, Created: "2026-01-01", Modified: "2026-02-01" },

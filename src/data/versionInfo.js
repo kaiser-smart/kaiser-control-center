@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.749"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.750"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vistos kontakty: konzervativní DATA_ONLY výběr",
+    text: "Chráněný read-only audit odděluje technickou kvalitu od komunikačního oprávnění a bez důkazu VALID_DOMAIN adresu fail-closed vyřadí. Duplicity, bývalí pracovníci, Kaiser doména, nejasné oslovení i potvrzené zákazy nemohou projít do budoucího importního výběru."
+  },
   {
     title: "Vistos kontakty: bývalí pracovníci odděleni od zákazů kontaktování",
     text: "Příznak Contact.DoNotWorkCompany je podle doloženého Vistos UI vyhodnocen jako samostatný LEFT_COMPANY. Označený kontakt se nevrátí přes firemní ani dokumentové publikum; konfliktní sdílené e-maily zůstávají k ruční kontrole."
