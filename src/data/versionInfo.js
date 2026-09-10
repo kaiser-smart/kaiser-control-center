@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.755"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.756"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vistos → LeadHub: čtení stavu nového profilu",
+    text: "Chybějící LeadHub profil při read-only kontrole odběrů vrací 404 a je nyní správně vyhodnocen jako neexistující profil, nikoli jako chyba synchronizace. Zápis odběrů, rozesílky a historický import zůstávají vypnuté."
+  },
   {
     title: "Vistos → LeadHub: bezpečná synchronizace profilů",
     text: "Cloudflare runner každých pět minut zpracuje pouze nové a změněné Vistos kontakty od výchozího checkpointu. Profily a DATA_ONLY tag aktualizuje idempotentně, před i po změně čte odběry a suppression; Newsletters, subscription stav, e-maily, SMS a historický hromadný import zůstávají vypnuté."
