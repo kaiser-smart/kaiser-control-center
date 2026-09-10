@@ -113,20 +113,31 @@ const dataOnlySelection = buildLeadHubDataOnlySelection([
   "unknown.example": "UNKNOWN"
 } });
 assert.equal(dataOnlySelection.status, "COMPLETE");
-assert.equal(dataOnlySelection.technicallyCleanContactRecords, 3);
-assert.equal(dataOnlySelection.technicallyCleanUniqueEmails, 3);
-assert.equal(dataOnlySelection.dataOnlyContactRecords, 2);
-assert.equal(dataOnlySelection.dataOnlyUniqueEmails, 2);
+assert.equal(dataOnlySelection.technicallyCleanContactRecords, 4);
+assert.equal(dataOnlySelection.technicallyCleanUniqueEmails, 4);
+assert.equal(dataOnlySelection.dataOnlyContactRecords, 3);
+assert.equal(dataOnlySelection.dataOnlyUniqueEmails, 3);
+assert.deepEqual(dataOnlySelection.salutationImpact, {
+  technicallyCleanContactRecordsBefore: 3,
+  technicallyCleanUniqueEmailsBefore: 3,
+  removedOnlyBySalutationContactRecords: 1,
+  removedOnlyBySalutationUniqueEmails: 1,
+  technicallyCleanContactRecordsAfter: 4,
+  technicallyCleanUniqueEmailsAfter: 4
+});
+assert.equal(dataOnlySelection.exclusionReasons.SALUTATION_UNRELIABLE, undefined);
+assert.equal(dataOnlySelection.dataOnly.find((row) => row.contactId === "10")?.salutationStatus, "SALUTATION_REVIEW");
+assert.equal(dataOnlySelection.dataOnly.find((row) => row.contactId === "3")?.salutationStatus, "SALUTATION_READY");
 assert.equal(dataOnlySelection.communicationStatus.confirmedForbiddenUniqueEmails, 1);
 assert.equal(dataOnlySelection.communicationStatus.unknownUniqueEmails, 1);
-assert.equal(dataOnlySelection.communicationStatus.documentedDncPermissionUniqueEmails, 1);
+assert.equal(dataOnlySelection.communicationStatus.documentedDncPermissionUniqueEmails, 2);
 assert.equal(dataOnlySelection.communicationStatusAllUniqueSyntaxValidEmails.confirmedForbiddenUniqueEmails, 1);
 assert.equal(dataOnlySelection.communicationStatusAllUniqueSyntaxValidEmails.unknownUniqueEmails, 1);
 assert.ok(dataOnlySelection.communicationStatusAllUniqueSyntaxValidEmails.documentedDncPermissionUniqueEmails > 1);
 for (const reason of [
   "NO_EMAIL1", "INVALID_SYNTAX", "SUSPICIOUS_TYPO", "DUPLICATE_OR_CONFLICT_EMAIL",
   "LEFT_COMPANY_TRUE", "LEFT_COMPANY_UNKNOWN", "KAISERSERVIS_DOMAIN",
-  "NAME_MISSING_OR_UNUSABLE", "ROLE_ADDRESS", "SALUTATION_UNRELIABLE",
+  "NAME_MISSING_OR_UNUSABLE", "ROLE_ADDRESS",
   "NULL_MX", "DNS_FALLBACK_REVIEW", "DNS_UNKNOWN", "CONFIRMED_DO_NOT_CONTACT"
 ]) assert.ok(dataOnlySelection.exclusionReasons[reason]?.contactRecords > 0, `${reason} must exclude an otherwise eligible fixture`);
 assert.equal(dataOnlySelection.readyForImport, false);
@@ -285,12 +296,10 @@ assert.equal((await dnsMailRouteStatus("missing.example")).status, "NXDOMAIN");
 globalThis.fetch = originalFetch;
 
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
-assert.match(appSource, /Spustit DATA_ONLY DNS přepočet/);
+assert.match(appSource, /Přepočítat DATA_ONLY z uloženého snapshotu/);
 assert.match(appSource, /data-vistos-audit-v4/);
 assert.match(appSource, /runVistosAuditV4/);
-assert.match(appSource, /action: "initialize"/);
-assert.match(appSource, /action: "dnsBatch"/);
-assert.match(appSource, /action: "finalize"/);
+assert.match(appSource, /action: "refinalizeLatest"/);
 assert.match(appSource, /documentTargeting: "UNVERIFIED_NOT_USED"/);
 assert.match(appSource, /invoiceBlock/);
 assert.match(appSource, /serviceListRawBlock/);

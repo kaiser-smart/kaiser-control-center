@@ -839,6 +839,8 @@ export function buildLeadHubDataOnlySelection(rows = [], schemaMetadata = [], op
   const reasons = new Map();
   const excludedRecordIds = new Set();
   const excludedEmails = new Set();
+  const technicalCleanBeforeSalutation = [];
+  const removedOnlyBySalutation = [];
   const addReason = (quality, reason) => {
     const bucket = reasons.get(reason) || { contactRecordIds: new Set(), normalizedEmails: new Set() };
     if (quality.id) bucket.contactRecordIds.add(quality.id);
@@ -862,7 +864,10 @@ export function buildLeadHubDataOnlySelection(rows = [], schemaMetadata = [], op
     if (quality.leftCompanyState === "UNKNOWN") technicalReasons.push("LEFT_COMPANY_UNKNOWN");
     if (!quality.nameOk) technicalReasons.push("NAME_MISSING_OR_UNUSABLE");
     if (quality.roleAddress) technicalReasons.push("ROLE_ADDRESS");
-    if (quality.salutation.status !== "SALUTATION_CANDIDATE") technicalReasons.push("SALUTATION_UNRELIABLE");
+    if (!technicalReasons.length) {
+      if (quality.salutation.status === "SALUTATION_CANDIDATE") technicalCleanBeforeSalutation.push(quality);
+      else removedOnlyBySalutation.push(quality);
+    }
     for (const reason of new Set(technicalReasons)) addReason(quality, reason);
     if (!technicalReasons.length) technicalClean.push(quality);
   }
@@ -898,6 +903,11 @@ export function buildLeadHubDataOnlySelection(rows = [], schemaMetadata = [], op
       firstName: quality.firstName || null,
       lastName: quality.lastName || null,
       salutationCandidate: quality.salutation.candidate,
+      salutationStatus: quality.salutation.status === "SALUTATION_CANDIDATE"
+        ? "SALUTATION_READY"
+        : quality.salutation.status === "SALUTATION_MISSING"
+          ? "SALUTATION_MISSING"
+          : "SALUTATION_REVIEW",
       communicationStatus: quality.doNotContactState === "FALSE" ? "DNC_ALLOWED_ONLY" : "UNKNOWN",
       newsletterPermission: "UNKNOWN"
     });
@@ -907,6 +917,8 @@ export function buildLeadHubDataOnlySelection(rows = [], schemaMetadata = [], op
     for (const email of bucket.normalizedEmails) excludedEmails.add(email);
   }
   const technicalCleanEmails = new Set(technicalClean.map((quality) => quality.normalizedEmail));
+  const technicalCleanBeforeSalutationEmails = new Set(technicalCleanBeforeSalutation.map((quality) => quality.normalizedEmail));
+  const removedOnlyBySalutationEmails = new Set(removedOnlyBySalutation.map((quality) => quality.normalizedEmail));
   const dataOnlyEmails = new Set(dataOnly.map((row) => row.normalizedEmail));
   return {
     status: missingDomains.length ? "PARTIAL" : "COMPLETE",
@@ -929,6 +941,14 @@ export function buildLeadHubDataOnlySelection(rows = [], schemaMetadata = [], op
     }])),
     excludedContactRecordsWithoutDoubleCount: excludedRecordIds.size,
     excludedUniqueEmailsWithoutDoubleCount: excludedEmails.size,
+    salutationImpact: {
+      technicallyCleanContactRecordsBefore: technicalCleanBeforeSalutation.length,
+      technicallyCleanUniqueEmailsBefore: technicalCleanBeforeSalutationEmails.size,
+      removedOnlyBySalutationContactRecords: removedOnlyBySalutation.length,
+      removedOnlyBySalutationUniqueEmails: removedOnlyBySalutationEmails.size,
+      technicallyCleanContactRecordsAfter: technicalClean.length,
+      technicallyCleanUniqueEmailsAfter: technicalCleanEmails.size
+    },
     technicallyCleanContactRecords: technicalClean.length,
     technicallyCleanUniqueEmails: technicalCleanEmails.size,
     communicationStatus: {
@@ -1247,10 +1267,31 @@ async function readLatestLeadHubDataOnlyAudit(env) {
   return artifact;
 }
 
+async function refinalizeLatestLeadHubDataOnlyAudit(env) {
+  const bucket = leadHubAuditBucket(env);
+  const latest = await getProtectedAuditJson(bucket, LEADHUB_DATA_ONLY_LATEST_KEY);
+  const runId = clean(latest?.runId);
+  if (!runId) {
+    const error = new Error("Chybí dokončený DATA_ONLY běh se snapshotem a DNS výsledky.");
+    error.status = 404;
+    error.code = "vistos_data_only_latest_missing";
+    throw error;
+  }
+  const artifact = await finalizeLeadHubDataOnlyAudit(env, { runId });
+  return {
+    ...artifact,
+    reusedContactSnapshot: true,
+    contactSnapshotLoads: 0,
+    dnsRepeated: false,
+    domainBatches: 0
+  };
+}
+
 export async function runLeadHubDataOnlyAuditAction(env, action, payload = {}) {
   if (action === "initialize") return initializeLeadHubDataOnlyAudit(env);
   if (action === "dnsBatch") return runLeadHubDataOnlyDnsBatch(env, payload);
   if (action === "finalize") return finalizeLeadHubDataOnlyAudit(env, payload);
+  if (action === "refinalizeLatest") return refinalizeLatestLeadHubDataOnlyAudit(env);
   const error = new Error("Neznámá akce Vistos DATA_ONLY auditu.");
   error.status = 400;
   error.code = "vistos_data_only_action_invalid";
