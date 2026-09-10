@@ -285,9 +285,13 @@ assert.equal((await dnsMailRouteStatus("missing.example")).status, "NXDOMAIN");
 globalThis.fetch = originalFetch;
 
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
-assert.match(appSource, /Spustit celý Contact audit V4/);
+assert.match(appSource, /Spustit DATA_ONLY DNS přepočet/);
 assert.match(appSource, /data-vistos-audit-v4/);
 assert.match(appSource, /runVistosAuditV4/);
+assert.match(appSource, /action: "initialize"/);
+assert.match(appSource, /action: "dnsBatch"/);
+assert.match(appSource, /action: "finalize"/);
+assert.match(appSource, /documentTargeting: "UNVERIFIED_NOT_USED"/);
 assert.match(appSource, /invoiceBlock/);
 assert.match(appSource, /serviceListRawBlock/);
 assert.match(appSource, /row\.leftCompanyState === "FALSE"/);
