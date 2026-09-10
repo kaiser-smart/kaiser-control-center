@@ -41347,6 +41347,60 @@ async function runVistosAuditV4() {
   vistosAuditV4State.progress = "Načítám celý Contact dataset a schema…";
   render();
   try {
+    const endpoint = "/api/receivables/vistos/contacts-audit";
+    const initialize = await apiJson(endpoint, {
+      method: "POST",
+      body: JSON.stringify({ action: "initialize" })
+    });
+    const runId = initialize.runId;
+    let domainStart = Number(initialize.nextDomainStart || 0);
+    let domainBatches = 0;
+    let checkedDomains = Number(initialize.checkedDomains || 0);
+    do {
+      vistosAuditV4State.progress = `Ověřuji DNS/MX domény ${checkedDomains} z ${initialize.requiredDomains || "?"}…`;
+      render();
+      const batch = await apiJson(endpoint, {
+        method: "POST",
+        body: JSON.stringify({ action: "dnsBatch", runId, domainStart, domainLimit: initialize.batchLimit || 150 })
+      });
+      domainBatches += 1;
+      checkedDomains = Number(batch.checkedDomains || checkedDomains);
+      domainStart = Number(batch.nextDomainStart || 0);
+      if (batch.done) break;
+    } while (domainStart > 0);
+
+    vistosAuditV4State.progress = "Předávám skutečnou DNS mapu do DATA_ONLY výběru…";
+    render();
+    const finalized = await apiJson(endpoint, {
+      method: "POST",
+      body: JSON.stringify({ action: "finalize", runId })
+    });
+    const cleanup = finalized.cleanup || {};
+    vistosAuditV4State.result = {
+      status: finalized.status,
+      testedAt: finalized.finalizedAt,
+      runId,
+      sourceContactRecords: cleanup.sourceContactRecords,
+      uniqueSyntaxValidEmails: cleanup.uniqueSyntaxValidEmails,
+      domainEvidence: cleanup.domainEvidence,
+      excludedUniqueEmailsWithoutDoubleCount: cleanup.excludedUniqueEmailsWithoutDoubleCount,
+      technicallyCleanUniqueEmails: cleanup.technicallyCleanUniqueEmails,
+      dataOnlyContactRecords: cleanup.dataOnlyContactRecords,
+      dataOnlyUniqueEmails: cleanup.dataOnlyUniqueEmails,
+      communicationStatus: cleanup.communicationStatus,
+      communicationStatusAllUniqueSyntaxValidEmails: cleanup.communicationStatusAllUniqueSyntaxValidEmails,
+      protectedOutputKey: finalized.protectedOutputKey,
+      contactSnapshotLoads: initialize.contactSnapshotLoads,
+      domainBatches,
+      documentTargeting: "UNVERIFIED_NOT_USED",
+      readyForImport: false,
+      sendAllowed: false,
+      noWriteSafety: finalized.noWriteSafety
+    };
+    vistosAuditV4State.progress = finalized.status === "COMPLETE"
+      ? "Cílený DATA_ONLY DNS přepočet dokončen. Import a rozesílka zůstávají zakázané."
+      : "DATA_ONLY přepočet je neúplný; chybějící DNS evidence nebyla vydána za čisté kontakty.";
+    return;
     const contactPayload = await apiJson(vistosAuditV4Url("contact"));
     const contact = contactPayload.contact || {};
     const compactQuality = contact.compactQuality || [];
@@ -41611,7 +41665,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
     ? `<a class="secondary-link" href="${routeHref(moduleItem.dashboardRoute)}" data-link>Dashboard modulu</a>`
     : "";
   const vistosAuditLink = !isDashboard && moduleItem.id === "vistos"
-    ? `<button class="secondary-link" type="button" data-vistos-audit-v4 ${vistosAuditV4State.running ? "disabled" : ""}>${vistosAuditV4State.running ? "Probíhá READ audit…" : "Spustit celý Contact audit V4"}</button>`
+    ? `<button class="secondary-link" type="button" data-vistos-audit-v4 ${vistosAuditV4State.running ? "disabled" : ""}>${vistosAuditV4State.running ? "Probíhá DATA_ONLY audit…" : "Spustit DATA_ONLY DNS přepočet"}</button>`
     : "";
   const usersPanel = moduleItem.id === "users" && !isDashboard ? usersManagementSection() : "";
   const settingsPanel = moduleItem.id === "settings" && !isDashboard ? settingsManagementSection(user) : "";
