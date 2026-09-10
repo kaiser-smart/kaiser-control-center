@@ -15,12 +15,18 @@ export async function runScheduledSync(env, scheduledTime) {
       runner: "kaiser-vistos-leadhub-profile-sync"
     })
   });
-  const payload = await response.json().catch(() => ({}));
+  const rawBody = await response.text();
+  const payload = (() => {
+    try { return JSON.parse(rawBody); } catch { return {}; }
+  })();
   if (!response.ok) {
     const error = new Error(payload.error || `Sync endpoint odpověděl ${response.status}.`);
     error.code = payload.code || "vistos_leadhub_sync_endpoint_failed";
     error.status = response.status;
     error.upstreamStatus = Number(payload.upstreamStatus) || 0;
+    error.responseType = String(response.headers.get("content-type") || "unknown");
+    error.responseRay = String(response.headers.get("cf-ray") || "unknown");
+    error.responseSnippet = rawBody.replace(/\s+/g, " ").slice(0, 300);
     throw error;
   }
   return payload;
@@ -47,7 +53,10 @@ export default {
         message: String(error?.message || error),
         code: String(error?.code || "vistos_leadhub_sync_failed"),
         status: Number(error?.status) || 0,
-        upstreamStatus: Number(error?.upstreamStatus) || 0
+        upstreamStatus: Number(error?.upstreamStatus) || 0,
+        responseType: String(error?.responseType || "unknown"),
+        responseRay: String(error?.responseRay || "unknown"),
+        responseSnippet: String(error?.responseSnippet || "")
       });
     }));
   },
