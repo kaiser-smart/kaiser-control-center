@@ -118,4 +118,17 @@ try {
   globalThis.fetch = originalFetch;
 }
 
+globalThis.fetch = async () => new Response("upstream unavailable", {
+  status: 502,
+  headers: { "content-type": "text/plain", "cf-ray": "test-ray" }
+});
+try {
+  await assert.rejects(
+    () => runScheduledSync({ APP_BASE_URL: "https://smart-odpady.ai", VISTOS_LEADHUB_SYNC_TOKEN: "runner-secret" }, Date.parse("2026-09-10T10:15:00Z")),
+    (error) => error?.status === 502 && error?.responseType === "text/plain" && error?.responseSnippet === "upstream unavailable"
+  );
+} finally {
+  globalThis.fetch = originalFetch;
+}
+
 console.log("Vistos → LeadHub profile sync tests passed");
