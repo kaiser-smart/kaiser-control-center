@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.748"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.749"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vistos kontakty: bývalí pracovníci odděleni od zákazů kontaktování",
+    text: "Příznak Contact.DoNotWorkCompany je podle doloženého Vistos UI vyhodnocen jako samostatný LEFT_COMPANY. Označený kontakt se nevrátí přes firemní ani dokumentové publikum; konfliktní sdílené e-maily zůstávají k ruční kontrole."
+  },
   {
     title: "Vistos kontakty: fail-closed čistící audit",
     text: "Zákazy kontaktování používají TRUE/FALSE/UNKNOWN bez převodu nejasných hodnot na povolení. DNS rozlišuje null MX, MX cíl a A/AAAA fallback, oslovení zůstávají neschválenými kandidáty a InvoiceIssued i ServiceList porovnávají dva úplné read-only běhy podle ID a vazeb."
