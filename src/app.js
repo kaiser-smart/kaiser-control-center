@@ -41353,21 +41353,26 @@ async function runVistosAuditV4() {
       body: JSON.stringify({ action: "initialize" })
     });
     const runId = initialize.runId;
-    let domainStart = Number(initialize.nextDomainStart || 0);
-    let domainBatches = 0;
+    let dataOnlyDomainStart = Number(initialize.nextDomainStart || 0);
+    let dataOnlyDomainBatches = 0;
     let checkedDomains = Number(initialize.checkedDomains || 0);
     do {
       vistosAuditV4State.progress = `Ověřuji DNS/MX domény ${checkedDomains} z ${initialize.requiredDomains || "?"}…`;
       render();
       const batch = await apiJson(endpoint, {
         method: "POST",
-        body: JSON.stringify({ action: "dnsBatch", runId, domainStart, domainLimit: initialize.batchLimit || 150 })
+        body: JSON.stringify({
+          action: "dnsBatch",
+          runId,
+          domainStart: dataOnlyDomainStart,
+          domainLimit: initialize.batchLimit || 150
+        })
       });
-      domainBatches += 1;
+      dataOnlyDomainBatches += 1;
       checkedDomains = Number(batch.checkedDomains || checkedDomains);
-      domainStart = Number(batch.nextDomainStart || 0);
+      dataOnlyDomainStart = Number(batch.nextDomainStart || 0);
       if (batch.done) break;
-    } while (domainStart > 0);
+    } while (dataOnlyDomainStart > 0);
 
     vistosAuditV4State.progress = "Předávám skutečnou DNS mapu do DATA_ONLY výběru…";
     render();
@@ -41391,7 +41396,7 @@ async function runVistosAuditV4() {
       communicationStatusAllUniqueSyntaxValidEmails: cleanup.communicationStatusAllUniqueSyntaxValidEmails,
       protectedOutputKey: finalized.protectedOutputKey,
       contactSnapshotLoads: initialize.contactSnapshotLoads,
-      domainBatches,
+      domainBatches: dataOnlyDomainBatches,
       documentTargeting: "UNVERIFIED_NOT_USED",
       readyForImport: false,
       sendAllowed: false,
