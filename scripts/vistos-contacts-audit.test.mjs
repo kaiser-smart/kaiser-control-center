@@ -119,6 +119,9 @@ assert.equal(dataOnlySelection.dataOnlyUniqueEmails, 2);
 assert.equal(dataOnlySelection.communicationStatus.confirmedForbiddenUniqueEmails, 1);
 assert.equal(dataOnlySelection.communicationStatus.unknownUniqueEmails, 1);
 assert.equal(dataOnlySelection.communicationStatus.documentedDncPermissionUniqueEmails, 1);
+assert.equal(dataOnlySelection.communicationStatusAllUniqueSyntaxValidEmails.confirmedForbiddenUniqueEmails, 1);
+assert.equal(dataOnlySelection.communicationStatusAllUniqueSyntaxValidEmails.unknownUniqueEmails, 1);
+assert.ok(dataOnlySelection.communicationStatusAllUniqueSyntaxValidEmails.documentedDncPermissionUniqueEmails > 1);
 for (const reason of [
   "NO_EMAIL1", "INVALID_SYNTAX", "SUSPICIOUS_TYPO", "DUPLICATE_OR_CONFLICT_EMAIL",
   "LEFT_COMPANY_TRUE", "LEFT_COMPANY_UNKNOWN", "KAISERSERVIS_DOMAIN",

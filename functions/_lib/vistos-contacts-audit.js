@@ -862,6 +862,19 @@ export function buildLeadHubDataOnlySelection(rows = [], schemaMetadata = [], op
   }
   const dataOnly = [];
   const communication = { confirmedForbidden: new Set(), unknown: new Set(), documentedPermission: new Set() };
+  const communicationStatesByEmail = new Map();
+  for (const quality of cleanup.qualityRows) {
+    if (!quality.syntaxValid) continue;
+    const states = communicationStatesByEmail.get(quality.normalizedEmail) || new Set();
+    states.add(quality.doNotContactState);
+    communicationStatesByEmail.set(quality.normalizedEmail, states);
+  }
+  const allCommunication = { confirmedForbidden: 0, unknown: 0, documentedPermission: 0 };
+  for (const states of communicationStatesByEmail.values()) {
+    if (states.has("TRUE")) allCommunication.confirmedForbidden += 1;
+    else if (states.has("UNKNOWN")) allCommunication.unknown += 1;
+    else allCommunication.documentedPermission += 1;
+  }
   for (const quality of technicalClean) {
     const target = quality.doNotContactState === "TRUE"
       ? communication.confirmedForbidden
@@ -913,6 +926,12 @@ export function buildLeadHubDataOnlySelection(rows = [], schemaMetadata = [], op
       confirmedForbiddenUniqueEmails: communication.confirmedForbidden.size,
       unknownUniqueEmails: communication.unknown.size,
       documentedDncPermissionUniqueEmails: communication.documentedPermission.size,
+      newsletterPermissionConfirmedUniqueEmails: 0
+    },
+    communicationStatusAllUniqueSyntaxValidEmails: {
+      confirmedForbiddenUniqueEmails: allCommunication.confirmedForbidden,
+      unknownUniqueEmails: allCommunication.unknown,
+      documentedDncPermissionUniqueEmails: allCommunication.documentedPermission,
       newsletterPermissionConfirmedUniqueEmails: 0
     },
     dataOnlyContactRecords: dataOnly.length,
