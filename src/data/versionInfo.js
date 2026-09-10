@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.753"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.754"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vistos kontakty: oslovení oddělené od datové kvality",
+    text: "Kontakt s použitelným FirstName nebo LastName už není vyřazen jen proto, že české oslovení vyžaduje kontrolu. SALUTATION_READY, SALUTATION_REVIEW a SALUTATION_MISSING zůstávají samostatným atributem; všechny ostatní bezpečnostní filtry, import i komunikace zůstávají beze změny."
+  },
   {
     title: "Vistos kontakty: cílený DATA_ONLY běh v chráněném UI",
     text: "Existující oprávněné tlačítko Vistos spouští pouze jeden Contact snapshot, navazující DNS bloky a finální DATA_ONLY výběr. Faktury ani ServiceList se při tomto přepočtu nenačítají; import, odběry a komunikace zůstávají vypnuté."
