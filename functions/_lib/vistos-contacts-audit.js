@@ -16,7 +16,9 @@ const CONTACT_FIELDS = [
   "Id", "FirstName", "LastName", "MiddleName", "Name",
   "Email1", "Email", "EmailInvoicing", "Phone", "PhoneNumber", "Mobile",
   "Directory_FK", "Company_FK", "Parent_FK", "MasterParent_FK", "MainProjection_FK",
-  "IsCompany", "IsActive", "Active", "Status_FK", "Created", "Modified"
+  "IsCompany", "IsActive", "Active", "Status_FK", "Created", "Modified",
+  "Kontaktovatsms", "SendMailEnabled", "CallEnabled", "DoNotWorkCompany",
+  "Gender_FK", "Salutation_FK", "SalutationText", "Osloveni5pad"
 ];
 
 const DB_OBJECT_COLUMN_ATTEMPTS = [
@@ -94,6 +96,7 @@ export function isSyntacticallyValidEmail(value) {
   if (parts.length !== 2) return false;
   const [local, domain] = parts;
   if (!local || local.length > 64 || local.startsWith(".") || local.endsWith(".") || local.includes("..")) return false;
+  if (!/^[a-z0-9!#$%&'*+/=?^_`{|}~.-]+$/i.test(local)) return false;
   if (!domain || domain.length > 253 || domain.startsWith(".") || domain.endsWith(".") || domain.includes("..")) return false;
   const labels = domain.split(".");
   if (labels.length < 2 || labels.at(-1).length < 2) return false;
@@ -500,8 +503,87 @@ function normalizedBoolean(value) {
   if (value === false || value === 0) return false;
   const normalized = foldText(value);
   if (["true", "ano", "yes", "1"].includes(normalized)) return true;
-  if (["false", "ne", "no", "0", ""].includes(normalized)) return false;
+  if (["false", "ne", "no", "0"].includes(normalized)) return false;
   return null;
+}
+
+const DNC_FIELD_DEFINITIONS = [
+  {
+    field: "Kontaktovatsms",
+    owner: "contact",
+    acceptedCaptions: ["kontaktovat sms"],
+    trueMeaning: "SMS kontakt povolen",
+    falseMeaning: "SMS kontakt zakázán",
+    trueDnc: false,
+    falseDnc: true
+  },
+  {
+    field: "SendMailEnabled",
+    owner: "contact",
+    acceptedCaptions: ["povolit e mail", "povolit email", "odesilat e mail", "odesilat email"],
+    trueMeaning: "e-mailové kontaktování povoleno",
+    falseMeaning: "e-mailové kontaktování zakázáno",
+    trueDnc: false,
+    falseDnc: true
+  },
+  {
+    field: "CallEnabled",
+    owner: "contact",
+    acceptedCaptions: ["povolit volani", "volat", "kontaktovat telefonicky"],
+    trueMeaning: "telefonické kontaktování povoleno",
+    falseMeaning: "telefonické kontaktování zakázáno",
+    trueDnc: false,
+    falseDnc: true
+  },
+  {
+    field: "DoNotWorkCompany",
+    owner: "company",
+    acceptedCaptions: ["nespolupracovat s firmou", "nepracovat s firmou"],
+    trueMeaning: "firma je blokovaná pro spolupráci",
+    falseMeaning: "firma tímto polem není blokovaná",
+    trueDnc: true,
+    falseDnc: false
+  }
+];
+
+function normalizeCaption(value) {
+  return foldText(value).replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function resolvedDncMappings(schemaMetadata) {
+  const byField = new Map(schemaMetadata.map((column) => [column.field, column]));
+  return DNC_FIELD_DEFINITIONS.map((definition) => {
+    const metadata = byField.get(definition.field) || null;
+    const normalizedCaption = normalizeCaption(metadata?.caption);
+    const confirmed = Boolean(metadata && normalizedCaption && definition.acceptedCaptions.includes(normalizedCaption));
+    return {
+      ...definition,
+      caption: metadata?.caption || null,
+      datatype: metadata?.datatype || null,
+      confirmed,
+      evidence: confirmed ? "exact schema/UI caption mapping" : "field exists, but schema did not provide a confirmed UI caption"
+    };
+  });
+}
+
+function dncStateForRow(row, mappings) {
+  let hasUnknown = false;
+  let hasFalse = false;
+  for (const mapping of mappings) {
+    if (!mapping.confirmed) {
+      hasUnknown = true;
+      continue;
+    }
+    const value = normalizedBoolean(row?.[mapping.field]);
+    if (value === null) {
+      hasUnknown = true;
+      continue;
+    }
+    const dnc = value ? mapping.trueDnc : mapping.falseDnc;
+    if (dnc) return "TRUE";
+    hasFalse = true;
+  }
+  return hasUnknown ? "UNKNOWN" : hasFalse ? "FALSE" : "UNKNOWN";
 }
 
 function isRoleAddress(email) {
@@ -528,20 +610,61 @@ function valueDistribution(rows, field) {
   return [...counts.entries()].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count || a.value.localeCompare(b.value, "cs"));
 }
 
-function contactQualityRecord(row, dncField) {
+const FIRST_NAME_VOCATIVES = new Map([
+  ["radim", "Radime"], ["jan", "Jane"], ["petr", "Petře"], ["pavel", "Pavle"],
+  ["martin", "Martine"], ["tomáš", "Tomáši"], ["jiří", "Jiří"], ["josef", "Josefe"],
+  ["eva", "Evo"], ["jana", "Jano"], ["petra", "Petro"], ["alena", "Aleno"],
+  ["lucie", "Lucie"], ["martina", "Martino"], ["lenka", "Lenko"], ["kateřina", "Kateřino"]
+]);
+const NON_PERSON_NAME_PATTERN = /\b(?:s\.?\s*r\.?\s*o\.?|a\.?\s*s\.?|spol|firma|obchod|servis|faktur|ucet|účet|sklad|recep|sekret|info|kontakt|objednav|objednáv|office|sales)\b/i;
+
+function humanNameValue(value) {
+  const text = clean(value);
+  return Boolean(text && text.length <= 50 && /^[\p{L}][\p{L}' -]*$/u.test(text)
+    && !/\d/.test(text) && !NON_PERSON_NAME_PATTERN.test(text));
+}
+
+function salutationForRow(row, roleAddress) {
+  const firstName = clean(row?.FirstName);
+  const lastName = clean(row?.LastName);
+  if (roleAddress) return { status: "SALUTATION_REVIEW", candidate: null, source: null, reason: "Sdílená/rolová e-mailová schránka." };
+  if (!humanNameValue(firstName) && !humanNameValue(lastName)) return { status: "SALUTATION_MISSING", candidate: null, source: null, reason: "Chybí ověřitelná osobní hodnota jména." };
+  const storedVocative = clean(row?.Osloveni5pad);
+  if (storedVocative && humanNameValue(storedVocative)) {
+    return { status: "SALUTATION_CANDIDATE", candidate: `Dobrý den, ${storedVocative},`, source: "Contact.Osloveni5pad", reason: "Vokativ je uložený ve Vistosu; stále vyžaduje lidské schválení." };
+  }
+  const firstVocative = FIRST_NAME_VOCATIVES.get(firstName.toLocaleLowerCase("cs-CZ"));
+  if (firstVocative && humanNameValue(firstName)) {
+    return { status: "SALUTATION_CANDIDATE", candidate: `Dobrý den, ${firstVocative},`, source: "curated Czech first-name dictionary", reason: "Přesná shoda v omezeném kontrolovaném slovníku; kandidát není schválené oslovení." };
+  }
+  const gender = foldText(referenceCaption(row, "Gender_FK") || row?.SalutationText);
+  if (!firstName && humanNameValue(lastName) && /muz|male|pan$/.test(gender) && /(?:il|ák)$/i.test(lastName)) {
+    const vocative = /ák$/i.test(lastName) ? `${lastName.slice(0, -1)}ku` : `${lastName}e`;
+    return { status: "SALUTATION_CANDIDATE", candidate: `Dobrý den, pane ${vocative},`, source: "confirmed male salutation + narrow Czech surname rule", reason: "Úzké pravidlo pouze pro potvrzený mužský rod; kandidát vyžaduje lidské schválení." };
+  }
+  return { status: "SALUTATION_REVIEW", candidate: null, source: null, reason: "Vokativ nebo rod nelze spolehlivě určit z dostupných dat." };
+}
+
+export function buildSalutationCandidate(row, roleAddress = false) {
+  return salutationForRow(row, roleAddress);
+}
+
+function contactQualityRecord(row, dncMappings) {
   const originalEmail = clean(row?.Email1);
   const normalizedEmail = normalizeContactEmail(originalEmail);
   const syntaxValid = isSyntacticallyValidEmail(normalizedEmail);
   const domain = syntaxValid ? normalizedEmail.split("@")[1] : "";
   const typo = domain ? suspiciousEmailDomain(domain) : null;
-  const dncValue = dncField ? normalizedBoolean(row?.[dncField.field]) : false;
+  const dncState = dncStateForRow(row, dncMappings);
   const firstName = clean(row?.FirstName);
   const lastName = clean(row?.LastName);
-  const nameOk = Boolean(firstName || lastName);
+  const nameOk = humanNameValue(firstName) || humanNameValue(lastName);
+  const roleAddress = syntaxValid && isRoleAddress(normalizedEmail);
+  const salutation = salutationForRow(row, roleAddress);
   return {
     id: clean(row?.Id), originalEmail, normalizedEmail, syntaxValid, domain, typo,
-    doNotContact: dncValue === true, doNotContactUnknown: dncValue === null,
-    firstName, lastName, nameOk, roleAddress: syntaxValid && isRoleAddress(normalizedEmail),
+    doNotContactState: dncState, doNotContact: dncState === "TRUE", doNotContactUnknown: dncState === "UNKNOWN",
+    firstName, lastName, nameOk, roleAddress, salutation,
     parentId: recordId(row, "Parent_FK")
   };
 }
@@ -557,7 +680,7 @@ function duplicateGroups(rows, qualityRows) {
   return [...byEmail.entries()].filter(([, members]) => members.length > 1).map(([email, members]) => {
     const parentIds = new Set(members.map(({ quality }) => quality.parentId).filter(Boolean));
     const names = new Set(members.map(({ quality }) => `${foldText(quality.firstName)}|${foldText(quality.lastName)}`));
-    const dncStates = new Set(members.map(({ quality }) => quality.doNotContact));
+    const dncStates = new Set(members.map(({ quality }) => quality.doNotContactState));
     return {
       normalizedEmail: email,
       count: members.length,
@@ -568,7 +691,7 @@ function duplicateGroups(rows, qualityRows) {
         lastName: quality.lastName,
         parentFk: quality.parentId || null,
         company: referenceCaption(row, "Parent_FK") || null,
-        doNotContact: quality.doNotContact,
+        doNotContact: quality.doNotContactState,
         phone: firstValue(row, ["Phone", "PhoneNumber", "Mobile"]) || null,
         created: clean(row?.Created) || null,
         modified: clean(row?.Modified) || null
@@ -577,14 +700,14 @@ function duplicateGroups(rows, qualityRows) {
       multiplePeople: names.size > 1,
       multipleCompanies: parentIds.size > 1,
       roleAddress: members.some(({ quality }) => quality.roleAddress),
-      doNotContactConflict: dncStates.size > 1 || members.some(({ quality }) => quality.doNotContact)
+      doNotContactConflict: dncStates.has("TRUE") || dncStates.has("UNKNOWN")
     };
   }).sort((a, b) => b.count - a.count || a.normalizedEmail.localeCompare(b.normalizedEmail));
 }
 
 function summarizeCleanupContacts(rows, schemaMetadata) {
-  const dncField = confirmedDoNotContactField(schemaMetadata);
-  const qualityRows = rows.map((row) => contactQualityRecord(row, dncField));
+  const dncMappings = resolvedDncMappings(schemaMetadata);
+  const qualityRows = rows.map((row) => contactQualityRecord(row, dncMappings));
   const duplicates = duplicateGroups(rows, qualityRows);
   const duplicateEmails = new Set(duplicates.map((group) => group.normalizedEmail));
   const dncConflictEmails = new Set(duplicates.filter((group) => group.doNotContactConflict).map((group) => group.normalizedEmail));
@@ -625,13 +748,15 @@ function summarizeCleanupContacts(rows, schemaMetadata) {
       nameOk: qualityRows.filter((row) => row.nameOk).length,
       nameMissing: qualityRows.filter((row) => !row.nameOk).length,
       roleAddress: qualityRows.filter((row) => row.roleAddress).length,
-      salutationOk: 0,
-      salutationReview: qualityRows.filter((row) => row.nameOk).length,
-      salutationMissing: qualityRows.filter((row) => !row.nameOk).length,
+      salutationCandidates: qualityRows.filter((row) => row.salutation.status === "SALUTATION_CANDIDATE").length,
+      salutationApproved: 0,
+      salutationReview: qualityRows.filter((row) => row.salutation.status === "SALUTATION_REVIEW").length,
+      salutationMissing: qualityRows.filter((row) => row.salutation.status === "SALUTATION_MISSING").length,
       candidateBeforeDns: candidateBeforeDns.length,
       uniqueDomains: uniqueDomains.length
     },
-    suspiciousRows
+    suspiciousRows,
+    dncMappings
   };
 }
 
@@ -640,26 +765,62 @@ export function summarizeCleanupContactRows(rows = [], schemaMetadata = []) {
   return {
     summary: result.summary,
     doNotContactField: confirmedDoNotContactField(schemaMetadata),
+    doNotContactMappings: result.dncMappings,
     duplicateGroups: result.duplicates,
     suspiciousRows: result.suspiciousRows,
     uniqueDomains: result.uniqueDomains
   };
 }
 
-async function dnsMxStatus(domain) {
-  try {
-    const response = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=MX`, {
-      headers: { Accept: "application/dns-json" }
-    });
-    if (!response.ok) return { status: "DNS_ERROR", dnsStatus: response.status, mx: [] };
-    const body = await response.json();
-    const mx = Array.isArray(body.Answer) ? body.Answer.filter((answer) => Number(answer.type) === 15).map((answer) => clean(answer.data)) : [];
-    if (Number(body.Status) === 3) return { status: "INVALID_DOMAIN", dnsStatus: 3, mx: [] };
-    if (Number(body.Status) !== 0) return { status: "DNS_ERROR", dnsStatus: Number(body.Status), mx: [] };
-    return { status: mx.length ? "VALID_DOMAIN" : "NO_MX", dnsStatus: 0, mx };
-  } catch {
-    return { status: "DNS_ERROR", dnsStatus: null, mx: [] };
+async function dnsQuery(name, type, attempts = 2) {
+  let last = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`, {
+        headers: { Accept: "application/dns-json" }
+      });
+      if (!response.ok) last = { ok: false, dnsStatus: response.status, transient: response.status >= 500 };
+      else {
+        const body = await response.json();
+        const status = Number(body.Status);
+        if (status === 0 || status === 3) return { ok: true, dnsStatus: status, answers: Array.isArray(body.Answer) ? body.Answer : [] };
+        last = { ok: false, dnsStatus: status, transient: [2, 4, 5].includes(status) };
+      }
+    } catch {
+      last = { ok: false, dnsStatus: null, transient: true };
+    }
+    if (!last?.transient) break;
   }
+  return last || { ok: false, dnsStatus: null, transient: true };
+}
+
+function addressAnswers(query, types) {
+  return query?.ok && query.dnsStatus === 0
+    ? query.answers.filter((answer) => types.includes(Number(answer.type))).map((answer) => clean(answer.data)).filter(Boolean)
+    : [];
+}
+
+export async function dnsMailRouteStatus(domain) {
+  const mxQuery = await dnsQuery(domain, "MX");
+  if (!mxQuery.ok) return { status: "UNKNOWN", dnsStatus: mxQuery.dnsStatus, mx: [], reason: "DNS query failed after bounded retry" };
+  if (mxQuery.dnsStatus === 3) return { status: "NXDOMAIN", dnsStatus: 3, mx: [], reason: "Domain does not exist" };
+  const mx = mxQuery.answers.filter((answer) => Number(answer.type) === 15).map((answer) => clean(answer.data));
+  if (mx.some((value) => /^0\s+\.$/.test(value))) return { status: "NULL_MX", dnsStatus: 0, mx, reason: "RFC 7505 null MX explicitly rejects mail" };
+  if (mx.length) {
+    const targets = [...new Set(mx.map((value) => value.replace(/^\d+\s+/, "").replace(/\.$/, "")).filter(Boolean))];
+    const targetResults = await mapConcurrent(targets, 4, async (target) => {
+      const [a, aaaa] = await Promise.all([dnsQuery(target, "A"), dnsQuery(target, "AAAA")]);
+      return { target, addresses: [...addressAnswers(a, [1]), ...addressAnswers(aaaa, [28])], uncertain: !a.ok || !aaaa.ok };
+    });
+    if (targetResults.some((row) => row.addresses.length)) return { status: "VALID_DOMAIN", dnsStatus: 0, mx, mxTargets: targetResults, reason: "MX target has A/AAAA address" };
+    if (targetResults.some((row) => row.uncertain)) return { status: "UNKNOWN", dnsStatus: null, mx, mxTargets: targetResults, reason: "MX target address lookup remained inconclusive" };
+    return { status: "INVALID_MX_TARGET", dnsStatus: 0, mx, mxTargets: targetResults, reason: "MX targets have no A/AAAA address" };
+  }
+  const [a, aaaa] = await Promise.all([dnsQuery(domain, "A"), dnsQuery(domain, "AAAA")]);
+  if ((!a.ok && a.dnsStatus !== 3) || (!aaaa.ok && aaaa.dnsStatus !== 3)) return { status: "UNKNOWN", dnsStatus: null, mx: [], reason: "A/AAAA fallback lookup remained inconclusive" };
+  const addresses = [...addressAnswers(a, [1]), ...addressAnswers(aaaa, [28])];
+  if (addresses.length) return { status: "A_AAAA_FALLBACK_REVIEW", dnsStatus: 0, mx: [], addresses, reason: "No MX; RFC 5321 implicit A/AAAA fallback exists and requires review" };
+  return { status: "NO_MAIL_ROUTE", dnsStatus: a.dnsStatus === 3 && aaaa.dnsStatus === 3 ? 3 : 0, mx: [], reason: "No MX and no A/AAAA fallback" };
 }
 
 async function mapConcurrent(values, concurrency, mapper) {
@@ -1068,6 +1229,8 @@ async function loadCleanupContacts(env, session) {
   const requested = unique([
     "Id", "FirstName", "LastName", "MiddleName", "Email1", "EmailInvoicing",
     "Phone", "PhoneNumber", "Mobile", "Parent_FK", "Status_FK", "Created", "Modified",
+    "Kontaktovatsms", "SendMailEnabled", "CallEnabled", "DoNotWorkCompany",
+    "Gender_FK", "Salutation_FK", "SalutationText", "Osloveni5pad",
     ...qualityFields.map((column) => column.field)
   ]);
   const load = await loadAllEntityRows(env, session, "Contact", availableColumns(schema, requested), { concurrency: 4 });
@@ -1085,35 +1248,48 @@ function publicSchema(schema, relevantMetadata = schema.metadata) {
 }
 
 function dncFieldReport(contactLoad) {
-  const field = contactLoad.dncField;
-  if (!field) {
-    return {
-      confirmed: false, field: null, caption: null, datatype: null, values: [],
-      trueInterpretation: null, falseInterpretation: null, unknownValues: [], confidence: "none"
-    };
-  }
-  const values = valueDistribution(contactLoad.load.rows, field.field);
   return {
-    confirmed: true,
-    field: field.field,
-    caption: field.caption,
-    datatype: field.datatype,
-    values,
-    trueInterpretation: "boolean true / 1 / ano / yes => DO_NOT_CONTACT",
-    falseInterpretation: "boolean false / 0 / ne / no / empty => not flagged by this field",
-    unknownValues: values.filter(({ value }) => value !== "(empty)" && normalizedBoolean(value) === null),
-    confidence: "high: exact schema caption Neposílat SMS"
+    confirmed: contactLoad.cleanup.dncMappings.every((mapping) => mapping.confirmed),
+    aggregateRule: "TRUE if any confirmed field blocks; UNKNOWN if any mapping/value is unconfirmed; FALSE only if every confirmed field explicitly allows contact",
+    mappings: contactLoad.cleanup.dncMappings.map((mapping) => ({
+      field: mapping.field,
+      owner: mapping.owner,
+      caption: mapping.caption,
+      datatype: mapping.datatype,
+      confirmed: mapping.confirmed,
+      evidence: mapping.evidence,
+      trueMeaning: mapping.confirmed ? mapping.trueMeaning : null,
+      falseMeaning: mapping.confirmed ? mapping.falseMeaning : null,
+      emptyMeaning: "UNKNOWN",
+      values: valueDistribution(contactLoad.load.rows, mapping.field)
+    })),
+    newsletterConsent: "NOT_DETERMINABLE"
   };
 }
 
-function salutationQaSample(rows, limit = 100) {
-  return rows.filter((row) => clean(row?.FirstName) || clean(row?.LastName)).slice(0, limit).map((row) => ({
-    contactId: clean(row?.Id),
-    firstName: clean(row?.FirstName) || null,
-    lastName: clean(row?.LastName) || null,
-    status: "SALUTATION_REVIEW",
-    candidate: null,
-    reason: "Rod ani český vokativ nejsou ve Vistos datech jednoznačně potvrzené; automatické oslovení nebylo vytvořeno."
+function salutationQaSample(qualityRows, limit = 100) {
+  const selected = [];
+  for (const status of ["SALUTATION_CANDIDATE", "SALUTATION_REVIEW", "SALUTATION_MISSING"]) {
+    for (const quality of qualityRows.filter((row) => row.salutation.status === status)) {
+      if (selected.length >= limit) break;
+      selected.push(quality);
+      if (selected.filter((row) => row.salutation.status === status).length >= Math.ceil(limit / 3)) break;
+    }
+  }
+  for (const quality of qualityRows) {
+    if (selected.length >= limit) break;
+    if (!selected.some((row) => row.id === quality.id)) selected.push(quality);
+  }
+  return selected.slice(0, limit).map((quality) => ({
+    contactId: quality.id,
+    firstName: quality.firstName || null,
+    lastName: quality.lastName || null,
+    roleAddress: quality.roleAddress,
+    status: quality.salutation.status,
+    candidate: quality.salutation.candidate,
+    source: quality.salutation.source,
+    approved: false,
+    reason: quality.salutation.reason
   }));
 }
 
@@ -1314,7 +1490,7 @@ async function auditDomainBatch(contactLoad, options) {
   const start = Math.max(0, Number(options.domainStart) || 0);
   const limit = Math.max(1, Math.min(Number(options.domainLimit) || 50, 500));
   const domains = contactLoad.cleanup.uniqueDomains.slice(start, start + limit);
-  const results = await mapConcurrent(domains, 10, async (domain) => ({ domain, ...(await dnsMxStatus(domain)) }));
+  const results = await mapConcurrent(domains, 10, async (domain) => ({ domain, ...(await dnsMailRouteStatus(domain)) }));
   const duplicateEmails = new Set(contactLoad.cleanup.duplicates.map((group) => group.normalizedEmail));
   const byDomain = new Map();
   for (const quality of contactLoad.cleanup.qualityRows) {
@@ -1412,7 +1588,7 @@ export async function auditVistosContactCleanupV4(env, options = {}) {
       ...contactLoad.cleanup.summary,
       suspiciousTypoCount: contactLoad.cleanup.suspiciousRows.length,
       suspiciousTypoSample: contactLoad.cleanup.suspiciousRows.slice(0, 250),
-      salutationQaSample: salutationQaSample(contactLoad.load.rows, 100),
+      salutationQaSample: salutationQaSample(contactLoad.cleanup.qualityRows, 100),
       compactQuality: (() => {
         const duplicateEmails = new Set(contactLoad.cleanup.duplicates.map((group) => group.normalizedEmail));
         return contactLoad.cleanup.qualityRows.map((quality) => ({
@@ -1424,9 +1600,11 @@ export async function auditVistosContactCleanupV4(env, options = {}) {
           typo: Boolean(quality.typo),
           doNotContact: quality.doNotContact,
           doNotContactUnknown: quality.doNotContactUnknown,
+          doNotContactState: quality.doNotContactState,
           duplicate: duplicateEmails.has(quality.normalizedEmail),
           nameOk: quality.nameOk,
-          roleAddress: quality.roleAddress
+          roleAddress: quality.roleAddress,
+          salutationStatus: quality.salutation.status
         }));
       })(),
       performance: { pageSize: contactLoad.load.pageSize, pagesRead: contactLoad.load.pagesRead, rowsRead: contactLoad.load.rows.length, sourceTotal: contactLoad.load.total, duplicatePageIds: integrity.duplicateIds }

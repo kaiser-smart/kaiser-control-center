@@ -41305,6 +41305,38 @@ function vistosAuditV4MetricsForIds(ids, qualityById, domainStatus) {
   };
 }
 
+async function vistosAuditV4CompareRawRun(scope, firstById, pageCount) {
+  const secondById = new Map();
+  let startPage = 0;
+  let rows = 0;
+  let blocks = 0;
+  do {
+    const payload = await apiJson(vistosAuditV4Url(scope, { startPage: String(startPage), pageCount: String(pageCount) }));
+    const raw = payload.rawDocument;
+    blocks += 1;
+    rows += Number(raw.block?.rowsRead || 0);
+    for (const row of raw.rows || []) if (row.id && !secondById.has(row.id)) secondById.set(row.id, row.signature);
+    startPage = Number(raw.block?.nextPage || 0);
+    if (raw.block?.done) break;
+  } while (startPage > 0);
+  const added = [...secondById.keys()].filter((id) => !firstById.has(id));
+  const missing = [...firstById.keys()].filter((id) => !secondById.has(id));
+  const changed = [...secondById.keys()].filter((id) => firstById.has(id) && firstById.get(id) !== secondById.get(id));
+  return {
+    reproducible: added.length === 0 && missing.length === 0 && changed.length === 0,
+    firstUniqueIds: firstById.size,
+    secondUniqueIds: secondById.size,
+    secondRows: rows,
+    secondBlocks: blocks,
+    addedIds: added.length,
+    missingIds: missing.length,
+    changedRelationsOrStatus: changed.length,
+    sourceMutationExcluded: false,
+    deterministicOrderingConfirmed: false,
+    verdict: "BLOCKED until Vistos confirms a deterministic unique ordering or cursor/ID-range pagination; matching counts alone are insufficient"
+  };
+}
+
 async function runVistosAuditV4() {
   if (vistosAuditV4State.running) return;
   vistosAuditV4State.running = true;
@@ -41325,8 +41357,8 @@ async function runVistosAuditV4() {
       contactsByCompany.set(row.parentId, ids);
     }
     const domainStatus = new Map();
-    const dnsCounts = { VALID_DOMAIN: 0, INVALID_DOMAIN: 0, NO_MX: 0, DNS_ERROR: 0 };
-    const dnsEmailCounts = { VALID_DOMAIN: 0, INVALID_DOMAIN: 0, NO_MX: 0, DNS_ERROR: 0 };
+    const dnsCounts = {};
+    const dnsEmailCounts = {};
     let readyForReview = 0;
     let domainStart = 0;
     let domainBatches = 0;
@@ -41425,6 +41457,7 @@ async function runVistosAuditV4() {
 
     const serviceDirect = new Set();
     const serviceCompanies = new Set();
+    const serviceFirstSignature = new Map();
     let startPage = 0;
     let serviceRows = 0;
     let serviceBlocks = 0;
@@ -41438,6 +41471,7 @@ async function runVistosAuditV4() {
       serviceRows += Number(service.block?.rowsRead || 0);
       serviceTotalPages = Number(service.block?.totalPages || 0);
       for (const row of service.rows || []) {
+        if (row.id && !serviceFirstSignature.has(row.id)) serviceFirstSignature.set(row.id, row.signature);
         if (row.companyId) serviceCompanies.add(row.companyId);
         for (const id of row.directContactIds || []) serviceDirect.add(id);
       }
@@ -41447,8 +41481,18 @@ async function runVistosAuditV4() {
     const serviceCompanyContacts = new Set();
     for (const companyId of serviceCompanies) for (const id of contactsByCompany.get(companyId) || []) serviceCompanyContacts.add(id);
 
+    vistosAuditV4State.progress = "Porovnávám druhý úplný běh InvoiceIssued po množinách ID a vazbách…";
+    render();
+    const invoiceReproducibility = await vistosAuditV4CompareRawRun("invoiceBlock", invoiceFirstSignature, 5);
+    vistosAuditV4State.progress = "Porovnávám druhý úplný běh ServiceList po množinách ID a vazbách…";
+    render();
+    const serviceReproducibility = await vistosAuditV4CompareRawRun("serviceListRawBlock", serviceFirstSignature, 10);
+
+    const dncMappingConfirmed = contact.doNotContactField?.confirmed === true;
+
     vistosAuditV4State.result = {
-      status: contactPayload.status === "complete" ? "COMPLETE" : "PARTIAL",
+      status: contactPayload.status === "complete" && dncMappingConfirmed
+        && invoiceReproducibility.reproducible && serviceReproducibility.reproducible ? "COMPLETE" : "PARTIAL",
       testedAt: new Date().toISOString(),
       contact: {
         ...Object.fromEntries(Object.entries(contact).filter(([key]) => !["schema", "relevantCommunicationFields", "doNotContactField", "suspiciousTypoSample", "salutationQaSample", "compactQuality", "performance"].includes(key))),
@@ -41471,11 +41515,15 @@ async function runVistosAuditV4() {
         blocks: serviceBlocks,
         totalPages: serviceTotalPages,
         directContacts: vistosAuditV4MetricsForIds(serviceDirect, qualityById, domainStatus),
-        companyContacts: vistosAuditV4MetricsForIds(serviceCompanyContacts, qualityById, domainStatus)
+        companyContacts: vistosAuditV4MetricsForIds(serviceCompanyContacts, qualityById, domainStatus),
+        reproducibility: serviceReproducibility
       },
       gdpr: scoped.gdpr?.gdpr || null,
       noWriteSafety: { vistosWrites: 0, leadHubWrites: 0, imports: 0, contactsDeleted: 0, emailsSent: 0, smsSent: 0 }
     };
+    vistosAuditV4State.result.invoice.loadedFields = invoiceSchema?.relevantFields?.map((field) => field.field) || [];
+    vistosAuditV4State.result.invoice.detailDatasetComplete = false;
+    vistosAuditV4State.result.invoice.reproducibility = invoiceReproducibility;
     vistosAuditV4State.progress = "READ audit dokončen.";
   } catch (error) {
     vistosAuditV4State.error = error?.payload?.error || error?.message || "READ audit selhal.";
