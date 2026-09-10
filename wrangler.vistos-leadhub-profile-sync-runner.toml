@@ -1,0 +1,10 @@
+name = "kaiser-vistos-leadhub-profile-sync-runner"
+main = "workers/vistos-leadhub-profile-sync-runner.js"
+compatibility_date = "2026-09-10"
+workers_dev = true
+
+[vars]
+APP_BASE_URL = "https://smart-odpady.ai"
+
+[triggers]
+crons = ["*/5 * * * *"]
