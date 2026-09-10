@@ -16,7 +16,13 @@ export async function runScheduledSync(env, scheduledTime) {
     })
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || `Sync endpoint odpověděl ${response.status}.`);
+  if (!response.ok) {
+    const error = new Error(payload.error || `Sync endpoint odpověděl ${response.status}.`);
+    error.code = payload.code || "vistos_leadhub_sync_endpoint_failed";
+    error.status = response.status;
+    error.upstreamStatus = Number(payload.upstreamStatus) || 0;
+    throw error;
+  }
   return payload;
 }
 
@@ -37,7 +43,12 @@ export default {
         messagesSent: 0
       });
     }).catch((error) => {
-      console.error("vistos_leadhub_profile_sync.failed", { message: String(error?.message || error) });
+      console.error("vistos_leadhub_profile_sync.failed", {
+        message: String(error?.message || error),
+        code: String(error?.code || "vistos_leadhub_sync_failed"),
+        status: Number(error?.status) || 0,
+        upstreamStatus: Number(error?.upstreamStatus) || 0
+      });
     }));
   },
 

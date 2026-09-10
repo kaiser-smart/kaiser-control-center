@@ -178,8 +178,8 @@ function tagPayload(item, active, reason, checked) {
 async function subscriptionRead(env, email) {
   const encoded = encodeURIComponent(email);
   const [subscriptions, suppressed] = await Promise.all([
-    leadHubRequest(env, `/subscriptions/email-address/${encoded}`),
-    leadHubRequest(env, `/subscriptions/email-address/${encoded}/suppressed`)
+    leadHubRequest(env, `/subscriptions/email-address/${encoded}`, { allow404: true }),
+    leadHubRequest(env, `/subscriptions/email-address/${encoded}/suppressed`, { allow404: true })
   ]);
   const states = Array.isArray(subscriptions.payload?.subscriptions) ? subscriptions.payload.subscriptions : [];
   return {
@@ -266,7 +266,7 @@ async function initializeState(env, scheduledAt) {
   const probeEmail = `esmart-sync-scope-probe-${Date.now()}@invalid.example`;
   const [profileProbe, subscriptionProbe, interestListsProbe] = await Promise.all([
     leadHubRequest(env, `/profiles/email-address/${encodeURIComponent(probeEmail)}`, { allow404: true }),
-    leadHubRequest(env, `/subscriptions/email-address/${encodeURIComponent(probeEmail)}`),
+    leadHubRequest(env, `/subscriptions/email-address/${encodeURIComponent(probeEmail)}`, { allow404: true }),
     leadHubRequest(env, "/interest-lists")
   ]);
   const latest = await getJson(storage, AUDIT_LATEST_KEY);
@@ -296,7 +296,7 @@ async function initializeState(env, scheduledAt) {
     totals: { created: 0, updated: 0, deactivated: 0, subscriptionChanges: 0, messagesSent: 0 },
     apiReadValidation: {
       profilesRead: [200, 404].includes(profileProbe.status),
-      subscriptionsRead: subscriptionProbe.status === 200,
+      subscriptionsRead: [200, 404].includes(subscriptionProbe.status),
       interestListsRead: interestListsProbe.status === 200
     },
     lastRun: { status: "checkpoint_initialized", finishedAt: checkpoint, sourceRows: 0, created: 0, updated: 0, deactivated: 0, readbackConfirmed: 0 }

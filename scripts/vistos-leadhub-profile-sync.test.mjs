@@ -28,7 +28,7 @@ const r2 = new MemoryR2({
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (url) => {
   if (String(url).includes("/profiles/email-address/")) return Response.json({ error_code: "profile_not_found" }, { status: 404 });
-  if (String(url).includes("/subscriptions/email-address/")) return Response.json({ subscriptions: [] });
+  if (String(url).includes("/subscriptions/email-address/")) return Response.json({ error_code: "profile_not_found" }, { status: 404 });
   if (String(url).endsWith("/interest-lists")) return Response.json([]);
   throw new Error(`unexpected init URL ${url}`);
 };
@@ -37,6 +37,11 @@ globalThis.fetch = originalFetch;
 assert.equal(initialized.syncStatus, "ACTIVE");
 assert.equal(initialized.checkpoint, "2026-09-10T10:00:00.000Z");
 assert.equal(initialized.historicalProfilesImported, 0, "initial checkpoint must not bulk-import the baseline");
+assert.deepEqual(initialized.apiReadValidation, {
+  profilesRead: true,
+  subscriptionsRead: true,
+  interestListsRead: true
+}, "missing profiles must still prove the read scopes without creating a profile");
 
 assert.doesNotThrow(() => __test.assertModifiedWindow(
   [{ Id: "2", Modified: "2026-09-10T10:01:00Z" }],
