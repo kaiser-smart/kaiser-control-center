@@ -811,8 +811,11 @@ export function summarizeCleanupContactRows(rows = [], schemaMetadata = []) {
 const ACCEPTED_MAIL_ROUTE_STATUS = "VALID_DOMAIN";
 
 function normalizedDomainStatuses(value) {
-  if (value instanceof Map) return value;
-  return new Map(Object.entries(value && typeof value === "object" ? value : {}));
+  const entries = value instanceof Map ? [...value.entries()] : Object.entries(value && typeof value === "object" ? value : {});
+  return new Map(entries.map(([domain, evidence]) => [
+    clean(domain).toLowerCase(),
+    clean(evidence && typeof evidence === "object" ? evidence.status : evidence).toUpperCase() || "UNKNOWN"
+  ]).filter(([domain]) => domain));
 }
 
 function mailRouteExclusionReason(status) {
@@ -826,6 +829,9 @@ function mailRouteExclusionReason(status) {
 export function buildLeadHubDataOnlySelection(rows = [], schemaMetadata = [], options = {}) {
   const cleanup = summarizeCleanupContacts(rows, schemaMetadata);
   const domainStatuses = normalizedDomainStatuses(options.domainStatuses);
+  const requiredDomains = cleanup.uniqueDomains;
+  const checkedRequiredDomains = requiredDomains.filter((domain) => domainStatuses.has(domain));
+  const missingDomains = requiredDomains.filter((domain) => !domainStatuses.has(domain));
   const duplicateEmails = new Set(cleanup.duplicates.map((group) => group.normalizedEmail));
   const employmentConflictEmails = new Set(cleanup.duplicates
     .filter((group) => group.employmentConflictReview || group.employmentUnknownConflictReview)
@@ -903,7 +909,7 @@ export function buildLeadHubDataOnlySelection(rows = [], schemaMetadata = [], op
   const technicalCleanEmails = new Set(technicalClean.map((quality) => quality.normalizedEmail));
   const dataOnlyEmails = new Set(dataOnly.map((row) => row.normalizedEmail));
   return {
-    status: "COMPLETE",
+    status: missingDomains.length ? "PARTIAL" : "COMPLETE",
     cleaningPolicy: "fail-closed; missing or inconclusive evidence is excluded instead of queued for manual review",
     grain: { source: "CONTACT_RECORDS", selection: "UNIQUE_EMAILS" },
     sourceContactRecords: cleanup.summary.total,
@@ -911,8 +917,11 @@ export function buildLeadHubDataOnlySelection(rows = [], schemaMetadata = [], op
     uniqueSyntaxValidEmails: cleanup.summary.uniqueSyntaxValid,
     domainEvidence: {
       suppliedDomains: domainStatuses.size,
+      requiredDomains: requiredDomains.length,
+      checkedRequiredDomains: checkedRequiredDomains.length,
+      missingDomains: missingDomains.length,
       requiredStatus: ACCEPTED_MAIL_ROUTE_STATUS,
-      missingEvidenceExcluded: domainStatuses.size === 0
+      missingEvidenceExcluded: missingDomains.length > 0
     },
     exclusionReasons: Object.fromEntries([...reasons.entries()].map(([reason, bucket]) => [reason, {
       contactRecords: bucket.contactRecordIds.size,
@@ -1005,6 +1014,247 @@ async function mapConcurrent(values, concurrency, mapper) {
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker));
   return results;
+}
+
+const LEADHUB_DATA_ONLY_PREFIX = "protected-audits/vistos-contact-cleanup-v4";
+const LEADHUB_DATA_ONLY_LATEST_KEY = `${LEADHUB_DATA_ONLY_PREFIX}/latest.json`;
+const LEADHUB_DNS_BATCH_LIMIT = 150;
+
+function leadHubAuditBucket(env) {
+  const bucket = env?.R2_ARCHIVE;
+  if (!bucket) {
+    const error = new Error("Chybí chráněné R2 úložiště R2_ARCHIVE pro Vistos DATA_ONLY audit.");
+    error.status = 503;
+    error.code = "vistos_data_only_storage_missing";
+    throw error;
+  }
+  return bucket;
+}
+
+function leadHubAuditKey(runId, name) {
+  const safeRunId = clean(runId);
+  if (!/^[a-z0-9-]{8,80}$/i.test(safeRunId)) {
+    const error = new Error("Neplatné runId Vistos DATA_ONLY auditu.");
+    error.status = 400;
+    error.code = "vistos_data_only_run_id_invalid";
+    throw error;
+  }
+  return `${LEADHUB_DATA_ONLY_PREFIX}/${safeRunId}/${name}.json`;
+}
+
+async function putProtectedAuditJson(bucket, key, value) {
+  await bucket.put(key, JSON.stringify(value), {
+    httpMetadata: { contentType: "application/json; charset=utf-8" },
+    customMetadata: { protected: "true", audit: "vistos-contact-cleanup-v4" }
+  });
+}
+
+async function getProtectedAuditJson(bucket, key) {
+  const object = await bucket.get(key);
+  if (!object) return null;
+  if (typeof object.json === "function") return object.json();
+  return JSON.parse(await object.text());
+}
+
+function contactSnapshotFingerprint(rows) {
+  return String(hashString(rows.map((row) => [
+    clean(row?.Id), clean(row?.Email1), clean(row?.Modified), clean(row?.DoNotWorkCompany)
+  ].join("\u001f")).join("\u001e")));
+}
+
+export function finalizeLeadHubDataOnlySnapshot(snapshot, dnsState) {
+  const rows = Array.isArray(snapshot?.rows) ? snapshot.rows : [];
+  const schemaMetadata = Array.isArray(snapshot?.schemaMetadata) ? snapshot.schemaMetadata : [];
+  const requiredDomains = Array.isArray(dnsState?.domains) ? dnsState.domains : [];
+  const results = dnsState?.results && typeof dnsState.results === "object" ? dnsState.results : {};
+  const domainStatuses = Object.fromEntries(requiredDomains
+    .filter((domain) => results[domain]?.status)
+    .map((domain) => [domain, results[domain]]));
+  const cleanup = buildLeadHubDataOnlySelection(rows, schemaMetadata, { domainStatuses });
+  const checkedAtValues = Object.values(results).map((row) => clean(row?.checkedAt)).filter(Boolean).sort();
+  return {
+    status: cleanup.status,
+    runId: clean(snapshot?.runId || dnsState?.runId),
+    snapshotFingerprint: clean(snapshot?.snapshotFingerprint),
+    snapshotCreatedAt: clean(snapshot?.createdAt) || null,
+    dnsCheckedAt: checkedAtValues.at(-1) || null,
+    dnsResults: Object.fromEntries(requiredDomains.filter((domain) => results[domain]).map((domain) => [domain, {
+      status: clean(results[domain]?.status).toUpperCase() || "UNKNOWN",
+      checkedAt: clean(results[domain]?.checkedAt) || null
+    }])),
+    cleanup,
+    communicationPermission: {
+      importAllowed: false,
+      sendAllowed: false,
+      newsletterPermission: "UNKNOWN"
+    },
+    noWriteSafety: {
+      vistosWrites: 0,
+      leadHubWrites: 0,
+      imports: 0,
+      subscriptionChanges: 0,
+      emailsSent: 0,
+      smsSent: 0,
+      automationsActivated: 0
+    }
+  };
+}
+
+async function initializeLeadHubDataOnlyAudit(env) {
+  if (!isVistosExecuteConfigured(env)) {
+    const error = new Error("Vistos Execute API není nakonfigurované.");
+    error.status = 503;
+    error.code = "vistos_not_configured";
+    throw error;
+  }
+  const session = await loginVistosExecute(env);
+  const contactLoad = await loadCleanupContacts(env, session);
+  const bucket = leadHubAuditBucket(env);
+  const runId = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  const snapshot = {
+    version: 1,
+    runId,
+    createdAt,
+    snapshotFingerprint: contactSnapshotFingerprint(contactLoad.load.rows),
+    rows: contactLoad.load.rows,
+    schemaMetadata: contactLoad.schema.metadata,
+    source: {
+      entity: "Contact",
+      rowsRead: contactLoad.load.rows.length,
+      sourceTotal: contactLoad.load.total,
+      pageSize: contactLoad.load.pageSize,
+      pagesRead: contactLoad.load.pagesRead
+    }
+  };
+  const state = {
+    version: 1,
+    runId,
+    createdAt,
+    snapshotFingerprint: snapshot.snapshotFingerprint,
+    domains: contactLoad.cleanup.uniqueDomains,
+    results: {},
+    nextDomainStart: 0
+  };
+  await Promise.all([
+    putProtectedAuditJson(bucket, leadHubAuditKey(runId, "contact-snapshot"), snapshot),
+    putProtectedAuditJson(bucket, leadHubAuditKey(runId, "dns-state"), state)
+  ]);
+  return {
+    status: "RUNNING",
+    runId,
+    sourceContactRecords: snapshot.source.rowsRead,
+    uniqueSyntaxValidEmails: contactLoad.cleanup.summary.uniqueSyntaxValid,
+    requiredDomains: state.domains.length,
+    checkedDomains: 0,
+    nextDomainStart: 0,
+    batchLimit: LEADHUB_DNS_BATCH_LIMIT,
+    contactSnapshotLoads: 1,
+    protectedSnapshotKey: leadHubAuditKey(runId, "contact-snapshot")
+  };
+}
+
+async function runLeadHubDataOnlyDnsBatch(env, payload) {
+  const bucket = leadHubAuditBucket(env);
+  const runId = clean(payload?.runId);
+  const stateKey = leadHubAuditKey(runId, "dns-state");
+  const state = await getProtectedAuditJson(bucket, stateKey);
+  if (!state) {
+    const error = new Error("DNS auditní běh nebyl nalezen.");
+    error.status = 404;
+    error.code = "vistos_data_only_run_not_found";
+    throw error;
+  }
+  const start = Math.max(0, Number(payload?.domainStart) || 0);
+  if (start !== Number(state.nextDomainStart || 0)) {
+    const error = new Error(`DNS blok musí navázat od domény ${state.nextDomainStart || 0}.`);
+    error.status = 409;
+    error.code = "vistos_data_only_dns_sequence_mismatch";
+    throw error;
+  }
+  const requestedLimit = Math.max(1, Number(payload?.domainLimit) || LEADHUB_DNS_BATCH_LIMIT);
+  const limit = Math.min(requestedLimit, LEADHUB_DNS_BATCH_LIMIT);
+  const domains = state.domains.slice(start, start + limit);
+  const checkedAt = new Date().toISOString();
+  const results = await mapConcurrent(domains, 10, async (domain) => ({ domain, ...(await dnsMailRouteStatus(domain)), checkedAt }));
+  for (const result of results) state.results[result.domain] = { status: result.status, checkedAt: result.checkedAt };
+  state.nextDomainStart = start + domains.length;
+  state.updatedAt = checkedAt;
+  await putProtectedAuditJson(bucket, stateKey, state);
+  return {
+    status: state.nextDomainStart >= state.domains.length ? "READY_TO_FINALIZE" : "RUNNING",
+    runId,
+    requiredDomains: state.domains.length,
+    checkedDomains: Object.keys(state.results).length,
+    nextDomainStart: state.nextDomainStart,
+    done: state.nextDomainStart >= state.domains.length,
+    results
+  };
+}
+
+async function finalizeLeadHubDataOnlyAudit(env, payload) {
+  const bucket = leadHubAuditBucket(env);
+  const runId = clean(payload?.runId);
+  const [snapshot, state] = await Promise.all([
+    getProtectedAuditJson(bucket, leadHubAuditKey(runId, "contact-snapshot")),
+    getProtectedAuditJson(bucket, leadHubAuditKey(runId, "dns-state"))
+  ]);
+  if (!snapshot || !state || snapshot.snapshotFingerprint !== state.snapshotFingerprint) {
+    const error = new Error("Kontaktní snapshot a DNS stav nejsou dostupné nebo si neodpovídají.");
+    error.status = 409;
+    error.code = "vistos_data_only_snapshot_mismatch";
+    throw error;
+  }
+  const artifact = {
+    ...finalizeLeadHubDataOnlySnapshot(snapshot, state),
+    finalizedAt: new Date().toISOString(),
+    protectedOutputKey: leadHubAuditKey(runId, "data-only")
+  };
+  await putProtectedAuditJson(bucket, artifact.protectedOutputKey, artifact);
+  if (artifact.status === "COMPLETE") {
+    await putProtectedAuditJson(bucket, LEADHUB_DATA_ONLY_LATEST_KEY, {
+      runId,
+      protectedOutputKey: artifact.protectedOutputKey,
+      finalizedAt: artifact.finalizedAt,
+      snapshotFingerprint: artifact.snapshotFingerprint
+    });
+  }
+  return artifact;
+}
+
+async function readLatestLeadHubDataOnlyAudit(env) {
+  const bucket = leadHubAuditBucket(env);
+  const latest = await getProtectedAuditJson(bucket, LEADHUB_DATA_ONLY_LATEST_KEY);
+  if (!latest?.protectedOutputKey) {
+    return {
+      status: "PARTIAL",
+      error: "DNS kontrola nebyla provedena nebo její výsledky nebyly předány.",
+      code: "vistos_data_only_dns_evidence_missing",
+      cleanup: null,
+      protectedOutputKey: null
+    };
+  }
+  const artifact = await getProtectedAuditJson(bucket, latest.protectedOutputKey);
+  if (!artifact) {
+    return {
+      status: "PARTIAL",
+      error: "Ukazatel posledního auditu odkazuje na chybějící chráněný artefakt.",
+      code: "vistos_data_only_artifact_missing",
+      cleanup: null,
+      protectedOutputKey: latest.protectedOutputKey
+    };
+  }
+  return artifact;
+}
+
+export async function runLeadHubDataOnlyAuditAction(env, action, payload = {}) {
+  if (action === "initialize") return initializeLeadHubDataOnlyAudit(env);
+  if (action === "dnsBatch") return runLeadHubDataOnlyDnsBatch(env, payload);
+  if (action === "finalize") return finalizeLeadHubDataOnlyAudit(env, payload);
+  const error = new Error("Neznámá akce Vistos DATA_ONLY auditu.");
+  error.status = 400;
+  error.code = "vistos_data_only_action_invalid";
+  throw error;
 }
 
 export function contactColumnsForSchema(schemaColumns = []) {
@@ -1748,8 +1998,6 @@ async function auditDocumentRawBlock(env, session, key, options) {
 }
 
 export async function auditVistosContactCleanupV4(env, options = {}) {
-  if (!isVistosExecuteConfigured(env)) return { status: "not_configured", version: 4, readOnly: true };
-  const session = await loginVistosExecute(env);
   const scope = clean(options.scope) || "contact";
   const base = {
     version: 4, scope, source: "vistos", readOnly: true,
@@ -1757,27 +2005,22 @@ export async function auditVistosContactCleanupV4(env, options = {}) {
     mailboxVerificationAvailable: false,
     mailboxVerificationReason: "V repozitáři nebyla nalezena specializovaná mailbox-verification služba; SendGrid je odesílací provider a pro tento audit nebyl použit."
   };
-  if (scope === "invoiceBlock") return { ...base, status: "complete", rawDocument: await auditDocumentRawBlock(env, session, "invoice", options), testedAt: new Date().toISOString() };
-  if (scope === "serviceListRawBlock") return { ...base, status: "complete", rawDocument: await auditDocumentRawBlock(env, session, "serviceList", options), testedAt: new Date().toISOString() };
-  const contactLoad = await loadCleanupContacts(env, session);
   if (scope === "leadHubDataOnly") {
-    const cleanup = buildLeadHubDataOnlySelection(contactLoad.load.rows, contactLoad.schema.metadata, { domainStatuses: {} });
+    const artifact = await readLatestLeadHubDataOnlyAudit(env);
     return {
       ...base,
-      status: cleanup.status.toLowerCase(),
-      cleanup,
+      ...artifact,
+      status: clean(artifact.status).toLowerCase() || "partial",
       documentTargeting: "UNVERIFIED_NOT_USED",
-      dnsRepeated: false,
-      performance: {
-        pageSize: contactLoad.load.pageSize,
-        pagesRead: contactLoad.load.pagesRead,
-        rowsRead: contactLoad.load.rows.length,
-        sourceTotal: contactLoad.load.total,
-        duplicatePageIds: pageIntegrity(contactLoad.load).duplicateIds
-      },
+      contactSnapshotLoads: 0,
       testedAt: new Date().toISOString()
     };
   }
+  if (!isVistosExecuteConfigured(env)) return { ...base, status: "not_configured" };
+  const session = await loginVistosExecute(env);
+  if (scope === "invoiceBlock") return { ...base, status: "complete", rawDocument: await auditDocumentRawBlock(env, session, "invoice", options), testedAt: new Date().toISOString() };
+  if (scope === "serviceListRawBlock") return { ...base, status: "complete", rawDocument: await auditDocumentRawBlock(env, session, "serviceList", options), testedAt: new Date().toISOString() };
+  const contactLoad = await loadCleanupContacts(env, session);
   if (scope === "domains") return { ...base, status: "complete", domains: await auditDomainBatch(contactLoad, options), testedAt: new Date().toISOString() };
   if (scope === "duplicates") {
     const start = Math.max(0, Number(options.detailStart) || 0);

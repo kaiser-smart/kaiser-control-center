@@ -1,8 +1,12 @@
 import { json, requireUserPermission } from "../../../_lib/auth.js";
-import { auditVistosContactCleanupV4, auditVistosContacts, auditVistosContactsFull } from "../../../_lib/vistos-contacts-audit.js";
+import { auditVistosContactCleanupV4, auditVistosContacts, auditVistosContactsFull, runLeadHubDataOnlyAuditAction } from "../../../_lib/vistos-contacts-audit.js";
+
+async function authorizedRequest(env, request) {
+  return requireUserPermission(env, request, "receivables", "manage");
+}
 
 export async function onRequestGet({ request, env }) {
-  const { response } = await requireUserPermission(env, request, "receivables", "manage");
+  const { response } = await authorizedRequest(env, request);
   if (response) return response;
   const url = new URL(request.url);
   try {
@@ -30,6 +34,30 @@ export async function onRequestGet({ request, env }) {
       error: String(error?.message || "Kontaktní audit Vistos se nepodařil."),
       code: String(error?.code || "vistos_contacts_audit_failed"),
       upstreamStatus: Number(error?.upstreamStatus) || 0
+    }, Number(error?.status) || 500);
+  }
+}
+
+export async function onRequestPost({ request, env }) {
+  const { response } = await authorizedRequest(env, request);
+  if (response) return response;
+  try {
+    const body = await request.json();
+    const result = await runLeadHubDataOnlyAuditAction(env, String(body?.action || ""), body || {});
+    return json({
+      version: 4,
+      scope: "leadHubDataOnly",
+      readOnlySources: true,
+      protectedAuditWrite: true,
+      writesVistos: false,
+      writesLeadHub: false,
+      ...result
+    });
+  } catch (error) {
+    return json({
+      status: "error", source: "vistos", readOnly: true, writesVistos: false, writesLeadHub: false,
+      error: String(error?.message || "Kontaktní DATA_ONLY audit Vistos se nepodařil."),
+      code: String(error?.code || "vistos_data_only_audit_failed")
     }, Number(error?.status) || 500);
   }
 }

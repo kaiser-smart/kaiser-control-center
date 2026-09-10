@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.751"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.752"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vistos kontakty: skutečné DNS důkazy v DATA_ONLY výběru",
+    text: "Cílený DNS běh používá jediný chráněný Contact snapshot, ukládá stav a čas kontroly každé domény do R2 a předává úplnou mapu do finálního fail-closed výběru. Chybějící DNS důkazy nově vrátí PARTIAL místo falešně dokončeného nulového výsledku."
+  },
   {
     title: "Vistos kontakty: konzervativní DATA_ONLY výběr",
     text: "Chráněný read-only audit odděluje technickou kvalitu od komunikačního oprávnění a bez důkazu VALID_DOMAIN adresu fail-closed vyřadí. Duplicity, bývalí pracovníci, Kaiser doména, nejasné oslovení i potvrzené zákazy nemohou projít do budoucího importního výběru."

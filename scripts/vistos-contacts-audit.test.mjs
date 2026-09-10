@@ -6,6 +6,7 @@ import {
   buildSalutationCandidate,
   contactColumnsForSchema,
   dnsMailRouteStatus,
+  finalizeLeadHubDataOnlySnapshot,
   isSyntacticallyValidEmail,
   normalizeContactEmail,
   summarizeCleanupContactRows,
@@ -134,9 +135,43 @@ assert.equal(dataOnlySelection.sendAllowed, false);
 const noDnsEvidence = buildLeadHubDataOnlySelection([
   { Id: 1, ...allowed, Email1: "radim@example.cz" }
 ], confirmedCommunicationSchema);
-assert.equal(noDnsEvidence.status, "COMPLETE");
+assert.equal(noDnsEvidence.status, "PARTIAL");
 assert.equal(noDnsEvidence.technicallyCleanUniqueEmails, 0);
 assert.equal(noDnsEvidence.exclusionReasons.DNS_UNKNOWN.uniqueEmails, 1);
+assert.deepEqual(noDnsEvidence.domainEvidence, {
+  suppliedDomains: 0,
+  requiredDomains: 1,
+  checkedRequiredDomains: 0,
+  missingDomains: 1,
+  requiredStatus: "VALID_DOMAIN",
+  missingEvidenceExcluded: true
+});
+
+const completeSnapshot = {
+  runId: "test-run-1234",
+  snapshotFingerprint: "fixture-fingerprint",
+  createdAt: "2026-09-10T00:00:00.000Z",
+  rows: [{ Id: 1, ...allowed, Email1: "radim@example.cz" }],
+  schemaMetadata: confirmedCommunicationSchema
+};
+const finalizedWithDns = finalizeLeadHubDataOnlySnapshot(completeSnapshot, {
+  runId: completeSnapshot.runId,
+  domains: ["example.cz"],
+  results: { "example.cz": { status: "VALID_DOMAIN", checkedAt: "2026-09-10T00:01:00.000Z" } }
+});
+assert.equal(finalizedWithDns.status, "COMPLETE");
+assert.equal(finalizedWithDns.cleanup.technicallyCleanUniqueEmails, 1);
+assert.equal(finalizedWithDns.cleanup.dataOnlyUniqueEmails, 1);
+assert.equal(finalizedWithDns.cleanup.domainEvidence.checkedRequiredDomains, 1);
+assert.equal(finalizedWithDns.dnsResults["example.cz"].checkedAt, "2026-09-10T00:01:00.000Z");
+
+const finalizedWithoutDns = finalizeLeadHubDataOnlySnapshot(completeSnapshot, {
+  runId: completeSnapshot.runId,
+  domains: ["example.cz"],
+  results: {}
+});
+assert.equal(finalizedWithoutDns.status, "PARTIAL");
+assert.equal(finalizedWithoutDns.cleanup.technicallyCleanUniqueEmails, 0);
 
 assert.deepEqual(summarizeContactRows([
   { Id: 1, FirstName: "A", LastName: "B", Email1: "same@example.test", Phone: "1", Parent_FK_RecordId: 10, Created: "2026-01-01", Modified: "2026-02-01" },
@@ -256,3 +291,8 @@ assert.match(appSource, /runVistosAuditV4/);
 assert.match(appSource, /invoiceBlock/);
 assert.match(appSource, /serviceListRawBlock/);
 assert.match(appSource, /row\.leftCompanyState === "FALSE"/);
+
+const auditEndpointSource = await readFile(new URL("../functions/api/receivables/vistos/contacts-audit.js", import.meta.url), "utf8");
+assert.match(auditEndpointSource, /onRequestPost/);
+assert.match(auditEndpointSource, /runLeadHubDataOnlyAuditAction/);
+assert.match(auditEndpointSource, /protectedAuditWrite: true/);
