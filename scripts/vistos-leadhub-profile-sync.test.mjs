@@ -358,6 +358,14 @@ try {
 console.log("Vistos → LeadHub historical preparation tests passed");
 
 const syncStateKey = "protected-sync/vistos-leadhub-profiles/state.json";
+assert.equal(__test.sourceValues({ Parent_FK: "Synthetic company", Parent_FK_RecordId: 20 }, ["Parent_FK"]),
+  __test.sourceValues({ Parent_FK: 20, Parent_FK_Caption: "Synthetic company" }, ["Parent_FK"]));
+assert.notEqual(__test.sourceValues({ Parent_FK: "Synthetic company", Parent_FK_RecordId: 20 }, ["Parent_FK"]),
+  __test.sourceValues({ Parent_FK: 21, Parent_FK_Caption: "Synthetic company" }, ["Parent_FK"]), "equal captions do not hide a changed company ID");
+assert.notEqual(__test.sourceValues({ Parent_FK: "Synthetic company" }, ["Parent_FK"]),
+  __test.sourceValues({ Parent_FK: 20 }, ["Parent_FK"]), "missing FK identity is not inferred from its caption");
+assert.notEqual(__test.sourceValues({ DoNotWorkCompany: false }, ["DoNotWorkCompany"]),
+  __test.sourceValues({}, ["DoNotWorkCompany"]), "FK normalization must not change UNKNOWN to false");
 const importedProfiles = new Map();
 let providerWrites = 0, currentSourceRow = preparationRow;
 let deltaSourceRows = [];
