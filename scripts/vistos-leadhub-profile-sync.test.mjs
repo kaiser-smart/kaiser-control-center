@@ -241,9 +241,40 @@ try {
   assert.equal(payload.sendAllowed, false);
   assert.equal(payload.writes, 0);
   assert.ok(!JSON.stringify(payload).includes("synthetic"), "no credentials or contact values in readback");
-  assert.equal(preflightCalls.length, 8);
+  assert.equal(preflightCalls.length, 9);
   assert.equal(payload.checks.vistosConfiguration.documentedEndpointMatches, true);
   assert.equal(payload.checks.vistosOriginReachable.httpStatus, 200);
+} finally { globalThis.fetch = originalFetch; }
+
+for (const campaign of [
+  { campaign_type: "incremental-emailing", state: "active" },
+  { campaign_type: "targeted-emailing", state: "scheduled" },
+  { campaign_type: "incremental-sms", state: "unknown" },
+  { campaign_type: "unrecognized", state: "draft" }
+]) {
+  globalThis.fetch = async (_url, options) => { assert.equal(options.method, "GET"); return Response.json([campaign]); };
+  try { await assert.rejects(() => __test.readCampaignSafety({ LEADHUB_API_TOKEN: "synthetic" }), error => error.code === "leadhub_message_campaign_blocks_write"); }
+  finally { globalThis.fetch = originalFetch; }
+}
+globalThis.fetch = async () => Response.json([{ campaign_type: "popup", state: "active" }, { campaign_type: "incremental-emailing", state: "archived" }]);
+try { assert.equal((await __test.readCampaignSafety({ LEADHUB_API_TOKEN: "synthetic" })).activeMessageCampaigns, 0); }
+finally { globalThis.fetch = originalFetch; }
+globalThis.fetch = async () => Response.json({ error: "missing scope" }, { status: 403 });
+try { await assert.rejects(() => __test.readCampaignSafety({ LEADHUB_API_TOKEN: "synthetic" }), error => error.upstreamStatus === 403); }
+finally { globalThis.fetch = originalFetch; }
+const guardedWrites = [];
+globalThis.fetch = async (url, options) => {
+  guardedWrites.push(options.method);
+  assert.equal(options.method, "GET");
+  if (url.includes("/campaigns?")) return Response.json({ error: "missing scope" }, { status: 403 });
+  if (url.includes("/suppressed")) return Response.json({ is_suppressed: false });
+  if (url.includes("/subscriptions/")) return Response.json({ subscriptions: [] });
+  return new Response(null, { status: 404 });
+};
+try {
+  await assert.rejects(() => __test.upsertActiveProfile({ LEADHUB_API_TOKEN: "synthetic" }, selected,
+    async () => assert.fail("write intent cannot start without campaign safety")), error => error.upstreamStatus === 403);
+  assert.equal(guardedWrites.length, 4);
 } finally { globalThis.fetch = originalFetch; }
 
 const calls = [];

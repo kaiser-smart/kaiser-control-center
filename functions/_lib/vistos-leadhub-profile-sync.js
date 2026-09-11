@@ -216,6 +216,7 @@ export async function verifyVistosLeadHubReadAccess(env) {
     const read = await leadHubRequest(env, "/jobs");
     return { httpStatus: read.status };
   });
+  await check("leadHubCampaignSafety", async () => await readCampaignSafety(env));
   // Reserved non-routable address; no profile, subscription or message is created.
   const absentEmail = `read-preflight-${crypto.randomUUID()}@example.invalid`;
   await check("leadHubAbsentProfileRead", async () => {
@@ -362,6 +363,30 @@ function assertSafetyUnchanged(before, after) {
   }
 }
 
+async function readCampaignSafety(env) {
+  const inertStates = new Set(["draft", "archived", "paused", "sent", "finished", "canceled", "terminated", "deleted"]);
+  const types = new Set(["targeted-emailing", "targeted-emailing-ab", "incremental-emailing", "targeted-sms", "incremental-sms", "popup"]);
+  let rows = 0;
+  for (let page = 0; page < 20; page += 1) {
+    if (page) await delay(1100); // Official campaign read limit: 1 request/second.
+    const read = await leadHubRequest(env, `/campaigns?page=${page}`);
+    if (!Array.isArray(read.payload)) {
+      const error = new Error("Neověřený formát seznamu kampaní; zápis zastaven.");
+      error.code = "leadhub_campaign_safety_unverified"; error.status = 409; throw error;
+    }
+    for (const campaign of read.payload) {
+      if (!types.has(campaign.campaign_type) || (campaign.campaign_type !== "popup" && !inertStates.has(campaign.state))) {
+        const error = new Error("Aktivní, naplánovaná nebo neověřená zprávová kampaň blokuje zápis profilů.");
+        error.code = "leadhub_message_campaign_blocks_write"; error.status = 409; throw error;
+      }
+    }
+    rows += read.payload.length;
+    if (read.payload.length < 20) return { rows, pages: page + 1, activeMessageCampaigns: 0 };
+  }
+  const error = new Error("Seznam kampaní není úplný; zápis zastaven.");
+  error.code = "leadhub_campaign_safety_incomplete"; error.status = 409; throw error;
+}
+
 async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
   const email = item.normalizedEmail;
   const encoded = encodeURIComponent(email);
@@ -374,6 +399,7 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
     throw error;
   }
   const safety = await subscriptionRead(env, email);
+  await readCampaignSafety(env);
   await beforeWrite(safety);
   await leadHubRequest(env, "/profiles", {
     method: "PUT",
@@ -444,6 +470,7 @@ async function deactivateProfile(env, item, reason, beforeWrite = async () => {}
       throw error;
     }
   }
+  await readCampaignSafety(env);
   await beforeWrite(safety);
   await leadHubRequest(env, "/profiles/tags", {
     method: "POST",
@@ -773,6 +800,7 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
 }
 
 export const __test = {
+  readCampaignSafety,
   upsertActiveProfile,
   parseSubscriptionSafety,
   assertSafetyUnchanged,
