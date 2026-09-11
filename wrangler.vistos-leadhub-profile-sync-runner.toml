@@ -5,6 +5,8 @@ workers_dev = true
 
 [vars]
 APP_BASE_URL = "https://smart-odpady.ai"
+# The source checkpoint remains unchanged until writer safety is verified.
+READ_PREFLIGHT_ONLY = "true"
 
 [triggers]
 crons = ["*/5 * * * *"]
