@@ -9,11 +9,12 @@ class MemoryR2 {
   constructor(seed = {}) { this.values = new Map(Object.entries(seed)); }
   async get(key) {
     const value = this.values.get(key);
-    return value === undefined ? null : { json: async () => JSON.parse(value) };
+    return value === undefined ? null : { json: async () => JSON.parse(value), httpEtag: `"${__test.fingerprint(value)}"` };
   }
   async head(key) { return this.values.has(key) ? { key } : null; }
   async put(key, value, options = {}) {
     if (options.onlyIf?.get("If-None-Match") === "*" && this.values.has(key)) return null;
+    if (options.onlyIf?.get("If-Match") && options.onlyIf.get("If-Match") !== `"${__test.fingerprint(this.values.get(key))}"`) return null;
     this.values.set(key, String(value));
     return { key };
   }
@@ -382,6 +383,9 @@ globalThis.fetch = async (url, options) => {
     if (payload.LoginParam) return Response.json({ status: "OK" }, { headers: { "Set-Cookie": "VistosAccessToken=synthetic; Secure" } });
     if (payload.GetByIdParam) return Response.json({ status: "OK", data: currentSourceRow });
     assert.ok(payload.GetPageParam.Filter);
+    if (payload.GetPageParam.Columns.length === 2) return Response.json({ status: "OK", data: {
+      recordsTotal: 1, recordsFiltered: 1, data: [{ Id: preparationRow.Id, Modified: preparationRow.Modified }]
+    } });
     return Response.json({ status: "OK", data: { recordsTotal: 1, recordsFiltered: deltaSourceRows.length, data: deltaSourceRows } });
   }
   if (url.endsWith("/segments")) return Response.json([{ id: "b17444f7663241a0adb31b9a47dcf1a0" }]);
@@ -477,7 +481,7 @@ console.log("Vistos → LeadHub coordinated import and adoption tests passed");
 
 const retainedLockKey = "protected-sync/vistos-leadhub-profiles/writer-lock.json";
 const retainedLock = { owner: "synthetic-retained", startedAt: "2026-01-01T00:00:00Z" };
-const retainedState = { checkpoint: "2026-01-01T00:00:00Z", pending: [selected] };
+const retainedState = { checkpoint: "2026-01-01T00:00:00Z", pending: [{ ...selected, manifestAction: "CREATE" }] };
 const retainedR2 = new MemoryR2({
   [retainedLockKey]: JSON.stringify(retainedLock), [syncStateKey]: JSON.stringify(retainedState),
   "protected-sync/vistos-leadhub-profiles/operations/synthetic-retained/42.json": JSON.stringify({
@@ -508,5 +512,21 @@ try {
   assert.equal(retainedR2.values.get(syncStateKey), JSON.stringify(retainedState));
   assert.ok(!JSON.stringify(read).includes(selected.normalizedEmail));
   assert.ok(!JSON.stringify(read).includes(selected.firstName));
+  retainedR2.put = retainedPut;
+  retainedR2.delete = MemoryR2.prototype.delete.bind(retainedR2);
+  const settled = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: retainedR2, LEADHUB_API_TOKEN: "synthetic" }, { recoveryOwner: retainedLock.owner });
+  assert.equal(settled.status, "READBACK_ADOPTED");
+  assert.equal(settled.profileWrites, 0);
+  assert.equal(settled.lockReleased, true);
+  const adoptedProfile = JSON.parse(retainedR2.values.get(syncStateKey));
+  assert.equal(adoptedProfile.totals.created, 1);
+  assert.equal(adoptedProfile.profiles["42"].active, false, "a profile without a verified tag is not enabled for targeting");
+  assert.equal(adoptedProfile.pending.length, 1, "the missing tag remains queued for fresh source checks");
+  assert.equal(adoptedProfile.pending[0].manifestAction, "UPDATE");
+  assert.equal(adoptedProfile.checkpoint, retainedState.checkpoint);
+  // Simulate failure after the state commit but before lock deletion.
+  retainedR2.values.set(retainedLockKey, JSON.stringify(retainedLock));
+  await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: retainedR2, LEADHUB_API_TOKEN: "synthetic" }, { recoveryOwner: retainedLock.owner });
+  assert.equal(JSON.parse(retainedR2.values.get(syncStateKey)).totals.created, 1, "retrying settlement cannot count or create a second profile");
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos → LeadHub retained-writer READ reconciliation tests passed");

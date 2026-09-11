@@ -7,6 +7,9 @@ workers_dev = true
 APP_BASE_URL = "https://smart-odpady.ai"
 # Shared writer: one read-back canary, then bounded DATA_ONLY batches.
 RUN_MODE = "execute-import"
+# Operator-observed terminal HTTP 502 at 2026-09-11T18:49:15Z. This exact
+# legacy owner may be settled only after live identity + safety readback.
+RECOVERY_OWNER = "10aa5c8d-7a71-40c5-866a-e35e22055e4f"
 
 [triggers]
 crons = ["* * * * *"]
