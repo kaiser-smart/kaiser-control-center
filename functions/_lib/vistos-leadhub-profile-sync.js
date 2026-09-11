@@ -272,6 +272,25 @@ async function loadContactDelta(env, checkpoint, periodTo, columns) {
   return { rows, pages, filter, periodFrom: from.toISOString(), periodTo: to.toISOString() };
 }
 
+async function verifyModifiedPositiveControl(env, snapshot) {
+  const known = snapshot.rows.find(row => clean(row.Id) && validDate(row.Modified));
+  if (!known) throw syncError("vistos_modified_positive_control_missing", "Chybí známý Contact pro pozitivní kontrolu změnového filtru.");
+  const timestamp = validDate(known.Modified).getTime();
+  const from = new Date(timestamp - 1000), to = new Date(timestamp + 1000);
+  const session = await loginVistosExecute(env);
+  const page = await getVistosPage(env, session, "Contact", ["Id", "Modified"], {
+    Modified_From: vistosDateTime(from), Modified_To: vistosDateTime(to)
+  }, 0, CONTACT_PAGE_SIZE);
+  if (!page.rows.length || !Number.isInteger(page.filtered) || page.filtered < 1) {
+    throw syncError("vistos_modified_positive_control_failed", "Změnový filtr nevrátil řádky pro známý existující čas změny.");
+  }
+  assertModifiedWindow(page.rows, from, to);
+  if (!page.rows.some(row => clean(row.Id) === clean(known.Id))) {
+    throw syncError("vistos_modified_positive_identity_unverified", "Pozitivní kontrola filtru nepotvrdila známé Contact ID.");
+  }
+  return { status: "PASS", testedAt: new Date().toISOString(), knownIdFound: true, rowsRead: page.rows.length, filtered: page.filtered };
+}
+
 function leadHubConfig(env) {
   const token = clean(env?.LEADHUB_API_TOKEN);
   if (!token) {
@@ -320,10 +339,10 @@ function delay(milliseconds) {
 async function readbackProfile(env, email, predicate) {
   const path = `/profiles/email-address/${encodeURIComponent(email)}`;
   let last = null;
-  for (let attempt = 0; attempt < 4; attempt += 1) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
     last = await leadHubRequest(env, path, { allow404: true });
     if (last.status === 200 && predicate(last.payload)) return last.payload;
-    if (attempt < 3) await delay(500 * (attempt + 1));
+    if (attempt < 7) await delay(Math.min(1500 * (attempt + 1), 3000));
   }
   return null;
 }
@@ -570,6 +589,9 @@ async function readCampaignSafety(env) {
 }
 
 async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
+  if ([item.firstName, item.lastName].some(value => [...clean(value)].length > 50)) {
+    throw syncError("leadhub_profile_attributes_invalid", "Jméno přesahuje doložený limit API; nebude zkráceno odhadem.");
+  }
   const email = item.normalizedEmail;
   const encoded = encodeURIComponent(email);
   const before = await leadHubRequest(env, `/profiles/email-address/${encoded}`, { allow404: true });
@@ -591,8 +613,12 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
       return { action: "no_change", ...safety, readback: true };
     }
   }
-  await beforeWrite(safety);
-  await acceptedProfileWrite(env, "/profiles", {
+  const action = before.status === 404 ? "created" : "updated";
+  const profileNeedsWrite = before.status === 404 || (item.firstName && before.payload.credentials.first_name !== item.firstName)
+    || (item.lastName && before.payload.credentials.last_name !== item.lastName);
+  if (profileNeedsWrite) {
+    await beforeWrite(safety, { action });
+    await acceptedProfileWrite(env, "/profiles", {
     method: "PUT",
     body: {
       user_id: profileUserId(item.contactId),
@@ -600,7 +626,8 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
       ...(item.firstName ? { first_name: item.firstName } : {}),
       ...(item.lastName ? { last_name: item.lastName } : {})
     }
-  }, safety, beforeWrite, "PROFILE_ACCEPTED");
+    }, safety, beforeWrite, "PROFILE_ACCEPTED");
+  }
   const profileReadback = await readbackProfile(env, email, payload =>
     payload?.credentials?.user_id === profileUserId(item.contactId)
     && normalizeContactEmail(payload?.credentials?.email_address) === email
@@ -613,6 +640,9 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
     throw error;
   }
   assertSafetyUnchanged(safety, await subscriptionRead(env, email));
+  await delay(1100);
+  await readCampaignSafety(env);
+  await beforeWrite(safety, { action });
   await acceptedProfileWrite(env, "/profiles/tags", {
     method: "POST",
     body: tagPayload(item, true, "", safety)
@@ -633,7 +663,7 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
   }
   assertSafetyUnchanged(safety, await subscriptionRead(env, email));
   return {
-    action: before.status === 404 ? "created" : "updated",
+    action,
     subscriptions: safety.subscriptions,
     suppressed: safety.suppressed,
     readback: true
@@ -776,6 +806,11 @@ export async function withVistosLeadHubWriter(env, operation) {
     if (completed || !context.sideEffectsStarted) {
       const lock = await getJson(storage, WRITER_LOCK_KEY);
       if (lock?.owner === owner) await storage.delete(WRITER_LOCK_KEY);
+    } else {
+      const lock = await getJson(storage, WRITER_LOCK_KEY);
+      if (lock?.owner === owner) await putJson(storage, WRITER_LOCK_KEY, {
+        ...lock, terminal: true, terminalAt: new Date().toISOString()
+      });
     }
   }
 }
@@ -790,7 +825,7 @@ export async function runVistosLeadHubProfileSync(env, options = {}) {
 export async function executeVistosLeadHubHistoricalImport(env, options = {}) {
   const heldLock = await getJson(bucket(env), WRITER_LOCK_KEY);
   if (heldLock && Date.now() - Date.parse(heldLock.startedAt) > 120000) {
-    return inspectRetainedWriter(env, heldLock);
+    return inspectRetainedWriter(env, heldLock, { recoveryOwner: options.recoveryOwner });
   }
   return withVistosLeadHubWriter(env, async writer => {
     const storage = bucket(env);
@@ -844,12 +879,13 @@ export async function executeVistosLeadHubHistoricalImport(env, options = {}) {
 
 // READ reconciliation does not take over or remove a lock. It does not retry
 // any accepted write and cannot modify a profile, tag, subscription or checkpoint.
-async function inspectRetainedWriter(env, lock) {
+async function inspectRetainedWriter(env, lock, options = {}) {
   const storage = bucket(env);
   const state = await getJson(storage, SYNC_STATE_KEY);
   const listed = await storage.list({ prefix: `${SYNC_PREFIX}/operations/${lock.owner}/`, limit: 100 });
   if (listed.truncated) throw syncError("writer_journal_incomplete", "Neuzavřený deník není úplný.");
   const checks = [];
+  const verified = [];
   for (const object of listed.objects) {
     const operation = await getJson(storage, object.key);
     const item = (state.pending || []).find(entry => entry.contactId === operation.contactId);
@@ -866,17 +902,75 @@ async function inspectRetainedWriter(env, lock) {
       && (!item.lastName || credentials.last_name === item.lastName);
     const tags = Array.isArray(profile.payload?.tags) ? profile.payload.tags.filter(tag => tag.name === TAG_NAME) : [];
     const tagMatches = tags.length === 1 && clean(tags[0].data?.vistos_contact_id) === item.contactId
+      && tags[0].data?.source === "Vistos Contact" && tags[0].data?.newsletter_permission === "UNKNOWN"
+      && Number(tags[0].data?.data_only) === (operation.desired === "active" ? 1 : 0)
       && Number(tags[0].data?.targeting_enabled) === (operation.desired === "active" ? 1 : 0);
     const allowedFields = new Set(["credentials", "tags", "first_name", "last_name", "user_id", "email_address", "profile", "data"]);
     const result = { profileHttpStatus: profile.status, identityMatches, namesMatch, tagMatches,
       safetyUnchanged, integrationTagCount: tags.length,
       knownRootFields: Object.keys(profile.payload || {}).filter(key => allowedFields.has(key)),
       knownCredentialFields: Object.keys(credentials || {}).filter(key => allowedFields.has(key)),
-      profileAccepted: operation.status === "PROFILE_ACCEPTED", tagAccepted: operation.status === "TAG_ACCEPTED" };
+      profileAccepted: operation.status === "PROFILE_ACCEPTED", tagAccepted: operation.status === "TAG_ACCEPTED",
+      readbackConfirmed: operation.status === "READBACK_CONFIRMED" };
     await putJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/${operation.contactId}.json`, {
       checkedAt: new Date().toISOString(), operation, expected: item, profile: profile.payload, safety, result
     });
     checks.push(result);
+    verified.push({ operationKey: object.key, operation, item, result, safety });
+  }
+  const explicitlyObservedLegacyFailure = clean(options.recoveryOwner) === lock.owner;
+  if (lock.phase !== "RECONCILING" && (lock.terminal === true || explicitlyObservedLegacyFailure)
+    && verified.length === listed.objects.length && verified.length > 0
+    && verified.every(entry => entry.result.identityMatches && entry.result.namesMatch && entry.result.safetyUnchanged
+      && (entry.result.profileAccepted || entry.result.tagAccepted || entry.result.readbackConfirmed)
+      && (entry.result.tagMatches || (entry.result.profileAccepted && entry.result.integrationTagCount === 0)))) {
+    const liveObject = await storage.get(WRITER_LOCK_KEY);
+    const live = liveObject ? await liveObject.json() : null;
+    if (!live || live.owner !== lock.owner || live.phase === "RECONCILING" || !liveObject.httpEtag) {
+      throw syncError("writer_reconciliation_changed", "Vlastník neuzavřené operace se změnil.");
+    }
+    // CAS, not a TTL takeover: only the observed terminal operation can be
+    // adopted, after its exact profile and unchanged safety state were read.
+    const claimed = await storage.put(WRITER_LOCK_KEY, JSON.stringify({ ...live, phase: "RECONCILING" }), {
+      onlyIf: new Headers({ "If-Match": liveObject.httpEtag }),
+      httpMetadata: { contentType: "application/json" }, customMetadata: { protected: "true" }
+    });
+    if (!claimed) throw syncError("writer_reconciliation_changed", "Zpětné ověření už převzal jiný běh.");
+    state.reconciledOperations ||= {};
+    for (const entry of verified) {
+      if (state.reconciledOperations[entry.operationKey]) continue;
+      const { item, operation, result, safety } = entry;
+      const action = operation.action || (item.manifestAction === "CREATE" && !state.profiles?.[item.contactId]?.synced ? "created" : "updated");
+      if (!["created", "updated", "deactivated"].includes(action)) throw syncError("writer_action_unverified", "Neznámý typ již provedené operace.");
+      state.profiles ||= {}; state.totals ||= {};
+      state.profiles[item.contactId] = { synced: true, active: result.tagMatches && operation.desired === "active",
+        email: item.normalizedEmail, rowHash: item.rowHash, sourceModified: item.sourceModified,
+        ...safety, lastSyncedAt: new Date().toISOString() };
+      state.totals[action] = (state.totals[action] || 0) + 1;
+      if (item.historical && state.historicalImport) {
+        state.historicalImport[action] = (state.historicalImport[action] || 0) + 1;
+        if (result.tagMatches) state.historicalImport.readbackConfirmed += 1;
+      }
+      if (result.tagMatches) state.pending = state.pending.filter(pending => pending.contactId !== item.contactId);
+      else {
+        const pending = state.pending.find(pending => pending.contactId === item.contactId);
+        pending.manifestAction = "UPDATE";
+        pending.profileAlreadyCreated = true;
+      }
+      state.reconciledOperations[entry.operationKey] = { confirmedAt: new Date().toISOString(), profileOnly: !result.tagMatches };
+    }
+    // One state commit makes retrying adoption idempotent. Accepted profile-only
+    // work stays queued for fresh source validation and the missing tag only.
+    if (state.historicalImport) state.historicalImport.remaining = state.pending.filter(item => item.historical).length;
+    await putJson(storage, SYNC_STATE_KEY, state);
+    await putJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/settled.json`, {
+      settledAt: new Date().toISOString(), profilesConfirmed: verified.length,
+      profileOnly: verified.filter(entry => !entry.result.tagMatches).length,
+      profileWrites: 0, safetyUnchanged: true, legacyTerminalResponseObserved: explicitlyObservedLegacyFailure
+    });
+    await storage.delete(WRITER_LOCK_KEY);
+    return { mode: "execute-import", status: "READBACK_ADOPTED", checks, profilesConfirmed: verified.length,
+      profileWrites: 0, lockReleased: true, checkpointChanged: false, sendAllowed: false };
   }
   return { mode: "execute-import", status: "RECONCILIATION_REQUIRED", checks,
     profileWrites: 0, lockReleased: false, checkpointChanged: false, sendAllowed: false };
@@ -930,6 +1024,9 @@ async function runProfileSyncUnlocked(env, options, writer) {
   }
 
   const oldRowsById = new Map(snapshot.rows.map((row) => [clean(row?.Id), row]));
+  if (!state.modifiedFilterVerification || Date.now() - Date.parse(state.modifiedFilterVerification.testedAt) > 86400000) {
+    state.modifiedFilterVerification = await verifyModifiedPositiveControl(env, snapshot);
+  }
   const delta = await loadContactDelta(env, state.checkpoint, scheduledAt, contactReadColumns(snapshot));
   const changedIds = new Set();
   const impactedEmails = new Set();
@@ -1074,9 +1171,13 @@ async function runProfileSyncUnlocked(env, options, writer) {
       sourceModified: item.sourceModified || null, rowHash: item.rowHash,
       startedAt: new Date().toISOString(), writer: writer.owner
     });
+    let operationAction = item.desired === "inactive" ? "deactivated" : "updated";
+    let operationSafety;
     const beforeWrite = async (safety, progress = {}) => {
+      operationSafety = safety;
+      if (progress.action) operationAction = progress.action;
       await putJson(storage, operationKey, {
-        status: progress.stage || "WRITE_INTENT", httpStatus: progress.httpStatus || null,
+        status: progress.stage || "WRITE_INTENT", httpStatus: progress.httpStatus || null, action: operationAction,
         contactId: item.contactId, normalizedEmail: item.normalizedEmail, desired: item.desired,
         sourceModified: item.sourceModified || null, rowHash: item.rowHash,
         beforeSafety: safety, startedAt: new Date().toISOString(), writer: writer.owner
@@ -1089,7 +1190,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
         ? await upsertActiveProfile(env, item, beforeWrite)
         : await deactivateProfile(env, item, item.reason, beforeWrite);
     } catch (error) {
-      if (!["leadhub_profile_identity_conflict", "leadhub_deactivation_identity_conflict", "leadhub_invalid_source_identity"].includes(error?.code)) throw error;
+      if (!["leadhub_profile_identity_conflict", "leadhub_deactivation_identity_conflict", "leadhub_invalid_source_identity", "leadhub_profile_attributes_invalid"].includes(error?.code)) throw error;
       await putJson(storage, operationKey, { status: "SKIP", contactId: item.contactId, reason: error.code, finishedAt: new Date().toISOString() });
       state.pending = state.pending.filter(pendingItem => pendingItem.contactId !== item.contactId);
       if (item.historical) state.historicalImport.skipped += 1;
@@ -1099,6 +1200,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
     }
     await putJson(storage, operationKey, {
       status: "READBACK_CONFIRMED", contactId: item.contactId, desired: item.desired,
+      normalizedEmail: item.normalizedEmail, beforeSafety: operationSafety,
       sourceModified: item.sourceModified || null, rowHash: item.rowHash,
       finishedAt: new Date().toISOString(), writer: writer.owner, action: result.action,
       afterSafety: { subscriptions: result.subscriptions, suppressed: result.suppressed }
@@ -1128,7 +1230,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
     writer.sideEffectsStarted = false;
     if (current.indexOf(item) < current.length - 1) await delay(7000);
   }
-  if (current.length) {
+  if (run.readbackConfirmed > 0) {
     state.apiReadValidation = {
       profilesRead: true,
       subscriptionsRead: true,

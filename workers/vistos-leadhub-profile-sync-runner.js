@@ -14,6 +14,7 @@ export async function runScheduledSync(env, scheduledTime) {
     body: JSON.stringify({
       scheduledAt: new Date(scheduledTime).toISOString(),
       mode: env.RUN_MODE || (env.READ_PREFLIGHT_ONLY === "true" ? "read-preflight" : "sync"),
+      recoveryOwner: env.RECOVERY_OWNER || undefined,
       runner: "kaiser-vistos-leadhub-profile-sync"
     })
   });
