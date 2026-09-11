@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker, { runScheduledSync } from "../workers/vistos-leadhub-profile-sync-runner.js";
-import { __test, buildLeadHubImportManifest, runVistosLeadHubProfileSync } from "../functions/_lib/vistos-leadhub-profile-sync.js";
+import { __test, buildLeadHubImportManifest, runVistosLeadHubProfileSync, withVistosLeadHubWriter } from "../functions/_lib/vistos-leadhub-profile-sync.js";
 import { onRequestGet, onRequestPost } from "../functions/api/receivables/vistos/leadhub-sync-internal.js";
 
 class MemoryR2 {
@@ -11,8 +11,29 @@ class MemoryR2 {
     return value === undefined ? null : { json: async () => JSON.parse(value) };
   }
   async head(key) { return this.values.has(key) ? { key } : null; }
-  async put(key, value) { this.values.set(key, String(value)); }
+  async put(key, value, options = {}) {
+    if (options.onlyIf?.get("If-None-Match") === "*" && this.values.has(key)) return null;
+    this.values.set(key, String(value));
+    return { key };
+  }
+  async delete(key) { this.values.delete(key); }
 }
+
+const lockR2 = new MemoryR2();
+let unlockFirst;
+let firstAcquired;
+const acquiredSignal = new Promise(resolve => { firstAcquired = resolve; });
+const held = new Promise(resolve => { unlockFirst = resolve; });
+const writerOne = withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async () => { firstAcquired(); await held; return "first"; });
+await acquiredSignal;
+await assert.rejects(() => withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async () => assert.fail("second writer entered")), error => error.code === "vistos_leadhub_writer_locked");
+unlockFirst();
+assert.equal(await writerOne, "first");
+assert.equal(await withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async () => "next"), "next");
+await assert.rejects(() => withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async () => { throw new Error("read failed"); }), /read failed/);
+assert.equal(lockR2.values.size, 0, "read-only failures release the writer");
+await assert.rejects(() => withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async context => { context.sideEffectsStarted = true; throw new Error("provider result unknown"); }), /provider result unknown/);
+await assert.rejects(() => withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async () => assert.fail("uncertain write was retried")), error => error.code === "vistos_leadhub_writer_locked");
 
 const baselineRunId = "baseline-contact-run";
 const baselineSnapshot = {
@@ -27,6 +48,25 @@ const r2 = new MemoryR2({
   [`protected-audits/vistos-contact-cleanup-v4/${baselineRunId}/dns-state.json`]: JSON.stringify(baselineDns)
 });
 const originalFetch = globalThis.fetch;
+const safeRead = (states = [], suppressed = false) => __test.parseSubscriptionSafety(
+  { status: 200, payload: { subscriptions: states } },
+  { status: 200, payload: { is_suppressed: suppressed } }
+);
+assert.deepEqual(safeRead(), { subscriptions: [], suppressed: false });
+for (const invalid of [
+  [{ status: 404, payload: null }, { status: 200, payload: { is_suppressed: false } }],
+  [{ status: 200, payload: { subscriptions: [] } }, { status: 404, payload: null }],
+  [{ status: 200, payload: {} }, { status: 200, payload: { is_suppressed: false } }],
+  [{ status: 200, payload: { subscriptions: [] } }, { status: 200, payload: { is_suppressed: null } }],
+  [{ status: 200, payload: { subscriptions: [{ code: "news", state: "unknown" }] } }, { status: 200, payload: { is_suppressed: false } }],
+  [{ status: 200, payload: { subscriptions: [{ code: "news", state: "subscribed" }, { code: "news", state: "unsubscribed" }] } }, { status: 200, payload: { is_suppressed: false } }]
+]) assert.throws(() => __test.parseSubscriptionSafety(...invalid), error => error.code === "leadhub_safety_read_unverified");
+const twoStates = [{ code: "news", state: "unsubscribed" }, { code: "other", state: "subscribed" }];
+assert.doesNotThrow(() => __test.assertSafetyUnchanged(safeRead(twoStates), safeRead([...twoStates].reverse())));
+assert.throws(() => __test.assertSafetyUnchanged(safeRead(twoStates), safeRead(twoStates, true)), error => error.code === "leadhub_subscription_or_suppression_changed");
+assert.throws(() => __test.assertSafetyUnchanged(safeRead(twoStates), safeRead()), error => error.code === "leadhub_subscription_or_suppression_changed");
+assert.throws(() => __test.profileUserId("9".repeat(60)), error => error.code === "leadhub_invalid_source_identity");
+assert.throws(() => __test.profileUserId(""), error => error.code === "leadhub_invalid_source_identity");
 const selected = { contactId: "42", normalizedEmail: "person@example.test", firstName: "Radim", lastName: "", communicationStatus: "UNKNOWN" };
 const owned = {
   credentials: { user_id: "vistos-contact-42", email_address: "person@example.test", first_name: "Radim", last_name: "Existing surname" },
@@ -88,6 +128,36 @@ assert.equal(initialized.checkpoint, "2026-09-10T10:00:00.000Z");
 assert.equal(initialized.historicalProfilesImported, 0, "initial checkpoint must not bulk-import the baseline");
 assert.equal(initializationFetches, 0);
 assert.equal(initialized.apiReadValidation.status, "deferred_until_first_profile_delta");
+globalThis.fetch = async () => assert.fail("a late runner must not perform external reads or writes");
+const priorState = r2.values.get("protected-sync/vistos-leadhub-profiles/state.json");
+try {
+  const stale = await runVistosLeadHubProfileSync({ R2_ARCHIVE: r2 }, { scheduledAt: "2026-09-10T09:55:00Z" });
+  assert.equal(stale.status, "stale_schedule_skipped");
+  assert.equal(r2.values.get("protected-sync/vistos-leadhub-profiles/state.json"), priorState, "checkpoint cannot rewind");
+} finally { globalThis.fetch = originalFetch; }
+
+// A matching address alone is never permission to attach/replace user_id.
+const identityCalls = [];
+globalThis.fetch = async (url, options) => {
+  identityCalls.push({ url, method: options.method });
+  assert.equal(options.method, "GET");
+  return Response.json({ credentials: { email_address: selected.normalizedEmail, user_id: "foreign-id" } });
+};
+try {
+  await assert.rejects(() => __test.upsertActiveProfile({ LEADHUB_API_TOKEN: "test" }, selected), error => error.code === "leadhub_profile_identity_conflict");
+  assert.equal(identityCalls.length, 1);
+} finally { globalThis.fetch = originalFetch; }
+
+const safetyCalls = [];
+globalThis.fetch = async (url, options) => {
+  safetyCalls.push(options.method);
+  assert.equal(options.method, "GET");
+  return new Response(null, { status: 404 });
+};
+try {
+  await assert.rejects(() => __test.upsertActiveProfile({ LEADHUB_API_TOKEN: "test" }, selected), error => error.code === "leadhub_safety_read_unverified");
+  assert.equal(safetyCalls.length, 3, "unknown pre-write safety stops before profile creation");
+} finally { globalThis.fetch = originalFetch; }
 
 const preparedR2 = new MemoryR2({
   "protected-audits/vistos-contact-cleanup-v4/latest.json": JSON.stringify({ runId: baselineRunId }),
@@ -139,6 +209,39 @@ assert.equal(unauthorized.status, 401);
 assert.equal((await unauthorized.json()).code, "vistos_leadhub_sync_unauthorized");
 const method = await onRequestGet();
 assert.equal(method.status, 405);
+
+const preflightCalls = [];
+const preflightR2 = new MemoryR2({ "protected-sync/vistos-leadhub-profiles/state.json": priorState });
+preflightR2.put = async () => assert.fail("read preflight cannot change a checkpoint or lock");
+globalThis.fetch = async (url, options) => {
+  preflightCalls.push({ url, method: options.method });
+  if (url.startsWith("https://vistos.example.test")) {
+    const payload = JSON.parse(options.body);
+    if (payload.LoginParam) return Response.json({ status: "OK" }, { headers: { "Set-Cookie": "VistosAccessToken=synthetic; Secure; HttpOnly" } });
+    assert.equal(payload.GetPageParam.EntityName, "Contact");
+    assert.equal(payload.GetPageParam.Length, 1);
+    return Response.json({ status: "OK", data: { recordsTotal: 1, recordsFiltered: 1, data: [{ Id: "synthetic" }] } });
+  }
+  assert.equal(options.method, "GET");
+  if (url.includes("/email-address/")) return new Response(null, { status: 404 });
+  return Response.json([]);
+};
+try {
+  const preflight = await onRequestPost({ request: new Request("https://example.test/internal", {
+    method: "POST", headers: { Authorization: "Bearer expected" }, body: JSON.stringify({ mode: "read-preflight" })
+  }), env: { VISTOS_LEADHUB_SYNC_TOKEN: "expected", LEADHUB_API_TOKEN: "synthetic", R2_ARCHIVE: preflightR2,
+    VISTOS_API_BASE_URL: "https://vistos.example.test", VISTOS_API_USERNAME: "synthetic", VISTOS_API_PASSWORD: "synthetic" } });
+  const payload = await preflight.json();
+  assert.equal(payload.status, "BLOCKED");
+  assert.equal(payload.checks.vistosContactRead.status, "PASS");
+  assert.equal(payload.checks.leadHubAbsentSafetyRead.subscriptionsHttpStatus, 404);
+  assert.equal(payload.checks.leadHubAbsentSafetyRead.suppressionHttpStatus, 404);
+  assert.equal(payload.readyForImport, false);
+  assert.equal(payload.sendAllowed, false);
+  assert.equal(payload.writes, 0);
+  assert.ok(!JSON.stringify(payload).includes("synthetic"), "no credentials or contact values in readback");
+  assert.equal(preflightCalls.length, 7);
+} finally { globalThis.fetch = originalFetch; }
 
 const calls = [];
 globalThis.fetch = async (url, options) => {

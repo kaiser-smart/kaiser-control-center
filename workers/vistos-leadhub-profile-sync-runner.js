@@ -12,6 +12,7 @@ export async function runScheduledSync(env, scheduledTime) {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       scheduledAt: new Date(scheduledTime).toISOString(),
+      mode: env.READ_PREFLIGHT_ONLY === "true" ? "read-preflight" : "sync",
       runner: "kaiser-vistos-leadhub-profile-sync"
     })
   });
@@ -36,6 +37,10 @@ export default {
   async scheduled(controller, env, ctx) {
     if (controller.cron !== CRON) return;
     ctx.waitUntil(runScheduledSync(env, controller.scheduledTime).then((summary) => {
+      if (summary.mode === "read-preflight") {
+        console.log("vistos_leadhub_profile_sync.read_preflight", summary);
+        return;
+      }
       console.log("vistos_leadhub_profile_sync.completed", {
         checkpoint: summary.checkpoint,
         sourceRows: summary.sourceRows || 0,

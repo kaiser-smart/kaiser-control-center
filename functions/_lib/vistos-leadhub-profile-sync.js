@@ -15,6 +15,7 @@ const SYNC_PREFIX = "protected-sync/vistos-leadhub-profiles";
 const SYNC_STATE_KEY = `${SYNC_PREFIX}/state.json`;
 const SYNC_SNAPSHOT_KEY = `${SYNC_PREFIX}/contact-snapshot.json`;
 const SYNC_DNS_KEY = `${SYNC_PREFIX}/dns-state.json`;
+const WRITER_LOCK_KEY = `${SYNC_PREFIX}/writer-lock.json`;
 const LEADHUB_BASE_URL = "https://api.leadhub.co";
 const CONTACT_PAGE_SIZE = 1000;
 const PROFILE_BATCH_LIMIT = 10;
@@ -154,7 +155,66 @@ async function readbackProfile(env, email, predicate) {
 }
 
 function profileUserId(contactId) {
-  return `vistos-contact-${clean(contactId)}`.slice(0, 50);
+  const id = clean(contactId);
+  if (!id || `vistos-contact-${id}`.length > 50) {
+    const error = new Error("Identifikátor kontaktu nelze bezpečně použít v LeadHubu.");
+    error.code = "leadhub_invalid_source_identity";
+    error.status = 409;
+    throw error;
+  }
+  return `vistos-contact-${id}`;
+}
+
+// Uses the deployed secrets and READ operations only. A missing profile is not
+// treated as proof of an empty subscription/suppression state.
+export async function verifyVistosLeadHubReadAccess(env) {
+  const result = { mode: "read-preflight", checkedAt: new Date().toISOString(), checks: {}, writes: 0, messagesSent: 0 };
+  const check = async (name, operation) => {
+    try { result.checks[name] = { status: "PASS", ...await operation() }; }
+    catch (error) {
+      result.checks[name] = { status: "FAIL", code: clean(error?.code) || "read_preflight_failed", upstreamStatus: Number(error?.upstreamStatus) || 0 };
+    }
+  };
+  await check("checkpoint", async () => {
+    const state = await getJson(bucket(env), SYNC_STATE_KEY);
+    if (!state?.checkpoint) throw new Error("missing checkpoint");
+    return { checkpoint: state.checkpoint, pending: state.pending?.length || 0, trackedProfiles: Object.keys(state.profiles || {}).length };
+  });
+  let session;
+  await check("vistosLogin", async () => {
+    session = await loginVistosExecute(env);
+    return {};
+  });
+  if (session) await check("vistosContactRead", async () => {
+    const page = await getVistosPage(env, session, "Contact", ["Id", "Modified"], {}, 0, 1);
+    return { rows: page.rows.length, total: page.total };
+  });
+  await check("leadHubSegmentsRead", async () => {
+    const read = await leadHubRequest(env, "/segments");
+    return { httpStatus: read.status };
+  });
+  await check("leadHubJobsRead", async () => {
+    const read = await leadHubRequest(env, "/jobs");
+    return { httpStatus: read.status };
+  });
+  // Reserved non-routable address; no profile, subscription or message is created.
+  const absentEmail = `read-preflight-${crypto.randomUUID()}@example.invalid`;
+  await check("leadHubAbsentProfileRead", async () => {
+    const read = await leadHubRequest(env, `/profiles/email-address/${encodeURIComponent(absentEmail)}`, { allow404: true });
+    return { httpStatus: read.status };
+  });
+  await check("leadHubAbsentSafetyRead", async () => {
+    const encoded = encodeURIComponent(absentEmail);
+    const subscriptions = await leadHubRequest(env, `/subscriptions/email-address/${encoded}`, { allow404: true });
+    const suppression = await leadHubRequest(env, `/subscriptions/email-address/${encoded}/suppressed`, { allow404: true });
+    const statuses = { subscriptionsHttpStatus: subscriptions.status, suppressionHttpStatus: suppression.status };
+    try { parseSubscriptionSafety(subscriptions, suppression); return statuses; }
+    catch (error) { return { ...statuses, status: "FAIL", code: error.code }; }
+  });
+  result.status = Object.values(result.checks).every(check => check.status === "PASS") ? "READ_ACCESS_VERIFIED" : "BLOCKED";
+  result.readyForImport = false;
+  result.sendAllowed = false;
+  return result;
 }
 
 // A plan over completed protected exports, never an authorization to write.
@@ -254,27 +314,69 @@ async function subscriptionRead(env, email) {
     leadHubRequest(env, `/subscriptions/email-address/${encoded}`, { allow404: true }),
     leadHubRequest(env, `/subscriptions/email-address/${encoded}/suppressed`, { allow404: true })
   ]);
-  const states = Array.isArray(subscriptions.payload?.subscriptions) ? subscriptions.payload.subscriptions : [];
+  return parseSubscriptionSafety(subscriptions, suppressed);
+}
+
+function parseSubscriptionSafety(subscriptions, suppressed) {
+  const states = subscriptions.payload?.subscriptions;
+  if (subscriptions.status !== 200 || suppressed.status !== 200
+    || !Array.isArray(states) || typeof suppressed.payload?.is_suppressed !== "boolean"
+    || states.some((row) => !clean(row?.code) || !["subscribed", "unsubscribed"].includes(row?.state))
+    || new Set(states.map(row => clean(row.code))).size !== states.length) {
+    const error = new Error("LeadHub nepotvrdil úplný stav odběrů a blokací; zápis není bezpečný.");
+    error.status = 502;
+    error.code = "leadhub_safety_read_unverified";
+    throw error;
+  }
   return {
-    subscriptions: states.map((row) => ({ code: clean(row?.code), state: clean(row?.state) })),
+    subscriptions: states.map((row) => ({ code: clean(row.code), state: row.state })).sort((a, b) => a.code.localeCompare(b.code)),
     suppressed: suppressed.payload?.is_suppressed === true
   };
 }
 
-async function upsertActiveProfile(env, item) {
+function assertSafetyUnchanged(before, after) {
+  if (JSON.stringify(before) !== JSON.stringify(after)) {
+    const error = new Error("Po zápisu se změnily odběry nebo blokace. Další zápisy jsou zastavené.");
+    error.status = 409;
+    error.code = "leadhub_subscription_or_suppression_changed";
+    throw error;
+  }
+}
+
+async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
   const email = item.normalizedEmail;
   const encoded = encodeURIComponent(email);
   const before = await leadHubRequest(env, `/profiles/email-address/${encoded}`, { allow404: true });
+  if (before.status === 200 && (before.payload?.credentials?.user_id !== profileUserId(item.contactId)
+    || normalizeContactEmail(before.payload?.credentials?.email_address) !== email)) {
+    const error = new Error("Profil stejného e-mailu nemá potvrzenou integrační identitu.");
+    error.code = "leadhub_profile_identity_conflict";
+    error.status = 409;
+    throw error;
+  }
   const safety = await subscriptionRead(env, email);
+  await beforeWrite(safety);
   await leadHubRequest(env, "/profiles", {
     method: "PUT",
     body: {
       user_id: profileUserId(item.contactId),
       email_address: email,
-      first_name: item.firstName || null,
-      last_name: item.lastName || null
+      ...(item.firstName ? { first_name: item.firstName } : {}),
+      ...(item.lastName ? { last_name: item.lastName } : {})
     }
   });
+  const profileReadback = await readbackProfile(env, email, payload =>
+    payload?.credentials?.user_id === profileUserId(item.contactId)
+    && normalizeContactEmail(payload?.credentials?.email_address) === email
+    && (!item.firstName || payload.credentials.first_name === item.firstName)
+    && (!item.lastName || payload.credentials.last_name === item.lastName));
+  if (!profileReadback) {
+    const error = new Error("Identita nebo atributy profilu nebyly po zápisu potvrzené.");
+    error.code = "leadhub_profile_identity_readback_failed";
+    error.status = 502;
+    throw error;
+  }
+  assertSafetyUnchanged(safety, await subscriptionRead(env, email));
   await leadHubRequest(env, "/profiles/tags", {
     method: "POST",
     body: tagPayload(item, true, "", safety)
@@ -282,7 +384,9 @@ async function upsertActiveProfile(env, item) {
   const readback = await readbackProfile(env, email, (payload) => {
     const tags = Array.isArray(payload?.tags) ? payload.tags : [];
     const tag = tags.find((row) => clean(row?.name) === TAG_NAME);
-    return clean(payload?.credentials?.email_address).toLowerCase() === email
+    return payload?.credentials?.user_id === profileUserId(item.contactId)
+      && clean(payload?.credentials?.email_address).toLowerCase() === email
+      && clean(tag?.data?.vistos_contact_id) === clean(item.contactId)
       && Number(tag?.data?.targeting_enabled) === 1;
   });
   if (!readback) {
@@ -291,6 +395,7 @@ async function upsertActiveProfile(env, item) {
     error.code = "leadhub_profile_readback_failed";
     throw error;
   }
+  assertSafetyUnchanged(safety, await subscriptionRead(env, email));
   return {
     action: before.status === 404 ? "created" : "updated",
     subscriptions: safety.subscriptions,
@@ -299,15 +404,28 @@ async function upsertActiveProfile(env, item) {
   };
 }
 
-async function deactivateProfile(env, item, reason) {
+async function deactivateProfile(env, item, reason, beforeWrite = async () => {}) {
   const email = clean(item.normalizedEmail);
-  const safety = email ? await subscriptionRead(env, email) : { subscriptions: [], suppressed: false };
+  if (!email) {
+    const error = new Error("Chybí adresa pro bezpečné ověření vyřazovaného profilu.");
+    error.code = "leadhub_deactivation_identity_missing";
+    error.status = 409;
+    throw error;
+  }
+  const safety = await subscriptionRead(env, email);
   if (email) {
     const existing = await leadHubRequest(env, `/profiles/email-address/${encodeURIComponent(email)}`, { allow404: true });
     if (existing.status === 404) {
       return { action: "deactivated", subscriptions: safety.subscriptions, suppressed: safety.suppressed, readback: true, profileAlreadyAbsent: true };
     }
+    if (existing.payload?.credentials?.user_id !== profileUserId(item.contactId)) {
+      const error = new Error("Vyřazení by zasáhlo neověřenou identitu profilu.");
+      error.code = "leadhub_deactivation_identity_conflict";
+      error.status = 409;
+      throw error;
+    }
   }
+  await beforeWrite(safety);
   await leadHubRequest(env, "/profiles/tags", {
     method: "POST",
     body: tagPayload(item, false, reason || "FILTERED_OUT", safety)
@@ -316,7 +434,10 @@ async function deactivateProfile(env, item, reason) {
     const readback = await readbackProfile(env, email, (payload) => {
       const tags = Array.isArray(payload?.tags) ? payload.tags : [];
       const tag = tags.find((row) => clean(row?.name) === TAG_NAME);
-      return Number(tag?.data?.targeting_enabled) === 0;
+      return payload?.credentials?.user_id === profileUserId(item.contactId)
+        && normalizeContactEmail(payload?.credentials?.email_address) === email
+        && clean(tag?.data?.vistos_contact_id) === clean(item.contactId)
+        && Number(tag?.data?.targeting_enabled) === 0;
     });
     if (!readback) {
       const error = new Error("Vyřazení LeadHub profilu nebylo potvrzeno zpětným čtením.");
@@ -325,6 +446,7 @@ async function deactivateProfile(env, item, reason) {
       throw error;
     }
   }
+  assertSafetyUnchanged(safety, await subscriptionRead(env, email));
   return { action: "deactivated", subscriptions: safety.subscriptions, suppressed: safety.suppressed, readback: true };
 }
 
@@ -391,11 +513,54 @@ async function initializeState(env, scheduledAt) {
   return { ...state.lastRun, syncStatus: "ACTIVE", checkpoint, historicalProfilesImported: 0, apiReadValidation: state.apiReadValidation };
 }
 
+// No TTL takeover: a timed-out writer may still have an accepted provider job.
+// An unresolved write retains the lock until its journal is reconciled.
+export async function withVistosLeadHubWriter(env, operation) {
+  const storage = bucket(env);
+  const owner = crypto.randomUUID();
+  const acquired = await storage.put(WRITER_LOCK_KEY, JSON.stringify({ owner, startedAt: new Date().toISOString() }), {
+    onlyIf: new Headers({ "If-None-Match": "*" }),
+    httpMetadata: { contentType: "application/json" },
+    customMetadata: { protected: "true", integration: "vistos-leadhub-profiles" }
+  });
+  if (!acquired) {
+    const error = new Error("Integrační zapisovatel je obsazený nebo čeká na ověření předchozí operace.");
+    error.status = 409;
+    error.code = "vistos_leadhub_writer_locked";
+    throw error;
+  }
+  const context = { owner, sideEffectsStarted: false };
+  let completed = false;
+  try {
+    const result = await operation(context);
+    completed = true;
+    return result;
+  } finally {
+    if (completed || !context.sideEffectsStarted) {
+      const lock = await getJson(storage, WRITER_LOCK_KEY);
+      if (lock?.owner === owner) await storage.delete(WRITER_LOCK_KEY);
+    }
+  }
+}
+
 export async function runVistosLeadHubProfileSync(env, options = {}) {
+  return withVistosLeadHubWriter(env, (writer) => runProfileSyncUnlocked(env, options, writer));
+}
+
+async function runProfileSyncUnlocked(env, options, writer) {
   const storage = bucket(env);
   const scheduledAt = (validDate(options.scheduledAt) || new Date()).toISOString();
   let state = await getJson(storage, SYNC_STATE_KEY);
   if (!state) return initializeState(env, scheduledAt);
+  if (!validDate(state.checkpoint)) {
+    const error = new Error("Neplatný checkpoint synchronizace.");
+    error.code = "vistos_leadhub_checkpoint_invalid";
+    error.status = 409;
+    throw error;
+  }
+  if (new Date(scheduledAt) <= new Date(state.checkpoint)) {
+    return { syncStatus: state.status, status: "stale_schedule_skipped", checkpoint: state.checkpoint, messagesSent: 0 };
+  }
   const [snapshot, dnsState] = await Promise.all([
     getJson(storage, SYNC_SNAPSHOT_KEY),
     getJson(storage, SYNC_DNS_KEY)
@@ -481,12 +646,40 @@ export async function runVistosLeadHubProfileSync(env, options = {}) {
   const pending = [...pendingById.values()];
   const current = pending.slice(0, PROFILE_BATCH_LIMIT);
   const remaining = pending.slice(PROFILE_BATCH_LIMIT);
-  const run = { created: 0, updated: 0, deactivated: 0, readbackConfirmed: 0, restoredSubscriptions: 0, messagesSent: 0 };
+  const run = { created: 0, updated: 0, deactivated: 0, skipped: 0, readbackConfirmed: 0, restoredSubscriptions: 0, messagesSent: 0 };
   state.profiles ||= {};
   for (const item of current) {
-    const result = item.desired === "active"
-      ? await upsertActiveProfile(env, item)
-      : await deactivateProfile(env, item, item.reason);
+    const operationKey = `${SYNC_PREFIX}/operations/${writer.owner}/${encodeURIComponent(item.contactId)}.json`;
+    await putJson(storage, operationKey, {
+      status: "INTENT", contactId: item.contactId, desired: item.desired,
+      sourceModified: item.sourceModified || null, rowHash: item.rowHash,
+      startedAt: new Date().toISOString(), writer: writer.owner
+    });
+    const beforeWrite = async (safety) => {
+      await putJson(storage, operationKey, {
+        status: "WRITE_INTENT", contactId: item.contactId, desired: item.desired,
+        sourceModified: item.sourceModified || null, rowHash: item.rowHash,
+        beforeSafety: safety, startedAt: new Date().toISOString(), writer: writer.owner
+      });
+      writer.sideEffectsStarted = true;
+    };
+    let result;
+    try {
+      result = item.desired === "active"
+        ? await upsertActiveProfile(env, item, beforeWrite)
+        : await deactivateProfile(env, item, item.reason, beforeWrite);
+    } catch (error) {
+      if (!["leadhub_profile_identity_conflict", "leadhub_deactivation_identity_conflict", "leadhub_invalid_source_identity"].includes(error?.code)) throw error;
+      await putJson(storage, operationKey, { status: "SKIP", contactId: item.contactId, reason: error.code, finishedAt: new Date().toISOString() });
+      run.skipped += 1;
+      continue;
+    }
+    await putJson(storage, operationKey, {
+      status: "READBACK_CONFIRMED", contactId: item.contactId, desired: item.desired,
+      sourceModified: item.sourceModified || null, rowHash: item.rowHash,
+      finishedAt: new Date().toISOString(), writer: writer.owner, action: result.action,
+      afterSafety: { subscriptions: result.subscriptions, suppressed: result.suppressed }
+    });
     run[result.action] += 1;
     if (result.readback) run.readbackConfirmed += 1;
     state.profiles[item.contactId] = {
@@ -525,6 +718,7 @@ export async function runVistosLeadHubProfileSync(env, options = {}) {
     created: run.created,
     updated: run.updated,
     deactivated: run.deactivated,
+    skipped: run.skipped,
     pending: remaining.length,
     readbackConfirmed: run.readbackConfirmed,
     restoredSubscriptions: 0,
@@ -560,6 +754,9 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
 }
 
 export const __test = {
+  upsertActiveProfile,
+  parseSubscriptionSafety,
+  assertSafetyUnchanged,
   assertModifiedWindow,
   profileUserId,
   tagPayload,
