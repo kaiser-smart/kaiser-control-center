@@ -170,18 +170,35 @@ function profileUserId(contactId) {
 export async function verifyVistosLeadHubReadAccess(env) {
   const result = { mode: "read-preflight", checkedAt: new Date().toISOString(), checks: {}, writes: 0, messagesSent: 0 };
   const check = async (name, operation) => {
+    const start = Date.now();
     try { result.checks[name] = { status: "PASS", ...await operation() }; }
     catch (error) {
       result.checks[name] = { status: "FAIL", code: clean(error?.code) || "read_preflight_failed", upstreamStatus: Number(error?.upstreamStatus) || 0 };
     }
+    result.checks[name].durationMs = Date.now() - start;
   };
   await check("checkpoint", async () => {
     const state = await getJson(bucket(env), SYNC_STATE_KEY);
     if (!state?.checkpoint) throw new Error("missing checkpoint");
     return { checkpoint: state.checkpoint, pending: state.pending?.length || 0, trackedProfiles: Object.keys(state.profiles || {}).length };
   });
+  await check("vistosConfiguration", async () => {
+    // Compare configuration without exposing any secret-store value.
+    const configured = new URL(clean(env.VISTOS_API_BASE_URL));
+    const matches = configured.origin.toLowerCase() === "https://kaiserservis.myvistos.com"
+      && ["", "/", "/api/vistosapi"].includes(configured.pathname.toLowerCase().replace(/\/$/, ""));
+    return { status: matches ? "PASS" : "FAIL", documentedEndpointMatches: matches };
+  });
+  await check("vistosOriginReachable", async () => {
+    try {
+      const response = await fetch("https://KaiserServis.myvistos.com/", { method: "HEAD", signal: AbortSignal.timeout(10000), redirect: "manual" });
+      return { status: response.ok ? "PASS" : "FAIL", httpStatus: response.status };
+    } catch (error) {
+      return { status: "FAIL", code: "vistos_origin_unavailable", timeout: ["TimeoutError", "AbortError"].includes(error?.name) };
+    }
+  });
   let session;
-  await check("vistosLogin", async () => {
+  if (result.checks.vistosConfiguration.status === "PASS") await check("vistosLogin", async () => {
     session = await loginVistosExecute(env);
     return {};
   });
@@ -191,7 +208,9 @@ export async function verifyVistosLeadHubReadAccess(env) {
   });
   await check("leadHubSegmentsRead", async () => {
     const read = await leadHubRequest(env, "/segments");
-    return { httpStatus: read.status };
+    const workspaceAnchorFound = Array.isArray(read.payload)
+      && read.payload.some(segment => segment.id === "b17444f7663241a0adb31b9a47dcf1a0");
+    return { status: workspaceAnchorFound ? "PASS" : "FAIL", httpStatus: read.status, workspaceAnchorFound };
   });
   await check("leadHubJobsRead", async () => {
     const read = await leadHubRequest(env, "/jobs");
