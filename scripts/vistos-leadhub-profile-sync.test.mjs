@@ -215,7 +215,8 @@ const preflightR2 = new MemoryR2({ "protected-sync/vistos-leadhub-profiles/state
 preflightR2.put = async () => assert.fail("read preflight cannot change a checkpoint or lock");
 globalThis.fetch = async (url, options) => {
   preflightCalls.push({ url, method: options.method });
-  if (url.startsWith("https://vistos.example.test")) {
+  if (new URL(url).hostname.toLowerCase() === "kaiserservis.myvistos.com") {
+    if (options.method === "HEAD") return new Response(null, { status: 200 });
     const payload = JSON.parse(options.body);
     if (payload.LoginParam) return Response.json({ status: "OK" }, { headers: { "Set-Cookie": "VistosAccessToken=synthetic; Secure; HttpOnly" } });
     assert.equal(payload.GetPageParam.EntityName, "Contact");
@@ -230,7 +231,7 @@ try {
   const preflight = await onRequestPost({ request: new Request("https://example.test/internal", {
     method: "POST", headers: { Authorization: "Bearer expected" }, body: JSON.stringify({ mode: "read-preflight" })
   }), env: { VISTOS_LEADHUB_SYNC_TOKEN: "expected", LEADHUB_API_TOKEN: "synthetic", R2_ARCHIVE: preflightR2,
-    VISTOS_API_BASE_URL: "https://vistos.example.test", VISTOS_API_USERNAME: "synthetic", VISTOS_API_PASSWORD: "synthetic" } });
+    VISTOS_API_BASE_URL: "https://KaiserServis.myvistos.com/API/VistosAPI", VISTOS_API_USERNAME: "synthetic", VISTOS_API_PASSWORD: "synthetic" } });
   const payload = await preflight.json();
   assert.equal(payload.status, "BLOCKED");
   assert.equal(payload.checks.vistosContactRead.status, "PASS");
@@ -240,7 +241,9 @@ try {
   assert.equal(payload.sendAllowed, false);
   assert.equal(payload.writes, 0);
   assert.ok(!JSON.stringify(payload).includes("synthetic"), "no credentials or contact values in readback");
-  assert.equal(preflightCalls.length, 7);
+  assert.equal(preflightCalls.length, 8);
+  assert.equal(payload.checks.vistosConfiguration.documentedEndpointMatches, true);
+  assert.equal(payload.checks.vistosOriginReachable.httpStatus, 200);
 } finally { globalThis.fetch = originalFetch; }
 
 const calls = [];
