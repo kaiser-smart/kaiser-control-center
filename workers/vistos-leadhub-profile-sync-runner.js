@@ -36,7 +36,7 @@ export async function runScheduledSync(env, scheduledTime) {
 
 export default {
   async scheduled(controller, env, ctx) {
-    if (controller.cron !== CRON && !(controller.cron === PREPARATION_CRON && env.RUN_MODE === "prepare-import")) return;
+    if (controller.cron !== CRON && !(controller.cron === PREPARATION_CRON && ["prepare-import", "execute-import"].includes(env.RUN_MODE))) return;
     ctx.waitUntil(runScheduledSync(env, controller.scheduledTime).then((summary) => {
       if (summary.mode === "read-preflight") {
         console.log("vistos_leadhub_profile_sync.read_preflight", summary);
@@ -44,6 +44,10 @@ export default {
       }
       if (summary.mode === "prepare-import") {
         console.log("vistos_leadhub_profile_sync.prepare_import", summary);
+        return;
+      }
+      if (summary.mode === "execute-import") {
+        console.log("vistos_leadhub_profile_sync.import", summary);
         return;
       }
       console.log("vistos_leadhub_profile_sync.completed", {
@@ -71,13 +75,14 @@ export default {
     }));
   },
 
-  async fetch() {
+  async fetch(request, env = {}) {
     return Response.json({
       status: "ready",
       trigger: "cloudflare-cron",
-      cron: CRON,
-      intervalMinutes: 5,
-      historicalBulkImport: false,
+      cron: ["prepare-import", "execute-import"].includes(env.RUN_MODE) ? PREPARATION_CRON : CRON,
+      intervalMinutes: ["prepare-import", "execute-import"].includes(env.RUN_MODE) ? 1 : 5,
+      runMode: env.RUN_MODE || "sync",
+      historicalBulkImport: env.RUN_MODE === "execute-import",
       subscriptionsWrite: false,
       messages: false
     });
