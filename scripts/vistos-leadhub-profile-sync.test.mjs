@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker, { runScheduledSync } from "../workers/vistos-leadhub-profile-sync-runner.js";
-import { __test, runVistosLeadHubProfileSync } from "../functions/_lib/vistos-leadhub-profile-sync.js";
+import { __test, buildLeadHubImportManifest, runVistosLeadHubProfileSync } from "../functions/_lib/vistos-leadhub-profile-sync.js";
 import { onRequestGet, onRequestPost } from "../functions/api/receivables/vistos/leadhub-sync-internal.js";
 
 class MemoryR2 {
@@ -27,6 +27,58 @@ const r2 = new MemoryR2({
   [`protected-audits/vistos-contact-cleanup-v4/${baselineRunId}/dns-state.json`]: JSON.stringify(baselineDns)
 });
 const originalFetch = globalThis.fetch;
+const selected = { contactId: "42", normalizedEmail: "person@example.test", firstName: "Radim", lastName: "", communicationStatus: "UNKNOWN" };
+const owned = {
+  credentials: { user_id: "vistos-contact-42", email_address: "person@example.test", first_name: "Radim", last_name: "Existing surname" },
+  tags: [__test.tagPayload(selected, true, "", { suppressed: false }).tag]
+};
+function plan(items = [selected], profiles = [], overrides = {}) {
+  return buildLeadHubImportManifest(items, profiles, {
+    workspaceId: "8d8bf07372ad4244877308cbd94c8e78", sourceRunId: "synthetic-source",
+    sourceCount: items.length, exportCount: profiles.length, exportState: "done",
+    exportJobId: "synthetic-export", allProfiles: true, ...overrides
+  });
+}
+globalThis.fetch = async () => { throw new Error("manifest must never call an API"); };
+try {
+  assert.equal(plan().items[0].action, "CREATE");
+  assert.equal(plan([selected], [owned]).items[0].action, "NO_CHANGE", "missing source surname does not clear existing surname");
+  assert.equal(plan([{ ...selected, firstName: "Martin" }], [owned]).items[0].action, "UPDATE");
+  assert.equal(plan().readyForImport, false);
+  assert.equal(plan().sendAllowed, false);
+  assert.equal(plan().items[0].requiresPreflight, true);
+  assert.equal(plan([{ ...selected, normalizedEmail: "bad address@example.test" }]).items[0].reason, "INVALID_SOURCE_IDENTITY");
+  assert.equal(plan([selected], [{ ...owned, credentials: { ...owned.credentials, user_id: " vistos-contact-42 " } }]).items[0].reason, "NON_CANONICAL_TARGET_USER_ID");
+  for (const overrides of [{ sourceCount: 2 }, { exportCount: 1 }, { exportState: "waiting" }, { allProfiles: false }, { workspaceId: "other" }, { sourceRunId: "" }]) {
+    assert.equal(plan([selected], [], overrides).status, "BLOCKED");
+  }
+  for (const malformed of [{}, { credentials: [] }, { credentials: {} }, { credentials: { email_address: null, user_id: 42 } }]) {
+    assert.equal(plan([selected], [malformed]).reason, "MALFORMED_PROFILE_EXPORT");
+  }
+  assert.equal(plan([selected], [{ credentials: null, tags: null }]).items[0].action, "CREATE");
+  const emailOnly = { ...owned, credentials: { ...owned.credentials, user_id: null } };
+  assert.equal(plan([selected], [emailOnly]).items[0].reason, "EMAIL_MATCH_WITHOUT_OWNED_USER_ID");
+  const otherEmail = { ...owned, credentials: { ...owned.credentials, email_address: "other@example.test" } };
+  assert.equal(plan([selected], [otherEmail]).items[0].reason, "EMAIL_CHANGE_REQUIRES_IDENTITY_RESOLUTION");
+  assert.equal(plan([selected], [emailOnly, otherEmail]).items[0].reason, "EMAIL_AND_USER_ID_MATCH_DIFFERENT_PROFILES");
+  assert.equal(plan([selected], [owned, owned]).items[0].reason, "DUPLICATE_TARGET_IDENTITY");
+  assert.equal(plan([selected, selected]).counts.SKIP, 2);
+  assert.equal(plan([selected, { ...selected, contactId: "43", normalizedEmail: " PERSON@EXAMPLE.TEST " }]).counts.SKIP, 2);
+  assert.equal(plan([{ ...selected, contactId: "9".repeat(60) }]).items[0].reason, "INVALID_SOURCE_IDENTITY", "never truncate user IDs into a collision");
+  assert.equal(plan([selected], [{ ...owned, tags: null }]).items[0].reason, "TARGET_TAGS_UNKNOWN");
+  assert.equal(plan([selected], [{ ...owned, tags: [...owned.tags, ...owned.tags] }]).items[0].reason, "DUPLICATE_INTEGRATION_TAG");
+  const conflictingTag = structuredClone(owned);
+  conflictingTag.tags[0].data.vistos_contact_id = "43";
+  assert.equal(plan([selected], [conflictingTag]).items[0].reason, "INTEGRATION_TAG_IDENTITY_CONFLICT");
+  const unrelated = { ...owned, credentials: { ...owned.credentials, phone: "+420123456789" }, tags: [...owned.tags, { name: "unrelated" }] };
+  const beforePlanning = JSON.stringify(unrelated);
+  assert.equal(plan([selected], [unrelated]).items[0].action, "NO_CHANGE");
+  assert.equal(JSON.stringify(unrelated), beforePlanning, "planning must preserve all input data");
+  const mixed = plan([selected, { ...selected, contactId: "43", normalizedEmail: "new@example.test" }], [emailOnly]);
+  assert.deepEqual(mixed.counts, { CREATE: 1, UPDATE: 0, NO_CHANGE: 0, SKIP: 1 }, "one collision does not block independent rows");
+} finally {
+  globalThis.fetch = originalFetch;
+}
 let initializationFetches = 0;
 globalThis.fetch = async () => { initializationFetches += 1; throw new Error("initialization must not call LeadHub"); };
 const initialized = await runVistosLeadHubProfileSync({ R2_ARCHIVE: r2, LEADHUB_API_TOKEN: "test-api-token" }, { scheduledAt: "2026-09-10T10:00:00Z" });

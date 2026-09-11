@@ -5,6 +5,7 @@ import {
 import {
   buildLeadHubDataOnlySelection,
   dnsMailRouteStatus,
+  isSyntacticallyValidEmail,
   normalizeContactEmail
 } from "./vistos-contacts-audit.js";
 
@@ -154,6 +155,78 @@ async function readbackProfile(env, email, predicate) {
 
 function profileUserId(contactId) {
   return `vistos-contact-${clean(contactId)}`.slice(0, 50);
+}
+
+// A plan over completed protected exports, never an authorization to write.
+// The executor must revalidate identities, source versions, automation triggers
+// and subscription/suppression state under the shared writer before each write.
+export function buildLeadHubImportManifest(items, profiles, evidence = {}) {
+  const blocked = (reason) => ({ status: "BLOCKED", reason, items: [], readyForImport: false, sendAllowed: false });
+  if (!Array.isArray(items) || !Array.isArray(profiles)
+    || evidence.workspaceId !== "8d8bf07372ad4244877308cbd94c8e78"
+    || !clean(evidence.sourceRunId) || evidence.sourceCount !== items.length
+    || evidence.exportState !== "done" || !clean(evidence.exportJobId)
+    || evidence.exportCount !== profiles.length || evidence.allProfiles !== true) {
+    return blocked("INCOMPLETE_SOURCE_OR_PROFILE_EXPORT");
+  }
+  // Null credentials are legitimate anonymous visitors; malformed credentials
+  // must not silently disappear from the collision index.
+  if (profiles.some((p) => !p || typeof p !== "object" || Array.isArray(p)
+    || !("credentials" in p)
+    || (p.credentials !== null && (typeof p.credentials !== "object" || Array.isArray(p.credentials)
+      || ["user_id", "email_address"].some((key) => !(key in p.credentials)
+        || (p.credentials[key] !== null && typeof p.credentials[key] !== "string")))))) {
+    return blocked("MALFORMED_PROFILE_EXPORT");
+  }
+  const index = (rows, keyOf) => {
+    const result = new Map();
+    rows.forEach((row, position) => {
+      const key = keyOf(row);
+      if (key) result.set(key, [...(result.get(key) || []), position]);
+    });
+    return result;
+  };
+  const sourceIds = index(items, (p) => clean(p?.contactId));
+  const sourceEmails = index(items, (p) => normalizeContactEmail(p?.normalizedEmail));
+  const targetIds = index(profiles, (p) => clean(p.credentials?.user_id));
+  const targetEmails = index(profiles, (p) => normalizeContactEmail(p.credentials?.email_address));
+  const manifest = items.map((item) => {
+    const contactId = clean(item?.contactId);
+    const normalizedEmail = normalizeContactEmail(item?.normalizedEmail);
+    const userId = `vistos-contact-${contactId}`;
+    const entry = { contactId, normalizedEmail, userId, action: "SKIP", reason: "", requiresPreflight: true };
+    const skip = (reason) => ({ ...entry, reason });
+    if (!contactId || !isSyntacticallyValidEmail(normalizedEmail) || userId.length > 50) return skip("INVALID_SOURCE_IDENTITY");
+    if ((sourceIds.get(contactId) || []).length !== 1) return skip("DUPLICATE_SOURCE_CONTACT_ID");
+    if ((sourceEmails.get(normalizedEmail) || []).length !== 1) return skip("DUPLICATE_SOURCE_EMAIL");
+    const byEmail = targetEmails.get(normalizedEmail) || [];
+    const byId = targetIds.get(userId) || [];
+    if (byEmail.length > 1 || byId.length > 1) return skip("DUPLICATE_TARGET_IDENTITY");
+    if (!byEmail.length && !byId.length) return { ...entry, action: "CREATE", reason: "NO_MATCH_IN_COMPLETE_EXPORT" };
+    if (!byEmail.length) return skip("EMAIL_CHANGE_REQUIRES_IDENTITY_RESOLUTION");
+    if (!byId.length) return skip("EMAIL_MATCH_WITHOUT_OWNED_USER_ID");
+    if (byEmail[0] !== byId[0]) return skip("EMAIL_AND_USER_ID_MATCH_DIFFERENT_PROFILES");
+    const profile = profiles[byId[0]];
+    const credentials = profile.credentials;
+    if (credentials.user_id !== userId) return skip("NON_CANONICAL_TARGET_USER_ID");
+    if (!Array.isArray(profile.tags)) return skip("TARGET_TAGS_UNKNOWN");
+    const ownedTags = profile.tags.filter((tag) => tag?.name === TAG_NAME);
+    if (ownedTags.length > 1) return skip("DUPLICATE_INTEGRATION_TAG");
+    const tag = ownedTags[0];
+    if (tag && clean(tag.data?.vistos_contact_id) !== contactId) return skip("INTEGRATION_TAG_IDENTITY_CONFLICT");
+    // Missing source names do not authorize clearing an existing target name.
+    const firstName = clean(item.firstName), lastName = clean(item.lastName);
+    const namesEqual = (!firstName || firstName === clean(credentials.first_name))
+      && (!lastName || lastName === clean(credentials.last_name));
+    const tagEqual = tag?.data?.source === "Vistos Contact"
+      && tag.data.data_only === 1 && tag.data.targeting_enabled === 1
+      && tag.data.newsletter_permission === "UNKNOWN"
+      && tag.data.communication_status === (clean(item.communicationStatus) || "UNKNOWN");
+    return { ...entry, action: namesEqual && tagEqual ? "NO_CHANGE" : "UPDATE", reason: "EMAIL_AND_OWNED_USER_ID_MATCH" };
+  });
+  const counts = { CREATE: 0, UPDATE: 0, NO_CHANGE: 0, SKIP: 0 };
+  manifest.forEach((item) => { counts[item.action] += 1; });
+  return { status: "PLANNED", evidence: { ...evidence }, counts, items: manifest, readyForImport: false, sendAllowed: false };
 }
 
 function tagPayload(item, active, reason, checked) {
