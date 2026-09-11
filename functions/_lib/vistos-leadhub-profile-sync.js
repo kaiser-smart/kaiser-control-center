@@ -1,4 +1,5 @@
 import {
+  getVistosById,
   getVistosPage,
   loginVistosExecute
 } from "./vistos-execute-client.js";
@@ -20,6 +21,7 @@ const IMPORT_STATE_KEY = `${SYNC_PREFIX}/import-state.json`;
 const LEADHUB_BASE_URL = "https://api.leadhub.co";
 const CONTACT_PAGE_SIZE = 1000;
 const PROFILE_BATCH_LIMIT = 10;
+const IMPORT_BATCH_LIMIT = 3;
 const OVERLAP_MS = 10 * 60 * 1000;
 const TAG_NAME = "eSMART Vistos DATA_ONLY";
 
@@ -337,6 +339,14 @@ function profileUserId(contactId) {
   return `vistos-contact-${id}`;
 }
 
+async function acceptedProfileWrite(env, path, options, safety, record, stage) {
+  const accepted = await leadHubRequest(env, path, options);
+  // Public OpenAPI promises 202 but no job_id for these write endpoints.
+  // Acceptance is journalled, never confused with the subsequent GET readback.
+  if (accepted.status !== 202) throw syncError("leadhub_write_acceptance_unverified", "LeadHub nepotvrdil přijetí zápisu.");
+  await record(safety, { stage, httpStatus: accepted.status });
+}
+
 // Uses the deployed secrets and READ operations only. A missing profile is not
 // treated as proof of an empty subscription/suppression state.
 export async function verifyVistosLeadHubReadAccess(env) {
@@ -572,8 +582,17 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
   }
   const safety = await subscriptionRead(env, email);
   await readCampaignSafety(env);
+  if (before.status === 200 && item.manifestAction === "NO_CHANGE") {
+    const tags = (before.payload.tags || []).filter(tag => tag?.name === TAG_NAME);
+    const expected = tagPayload(item, true, "", safety).tag.data;
+    if ((!item.firstName || before.payload.credentials.first_name === item.firstName)
+      && (!item.lastName || before.payload.credentials.last_name === item.lastName)
+      && tags.length === 1 && Object.entries(expected).every(([key, value]) => tags[0].data?.[key] === value)) {
+      return { action: "no_change", ...safety, readback: true };
+    }
+  }
   await beforeWrite(safety);
-  await leadHubRequest(env, "/profiles", {
+  await acceptedProfileWrite(env, "/profiles", {
     method: "PUT",
     body: {
       user_id: profileUserId(item.contactId),
@@ -581,7 +600,7 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
       ...(item.firstName ? { first_name: item.firstName } : {}),
       ...(item.lastName ? { last_name: item.lastName } : {})
     }
-  });
+  }, safety, beforeWrite, "PROFILE_ACCEPTED");
   const profileReadback = await readbackProfile(env, email, payload =>
     payload?.credentials?.user_id === profileUserId(item.contactId)
     && normalizeContactEmail(payload?.credentials?.email_address) === email
@@ -594,10 +613,10 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
     throw error;
   }
   assertSafetyUnchanged(safety, await subscriptionRead(env, email));
-  await leadHubRequest(env, "/profiles/tags", {
+  await acceptedProfileWrite(env, "/profiles/tags", {
     method: "POST",
     body: tagPayload(item, true, "", safety)
-  });
+  }, safety, beforeWrite, "TAG_ACCEPTED");
   const readback = await readbackProfile(env, email, (payload) => {
     const tags = Array.isArray(payload?.tags) ? payload.tags : [];
     const tag = tags.find((row) => clean(row?.name) === TAG_NAME);
@@ -644,10 +663,10 @@ async function deactivateProfile(env, item, reason, beforeWrite = async () => {}
   }
   await readCampaignSafety(env);
   await beforeWrite(safety);
-  await leadHubRequest(env, "/profiles/tags", {
+  await acceptedProfileWrite(env, "/profiles/tags", {
     method: "POST",
     body: tagPayload(item, false, reason || "FILTERED_OUT", safety)
-  });
+  }, safety, beforeWrite, "TAG_ACCEPTED");
   if (email) {
     const readback = await readbackProfile(env, email, (payload) => {
       const tags = Array.isArray(payload?.tags) ? payload.tags : [];
@@ -765,6 +784,73 @@ export async function runVistosLeadHubProfileSync(env, options = {}) {
   return withVistosLeadHubWriter(env, (writer) => runProfileSyncUnlocked(env, options, writer));
 }
 
+// The import and delta share the lock, queue, identity ownership and commit.
+// This is not a rewind: the new observed capture replaces an obsolete baseline
+// only after its complete ID set and the capture-time changes were verified.
+export async function executeVistosLeadHubHistoricalImport(env, options = {}) {
+  return withVistosLeadHubWriter(env, async writer => {
+    const storage = bucket(env);
+    const prepared = await getJson(storage, IMPORT_STATE_KEY);
+    if (prepared?.phase !== "MANIFEST_READY") throw syncError("historical_manifest_not_ready", "Úplný manifest zatím není připraven.");
+    let state = await getJson(storage, SYNC_STATE_KEY);
+    if (!state || !validDate(state.checkpoint)) throw syncError("historical_checkpoint_missing", "Chybí platný produkční checkpoint.");
+    if (!state.historicalImport) {
+      const [manifest, selection, snapshot, dns] = await Promise.all([
+        getJson(storage, prepared.manifestKey), getJson(storage, `${prepared.prefix}/selection.json`),
+        getJson(storage, `${prepared.prefix}/snapshot.json`), getJson(storage, `${prepared.prefix}/dns.json`)
+      ]);
+      if (manifest?.status !== "PLANNED" || selection?.status !== "COMPLETE"
+        || !validDate(snapshot?.captureStartedAt) || !validDate(snapshot?.changesThrough)
+        || new Date(snapshot.changesThrough) < new Date(state.checkpoint)
+        || !dns?.results || Object.keys(state.profiles || {}).length || state.pending?.length) {
+        throw syncError("historical_adoption_conflict", "Výchozí stav nelze bezpečně převzít; není dovoleno přepsat rozpracované operace.");
+      }
+      await assertLeadHubWorkspace(env);
+      await readCampaignSafety(env);
+      const byId = new Map(selection.dataOnly.map(item => [clean(item.contactId), item]));
+      const rows = new Map(snapshot.rows.map(row => [clean(row.Id), row]));
+      state.pending = manifest.items.filter(item => item.action !== "SKIP").map(entry => {
+        const selected = byId.get(entry.contactId), row = rows.get(entry.contactId);
+        if (!selected || !row || selected.normalizedEmail !== entry.normalizedEmail) throw syncError("historical_manifest_source_mismatch", "Manifest neodpovídá chráněnému výběru.");
+        return { ...selected, desired: "active", sourceModified: clean(row.Modified), rowHash: fingerprint(row),
+          historical: true, manifestAction: entry.action, manifestExportId: prepared.exportJobId };
+      });
+      state.historicalImport = { id: prepared.id, status: "CANARY_PENDING", planned: manifest.counts,
+        sourceRows: snapshot.rows.length, eligibleEmails: selection.dataOnly.length,
+        checkpointBeforeAdoption: state.checkpoint, captureStartedAt: snapshot.captureStartedAt,
+        captureFinishedAt: snapshot.captureFinishedAt, changesThrough: snapshot.changesThrough,
+        historicalEventsRecovered: false, created: 0, updated: 0, skipped: 0, readbackConfirmed: 0,
+        remaining: state.pending.length, startedAt: new Date().toISOString(), sendAllowed: false };
+      state.manifestIdentityChecks = Object.fromEntries(manifest.items.map(item => [item.contactId,
+        { action: item.action, email: item.normalizedEmail, reason: item.reason, exportJobId: prepared.exportJobId }]));
+      state.checkpoint = snapshot.changesThrough;
+      state.snapshotKey = `${prepared.prefix}/snapshot.json`; state.dnsKey = `${prepared.prefix}/dns.json`;
+      state.baselineRunId = prepared.id;
+      state.status = "IMPORT_CANARY_PENDING";
+      await putJson(storage, SYNC_STATE_KEY, state);
+      return { mode: "execute-import", status: state.status, historicalImport: state.historicalImport, profileWrites: 0, sendAllowed: false };
+    }
+    if (state.historicalImport.id !== prepared.id) throw syncError("historical_import_identity_conflict", "Evidence importu patří jinému manifestu.");
+    const summary = await runProfileSyncUnlocked(env, { ...options,
+      batchLimit: state.historicalImport.readbackConfirmed ? IMPORT_BATCH_LIMIT : 1 }, writer);
+    const confirmed = await getJson(storage, SYNC_STATE_KEY);
+    return { ...summary, mode: "execute-import", historicalImport: confirmed.historicalImport, sendAllowed: false };
+  });
+}
+
+function sourceValues(row, columns) {
+  return JSON.stringify(columns.map(field => [field, row?.[field] ?? null]));
+}
+
+async function commitSourceVersion(storage, state, snapshot, dnsState, owner) {
+  const prefix = `${SYNC_PREFIX}/versions/${owner}`;
+  // Immutable objects first; one small, strongly consistent R2 pointer last.
+  await putJson(storage, `${prefix}/snapshot.json`, snapshot);
+  await putJson(storage, `${prefix}/dns.json`, dnsState);
+  state.snapshotKey = `${prefix}/snapshot.json`; state.dnsKey = `${prefix}/dns.json`;
+  await putJson(storage, SYNC_STATE_KEY, state);
+}
+
 async function runProfileSyncUnlocked(env, options, writer) {
   const storage = bucket(env);
   const scheduledAt = (validDate(options.scheduledAt) || new Date()).toISOString();
@@ -780,8 +866,8 @@ async function runProfileSyncUnlocked(env, options, writer) {
     return { syncStatus: state.status, status: "stale_schedule_skipped", checkpoint: state.checkpoint, messagesSent: 0 };
   }
   const [snapshot, dnsState] = await Promise.all([
-    getJson(storage, SYNC_SNAPSHOT_KEY),
-    getJson(storage, SYNC_DNS_KEY)
+    getJson(storage, state.snapshotKey || SYNC_SNAPSHOT_KEY),
+    getJson(storage, state.dnsKey || SYNC_DNS_KEY)
   ]);
   if (!snapshot || !dnsState) {
     const error = new Error("Synchronizační Contact snapshot nebo DNS stav chybí.");
@@ -826,17 +912,41 @@ async function runProfileSyncUnlocked(env, options, writer) {
   const selectedById = new Map((cleanup.dataOnly || []).map((item) => [clean(item.contactId), item]));
   const pendingById = new Map((state.pending || []).map((item) => [clean(item.contactId), item]));
 
+  // Rebuild historical queue entries from the current selection, never from
+  // the old manifest's names or eligibility. A new exclusion cancels the item.
+  for (const [id, pendingItem] of pendingById) {
+    if (!pendingItem.historical) continue;
+    const selected = selectedById.get(id), row = oldRowsById.get(id);
+    if (!selected || selected.normalizedEmail !== pendingItem.normalizedEmail) {
+      pendingById.set(id, { ...pendingItem, desired: "skip", reason: "SOURCE_CHANGED_OR_FILTERED" });
+    } else pendingById.set(id, { ...pendingItem, ...selected, rowHash: fingerprint(row), sourceModified: clean(row.Modified) });
+  }
+
   for (const id of changedIds) {
     const row = oldRowsById.get(id);
     const email = normalizeContactEmail(row?.Email1);
     const selected = selectedById.get(id);
     const previousProfile = state.profiles?.[id];
+    if (previousProfile?.synced && previousProfile.email !== email) {
+      pendingById.set(id, { contactId: id, normalizedEmail: previousProfile.email, desired: "inactive",
+        reason: "EMAIL_CHANGED_IDENTITY_NOT_MERGED", sourceModified: clean(row.Modified), rowHash: fingerprint(row) });
+      continue;
+    }
+    if (pendingById.get(id)?.historical) continue;
+    if (selected && state.historicalImport && !previousProfile?.synced) {
+      const checked = state.manifestIdentityChecks?.[id];
+      if (!checked || checked.action === "SKIP" || checked.email !== email) {
+        pendingById.set(id, { contactId: id, normalizedEmail: email, desired: "skip",
+          reason: checked?.reason || "TARGET_IDENTITY_EXPORT_REQUIRED" });
+        continue;
+      }
+    }
     if (selected) {
       pendingById.set(id, { ...selected, desired: "active", sourceModified: clean(row?.Modified), rowHash: fingerprint(row) });
     } else if (previousProfile?.synced) {
       pendingById.set(id, {
         contactId: id,
-        normalizedEmail: email || previousProfile.email,
+        normalizedEmail: previousProfile.email,
         communicationStatus: "UNKNOWN",
         desired: "inactive",
         reason: exclusionReasons(cleanup, id, email).join(",") || "FILTERED_OUT",
@@ -862,20 +972,46 @@ async function runProfileSyncUnlocked(env, options, writer) {
   }
 
   const pending = [...pendingById.values()];
-  const current = pending.slice(0, PROFILE_BATCH_LIMIT);
-  const remaining = pending.slice(PROFILE_BATCH_LIMIT);
-  const run = { created: 0, updated: 0, deactivated: 0, skipped: 0, readbackConfirmed: 0, restoredSubscriptions: 0, messagesSent: 0 };
+  const batchLimit = Math.min(Number(options.batchLimit) || PROFILE_BATCH_LIMIT, PROFILE_BATCH_LIMIT);
+  const current = pending.slice(0, batchLimit);
+  const remaining = pending.slice(batchLimit);
+  const run = { created: 0, updated: 0, deactivated: 0, no_change: 0, skipped: 0, readbackConfirmed: 0, restoredSubscriptions: 0, messagesSent: 0 };
   state.profiles ||= {};
+  const sourceSession = current.some(item => item.desired === "active") ? await loginVistosExecute(env) : null;
+  const columns = contactReadColumns(snapshot);
+  // Persist the reconciled source and queue before any provider write.
+  state.pending = pending;
+  state.checkpoint = scheduledAt;
+  if (delta.rows.length || !state.snapshotKey || !state.dnsKey) await commitSourceVersion(storage, state, snapshot, dnsState, writer.owner);
+  else await putJson(storage, SYNC_STATE_KEY, state);
   for (const item of current) {
     const operationKey = `${SYNC_PREFIX}/operations/${writer.owner}/${encodeURIComponent(item.contactId)}.json`;
+    if (item.desired === "active") {
+      const latest = await getVistosById(env, sourceSession, "Contact", item.contactId, columns);
+      if (clean(latest.row?.Id) !== item.contactId) throw syncError("contact_current_identity_unverified", "Aktuální Contact detail nepotvrdil požadované ID.");
+      if (sourceValues(latest.row, columns) !== sourceValues(oldRowsById.get(item.contactId), columns)) {
+        // Keep the item queued; the next source reconciliation must re-evaluate
+        // the entire email group. Never overwrite with an old snapshot.
+        throw syncError("contact_changed_before_write", "Kontakt se od posledního čtení změnil; zápis nebyl proveden.");
+      }
+    }
+    if (item.desired === "skip") {
+      await putJson(storage, operationKey, { status: "SKIP", contactId: item.contactId, reason: item.reason, finishedAt: new Date().toISOString() });
+      state.pending = state.pending.filter(pendingItem => pendingItem.contactId !== item.contactId);
+      if (item.historical) state.historicalImport.skipped += 1;
+      run.skipped += 1;
+      await putJson(storage, SYNC_STATE_KEY, state);
+      continue;
+    }
     await putJson(storage, operationKey, {
       status: "INTENT", contactId: item.contactId, desired: item.desired,
       sourceModified: item.sourceModified || null, rowHash: item.rowHash,
       startedAt: new Date().toISOString(), writer: writer.owner
     });
-    const beforeWrite = async (safety) => {
+    const beforeWrite = async (safety, progress = {}) => {
       await putJson(storage, operationKey, {
-        status: "WRITE_INTENT", contactId: item.contactId, desired: item.desired,
+        status: progress.stage || "WRITE_INTENT", httpStatus: progress.httpStatus || null,
+        contactId: item.contactId, normalizedEmail: item.normalizedEmail, desired: item.desired,
         sourceModified: item.sourceModified || null, rowHash: item.rowHash,
         beforeSafety: safety, startedAt: new Date().toISOString(), writer: writer.owner
       });
@@ -889,6 +1025,9 @@ async function runProfileSyncUnlocked(env, options, writer) {
     } catch (error) {
       if (!["leadhub_profile_identity_conflict", "leadhub_deactivation_identity_conflict", "leadhub_invalid_source_identity"].includes(error?.code)) throw error;
       await putJson(storage, operationKey, { status: "SKIP", contactId: item.contactId, reason: error.code, finishedAt: new Date().toISOString() });
+      state.pending = state.pending.filter(pendingItem => pendingItem.contactId !== item.contactId);
+      if (item.historical) state.historicalImport.skipped += 1;
+      await putJson(storage, SYNC_STATE_KEY, state);
       run.skipped += 1;
       continue;
     }
@@ -910,6 +1049,18 @@ async function runProfileSyncUnlocked(env, options, writer) {
       suppressed: result.suppressed,
       lastSyncedAt: scheduledAt
     };
+    state.pending = state.pending.filter(pendingItem => pendingItem.contactId !== item.contactId);
+    if (item.historical) {
+      state.historicalImport[result.action] = (state.historicalImport[result.action] || 0) + 1;
+      state.historicalImport.readbackConfirmed += 1;
+      state.historicalImport.lastReadbackAt = new Date().toISOString();
+    }
+    state.totals ||= { created: 0, updated: 0, deactivated: 0, subscriptionChanges: 0, messagesSent: 0 };
+    state.totals[result.action] = (state.totals[result.action] || 0) + 1;
+    await putJson(storage, SYNC_STATE_KEY, state);
+    // Only a fully read-back and committed operation may release its lock.
+    writer.sideEffectsStarted = false;
+    if (current.indexOf(item) < current.length - 1) await delay(7000);
   }
   if (current.length) {
     state.apiReadValidation = {
@@ -923,9 +1074,10 @@ async function runProfileSyncUnlocked(env, options, writer) {
   state.checkpoint = scheduledAt;
   state.status = "ACTIVE";
   state.totals ||= { created: 0, updated: 0, deactivated: 0, subscriptionChanges: 0, messagesSent: 0 };
-  state.totals.created += run.created;
-  state.totals.updated += run.updated;
-  state.totals.deactivated += run.deactivated;
+  if (state.historicalImport) {
+    state.historicalImport.remaining = remaining.filter(item => item.historical).length;
+    state.historicalImport.status = state.historicalImport.remaining ? "IMPORTING" : "COMPLETED_WITH_SKIPS";
+  }
   state.lastRun = {
     status: "completed",
     startedFrom: delta.periodFrom,
@@ -942,20 +1094,21 @@ async function runProfileSyncUnlocked(env, options, writer) {
     restoredSubscriptions: 0,
     messagesSent: 0
   };
-  await Promise.all([
-    putJson(storage, SYNC_SNAPSHOT_KEY, snapshot),
-    putJson(storage, SYNC_DNS_KEY, dnsState),
-    putJson(storage, SYNC_STATE_KEY, state),
-    putJson(storage, `${SYNC_PREFIX}/runs/${scheduledAt.replace(/[:.]/g, "-")}.json`, state.lastRun)
-  ]);
+  await putJson(storage, `${SYNC_PREFIX}/runs/${scheduledAt.replace(/[:.]/g, "-")}.json`, state.lastRun);
+  await putJson(storage, SYNC_STATE_KEY, state);
   return { syncStatus: "ACTIVE", checkpoint: state.checkpoint, ...state.lastRun, totals: state.totals };
 }
 
 export async function readVistosLeadHubProfileSyncStatus(env) {
   const state = await getJson(bucket(env), SYNC_STATE_KEY);
   if (!state) return { syncStatus: "BLOCKED", reason: "not_initialized" };
+  const lock = await getJson(bucket(env), WRITER_LOCK_KEY);
+  const lastRun = validDate(state.lastRun?.finishedAt);
+  const current = lastRun && Date.now() - lastRun.getTime() < 15 * 60 * 1000 && state.lastRun?.status === "completed";
   return {
-    syncStatus: state.status,
+    syncStatus: lock ? "WRITER_BUSY_OR_RECONCILIATION_REQUIRED" : current ? state.status : "BLOCKED",
+    storedStatus: state.status,
+    lastRunCurrent: Boolean(current),
     trigger: "Cloudflare Cron",
     intervalMinutes: 5,
     checkpoint: state.checkpoint,
@@ -965,14 +1118,17 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
     pending: state.pending?.length || 0,
     totals: state.totals,
     lastRun: state.lastRun,
+    historicalImport: state.historicalImport || null,
     subscriptionsWriteEnabled: false,
-    historicalBulkImportEnabled: false,
+    historicalBulkImportEnabled: Boolean(state.historicalImport),
     messagesEnabled: false
   };
 }
 
 export const __test = {
   contactReadColumns,
+  sourceValues,
+  commitSourceVersion,
   readCampaignSafety,
   upsertActiveProfile,
   parseSubscriptionSafety,

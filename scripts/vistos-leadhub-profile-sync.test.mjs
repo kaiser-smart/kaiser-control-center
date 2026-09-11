@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import worker, { runScheduledSync } from "../workers/vistos-leadhub-profile-sync-runner.js";
-import { __test, buildLeadHubImportManifest, runVistosLeadHubProfileSync, withVistosLeadHubWriter, prepareVistosLeadHubHistoricalImport, verifyCompleteContactCapture } from "../functions/_lib/vistos-leadhub-profile-sync.js";
+import { __test, buildLeadHubImportManifest, runVistosLeadHubProfileSync, withVistosLeadHubWriter, prepareVistosLeadHubHistoricalImport, executeVistosLeadHubHistoricalImport, verifyCompleteContactCapture } from "../functions/_lib/vistos-leadhub-profile-sync.js";
 import { onRequestGet, onRequestPost } from "../functions/api/receivables/vistos/leadhub-sync-internal.js";
 
 class MemoryR2 {
@@ -197,7 +197,7 @@ assert.match(source, /method: "PUT"/);
 assert.match(source, /\/subscriptions\/email-address\//);
 assert.doesNotMatch(source, /subscriptions[^\n]+method: "POST"/);
 assert.match(config, /crons = \["\* \* \* \* \*"\]/);
-assert.match(config, /RUN_MODE = "prepare-import"/);
+assert.match(config, /RUN_MODE = "execute-import"/);
 
 const unauthorized = await onRequestPost({
   request: new Request("https://example.test/api/receivables/vistos/leadhub-sync-internal", {
@@ -356,3 +356,109 @@ try {
   assert.equal(exportJobsCreated, 1, "completed preparation is repeatable without another export job");
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos → LeadHub historical preparation tests passed");
+
+const syncStateKey = "protected-sync/vistos-leadhub-profiles/state.json";
+const importedProfiles = new Map();
+let providerWrites = 0, currentSourceRow = preparationRow;
+let deltaSourceRows = [];
+let existingStates = [{ code: "newsletters", state: "unsubscribed" }];
+let changeSafetyAfterWrite = false;
+let standaloneSafetyTest = false, safetyChangeThreshold = Infinity;
+globalThis.fetch = async (url, options) => {
+  if (url.startsWith("https://vistos.example.test")) {
+    const payload = JSON.parse(options.body);
+    if (payload.LoginParam) return Response.json({ status: "OK" }, { headers: { "Set-Cookie": "VistosAccessToken=synthetic; Secure" } });
+    if (payload.GetByIdParam) return Response.json({ status: "OK", data: currentSourceRow });
+    assert.ok(payload.GetPageParam.Filter);
+    return Response.json({ status: "OK", data: { recordsTotal: 1, recordsFiltered: deltaSourceRows.length, data: deltaSourceRows } });
+  }
+  if (url.endsWith("/segments")) return Response.json([{ id: "b17444f7663241a0adb31b9a47dcf1a0" }]);
+  if (url.includes("/campaigns?")) return Response.json([{ campaign_type: "popup", state: "active" }]);
+  if (url.includes("/subscriptions/")) {
+    assert.equal(options.method, "GET", "subscriptions and suppression are never written");
+    if (url.endsWith("/suppressed")) return Response.json({ is_suppressed: changeSafetyAfterWrite && providerWrites > safetyChangeThreshold });
+    return Response.json({ subscriptions: existingStates });
+  }
+  if (url.includes("/jobs/")) return Response.json({ job_id: url.split("/").at(-1), state: "done", errors: null });
+  if (url.endsWith("/profiles") && options.method === "PUT") {
+    if (!standaloneSafetyTest) {
+      assert.ok(preparationR2.values.has("protected-sync/vistos-leadhub-profiles/writer-lock.json"));
+      assert.ok([...preparationR2.values.entries()].some(([key, value]) => key.includes("/operations/") && JSON.parse(value).status === "WRITE_INTENT"));
+    }
+    const body = JSON.parse(options.body);
+    assert.deepEqual(Object.keys(body).sort(), ["email_address", "first_name", "user_id"]);
+    assert.equal(body.first_name, "Radim");
+    importedProfiles.set(body.email_address, { credentials: body, tags: [] });
+    providerWrites += 1; return new Response(null, { status: 202 });
+  }
+  if (url.endsWith("/profiles/tags") && options.method === "POST") {
+    const body = JSON.parse(options.body);
+    const profile = [...importedProfiles.values()].find(item => item.credentials.user_id === body.profile_identification.user_id);
+    assert.ok(profile, "tag writes must not create profiles implicitly");
+    profile.tags = [body.tag];
+    providerWrites += 1; return new Response(null, { status: 202 });
+  }
+  assert.equal(options.method, "GET");
+  const profile = importedProfiles.get(decodeURIComponent(url.split("/").at(-1)));
+  return profile ? Response.json(profile) : new Response(null, { status: 404 });
+};
+try {
+  const adoption = await executeVistosLeadHubHistoricalImport(preparationEnv);
+  assert.equal(adoption.status, "IMPORT_CANARY_PENDING");
+  assert.equal(providerWrites, 0, "adoption is not a profile write");
+  const adopted = JSON.parse(preparationR2.values.get(syncStateKey));
+  assert.equal(adopted.historicalImport.planned.CREATE, 1);
+  assert.equal(adopted.historicalImport.remaining, 1);
+  assert.ok(new Date(adopted.checkpoint) > new Date(JSON.parse(priorState).checkpoint));
+  assert.ok(adopted.snapshotKey.includes("/imports/"));
+  const runAt = new Date(Date.parse(adopted.checkpoint) + 60000).toISOString();
+  currentSourceRow = { ...preparationRow, FirstName: "Changed" };
+  await assert.rejects(() => executeVistosLeadHubHistoricalImport(preparationEnv, { scheduledAt: runAt }), error => error.code === "contact_changed_before_write");
+  assert.equal(providerWrites, 0, "current source change cannot be overwritten by the old manifest");
+  assert.equal(JSON.parse(preparationR2.values.get(syncStateKey)).pending.length, 1, "rejected source read retains the queue");
+  assert.equal(preparationR2.values.has("protected-sync/vistos-leadhub-profiles/writer-lock.json"), false);
+  currentSourceRow = preparationRow;
+  const canary = await executeVistosLeadHubHistoricalImport(preparationEnv, { scheduledAt: new Date(Date.parse(runAt) + 60000).toISOString() });
+  assert.equal(canary.created, 1);
+  assert.equal(canary.historicalImport.readbackConfirmed, 1);
+  assert.equal(canary.historicalImport.remaining, 0);
+  assert.equal(providerWrites, 2, "one profile and one integration tag, no subscription write");
+  const confirmed = JSON.parse(preparationR2.values.get(syncStateKey));
+  assert.equal(confirmed.profiles[preparationRow.Id].synced, true, "imported identities enter the same delta registry");
+  assert.deepEqual(confirmed.profiles[preparationRow.Id].subscriptions, existingStates);
+  assert.equal(confirmed.totals.created, 1);
+  await executeVistosLeadHubHistoricalImport(preparationEnv, { scheduledAt: new Date(Date.parse(runAt) + 120000).toISOString() });
+  assert.equal(providerWrites, 2, "repeat with no source changes performs no writes and creates no duplicates");
+  assert.equal(JSON.parse(preparationR2.values.get(syncStateKey)).totals.created, 1);
+
+  const departureAt = new Date(Date.parse(runAt) + 180000).toISOString();
+  deltaSourceRows = [{ ...preparationRow, DoNotWorkCompany: true, Modified: departureAt }];
+  const departure = await executeVistosLeadHubHistoricalImport(preparationEnv, { scheduledAt: departureAt });
+  assert.equal(departure.deactivated, 1, "delta excludes an already imported departed employee");
+  assert.equal(importedProfiles.get(preparationRow.Email1).tags[0].data.targeting_enabled, 0);
+  assert.equal(importedProfiles.size, 1, "deactivation preserves the profile and its history");
+  assert.deepEqual(JSON.parse(preparationR2.values.get(syncStateKey)).profiles[preparationRow.Id].subscriptions, existingStates);
+
+  const emailChangeAt = new Date(Date.parse(runAt) + 240000).toISOString();
+  deltaSourceRows = [{ ...preparationRow, Email1: "changed@example.test", Modified: emailChangeAt }];
+  await executeVistosLeadHubHistoricalImport(preparationEnv, { scheduledAt: emailChangeAt });
+  assert.equal(importedProfiles.size, 1, "email changes do not merge a new identity into an old profile");
+  assert.equal(importedProfiles.has("changed@example.test"), false);
+  assert.equal(JSON.parse(preparationR2.values.get(syncStateKey)).profiles[preparationRow.Id].email, preparationRow.Email1);
+
+  const pointerBefore = preparationR2.values.get(syncStateKey);
+  const originalPut = preparationR2.put.bind(preparationR2);
+  preparationR2.put = async (key, value, options) => {
+    if (key.endsWith("/dns.json")) throw new Error("synthetic object write failed");
+    return originalPut(key, value, options);
+  };
+  await assert.rejects(() => __test.commitSourceVersion(preparationR2, confirmed, {}, {}, "failed-commit"), /synthetic object write failed/);
+  assert.equal(preparationR2.values.get(syncStateKey), pointerBefore, "a partially written version never becomes the live pointer");
+  preparationR2.put = originalPut;
+  changeSafetyAfterWrite = true;
+  standaloneSafetyTest = true; safetyChangeThreshold = providerWrites;
+  const writesBeforeSafetyChange = providerWrites;
+  await assert.rejects(() => __test.upsertActiveProfile(preparationEnv, { ...selected, contactId: "102", normalizedEmail: "new-person@example.test" }), error => error.code === "leadhub_subscription_or_suppression_changed");
+  assert.equal(providerWrites, writesBeforeSafetyChange + 1, "unexpected safety change stops before tag writes");
+} finally { globalThis.fetch = originalFetch; }
+console.log("Vistos → LeadHub coordinated import and adoption tests passed");

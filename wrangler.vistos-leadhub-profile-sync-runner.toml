@@ -5,8 +5,8 @@ workers_dev = true
 
 [vars]
 APP_BASE_URL = "https://smart-odpady.ai"
-# One-off, source-read-only preparation. Does not import or move the delta checkpoint.
-RUN_MODE = "prepare-import"
+# Shared writer: one read-back canary, then bounded DATA_ONLY batches.
+RUN_MODE = "execute-import"
 
 [triggers]
 crons = ["* * * * *"]
