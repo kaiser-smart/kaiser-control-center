@@ -18,6 +18,10 @@ class MemoryR2 {
     return { key };
   }
   async delete(key) { this.values.delete(key); }
+  async list({ prefix, limit }) {
+    const matches = [...this.values.keys()].filter(key => key.startsWith(prefix));
+    return { objects: matches.slice(0, limit).map(key => ({ key })), truncated: matches.length > limit };
+  }
 }
 
 const lockR2 = new MemoryR2();
@@ -470,3 +474,39 @@ try {
   assert.equal(providerWrites, writesBeforeSafetyChange + 1, "unexpected safety change stops before tag writes");
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos → LeadHub coordinated import and adoption tests passed");
+
+const retainedLockKey = "protected-sync/vistos-leadhub-profiles/writer-lock.json";
+const retainedLock = { owner: "synthetic-retained", startedAt: "2026-01-01T00:00:00Z" };
+const retainedState = { checkpoint: "2026-01-01T00:00:00Z", pending: [selected] };
+const retainedR2 = new MemoryR2({
+  [retainedLockKey]: JSON.stringify(retainedLock), [syncStateKey]: JSON.stringify(retainedState),
+  "protected-sync/vistos-leadhub-profiles/operations/synthetic-retained/42.json": JSON.stringify({
+    contactId: "42", normalizedEmail: selected.normalizedEmail, desired: "active", status: "PROFILE_ACCEPTED",
+    beforeSafety: { subscriptions: [], suppressed: false }
+  })
+});
+const retainedPut = retainedR2.put.bind(retainedR2);
+retainedR2.put = async (key, value, options) => {
+  assert.ok(key.includes("/reconciliation/"), "read reconciliation may only store protected evidence");
+  return retainedPut(key, value, options);
+};
+retainedR2.delete = async () => assert.fail("read reconciliation must never release a retained lock");
+globalThis.fetch = async (url, options) => {
+  assert.equal(options.method, "GET", "accepted writes cannot be retried by read reconciliation");
+  if (url.includes("/subscriptions/")) return Response.json(url.endsWith("/suppressed") ? { is_suppressed: false } : { subscriptions: [] });
+  return Response.json({ ...owned, tags: [] });
+};
+try {
+  const read = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: retainedR2, LEADHUB_API_TOKEN: "synthetic" });
+  assert.equal(read.status, "RECONCILIATION_REQUIRED");
+  assert.equal(read.profileWrites, 0);
+  assert.equal(read.checks[0].identityMatches, true);
+  assert.equal(read.checks[0].namesMatch, true);
+  assert.equal(read.checks[0].tagMatches, false);
+  assert.equal(read.checks[0].safetyUnchanged, true);
+  assert.equal(retainedR2.values.get(retainedLockKey), JSON.stringify(retainedLock));
+  assert.equal(retainedR2.values.get(syncStateKey), JSON.stringify(retainedState));
+  assert.ok(!JSON.stringify(read).includes(selected.normalizedEmail));
+  assert.ok(!JSON.stringify(read).includes(selected.firstName));
+} finally { globalThis.fetch = originalFetch; }
+console.log("Vistos → LeadHub retained-writer READ reconciliation tests passed");
