@@ -990,9 +990,22 @@ async function runProfileSyncUnlocked(env, options, writer) {
       const latest = await getVistosById(env, sourceSession, "Contact", item.contactId, columns);
       if (clean(latest.row?.Id) !== item.contactId) throw syncError("contact_current_identity_unverified", "Aktuální Contact detail nepotvrdil požadované ID.");
       if (sourceValues(latest.row, columns) !== sourceValues(oldRowsById.get(item.contactId), columns)) {
+        const previous = oldRowsById.get(item.contactId);
+        const differences = columns.filter(field => sourceValues(latest.row, [field]) !== sourceValues(previous, [field]))
+          .map(field => ({ field, snapshotType: typeof previous?.[field], detailType: typeof latest.row?.[field],
+            snapshotMissing: previous?.[field] == null, detailMissing: latest.row?.[field] == null,
+            trimmedStringsEqual: clean(previous?.[field]) === clean(latest.row?.[field]),
+            snapshotRecordIdPresent: previous?.[`${field}_RecordId`] != null,
+            detailRecordIdPresent: latest.row?.[`${field}_RecordId`] != null,
+            recordIdsEqual: previous?.[`${field}_RecordId`] != null && latest.row?.[`${field}_RecordId`] != null
+              && clean(previous[`${field}_RecordId`]) === clean(latest.row[`${field}_RecordId`]) }));
+        await putJson(storage, `${SYNC_PREFIX}/last-source-readback-mismatch.json`, {
+          checkedAt: new Date().toISOString(), differences, snapshot: previous, detail: latest.row,
+          diagnostics: latest.diagnostics, contactId: item.contactId
+        });
         // Keep the item queued; the next source reconciliation must re-evaluate
         // the entire email group. Never overwrite with an old snapshot.
-        throw syncError("contact_changed_before_write", "Kontakt se od posledního čtení změnil; zápis nebyl proveden.");
+        throw syncError("contact_changed_before_write", "Contact detail se neshoduje se snímkem; zápis nebyl proveden.");
       }
     }
     if (item.desired === "skip") {
