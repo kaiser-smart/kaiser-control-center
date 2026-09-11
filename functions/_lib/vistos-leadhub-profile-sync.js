@@ -16,6 +16,7 @@ const SYNC_STATE_KEY = `${SYNC_PREFIX}/state.json`;
 const SYNC_SNAPSHOT_KEY = `${SYNC_PREFIX}/contact-snapshot.json`;
 const SYNC_DNS_KEY = `${SYNC_PREFIX}/dns-state.json`;
 const WRITER_LOCK_KEY = `${SYNC_PREFIX}/writer-lock.json`;
+const IMPORT_STATE_KEY = `${SYNC_PREFIX}/import-state.json`;
 const LEADHUB_BASE_URL = "https://api.leadhub.co";
 const CONTACT_PAGE_SIZE = 1000;
 const PROFILE_BATCH_LIMIT = 10;
@@ -70,6 +71,165 @@ function fingerprint(value) {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
+function syncError(code, message, status = 409) {
+  const error = new Error(message); error.code = code; error.status = status; return error;
+}
+
+function contactReadColumns(snapshot) {
+  const available = new Set((snapshot.schemaMetadata || []).map(field => field.field));
+  const required = ["Id", "Modified", "Email1", "FirstName", "LastName", "DoNotWorkCompany", "Parent_FK"];
+  if (required.some(field => !available.has(field))) throw syncError("contact_columns_unverified", "Chybí potvrzené Contact sloupce pro integraci.");
+  // FK decorators and lowercase client-side id are response fields, not schema columns.
+  return [...new Set([...required, ...Object.keys(snapshot.rows?.[0] || {}).filter(field => available.has(field))])];
+}
+
+function importSummary(state) {
+  return { mode: "prepare-import", status: state.status, phase: state.phase, importId: state.id,
+    sourceRows: state.sourceRows || 0, pagesRead: state.nextPage || 0, expectedRows: state.expectedRows,
+    counts: state.counts || null, manifestKey: state.manifestKey || null,
+    checkpointChanged: false, profileWrites: 0, readyForImport: false, sendAllowed: false };
+}
+
+export function verifyCompleteContactCapture(pages, expectedRows) {
+  if (!Number.isInteger(expectedRows) || expectedRows < 0 || !Array.isArray(pages)) throw syncError("contact_capture_incomplete", "Chybí přesný počet Contact řádků.");
+  const rows = pages.flat();
+  const ids = rows.map(row => clean(row?.Id));
+  if (rows.length !== expectedRows || ids.some(id => !id) || new Set(ids).size !== expectedRows) {
+    throw syncError("contact_capture_incomplete", "Stránkování Contact neprokázalo úplnou množinu jednoznačných ID.");
+  }
+  return rows;
+}
+
+// Preparation never calls a profile/tag/subscription write endpoint and never
+// advances the production delta checkpoint. All pages and manifests are private.
+export async function prepareVistosLeadHubHistoricalImport(env) {
+  return withVistosLeadHubWriter(env, async () => {
+    const storage = bucket(env);
+    let state = await getJson(storage, IMPORT_STATE_KEY);
+    if (state?.phase === "MANIFEST_READY") return importSummary(state);
+    if (!state) {
+      const baseline = await getJson(storage, SYNC_SNAPSHOT_KEY);
+      if (!baseline?.rows?.length || !Array.isArray(baseline.schemaMetadata)) throw syncError("historical_baseline_missing", "Chybí potvrzený zdrojový model.");
+      const id = crypto.randomUUID();
+      state = { id, prefix: `${SYNC_PREFIX}/imports/${id}`, status: "PREPARING", phase: "CAPTURE",
+        startedAt: new Date().toISOString(), captureStartedAt: new Date().toISOString(), nextPage: 0,
+        sourceRows: 0, expectedRows: null, columns: contactReadColumns(baseline), readyForImport: false, sendAllowed: false };
+      await putJson(storage, `${state.prefix}/schema.json`, baseline.schemaMetadata);
+      await putJson(storage, IMPORT_STATE_KEY, state);
+    }
+    if (state.phase === "CAPTURE") {
+      const session = await loginVistosExecute(env);
+      for (let count = 0; count < 5; count += 1) {
+        const page = await getVistosPage(env, session, "Contact", state.columns, {}, state.nextPage * CONTACT_PAGE_SIZE, CONTACT_PAGE_SIZE);
+        if (!Number.isInteger(page.total) || page.total <= 0) throw syncError("contact_total_unverified", "Vistos nepotvrdil celkový počet Contact.");
+        if (state.expectedRows === null) state.expectedRows = page.total;
+        if (page.total !== state.expectedRows) throw syncError("contact_capture_source_changed", "Celkový počet Contact se během snímku změnil; snímek nebude použit.");
+        const expectedLength = Math.min(CONTACT_PAGE_SIZE, state.expectedRows - state.nextPage * CONTACT_PAGE_SIZE);
+        if (page.rows.length !== expectedLength) throw syncError("contact_capture_page_incomplete", "Vistos vrátil neúplnou stránku Contact.");
+        await putJson(storage, `${state.prefix}/pages/${state.nextPage}.json`, page.rows);
+        state.nextPage += 1; state.sourceRows += page.rows.length;
+        if (state.sourceRows === state.expectedRows) {
+          state.captureFinishedAt = new Date().toISOString(); state.phase = "ASSEMBLE"; break;
+        }
+      }
+      await putJson(storage, IMPORT_STATE_KEY, state);
+      return importSummary(state);
+    }
+    if (state.phase === "ASSEMBLE") {
+      const pages = [];
+      for (let page = 0; page < state.nextPage; page += 1) {
+        const rows = await getJson(storage, `${state.prefix}/pages/${page}.json`);
+        if (!Array.isArray(rows)) throw syncError("contact_capture_page_missing", "Chybí chráněná stránka Contact.");
+        pages.push(rows);
+      }
+      let rows = verifyCompleteContactCapture(pages, state.expectedRows);
+      const catchup = await loadContactDelta(env, state.captureStartedAt, new Date().toISOString(), state.columns);
+      const byId = new Map(rows.map(row => [clean(row.Id), row]));
+      for (const row of catchup.rows) {
+        if (!clean(row.Id)) throw syncError("contact_delta_identity_missing", "Změnový Contact řádek nemá ID.");
+        byId.set(clean(row.Id), row);
+      }
+      rows = [...byId.values()];
+      state.captureChangesRead = catchup.rows.length;
+      state.captureChangesThrough = catchup.periodTo;
+      state.sourceRows = rows.length;
+      const schemaMetadata = await getJson(storage, `${state.prefix}/schema.json`);
+      const dns = await getJson(storage, SYNC_DNS_KEY);
+      if (!dns?.results) throw syncError("historical_dns_missing", "Chybí dokončená DNS mapa.");
+      state.missingDomains = [...new Set(rows.map(row => normalizeContactEmail(row.Email1))
+        .filter(isSyntacticallyValidEmail).map(email => email.split("@")[1]))].filter(domain => !dns.results[domain]);
+      await putJson(storage, `${state.prefix}/snapshot.json`, { rows, schemaMetadata,
+        captureStartedAt: state.captureStartedAt, captureFinishedAt: state.captureFinishedAt,
+        sourceTotal: state.expectedRows, reconciledSourceRows: rows.length,
+        changesThrough: state.captureChangesThrough, runId: state.id });
+      await putJson(storage, `${state.prefix}/dns.json`, dns);
+      state.phase = "DNS_NEW_DOMAINS";
+      await putJson(storage, IMPORT_STATE_KEY, state);
+      return importSummary(state);
+    }
+    if (state.phase === "DNS_NEW_DOMAINS") {
+      const dns = await getJson(storage, `${state.prefix}/dns.json`);
+      for (const domain of state.missingDomains.slice(0, 20)) {
+        const result = await dnsMailRouteStatus(domain);
+        dns.results[domain] = { status: result.status, checkedAt: new Date().toISOString() };
+      }
+      state.missingDomains = state.missingDomains.slice(20);
+      dns.domains = Object.keys(dns.results).sort(); dns.nextDomainStart = dns.domains.length;
+      await putJson(storage, `${state.prefix}/dns.json`, dns);
+      if (!state.missingDomains.length) state.phase = "SELECTION";
+      await putJson(storage, IMPORT_STATE_KEY, state);
+      return importSummary(state);
+    }
+    if (state.phase === "SELECTION") {
+      const snapshot = await getJson(storage, `${state.prefix}/snapshot.json`);
+      const dns = await getJson(storage, `${state.prefix}/dns.json`);
+      const selection = buildLeadHubDataOnlySelection(snapshot.rows, snapshot.schemaMetadata, { domainStatuses: dns.results });
+      if (selection.status !== "COMPLETE") throw syncError("historical_selection_incomplete", "Nový výběr není úplný.");
+      await putJson(storage, `${state.prefix}/selection.json`, selection);
+      state.eligibleEmails = selection.dataOnlyUniqueEmails;
+      await assertLeadHubWorkspace(env);
+      // READ export job only; its query has no segment/audience restriction.
+      const job = await leadHubRequest(env, "/segments/query/profiles", { method: "POST", body: { segments: [{ targetingBlocks: [] }] } });
+      if (job.status !== 202 || !clean(job.payload?.job_id)) throw syncError("leadhub_export_not_accepted", "LeadHub nepotvrdil exportní úlohu.");
+      state.exportJobId = job.payload.job_id; state.phase = "EXPORT_WAIT";
+      await putJson(storage, IMPORT_STATE_KEY, state);
+      return importSummary(state);
+    }
+    if (state.phase === "EXPORT_WAIT") {
+      const job = await leadHubRequest(env, `/jobs/${encodeURIComponent(state.exportJobId)}`);
+      if (job.payload?.job_id !== state.exportJobId || job.payload?.errors?.length) throw syncError("leadhub_export_failed", "Export profilů selhal nebo neodpovídá úloze.");
+      if (!["waiting", "processing", "done"].includes(job.payload?.state)) throw syncError("leadhub_export_failed", "Export profilů nemá platný pokračovací stav.");
+      if (job.payload?.state !== "done") return importSummary(state);
+      await assertLeadHubWorkspace(env);
+      const config = leadHubConfig(env);
+      const response = await fetch(`${config.baseUrl}/jobs/${encodeURIComponent(state.exportJobId)}/result`, { headers: { Authorization: config.token } });
+      if (!response.ok) throw syncError("leadhub_export_download_failed", "Výsledek exportu nelze stáhnout.");
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes[0] !== 31 || bytes[1] !== 139) throw syncError("leadhub_export_format_unverified", "Export nemá potvrzený JSONL Gzip formát.");
+      const text = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+      let profiles;
+      try { profiles = text.split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line)); }
+      catch { throw syncError("leadhub_export_parse_failed", "Export obsahuje nevalidní JSONL."); }
+      const selection = await getJson(storage, `${state.prefix}/selection.json`);
+      const manifest = buildLeadHubImportManifest(selection.dataOnly, profiles, {
+        workspaceId: "8d8bf07372ad4244877308cbd94c8e78", sourceRunId: state.id,
+        sourceCount: selection.dataOnly.length, exportCount: profiles.length, exportState: "done",
+        exportJobId: state.exportJobId, allProfiles: true, snapshotCaptureStartedAt: state.captureStartedAt,
+        snapshotCaptureFinishedAt: state.captureFinishedAt, exportCreatedAt: job.payload.created_date
+      });
+      if (manifest.status !== "PLANNED") throw syncError("historical_manifest_blocked", "Manifest neprošel kontrolou úplnosti a identit.");
+      await putJson(storage, `${state.prefix}/leadhub-export.json`, profiles);
+      state.manifestKey = `${state.prefix}/manifest.json`;
+      await putJson(storage, state.manifestKey, manifest);
+      state.exportProfiles = profiles.length; state.counts = manifest.counts; state.phase = "MANIFEST_READY";
+      state.status = "PREPARED_NOT_IMPORTED"; state.preparedAt = new Date().toISOString();
+      await putJson(storage, IMPORT_STATE_KEY, state);
+      return importSummary(state);
+    }
+    throw syncError("historical_stage_unknown", "Neznámá fáze přípravy importu.");
+  });
+}
+
 function modifiedDate(row) {
   return validDate(row?.Modified || row?.modified || row?.Updated || row?.updated);
 }
@@ -95,7 +255,8 @@ async function loadContactDelta(env, checkpoint, periodTo, columns) {
   const to = validDate(periodTo) || new Date();
   const filter = { Modified_From: vistosDateTime(from), Modified_To: vistosDateTime(to) };
   const first = await getVistosPage(env, session, "Contact", columns, filter, 0, CONTACT_PAGE_SIZE);
-  const expected = Number(first.filtered) || first.rows.length;
+  const expected = first.filtered;
+  if (!Number.isInteger(expected) || expected < 0) throw syncError("vistos_delta_total_unverified", "Vistos nepotvrdil počet změnových řádků.");
   const pages = Math.max(1, Math.ceil(expected / CONTACT_PAGE_SIZE));
   const rows = [...first.rows];
   for (let page = 1; page < pages; page += 1) {
@@ -103,6 +264,9 @@ async function loadContactDelta(env, checkpoint, periodTo, columns) {
     rows.push(...result.rows);
   }
   assertModifiedWindow(rows, from, to);
+  if (rows.length !== expected || rows.some(row => !clean(row.Id)) || new Set(rows.map(row => clean(row.Id))).size !== rows.length) {
+    throw syncError("vistos_delta_incomplete", "Změnové stránky neprokázaly úplnost jednoznačných Contact ID.");
+  }
   return { rows, pages, filter, periodFrom: from.toISOString(), periodTo: to.toISOString() };
 }
 
@@ -137,6 +301,14 @@ async function leadHubRequest(env, path, options = {}) {
     throw error;
   }
   return { status: response.status, payload };
+}
+
+async function assertLeadHubWorkspace(env) {
+  const read = await leadHubRequest(env, "/segments");
+  if (!Array.isArray(read.payload) || !read.payload.some(segment => segment.id === "b17444f7663241a0adb31b9a47dcf1a0")) {
+    throw syncError("leadhub_workspace_unverified", "Klíč nepotvrdil známé publikum workspace kaiserservis.cz.");
+  }
+  return { httpStatus: read.status, workspaceAnchorFound: true };
 }
 
 function delay(milliseconds) {
@@ -619,7 +791,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
   }
 
   const oldRowsById = new Map(snapshot.rows.map((row) => [clean(row?.Id), row]));
-  const delta = await loadContactDelta(env, state.checkpoint, scheduledAt, snapshot.rows.length ? Object.keys(snapshot.rows[0]) : ["Id", "Modified"]);
+  const delta = await loadContactDelta(env, state.checkpoint, scheduledAt, contactReadColumns(snapshot));
   const changedIds = new Set();
   const impactedEmails = new Set();
   for (const row of delta.rows) {
@@ -800,6 +972,7 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
 }
 
 export const __test = {
+  contactReadColumns,
   readCampaignSafety,
   upsertActiveProfile,
   parseSubscriptionSafety,

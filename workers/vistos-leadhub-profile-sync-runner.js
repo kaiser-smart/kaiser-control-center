@@ -1,4 +1,5 @@
 const CRON = "*/5 * * * *";
+const PREPARATION_CRON = "* * * * *";
 
 function baseUrl(env) {
   return String(env.APP_BASE_URL || "https://smart-odpady.ai").replace(/\/+$/, "");
@@ -12,7 +13,7 @@ export async function runScheduledSync(env, scheduledTime) {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       scheduledAt: new Date(scheduledTime).toISOString(),
-      mode: env.READ_PREFLIGHT_ONLY === "true" ? "read-preflight" : "sync",
+      mode: env.RUN_MODE || (env.READ_PREFLIGHT_ONLY === "true" ? "read-preflight" : "sync"),
       runner: "kaiser-vistos-leadhub-profile-sync"
     })
   });
@@ -35,10 +36,14 @@ export async function runScheduledSync(env, scheduledTime) {
 
 export default {
   async scheduled(controller, env, ctx) {
-    if (controller.cron !== CRON) return;
+    if (controller.cron !== CRON && !(controller.cron === PREPARATION_CRON && env.RUN_MODE === "prepare-import")) return;
     ctx.waitUntil(runScheduledSync(env, controller.scheduledTime).then((summary) => {
       if (summary.mode === "read-preflight") {
         console.log("vistos_leadhub_profile_sync.read_preflight", summary);
+        return;
+      }
+      if (summary.mode === "prepare-import") {
+        console.log("vistos_leadhub_profile_sync.prepare_import", summary);
         return;
       }
       console.log("vistos_leadhub_profile_sync.completed", {

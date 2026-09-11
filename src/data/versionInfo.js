@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.761"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.762"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vistos → LeadHub: bloková příprava aktuálního manifestu",
+    text: "Jednorázová serverová příprava zaznamená začátek a konec Contact snímku, ověří úplnost ID a změny během načítání. Použije existující DNS výsledky a úplný LeadHub export. Zatím neimportuje profily ani neposouvá produkční checkpoint."
+  },
   {
     title: "Vistos → LeadHub: kontrola automatických zpráv před zápisem",
     text: "Zápis profilu vyžaduje úplné serverové čtení kampaní. Aktivní, naplánovaná nebo neověřená zprávová kampaň jej zastaví; existující popup se nemění. Bez ověřeného přístupu se import nespustí."

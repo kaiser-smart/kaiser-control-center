@@ -5,8 +5,8 @@ workers_dev = true
 
 [vars]
 APP_BASE_URL = "https://smart-odpady.ai"
-# The source checkpoint remains unchanged until writer safety is verified.
-READ_PREFLIGHT_ONLY = "true"
+# One-off, source-read-only preparation. Does not import or move the delta checkpoint.
+RUN_MODE = "prepare-import"
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["* * * * *"]

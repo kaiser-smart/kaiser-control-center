@@ -1,5 +1,5 @@
 import { json } from "../../../_lib/auth.js";
-import { runVistosLeadHubProfileSync, verifyVistosLeadHubReadAccess } from "../../../_lib/vistos-leadhub-profile-sync.js";
+import { runVistosLeadHubProfileSync, verifyVistosLeadHubReadAccess, prepareVistosLeadHubHistoricalImport } from "../../../_lib/vistos-leadhub-profile-sync.js";
 
 function clean(value) {
   return String(value ?? "").trim();
@@ -26,6 +26,8 @@ export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json().catch(() => ({}));
     if (body.mode === "read-preflight") return json(await verifyVistosLeadHubReadAccess(env));
+    if (body.mode === "prepare-import") return json(await prepareVistosLeadHubHistoricalImport(env));
+    if (body.mode && body.mode !== "sync") return json({ code: "vistos_leadhub_invalid_mode" }, 400);
     return json(await runVistosLeadHubProfileSync(env, {
       scheduledAt: clean(body.scheduledAt) || new Date().toISOString(),
       triggeredBy: clean(body.runner) || "cloudflare-cron"

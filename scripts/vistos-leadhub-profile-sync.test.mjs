@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { gzipSync } from "node:zlib";
 import worker, { runScheduledSync } from "../workers/vistos-leadhub-profile-sync-runner.js";
-import { __test, buildLeadHubImportManifest, runVistosLeadHubProfileSync, withVistosLeadHubWriter } from "../functions/_lib/vistos-leadhub-profile-sync.js";
+import { __test, buildLeadHubImportManifest, runVistosLeadHubProfileSync, withVistosLeadHubWriter, prepareVistosLeadHubHistoricalImport, verifyCompleteContactCapture } from "../functions/_lib/vistos-leadhub-profile-sync.js";
 import { onRequestGet, onRequestPost } from "../functions/api/receivables/vistos/leadhub-sync-internal.js";
 
 class MemoryR2 {
@@ -195,7 +196,8 @@ const config = readFileSync(new URL("../wrangler.vistos-leadhub-profile-sync-run
 assert.match(source, /method: "PUT"/);
 assert.match(source, /\/subscriptions\/email-address\//);
 assert.doesNotMatch(source, /subscriptions[^\n]+method: "POST"/);
-assert.match(config, /crons = \["\*\/5 \* \* \* \*"\]/);
+assert.match(config, /crons = \["\* \* \* \* \*"\]/);
+assert.match(config, /RUN_MODE = "prepare-import"/);
 
 const unauthorized = await onRequestPost({
   request: new Request("https://example.test/api/receivables/vistos/leadhub-sync-internal", {
@@ -308,3 +310,49 @@ try {
 }
 
 console.log("Vistos → LeadHub profile sync tests passed");
+
+assert.equal(verifyCompleteContactCapture([[{ Id: "1" }], [{ Id: "2" }]], 2).length, 2);
+for (const pages of [[[{ Id: "1" }], [{ Id: "1" }]], [[{ Id: "1" }]], [[{ Id: "1" }], [{}]]]) {
+  assert.throws(() => verifyCompleteContactCapture(pages, 2), error => error.code === "contact_capture_incomplete");
+}
+const preparationRow = { Id: "101", Email1: "synthetic-person@example.test", FirstName: "Radim", LastName: "", DoNotWorkCompany: false, Parent_FK: null, Modified: "2026-09-11T00:00:00Z" };
+const preparationSchema = Object.keys(preparationRow).map(field => ({ field, caption: field === "DoNotWorkCompany" ? "Už nepracuje ve firmě" : field, datatype: field === "DoNotWorkCompany" ? "Boolean" : "String" }));
+const preparationR2 = new MemoryR2({
+  "protected-sync/vistos-leadhub-profiles/state.json": priorState,
+  "protected-sync/vistos-leadhub-profiles/contact-snapshot.json": JSON.stringify({ rows: [preparationRow], schemaMetadata: preparationSchema }),
+  "protected-sync/vistos-leadhub-profiles/dns-state.json": JSON.stringify({ results: { "example.test": { status: "VALID_DOMAIN", checkedAt: "2026-09-10T00:00:00Z" } } })
+});
+let exportJobsCreated = 0;
+const preparationEnv = { R2_ARCHIVE: preparationR2, LEADHUB_API_TOKEN: "synthetic", VISTOS_API_BASE_URL: "https://vistos.example.test", VISTOS_API_USERNAME: "synthetic", VISTOS_API_PASSWORD: "synthetic" };
+assert.ok(!__test.contactReadColumns({ rows: [{ ...preparationRow, id: "101", Parent_FK_RecordId: 1 }], schemaMetadata: preparationSchema }).includes("id"));
+assert.ok(!__test.contactReadColumns({ rows: [{ ...preparationRow, id: "101", Parent_FK_RecordId: 1 }], schemaMetadata: preparationSchema }).includes("Parent_FK_RecordId"));
+globalThis.fetch = async (url, options) => {
+  if (url.startsWith("https://vistos.example.test")) {
+    const payload = JSON.parse(options.body);
+    if (payload.LoginParam) return Response.json({ status: "OK" }, { headers: { "Set-Cookie": "VistosAccessToken=synthetic; Secure" } });
+    assert.ok(payload.GetPageParam);
+    if (payload.GetPageParam.Filter) return Response.json({ status: "OK", data: { recordsTotal: 1, recordsFiltered: 0, data: [] } });
+    return Response.json({ status: "OK", data: { recordsTotal: 1, recordsFiltered: 1, data: [preparationRow] } });
+  }
+  if (url.endsWith("/segments/query/profiles")) {
+    assert.equal(options.method, "POST");
+    assert.deepEqual(JSON.parse(options.body), { segments: [{ targetingBlocks: [] }] });
+    exportJobsCreated += 1; return Response.json({ job_id: "synthetic-export-job" }, { status: 202 });
+  }
+  assert.ok(!options.method || options.method === "GET", "preparation cannot mutate LeadHub profiles or subscriptions");
+  if (url.endsWith("/segments")) return Response.json([{ id: "b17444f7663241a0adb31b9a47dcf1a0" }]);
+  if (url.endsWith("/result")) return new Response(gzipSync(""));
+  return Response.json({ job_id: "synthetic-export-job", state: "done", errors: null, created_date: "2026-09-11T00:00:00Z" });
+};
+try {
+  let prepared;
+  for (let step = 0; step < 5; step += 1) prepared = await prepareVistosLeadHubHistoricalImport(preparationEnv);
+  assert.equal(prepared.phase, "MANIFEST_READY");
+  assert.deepEqual(prepared.counts, { CREATE: 1, UPDATE: 0, NO_CHANGE: 0, SKIP: 0 });
+  assert.equal(prepared.profileWrites, 0);
+  assert.equal(prepared.readyForImport, false);
+  assert.equal(preparationR2.values.get("protected-sync/vistos-leadhub-profiles/state.json"), priorState);
+  await prepareVistosLeadHubHistoricalImport(preparationEnv);
+  assert.equal(exportJobsCreated, 1, "completed preparation is repeatable without another export job");
+} finally { globalThis.fetch = originalFetch; }
+console.log("Vistos → LeadHub historical preparation tests passed");
