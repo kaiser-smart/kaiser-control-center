@@ -839,7 +839,16 @@ export async function executeVistosLeadHubHistoricalImport(env, options = {}) {
 }
 
 function sourceValues(row, columns) {
-  return JSON.stringify(columns.map(field => [field, row?.[field] ?? null]));
+  return JSON.stringify(columns.map(field => {
+    // Production READ evidence: GetPage returns the company caption in
+    // Parent_FK and its ID in Parent_FK_RecordId; GetById returns that same ID
+    // directly in Parent_FK (and the caption in Parent_FK_Caption).
+    if (field === "Parent_FK") {
+      const id = row?.Parent_FK_RecordId ?? row?.Parent_FK;
+      if (/^[0-9]+$/.test(clean(id))) return [field, { recordId: clean(id) }];
+    }
+    return [field, row?.[field] ?? null];
+  }));
 }
 
 async function commitSourceVersion(storage, state, snapshot, dnsState, owner) {
