@@ -788,6 +788,10 @@ export async function runVistosLeadHubProfileSync(env, options = {}) {
 // This is not a rewind: the new observed capture replaces an obsolete baseline
 // only after its complete ID set and the capture-time changes were verified.
 export async function executeVistosLeadHubHistoricalImport(env, options = {}) {
+  const heldLock = await getJson(bucket(env), WRITER_LOCK_KEY);
+  if (heldLock && Date.now() - Date.parse(heldLock.startedAt) > 120000) {
+    return inspectRetainedWriter(env, heldLock);
+  }
   return withVistosLeadHubWriter(env, async writer => {
     const storage = bucket(env);
     const prepared = await getJson(storage, IMPORT_STATE_KEY);
@@ -836,6 +840,46 @@ export async function executeVistosLeadHubHistoricalImport(env, options = {}) {
     const confirmed = await getJson(storage, SYNC_STATE_KEY);
     return { ...summary, mode: "execute-import", historicalImport: confirmed.historicalImport, sendAllowed: false };
   });
+}
+
+// READ reconciliation does not take over or remove a lock. It does not retry
+// any accepted write and cannot modify a profile, tag, subscription or checkpoint.
+async function inspectRetainedWriter(env, lock) {
+  const storage = bucket(env);
+  const state = await getJson(storage, SYNC_STATE_KEY);
+  const listed = await storage.list({ prefix: `${SYNC_PREFIX}/operations/${lock.owner}/`, limit: 100 });
+  if (listed.truncated) throw syncError("writer_journal_incomplete", "Neuzavřený deník není úplný.");
+  const checks = [];
+  for (const object of listed.objects) {
+    const operation = await getJson(storage, object.key);
+    const item = (state.pending || []).find(entry => entry.contactId === operation.contactId);
+    if (!item || !operation.normalizedEmail) {
+      checks.push({ stage: "NO_WRITE_READBACK_AVAILABLE" }); continue;
+    }
+    const profile = await leadHubRequest(env, `/profiles/email-address/${encodeURIComponent(operation.normalizedEmail)}`, { allow404: true });
+    const safety = await subscriptionRead(env, operation.normalizedEmail);
+    const safetyUnchanged = Boolean(operation.beforeSafety) && JSON.stringify(operation.beforeSafety) === JSON.stringify(safety);
+    const credentials = profile.payload?.credentials;
+    const identityMatches = profile.status === 200 && credentials?.user_id === profileUserId(item.contactId)
+      && normalizeContactEmail(credentials?.email_address) === item.normalizedEmail;
+    const namesMatch = identityMatches && (!item.firstName || credentials.first_name === item.firstName)
+      && (!item.lastName || credentials.last_name === item.lastName);
+    const tags = Array.isArray(profile.payload?.tags) ? profile.payload.tags.filter(tag => tag.name === TAG_NAME) : [];
+    const tagMatches = tags.length === 1 && clean(tags[0].data?.vistos_contact_id) === item.contactId
+      && Number(tags[0].data?.targeting_enabled) === (operation.desired === "active" ? 1 : 0);
+    const allowedFields = new Set(["credentials", "tags", "first_name", "last_name", "user_id", "email_address", "profile", "data"]);
+    const result = { profileHttpStatus: profile.status, identityMatches, namesMatch, tagMatches,
+      safetyUnchanged, integrationTagCount: tags.length,
+      knownRootFields: Object.keys(profile.payload || {}).filter(key => allowedFields.has(key)),
+      knownCredentialFields: Object.keys(credentials || {}).filter(key => allowedFields.has(key)),
+      profileAccepted: operation.status === "PROFILE_ACCEPTED", tagAccepted: operation.status === "TAG_ACCEPTED" };
+    await putJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/${operation.contactId}.json`, {
+      checkedAt: new Date().toISOString(), operation, expected: item, profile: profile.payload, safety, result
+    });
+    checks.push(result);
+  }
+  return { mode: "execute-import", status: "RECONCILIATION_REQUIRED", checks,
+    profileWrites: 0, lockReleased: false, checkpointChanged: false, sendAllowed: false };
 }
 
 function sourceValues(row, columns) {
