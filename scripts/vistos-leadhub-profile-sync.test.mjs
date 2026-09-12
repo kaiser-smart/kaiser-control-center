@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
-import worker, { runScheduledSync } from "../workers/vistos-leadhub-profile-sync-runner.js";
+import worker, { runScheduledSync, VistosContinuationController } from "../workers/vistos-leadhub-profile-sync-runner.js";
 import { __test, buildLeadHubImportManifest, runVistosLeadHubProfileSync, withVistosLeadHubWriter, prepareVistosLeadHubHistoricalImport, executeVistosLeadHubHistoricalImport, verifyCompleteContactCapture, refreshVistosBusinessRelations } from "../functions/_lib/vistos-leadhub-profile-sync.js";
 import { onRequestGet, onRequestPost } from "../functions/api/receivables/vistos/leadhub-sync-internal.js";
 
@@ -113,7 +113,7 @@ try {
   }
   assert.equal(plan([selected], [{ credentials: null, tags: null }]).items[0].action, "CREATE");
   const emailOnly = { ...owned, credentials: { ...owned.credentials, user_id: null } };
-  assert.equal(plan([selected], [emailOnly]).items[0].reason, "EMAIL_MATCH_WITHOUT_OWNED_USER_ID");
+  assert.equal(plan([selected], [emailOnly]).items[0].reason, "UNOWNED_PROFILE_NAME_EVIDENCE_INSUFFICIENT");
   const otherEmail = { ...owned, credentials: { ...owned.credentials, email_address: "other@example.test" } };
   assert.equal(plan([selected], [otherEmail]).items[0].reason, "EMAIL_CHANGE_REQUIRES_IDENTITY_RESOLUTION");
   assert.equal(plan([selected], [emailOnly, otherEmail]).items[0].reason, "EMAIL_AND_USER_ID_MATCH_DIFFERENT_PROFILES");
@@ -318,7 +318,7 @@ globalThis.fetch = async () => new Response("upstream unavailable", {
 try {
   await assert.rejects(
     () => runScheduledSync({ APP_BASE_URL: "https://smart-odpady.ai", VISTOS_LEADHUB_SYNC_TOKEN: "runner-secret" }, Date.parse("2026-09-10T10:15:00Z")),
-    (error) => error?.status === 502 && error?.responseType === "text/plain" && error?.responseSnippet === "upstream unavailable"
+    (error) => error?.status === 502 && error?.responseType === "text/plain" && error?.responseSnippet === undefined
   );
 } finally {
   globalThis.fetch = originalFetch;
@@ -710,10 +710,14 @@ try {
     const request = JSON.parse(options.body).GetPageParam;
     if (!request) return normalBusinessFetch(url, options);
     starts.push(request.Start);
-    const rows = Array.from({ length: 1000 }, (_, i) => ({ ...contractRows[0], Id: request.Start + i + 1 }));
+    const rows = Array.from({ length: 1000 }, (_, i) => ({ Id: request.Start + i + 1, Customer_FK: 10, CustomerManager_FK: null }));
     return Response.json({ status: "OK", data: { recordsTotal: 4000, recordsFiltered: 4000, data: rows } });
   };
-  const blocksStorage = new MemoryR2();
+  const blocksStorage = new MemoryR2({
+    "protected-sync/vistos-leadhub-profiles/business-state.json": JSON.stringify({ id: "blocks", cursorVersion: 2,
+      entityIndex: 1, pass: 0, offset: 0, blocks: 0, cursors: {},
+      results: { Contract: verifiedContracts, OrderReceived: { status: "VERIFIED", documents: 0, directIds: [], companyIds: [] } } })
+  });
   const firstBlock = await refreshVistosBusinessRelations({ ...businessEnv, R2_ARCHIVE: blocksStorage });
   assert.deepEqual(starts, [0, 1000, 2000], "one invocation must not read the whole large entity");
   assert.equal(firstBlock.offset, 3000);
@@ -723,7 +727,7 @@ try {
   assert.equal(secondBlock.offset, 0);
   assert.equal(starts.at(-1), 3000, "the next stateless block resumes exactly at the stored offset");
   const fieldStorage = new MemoryR2({
-    "protected-sync/vistos-leadhub-profiles/business-state.json": JSON.stringify({ id: "field-probe", entityIndex: 1,
+    "protected-sync/vistos-leadhub-profiles/business-state.json": JSON.stringify({ id: "field-probe", entityIndex: 1, cursorVersion: 2, cursors: {},
       pass: 0, offset: 3000, results: { Contract: { status: "UNVERIFIED", code: "business_fields_missing" } } })
   });
   const probeRequests = [];
@@ -751,3 +755,78 @@ try {
   assert.equal(fieldStorage.values.has("protected-sync/vistos-leadhub-profiles/business-current.json"), false);
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos → LeadHub separate verified business relationship tests passed");
+
+// A complete export + unique email + full name can authorize only a tag-only
+// ledger link. Foreign IDs, different names and changed credentials stay blocked.
+const linkSource = { ...selected, lastName: "Novák" };
+const unownedProfile = { credentials: { ...owned.credentials, user_id: null, last_name: "Novák" }, tags: [] };
+const linkPlan = plan([linkSource], [unownedProfile]).items[0];
+assert.equal(linkPlan.action, "UPDATE");
+const linkedItem = { ...linkSource, identityBinding: linkPlan.identityBinding };
+assert.deepEqual(__test.tagPayload(linkedItem, true, "", mixedSafety).profile_identification, { email_address: linkSource.normalizedEmail });
+assert.equal(__test.profileIdentityMatches(unownedProfile, linkedItem), true);
+assert.equal(__test.profileIdentityMatches({ ...unownedProfile, credentials: { ...unownedProfile.credentials, user_id: "foreign" } }, linkedItem), false);
+assert.equal(plan([linkSource], [{ ...unownedProfile, credentials: { ...unownedProfile.credentials, user_id: "foreign" } }]).items[0].reason, "FOREIGN_USER_ID_PRESERVED");
+assert.equal(plan([linkSource], [{ ...unownedProfile, credentials: { ...unownedProfile.credentials, first_name: "Different" } }]).items[0].action, "SKIP");
+const linkWrites = [];
+let linkReadback = structuredClone(unownedProfile);
+globalThis.fetch = async (url, options) => {
+  if (options.method !== "GET") {
+    assert.equal(options.method, "POST"); assert.ok(url.endsWith("/profiles/tags"), "existing link must never PUT profile/user_id");
+    const body = JSON.parse(options.body); linkWrites.push(body);
+    linkReadback.tags = [body.tag];
+    return new Response(null, { status: 202 });
+  }
+  if (url.endsWith("/suppressed")) return Response.json({ is_suppressed: true });
+  if (url.includes("/subscriptions/")) return Response.json({ subscriptions: twoStates });
+  if (url.includes("/campaigns")) return Response.json([]);
+  return Response.json(linkReadback);
+};
+try {
+  const linked = await __test.upsertActiveProfile({ LEADHUB_API_TOKEN: "synthetic" }, linkedItem);
+  assert.equal(linked.readback, true); assert.equal(linked.suppressed, true);
+  assert.equal(linkWrites.length, 1);
+  assert.deepEqual(linkWrites[0].profile_identification, { email_address: selected.normalizedEmail });
+  assert.equal(linkReadback.credentials.user_id, null);
+} finally { globalThis.fetch = originalFetch; }
+
+// Persisted continuation survives re-instantiation; cron never resets a live
+// wakeup. Business and import alternate fairly, and API backoff is honored.
+const continuationData = new Map(); let nextAlarm = null;
+const continuationStorage = { get: async key => continuationData.get(key), put: async (key, value) => continuationData.set(key, structuredClone(value)),
+  getAlarm: async () => nextAlarm, setAlarm: async at => { nextAlarm = at; } };
+const continuationEnv = { VISTOS_LEADHUB_SYNC_TOKEN: "synthetic", BUSINESS_READ_ENABLED: "true" };
+const modes = [];
+globalThis.fetch = async (_, options) => { modes.push(JSON.parse(options.body).mode); return Response.json({ pending: 10, created: 1 }); };
+try {
+  const c = new VistosContinuationController(continuationStorage, continuationEnv);
+  await c.ensureScheduled(); const firstAlarm = nextAlarm;
+  await c.ensureScheduled(); assert.equal(nextAlarm, firstAlarm);
+  await c.alarm();
+  await new VistosContinuationController(continuationStorage, continuationEnv).alarm();
+  assert.deepEqual(modes, ["business-read", "execute-import"]);
+  assert.equal(continuationData.get("continuation").steps, 2);
+  globalThis.fetch = async () => Response.json({ code: "rate_limit" }, { status: 429, headers: { "retry-after": "120" } });
+  const beforeFailure = Date.now(); await c.alarm();
+  assert.ok(nextAlarm >= beforeFailure + 120000);
+  assert.equal(continuationData.get("continuation").lastError.status, 429);
+} finally { globalThis.fetch = originalFetch; }
+console.log("Vistos tag-only identity linking and durable continuation tests passed");
+
+const hydratedFields = ["Id", "Directory_FK", "DirectoryManager_FK", "Koncovkakontakt_FK", "Status_FK"];
+const pageWithoutManager = { ...contractRows[0] }; delete pageWithoutManager.DirectoryManager_FK;
+let hydratedDetail = { Id: 1, Directory_FK: 10, DirectoryManager_FK: 42, Koncovkakontakt_FK: null, Status_FK: 74 };
+globalThis.fetch = async (_, options) => {
+  assert.equal(JSON.parse(options.body).GetByIdParam.EntityName, "Contract");
+  return Response.json({ status: "OK", data: hydratedDetail });
+};
+try {
+  const session = { cookie: "VistosAccessToken=synthetic" };
+  assert.deepEqual(await __test.hydrateBusinessRow(preparationEnv, session, pageWithoutManager, contractDefinition, hydratedFields), compact[0]);
+  hydratedDetail = { ...hydratedDetail, Directory_FK: 999 };
+  await assert.rejects(() => __test.hydrateBusinessRow(preparationEnv, session, pageWithoutManager, contractDefinition, hydratedFields),
+    error => error.code === "business_detail_changed");
+  delete hydratedDetail.DirectoryManager_FK;
+  await assert.rejects(() => __test.hydrateBusinessRow(preparationEnv, session, pageWithoutManager, contractDefinition, hydratedFields),
+    error => error.code === "business_fields_missing");
+} finally { globalThis.fetch = originalFetch; }

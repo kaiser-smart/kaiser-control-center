@@ -1,13 +1,21 @@
 name = "kaiser-vistos-leadhub-profile-sync-runner"
-main = "workers/vistos-leadhub-profile-sync-runner.js"
+main = "workers/vistos-leadhub-profile-sync-entry.js"
 compatibility_date = "2026-09-10"
 workers_dev = true
 
 [vars]
 APP_BASE_URL = "https://smart-odpady.ai"
-# Shared writer: one fully read-back DATA_ONLY profile per invocation.
+# Short shared-writer steps continued by one durable workspace alarm.
 RUN_MODE = "execute-import"
 BUSINESS_READ_ENABLED = "true"
 
 [triggers]
 crons = ["* * * * *"]
+
+[[durable_objects.bindings]]
+name = "CONTINUATION"
+class_name = "VistosLeadHubContinuation"
+
+[[migrations]]
+tag = "vistos-leadhub-continuation-v1"
+new_sqlite_classes = ["VistosLeadHubContinuation"]
