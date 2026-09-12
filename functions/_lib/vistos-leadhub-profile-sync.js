@@ -646,7 +646,9 @@ async function leadHubRequest(env, path, options = {}) {
   }
   if (env.syncApiLimiter) await env.syncApiLimiter(family, env);
   if (env.syncWriter?.halted && options.method && options.method !== "GET") {
-    throw syncError("coordinator_halted", "Zapisovatel zastavil zahajování dalších zápisů.");
+    const error = syncError("coordinator_halted", "Zapisovatel zastavil zahajování dalších zápisů.");
+    error.requestNotDispatched = true;
+    throw error;
   }
   const startedAt = Date.now();
   const config = leadHubConfig(env);
@@ -718,7 +720,9 @@ async function acceptedProfileWrite(env, path, options, safety, record, stage) {
   catch (error) {
     // 429 explicitly rejected this request. Preserve an earlier accepted
     // stage, if any; never retry an ambiguous timeout/5xx as a fresh write.
-    if (error.upstreamStatus === 429) await record(safety, { rejected: true, httpStatus: 429 });
+    if (error.upstreamStatus === 429 || (error.code === "coordinator_halted" && error.requestNotDispatched === true)) {
+      await record(safety, { rejected: true, httpStatus: error.upstreamStatus || null, notDispatched: error.requestNotDispatched === true });
+    }
     throw error;
   }
   // Public OpenAPI promises 202 but no job_id for these write endpoints.
@@ -1340,6 +1344,13 @@ async function inspectRetainedWriter(env, lock, options = {}) {
       knownCredentialFields: Object.keys(credentials || {}).filter(key => allowedFields.has(key)),
       profileAccepted: operation.status === "PROFILE_ACCEPTED", tagAccepted: operation.status === "TAG_ACCEPTED",
       readbackConfirmed: operation.status === "READBACK_CONFIRMED" };
+    // Legacy WRITE_INTENT does not prove dispatch or acceptance. Never replay
+    // it. For a terminated writer, a still-unowned tag-only identity with no
+    // integration tag and unchanged safety can be isolated permanently as SKIP.
+    // This is not a successful operation or permission to mutate that profile.
+    result.quarantinable = lock.terminal === true && operation.status === "WRITE_INTENT"
+      && item.identityBinding?.mode === "EXISTING_EMAIL_TAG_ONLY"
+      && identityMatches && namesMatch && safetyUnchanged && tags.length === 0;
     await putJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/${operation.contactId}.json`, {
       checkedAt: new Date().toISOString(), operation, expected: item, profile: profile.payload, safety, result
     });
@@ -1350,8 +1361,8 @@ async function inspectRetainedWriter(env, lock, options = {}) {
   if (lock.phase !== "RECONCILING" && (lock.terminal === true || explicitlyObservedLegacyFailure)
     && verified.length + noWriteJournals === listed.objects.length && verified.length > 0
     && verified.every(entry => entry.result.identityMatches && entry.result.namesMatch && entry.result.safetyUnchanged
-      && (entry.result.profileAccepted || entry.result.tagAccepted || entry.result.readbackConfirmed)
-      && (entry.result.tagMatches || (entry.result.profileAccepted && entry.result.integrationTagCount === 0)))) {
+      && (entry.result.quarantinable || ((entry.result.profileAccepted || entry.result.tagAccepted || entry.result.readbackConfirmed)
+      && (entry.result.tagMatches || (entry.result.profileAccepted && entry.result.integrationTagCount === 0)))))) {
     const liveObject = await storage.get(WRITER_LOCK_KEY);
     const live = liveObject ? await liveObject.json() : null;
     if (!live || live.owner !== lock.owner || live.phase === "RECONCILING" || !liveObject.httpEtag) {
@@ -1372,6 +1383,19 @@ async function inspectRetainedWriter(env, lock, options = {}) {
       if (entry.alreadyCommitted) continue;
       if (state.reconciledOperations[entry.operationKey]) continue;
       const { item, operation, result, safety } = entry;
+      if (result.quarantinable) {
+        state.quarantinedIdentities ||= {};
+        state.quarantinedIdentities[item.contactId] = { email: item.normalizedEmail,
+          reason: "UNACKNOWLEDGED_TAG_INTENT", journalKey: entry.operationKey,
+          quarantinedAt: new Date().toISOString(), operationOutcome: "UNVERIFIED" };
+        state.pending = state.pending.filter(pending => pending.contactId !== item.contactId && pending.normalizedEmail !== item.normalizedEmail);
+        state.manifestIdentityChecks ||= {};
+        state.manifestIdentityChecks[item.contactId] = { ...state.manifestIdentityChecks[item.contactId],
+          email: item.normalizedEmail, action: "SKIP", reason: "UNACKNOWLEDGED_TAG_INTENT" };
+        if (item.historical && state.historicalImport) state.historicalImport.skipped++;
+        state.reconciledOperations[entry.operationKey] = { quarantined: true, confirmedAt: new Date().toISOString() };
+        continue;
+      }
       const action = operation.action || (item.manifestAction === "CREATE" && !state.profiles?.[item.contactId]?.synced ? "created" : "updated");
       if (!["created", "updated", "deactivated", "no_change"].includes(action)) throw syncError("writer_action_unverified", "Neznámý typ již provedené operace.");
       state.profiles ||= {}; state.totals ||= {};
@@ -1398,12 +1422,15 @@ async function inspectRetainedWriter(env, lock, options = {}) {
     if (state.historicalImport) state.historicalImport.remaining = state.pending.filter(item => item.historical).length;
     await putJson(storage, SYNC_STATE_KEY, state);
     await putJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/settled.json`, {
-      settledAt: new Date().toISOString(), profilesConfirmed: verified.length,
-      profileOnly: verified.filter(entry => !entry.result.tagMatches).length,
+      settledAt: new Date().toISOString(), profilesConfirmed: verified.filter(entry => !entry.result.quarantinable).length,
+      profilesQuarantined: verified.filter(entry => entry.result.quarantinable).length,
+      profileOnly: verified.filter(entry => !entry.result.quarantinable && !entry.result.tagMatches).length,
       profileWrites: 0, safetyUnchanged: true, legacyTerminalResponseObserved: explicitlyObservedLegacyFailure
     });
     await storage.delete(WRITER_LOCK_KEY);
-    return { mode: "execute-import", status: "READBACK_ADOPTED", checks, profilesConfirmed: verified.length,
+    return { mode: "execute-import", status: verified.some(entry => entry.result.quarantinable) ? "AMBIGUOUS_INTENT_SKIPPED" : "READBACK_ADOPTED", checks,
+      profilesConfirmed: verified.filter(entry => !entry.result.quarantinable).length,
+      profilesQuarantined: verified.filter(entry => entry.result.quarantinable).length,
       profileWrites: 0, lockReleased: true, checkpointChanged: false, sendAllowed: false };
   }
   return { mode: "execute-import", status: "RECONCILIATION_REQUIRED", checks,
@@ -1686,6 +1713,12 @@ async function runProfileSyncUnlocked(env, options, writer) {
       && (!checked || checked.email !== selected.normalizedEmail)) state.identityPending[id] = true;
   }
   for (const id of await refreshDeltaIdentities(env, state, selectedById)) changedIds.add(id);
+  for (const [id, quarantined] of Object.entries(state.quarantinedIdentities || {})) {
+    state.manifestIdentityChecks ||= {};
+    state.manifestIdentityChecks[id] = { ...state.manifestIdentityChecks[id],
+      email: state.manifestIdentityChecks[id]?.email || quarantined.email,
+      action: "SKIP", reason: quarantined.reason };
+  }
   if (state.historicalImport) classifyHistoricalOrigins(state, [...historicalIds].map(contactId => ({ contactId })));
 
   // Rebuild ALL intents, including business refreshes queued by an older
@@ -1750,6 +1783,10 @@ async function runProfileSyncUnlocked(env, options, writer) {
 
   for (const item of pendingById.values()) Object.assign(item, previousQueueTimes.get(item.contactId)
     || { enqueuedAt: runStartedAt, enqueuedAtEvidence: "ENQUEUED" });
+  const quarantinedEmails = new Set(Object.values(state.quarantinedIdentities || {}).map(item => item.email));
+  for (const [id, item] of pendingById) {
+    if (state.quarantinedIdentities?.[id] || quarantinedEmails.has(item.normalizedEmail)) pendingById.delete(id);
+  }
   for (const item of pendingById.values()) if (item.historical && !state.profiles?.[item.contactId]?.synced) {
     item.historicalKind = state.manifestIdentityChecks?.[item.contactId]?.action === "CREATE" ? "create" : "link";
   }
@@ -1997,6 +2034,7 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
     lastRun: state.lastRun,
     lastFailure: state.lastFailure || null,
     safetyIncident: state.safetyIncident || null,
+    quarantinedProfiles: Object.keys(state.quarantinedIdentities || {}).length,
     historicalImport: state.historicalImport || null,
     identityChecksPending: Object.keys(state.identityPending || {}).length,
     identityExport: state.identityExport ? { status: state.identityExport.status, requestedAt: state.identityExport.requestedAt } : null,

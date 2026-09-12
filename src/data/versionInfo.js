@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.781"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.782"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vistos → LeadHub: izolace nejednoznačného přerušeného zápisu",
+    text: "Prokazatelně nezahájený požadavek nezůstává jako nejasný zápis. Starý nepotvrzený záměr propojení lze po kontrolním čtení identity, odběrů a blokací trvale vyřadit jako SKIP bez opakování zápisu. Delta takto vyřazenou identitu znovu nezařadí."
+  },
   {
     title: "Vistos → LeadHub: řízená propustnost společného zapisovatele",
     text: "Nezávislé identity se zpracovávají nejvýše ve dvou souběžných pruzích s řízeným odstupem API požadavků. Malý trvalý deník chrání každý zápis a jeho readback; velká fronta se potvrzuje jednou za krátkou dávku. Obnova po výpadku nepřepisuje už provedené operace. Kontroly odběrů, blokací a zákazu zpráv zůstávají povinné."

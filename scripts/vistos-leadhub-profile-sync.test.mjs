@@ -831,6 +831,48 @@ try {
   assert.equal(linkWrites.length, 1, "same resulting tag and profile cause no repeated provider write");
 } finally { globalThis.fetch = originalFetch; }
 
+// An unacknowledged legacy tag intent is never replayed. Only a terminated
+// writer with the exact unchanged unowned identity/safety may isolate it.
+for (const scenario of ["unchanged", "safety-changed", "foreign-id", "live-writer", "accepted-tag", "tag-present"]) {
+  const owner = `quarantine-${scenario}`;
+  const lock = { owner, startedAt: "2026-01-01T00:00:00Z", terminal: scenario !== "live-writer" };
+  const item = { ...linkedItem, historical: true, desired: "active", manifestAction: "UPDATE" };
+  const seedState = { checkpoint: "2026-01-01T00:00:00Z", profiles: {}, pending: [item],
+    historicalImport: { skipped: 55 }, manifestIdentityChecks: { "42": { action: "UPDATE" } } };
+  const storage = new MemoryR2({ [retainedLockKey]: JSON.stringify(lock), [syncStateKey]: JSON.stringify(seedState),
+    [`protected-sync/vistos-leadhub-profiles/operations/${owner}/42.json`]: JSON.stringify({
+      contactId: "42", normalizedEmail: item.normalizedEmail, desired: "active", action: "updated",
+      status: scenario === "accepted-tag" ? "TAG_ACCEPTED" : "WRITE_INTENT", beforeSafety: mixedSafety }),
+    [`protected-sync/vistos-leadhub-profiles/operations/${owner}/43.json`]: JSON.stringify({ status: "INTENT" }) });
+  globalThis.fetch = async (url, options) => {
+    assert.equal(options.method, "GET", "ambiguous intent recovery may not replay any mutation");
+    if (url.endsWith("/suppressed")) return Response.json({ is_suppressed: scenario !== "safety-changed" });
+    if (url.includes("/subscriptions/")) return Response.json({ subscriptions: mixedSafety.subscriptions });
+    return Response.json({ ...unownedProfile,
+      credentials: { ...unownedProfile.credentials, user_id: scenario === "foreign-id" ? "foreign" : null },
+      tags: scenario === "tag-present" ? [{ name: __test.TAG_NAME, data: { unknown: true } }] : [] });
+  };
+  try {
+    const result = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: storage, LEADHUB_API_TOKEN: "synthetic" });
+    assert.equal(result.profileWrites, 0);
+    if (scenario === "unchanged") {
+      assert.equal(result.status, "AMBIGUOUS_INTENT_SKIPPED");
+      assert.equal(result.profilesConfirmed, 0); assert.equal(result.profilesQuarantined, 1);
+      assert.equal(result.lockReleased, true);
+      const saved = JSON.parse(storage.values.get(syncStateKey));
+      assert.equal(saved.pending.length, 0); assert.deepEqual(saved.profiles, {});
+      assert.equal(saved.manifestIdentityChecks["42"].reason, "UNACKNOWLEDGED_TAG_INTENT");
+      assert.equal(saved.quarantinedIdentities["42"].operationOutcome, "UNVERIFIED");
+      assert.equal(saved.historicalImport.skipped, 56);
+      assert.equal(saved.checkpoint, seedState.checkpoint);
+    } else {
+      assert.equal(result.lockReleased, false, scenario);
+      assert.equal(storage.values.get(syncStateKey), JSON.stringify(seedState), scenario);
+    }
+  } finally { globalThis.fetch = originalFetch; }
+}
+console.log("Vistos legacy ambiguous tag intent isolation tests passed");
+
 // Persisted continuation survives re-instantiation; cron never resets a live
 // wakeup. Business and import alternate fairly, and API backoff is honored.
 const continuationData = new Map(); let nextAlarm = null;
@@ -922,6 +964,7 @@ for (let index = 2; index < campaignEvents.length; index += 2) {
     "campaign reads are spaced after prior response, not just local dispatch, even with variable provider latency");
 }
 let haltedWrites = 0;
+const haltedJournalEvents = [];
 const sharedHalt = { halted: false };
 globalThis.fetch = async (url, options) => {
   if (options.method !== "GET") { haltedWrites++; assert.fail("incident must block provider dispatch"); }
@@ -932,8 +975,10 @@ globalThis.fetch = async (url, options) => {
 try {
   await assert.rejects(() => __test.upsertActiveProfile({ LEADHUB_API_TOKEN: "synthetic", syncWriter: sharedHalt,
     syncApiLimiter: async family => { if (family === "tagWrite" || family === "profileWrite") sharedHalt.halted = true; }
-  }, { ...selected, businessFlags: { quote_direct: "YES" } }), error => error.code === "coordinator_halted");
+  }, { ...selected, businessFlags: { quote_direct: "YES" } }, async (_safety, event) => haltedJournalEvents.push(event)), error => error.code === "coordinator_halted");
   assert.equal(haltedWrites, 0, "an incident while waiting for API capacity is checked again immediately before dispatch");
+  assert.equal(haltedJournalEvents.at(-1).rejected, true);
+  assert.equal(haltedJournalEvents.at(-1).notDispatched, true, "provably cancelled dispatch cannot remain an ambiguous WRITE_INTENT");
 } finally { globalThis.fetch = originalFetch; }
 const incidentR2 = new MemoryR2({ [syncStateKey]: JSON.stringify({ checkpoint: new Date().toISOString(), safetyIncident: { code: "synthetic" } }) });
 await assert.rejects(() => runVistosLeadHubProfileSync({ R2_ARCHIVE: incidentR2 }), error => error.code === "safety_incident_unresolved");
@@ -1031,6 +1076,17 @@ try {
   assert.equal(recovered.profileWrites, 0); assert.equal(batchWrites, 4);
   assert.equal(Object.keys(JSON.parse(faultR2.values.get(syncStateKey)).profiles).length, 2);
   assert.equal(faultR2.values.has(retainedLockKey), false, "read-only sibling intent cannot trap safely confirmed operations");
+  const isolatedState = JSON.parse(batchInitial[syncStateKey]);
+  isolatedState.quarantinedIdentities = {
+    "701": { email: "previous-address@example.test", reason: "UNACKNOWLEDGED_TAG_INTENT" },
+    "other-id": { email: batchRows[1].Email1, reason: "UNACKNOWLEDGED_TAG_INTENT" }
+  };
+  const isolatedR2 = new MemoryR2({ ...batchInitial, [syncStateKey]: JSON.stringify(isolatedState) });
+  const writesBeforeIsolation = batchWrites;
+  const isolated = await runVistosLeadHubProfileSync({ ...batchEnv, R2_ARCHIVE: isolatedR2 }, { scheduledAt: "2026-09-11T01:03:00Z", batchLimit: 2 });
+  assert.equal(isolated.newlyCompletedProfiles, 0);
+  assert.equal(batchWrites, writesBeforeIsolation, "neither changed email of quarantined ID nor same email on another ID can resurrect an intent");
+  assert.equal(JSON.parse(isolatedR2.values.get(syncStateKey)).manifestIdentityChecks["701"].action, "SKIP");
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos full two-profile concurrent writer + restart + preserved opt-out test passed");
 
