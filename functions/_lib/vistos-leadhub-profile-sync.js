@@ -54,6 +54,28 @@ function compactBusinessRow(row, definition) {
   return values;
 }
 
+// A missing projected field is not an empty relation. Collect one bounded
+// page/detail comparison, privately, without changing selection or the cursor.
+async function diagnoseBusinessFields(env, storage, state, definition) {
+  const columns = ["Id", definition.company, ...definition.contacts, ...(definition.status ? [definition.status] : [])];
+  const present = (row, field) => Object.hasOwn(row, field) || Object.hasOwn(row, `${field}_RecordId`);
+  const session = await loginVistosExecute(env);
+  const page = await getVistosPage(env, session, definition.entity, columns, {}, 0, 25);
+  const sample = page.rows.find(row => columns.some(field => !present(row, field)));
+  const detail = sample && /^\d+$/.test(clean(sample.Id))
+    ? await getVistosById(env, session, definition.entity, sample.Id, columns) : null;
+  const checkedAt = new Date().toISOString();
+  const evidenceKey = `${SYNC_PREFIX}/business/${state.id}/${definition.entity}-field-evidence.json`;
+  await putJson(storage, evidenceKey, { checkedAt, columns, page, detail });
+  return { checkedAt, evidenceKey, pageRows: page.rows.length, detailStatus: detail?.status ?? null,
+    fields: columns.map(field => ({ field,
+      pageMissing: page.rows.filter(row => !present(row, field)).length,
+      detailPresent: detail ? present(detail.row, field) : null,
+      detailExplicitNull: detail && present(detail.row, field)
+        ? (Object.hasOwn(detail.row, `${field}_RecordId`) ? detail.row[`${field}_RecordId`] : detail.row[field]) === null : null
+    })) };
+}
+
 function verifyBusinessPasses(first, second, definition) {
   const canonical = pass => {
     if (!Number.isInteger(pass.total) || pass.rows.length !== pass.total
@@ -79,6 +101,17 @@ export async function refreshVistosBusinessRelations(env) {
   return withVistosLeadHubWriter(env, async () => {
     const storage = bucket(env);
     let state = await getJson(storage, BUSINESS_STATE_KEY);
+    const needsEvidence = BUSINESS_DEFINITIONS.find(definition =>
+      state?.results?.[definition.entity]?.code === "business_fields_missing"
+      && !state.results[definition.entity].fieldEvidence);
+    if (needsEvidence) {
+      let fieldEvidence;
+      try { fieldEvidence = await diagnoseBusinessFields(env, storage, state, needsEvidence); }
+      catch (error) { fieldEvidence = { checkedAt: new Date().toISOString(), code: clean(error?.code) || "business_field_evidence_failed" }; }
+      state.results[needsEvidence.entity].fieldEvidence = fieldEvidence;
+      await putJson(storage, BUSINESS_STATE_KEY, state);
+      return { mode: "business-read", status: "UNVERIFIED", entity: needsEvidence.entity, fieldEvidence, messagesSent: 0 };
+    }
     if (state?.completedAt && Date.now() - Date.parse(state.completedAt) < 3600000) {
       return { mode: "business-read", status: "CURRENT", results: state.summary, messagesSent: 0 };
     }

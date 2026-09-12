@@ -722,5 +722,32 @@ try {
   assert.equal(secondBlock.pass, 1);
   assert.equal(secondBlock.offset, 0);
   assert.equal(starts.at(-1), 3000, "the next stateless block resumes exactly at the stored offset");
+  const fieldStorage = new MemoryR2({
+    "protected-sync/vistos-leadhub-profiles/business-state.json": JSON.stringify({ id: "field-probe", entityIndex: 1,
+      pass: 0, offset: 3000, results: { Contract: { status: "UNVERIFIED", code: "business_fields_missing" } } })
+  });
+  const probeRequests = [];
+  globalThis.fetch = async (url, options) => {
+    const body = JSON.parse(options.body);
+    if (body.LoginParam) return normalBusinessFetch(url, options);
+    assert.ok(url.startsWith("https://vistos.example.test"));
+    probeRequests.push(body);
+    if (body.GetPageParam) {
+      assert.equal(body.GetPageParam.Length, 25);
+      return Response.json({ status: "OK", data: { recordsTotal: 1, recordsFiltered: 1, data: [{ Id: 1, Directory_FK: 10 }] } });
+    }
+    assert.equal(body.GetByIdParam.EntityId, 1);
+    return Response.json({ status: "OK", data: { Id: 1, Directory_FK: 10, DirectoryManager_FK: null } });
+  };
+  const fieldResult = await refreshVistosBusinessRelations({ ...businessEnv, R2_ARCHIVE: fieldStorage });
+  assert.equal(fieldResult.status, "UNVERIFIED", "one detail must not turn missing projected fields into empty relations");
+  assert.equal(probeRequests.length, 2, "one bounded page and one detail only");
+  assert.equal(fieldResult.fieldEvidence.fields.find(item => item.field === "DirectoryManager_FK").pageMissing, 1);
+  assert.equal(fieldResult.fieldEvidence.fields.find(item => item.field === "DirectoryManager_FK").detailExplicitNull, true);
+  assert.equal(fieldResult.fieldEvidence.fields.find(item => item.field === "Koncovkakontakt_FK").detailPresent, false);
+  assert.equal(JSON.parse(fieldStorage.values.get("protected-sync/vistos-leadhub-profiles/business-state.json")).offset, 3000,
+    "diagnostic read must not rewind or skip the next entity");
+  assert.equal(fieldStorage.values.has(syncStateKey), false);
+  assert.equal(fieldStorage.values.has("protected-sync/vistos-leadhub-profiles/business-current.json"), false);
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos → LeadHub separate verified business relationship tests passed");
