@@ -21,7 +21,10 @@ const IMPORT_STATE_KEY = `${SYNC_PREFIX}/import-state.json`;
 const LEADHUB_BASE_URL = "https://api.leadhub.co";
 const CONTACT_PAGE_SIZE = 1000;
 const PROFILE_BATCH_LIMIT = 10;
-const IMPORT_BATCH_LIMIT = 3;
+// Provider acceptance and safety readback can take tens of seconds each.
+// Keep historical invocations to one profile; never leave a third write
+// waiting behind two completed profiles in the same HTTP request.
+const IMPORT_BATCH_LIMIT = 1;
 const OVERLAP_MS = 10 * 60 * 1000;
 const TAG_NAME = "eSMART Vistos DATA_ONLY";
 
@@ -305,6 +308,7 @@ function leadHubConfig(env) {
 async function leadHubRequest(env, path, options = {}) {
   const config = leadHubConfig(env);
   const response = await fetch(`${config.baseUrl}${path}`, {
+    signal: AbortSignal.timeout(20000),
     method: options.method || "GET",
     headers: {
       Accept: "application/json",
@@ -888,7 +892,14 @@ async function inspectRetainedWriter(env, lock, options = {}) {
   const verified = [];
   for (const object of listed.objects) {
     const operation = await getJson(storage, object.key);
-    const item = (state.pending || []).find(entry => entry.contactId === operation.contactId);
+    const tracked = state.profiles?.[operation.contactId];
+    const alreadyCommitted = operation.status === "READBACK_CONFIRMED" && tracked?.synced === true
+      && tracked.email === operation.normalizedEmail && tracked.rowHash === operation.rowHash
+      && tracked.sourceModified === operation.sourceModified
+      && tracked.active === (operation.desired === "active")
+      && JSON.stringify({ subscriptions: tracked.subscriptions, suppressed: tracked.suppressed }) === JSON.stringify(operation.afterSafety);
+    const item = (state.pending || []).find(entry => entry.contactId === operation.contactId)
+      || (alreadyCommitted ? { contactId: operation.contactId, normalizedEmail: operation.normalizedEmail } : null);
     if (!item || !operation.normalizedEmail) {
       checks.push({ stage: "NO_WRITE_READBACK_AVAILABLE" }); continue;
     }
@@ -906,7 +917,7 @@ async function inspectRetainedWriter(env, lock, options = {}) {
       && Number(tags[0].data?.data_only) === (operation.desired === "active" ? 1 : 0)
       && Number(tags[0].data?.targeting_enabled) === (operation.desired === "active" ? 1 : 0);
     const allowedFields = new Set(["credentials", "tags", "first_name", "last_name", "user_id", "email_address", "profile", "data"]);
-    const result = { profileHttpStatus: profile.status, identityMatches, namesMatch, tagMatches,
+    const result = { profileHttpStatus: profile.status, identityMatches, namesMatch, tagMatches, alreadyCommitted,
       safetyUnchanged, integrationTagCount: tags.length,
       knownRootFields: Object.keys(profile.payload || {}).filter(key => allowedFields.has(key)),
       knownCredentialFields: Object.keys(credentials || {}).filter(key => allowedFields.has(key)),
@@ -916,7 +927,7 @@ async function inspectRetainedWriter(env, lock, options = {}) {
       checkedAt: new Date().toISOString(), operation, expected: item, profile: profile.payload, safety, result
     });
     checks.push(result);
-    verified.push({ operationKey: object.key, operation, item, result, safety });
+    verified.push({ operationKey: object.key, operation, item, result, safety, alreadyCommitted });
   }
   const explicitlyObservedLegacyFailure = clean(options.recoveryOwner) === lock.owner;
   if (lock.phase !== "RECONCILING" && (lock.terminal === true || explicitlyObservedLegacyFailure)
@@ -938,6 +949,10 @@ async function inspectRetainedWriter(env, lock, options = {}) {
     if (!claimed) throw syncError("writer_reconciliation_changed", "Zpětné ověření už převzal jiný běh.");
     state.reconciledOperations ||= {};
     for (const entry of verified) {
+      // The operation was committed before the interrupted batch ended. Its
+      // live safety/identity/tag readback is still mandatory, but it must not
+      // increment counters, recreate a queue item or rewrite a tracked profile.
+      if (entry.alreadyCommitted) continue;
       if (state.reconciledOperations[entry.operationKey]) continue;
       const { item, operation, result, safety } = entry;
       const action = operation.action || (item.manifestAction === "CREATE" && !state.profiles?.[item.contactId]?.synced ? "created" : "updated");

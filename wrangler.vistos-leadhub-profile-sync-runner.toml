@@ -5,11 +5,13 @@ workers_dev = true
 
 [vars]
 APP_BASE_URL = "https://smart-odpady.ai"
-# Shared writer: one read-back canary, then bounded DATA_ONLY batches.
+# Shared writer: one fully read-back DATA_ONLY profile per invocation.
 RUN_MODE = "execute-import"
-# Operator-observed terminal HTTP 502 at 2026-09-11T18:49:15Z. This exact
-# legacy owner may be settled only after live identity + safety readback.
-RECOVERY_OWNER = "10aa5c8d-7a71-40c5-866a-e35e22055e4f"
+# Explicit recovery of the 2026-09-11T19:16:56Z cron's interrupted batch.
+# Its originating cron is beyond Cloudflare's 15-minute runtime bound.
+# All journal operations still require live identity, tags and safety readback;
+# this is not a generic TTL takeover or permission to repeat accepted writes.
+RECOVERY_OWNER = "3ca09bdf-3ef9-48a0-a5ce-447c66e4514e"
 
 [triggers]
 crons = ["* * * * *"]
