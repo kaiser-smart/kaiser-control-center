@@ -837,6 +837,15 @@ try {
 console.log("Vistos tag-only identity linking and durable continuation tests passed");
 
 const pendingRow = { Id: "42", Modified: "2026-09-12T00:00:00Z" };
+const originState = { profiles: {}, pending: [{ contactId: "42", desired: "active" }, { contactId: "43", desired: "active" }],
+  historicalImport: { planned: { CREATE: 0, UPDATE: 0, NO_CHANGE: 0, SKIP: 1 } },
+  manifestIdentityChecks: { "42": { action: "UPDATE" } } };
+__test.classifyHistoricalOrigins(originState, [{ contactId: "42" }]);
+assert.equal(originState.pending[0].historical, true);
+assert.equal(originState.historicalImport.planned.UPDATE, 1);
+assert.equal(originState.historicalImport.initialPlanned.SKIP, 1);
+assert.deepEqual(__test.prioritizePending(originState.pending).map(item => item.contactId), ["43", "42"],
+  "a historical identity link must not starve a new delta profile");
 const currentIntent = { ...selected, businessFlags: { contract_direct: "YES" } };
 const staleIntent = { ...selected, desired: "active", businessFlags: { contract_direct: "NO" } };
 const trackedIntent = { synced: true, active: true, email: selected.normalizedEmail,
