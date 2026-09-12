@@ -1,5 +1,5 @@
 import { json } from "../../../_lib/auth.js";
-import { runVistosLeadHubProfileSync, verifyVistosLeadHubReadAccess, prepareVistosLeadHubHistoricalImport, executeVistosLeadHubHistoricalImport } from "../../../_lib/vistos-leadhub-profile-sync.js";
+import { runVistosLeadHubProfileSync, verifyVistosLeadHubReadAccess, prepareVistosLeadHubHistoricalImport, executeVistosLeadHubHistoricalImport, refreshVistosBusinessRelations } from "../../../_lib/vistos-leadhub-profile-sync.js";
 
 function clean(value) {
   return String(value ?? "").trim();
@@ -26,6 +26,7 @@ export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json().catch(() => ({}));
     if (body.mode === "read-preflight") return json(await verifyVistosLeadHubReadAccess(env));
+    if (body.mode === "business-read") return json(await refreshVistosBusinessRelations(env));
     if (body.mode === "prepare-import") return json(await prepareVistosLeadHubHistoricalImport(env));
     if (body.mode === "execute-import") return json(await executeVistosLeadHubHistoricalImport(env, {
       scheduledAt: clean(body.scheduledAt) || new Date().toISOString(), recoveryOwner: clean(body.recoveryOwner)

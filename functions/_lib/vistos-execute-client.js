@@ -193,6 +193,11 @@ function recordsTotal(payload) {
   };
 }
 
+function explicitlyReportedCount(value) {
+  return (typeof value === "number" && Number.isInteger(value) && value >= 0)
+    || (typeof value === "string" && /^\d+$/.test(value.trim()));
+}
+
 export async function fetchVistosExecute(env, methodName, payload, cookieHeader = "") {
   const apiBase = vistosExecuteApiBase(env);
   if (!apiBase) {
@@ -307,6 +312,10 @@ export async function getVistosPage(env, session, entityName, columns, filter = 
   const rows = extractVistosRows(result.body);
   return {
     rows,
+    countEvidence: {
+      totalReported: explicitlyReportedCount(result.body?.data?.recordsTotal),
+      filteredReported: explicitlyReportedCount(result.body?.data?.recordsFiltered)
+    },
     ...recordsTotal(result.body)
   };
 }
