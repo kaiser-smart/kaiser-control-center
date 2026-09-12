@@ -1387,6 +1387,22 @@ function refreshPendingIntent(item, selected, row, tracked) {
   return current;
 }
 
+function classifyHistoricalOrigins(state, originalItems) {
+  const ids = new Set(originalItems.map(item => clean(item.contactId)));
+  state.historicalContactIds = [...ids];
+  for (const item of state.pending || []) {
+    if (ids.has(item.contactId) && !state.profiles?.[item.contactId]?.synced) item.historical = true;
+  }
+  if (state.historicalImport) {
+    state.historicalImport.initialPlanned ||= state.historicalImport.planned;
+    const counts = { CREATE: 0, UPDATE: 0, NO_CHANGE: 0, SKIP: 0 };
+    for (const id of ids) counts[state.manifestIdentityChecks?.[id]?.action || "SKIP"]++;
+    state.historicalImport.planned = counts;
+    state.historicalImport.processedUniqueProfiles = [...ids].filter(id => state.profiles?.[id]?.synced).length;
+  }
+  return ids;
+}
+
 async function runProfileSyncUnlocked(env, options, writer) {
   const runStartedAt = new Date().toISOString();
   const storage = bucket(env);
@@ -1414,6 +1430,13 @@ async function runProfileSyncUnlocked(env, options, writer) {
   }
 
   const oldRowsById = new Map(snapshot.rows.map((row) => [clean(row?.Id), row]));
+  let historicalIds = new Set(state.historicalContactIds || []);
+  if (state.historicalImport && !historicalIds.size) {
+    const prepared = await getJson(storage, IMPORT_STATE_KEY);
+    const original = prepared?.id === state.historicalImport.id && await getJson(storage, prepared.manifestKey);
+    if (!Array.isArray(original?.items)) throw syncError("historical_origin_missing", "Chybí původní manifest pro odlišení historie a delty.");
+    historicalIds = classifyHistoricalOrigins(state, original.items);
+  }
   if (!state.modifiedFilterVerification || Date.now() - Date.parse(state.modifiedFilterVerification.testedAt) > 86400000) {
     state.modifiedFilterVerification = await verifyModifiedPositiveControl(env, snapshot);
   }
@@ -1475,6 +1498,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
       && (!checked || checked.email !== selected.normalizedEmail)) state.identityPending[id] = true;
   }
   for (const id of await refreshDeltaIdentities(env, state, selectedById)) changedIds.add(id);
+  if (state.historicalImport) classifyHistoricalOrigins(state, [...historicalIds].map(contactId => ({ contactId })));
 
   // Rebuild ALL intents, including business refreshes queued by an older
   // capture. Stale flags must never overwrite a more recent committed state.
@@ -1500,12 +1524,14 @@ async function runProfileSyncUnlocked(env, options, writer) {
       const checked = state.manifestIdentityChecks?.[id];
       if (!checked || checked.action === "SKIP" || checked.email !== email) {
         pendingById.set(id, { contactId: id, normalizedEmail: email, desired: "skip",
+          historical: historicalIds.has(id),
           reason: checked?.reason || "TARGET_IDENTITY_EXPORT_REQUIRED" });
         continue;
       }
     }
     if (selected) {
-      pendingById.set(id, { ...selected, desired: "active", sourceModified: clean(row?.Modified), rowHash: fingerprint(row) });
+      pendingById.set(id, { ...selected, desired: "active", sourceModified: clean(row?.Modified), rowHash: fingerprint(row),
+        historical: historicalIds.has(id) && !previousProfile?.synced });
     } else if (previousProfile?.synced) {
       pendingById.set(id, {
         contactId: id,
@@ -1671,6 +1697,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
   state.totals ||= { created: 0, updated: 0, deactivated: 0, subscriptionChanges: 0, messagesSent: 0 };
   if (state.historicalImport) {
     state.historicalImport.remaining = remaining.filter(item => item.historical).length;
+    state.historicalImport.processedUniqueProfiles = [...historicalIds].filter(id => state.profiles[id]?.synced).length;
     state.historicalImport.status = state.historicalImport.remaining ? "IMPORTING" : "COMPLETED_WITH_SKIPS";
   }
   state.lastRun = {
@@ -1731,6 +1758,7 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
 }
 
 export const __test = {
+  classifyHistoricalOrigins,
   refreshPendingIntent,
   hydrateBusinessRow,
   profileIdentityMatches,
