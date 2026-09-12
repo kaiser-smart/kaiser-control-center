@@ -54,6 +54,21 @@ function compactBusinessRow(row, definition) {
   return values;
 }
 
+async function hydrateBusinessRow(env, session, row, definition, columns) {
+  const present = (value, field) => Object.hasOwn(value, field) || Object.hasOwn(value, `${field}_RecordId`);
+  if (columns.every(field => present(row, field))) return compactBusinessRow(row, definition);
+  // Production evidence proves Contract.DirectoryManager_FK is omitted by
+  // GetPageParam but returned by GetByIdParam. Do not invent null relations.
+  const detail = await getVistosById(env, session, definition.entity, row.Id, columns);
+  const values = compactBusinessRow(detail.row, definition);
+  for (let index = 0; index < columns.length; index++) {
+    if (present(row, columns[index]) && relationId(row, columns[index]) !== values[index]) {
+      throw syncError("business_detail_changed", "Detail dokumentu nesouhlasí se stránkou; vazby nejsou ověřené.");
+    }
+  }
+  return values;
+}
+
 // A missing projected field is not an empty relation. Collect one bounded
 // page/detail comparison, privately, without changing selection or the cursor.
 async function diagnoseBusinessFields(env, storage, state, definition) {
@@ -101,6 +116,23 @@ export async function refreshVistosBusinessRelations(env) {
   return withVistosLeadHubWriter(env, async () => {
     const storage = bucket(env);
     let state = await getJson(storage, BUSINESS_STATE_KEY);
+    if (state && state.cursorVersion !== 2) {
+      state.cursors = { [BUSINESS_DEFINITIONS[state.entityIndex]?.entity]: { pass: state.pass, offset: state.offset } };
+      state.cursorVersion = 2;
+      if (state.results?.Contract?.code === "business_fields_missing") {
+        delete state.results.Contract;
+        state.completedAt = null;
+      }
+    }
+    if (state && !state.completedAt) {
+      for (const definition of BUSINESS_DEFINITIONS) {
+        const result = state.results?.[definition.entity];
+        if (result?.status === "VERIFIED" && Date.now() - Date.parse(result.verifiedAt) >= 3600000) {
+          delete state.results[definition.entity];
+          state.cursors[definition.entity] = { pass: 0, offset: 0 };
+        }
+      }
+    }
     const needsEvidence = BUSINESS_DEFINITIONS.find(definition =>
       state?.results?.[definition.entity]?.code === "business_fields_missing"
       && !state.results[definition.entity].fieldEvidence);
@@ -116,8 +148,19 @@ export async function refreshVistosBusinessRelations(env) {
       return { mode: "business-read", status: "CURRENT", results: state.summary, messagesSent: 0 };
     }
     if (!state || state.completedAt) state = { id: crypto.randomUUID(), startedAt: new Date().toISOString(),
-      entityIndex: 0, pass: 0, offset: 0, results: {}, blocks: 0 };
+      entityIndex: 0, pass: 0, offset: 0, results: {}, blocks: 0, cursorVersion: 2, cursors: {} };
+    if (state.results[BUSINESS_DEFINITIONS[state.entityIndex]?.entity] || !BUSINESS_DEFINITIONS[state.entityIndex]) {
+      state.entityIndex = BUSINESS_DEFINITIONS.findIndex(item => !state.results[item.entity]);
+    }
+    if (state.entityIndex < 0) {
+      state.completedAt = new Date().toISOString();
+      await putJson(storage, BUSINESS_STATE_KEY, state);
+      return { mode: "business-read", status: "CAPTURED", results: state.summary, messagesSent: 0 };
+    }
     const definition = BUSINESS_DEFINITIONS[state.entityIndex];
+    const startingIndex = state.entityIndex;
+    const savedCursor = state.cursors[definition.entity];
+    if (savedCursor) { state.pass = savedCursor.pass; state.offset = savedCursor.offset; }
     const prefix = `${SYNC_PREFIX}/business/${state.id}`;
     const columns = ["Id", definition.company, ...definition.contacts, ...(definition.status ? [definition.status] : [])];
     try {
@@ -131,19 +174,27 @@ export async function refreshVistosBusinessRelations(env) {
         }
       }
       const passKey = `${prefix}/${definition.entity}-${state.pass}.json`;
-      const pass = await getJson(storage, passKey) || { total: null, rows: [] };
+      const pass = state.offset === 0 ? { total: null, rows: [] } : await getJson(storage, passKey);
+      if (!pass || pass.rows.length < state.offset) throw syncError("business_saved_page_missing", "Uložený rozsah dokumentů chybí.");
       const blockStarted = Date.now();
       for (let page = 0; page < 3; page++) {
         if (page && Date.now() - blockStarted > 15000) break;
-        const read = await getVistosPage(env, session, definition.entity, columns, {}, state.offset, 1000);
+        const pageSize = definition.entity === "Contract" ? 10 : 1000;
+        const read = await getVistosPage(env, session, definition.entity, columns, {}, state.offset, pageSize);
         const total = read.filtered;
         if (!read.countEvidence?.filteredReported || !Number.isInteger(total) || total < 0 || (pass.total != null && pass.total !== total)) {
           throw syncError("business_total_changed", "Počet dokumentů není potvrzený nebo se změnil během stránkování.");
         }
         pass.total = total;
         if (!read.rows.length && state.offset < total) throw syncError("business_page_missing", "Chybí dokumentová stránka.");
-        pass.rows.push(...read.rows.map(row => compactBusinessRow(row, definition)));
-        state.offset += read.rows.length;
+        // A detail block is short and resumable even when its HTTP invocation
+        // ends early. Persist rows before the cursor; retries trim to cursor.
+        pass.rows = pass.rows.slice(0, state.offset);
+        for (const row of read.rows) {
+          pass.rows.push(await hydrateBusinessRow(env, session, row, definition, columns));
+          state.offset++;
+          if (Date.now() - blockStarted > 15000) break;
+        }
         if (state.offset >= total) break;
       }
       await putJson(storage, passKey, pass);
@@ -160,10 +211,21 @@ export async function refreshVistosBusinessRelations(env) {
       state.results[definition.entity] = { status: "UNVERIFIED", code: clean(error?.code) || "business_read_failed" };
       state.entityIndex++; state.pass = 0; state.offset = 0;
     }
-    if (state.entityIndex >= BUSINESS_DEFINITIONS.length) state.completedAt = new Date().toISOString();
+    state.cursors[definition.entity] = { pass: state.pass, offset: state.offset };
+    const unfinished = BUSINESS_DEFINITIONS.map((_, offset) => (startingIndex + offset + 1) % BUSINESS_DEFINITIONS.length)
+      .find(index => !state.results[BUSINESS_DEFINITIONS[index].entity]);
+    if (unfinished === undefined) state.completedAt = new Date().toISOString();
+    else {
+      state.entityIndex = unfinished;
+      state.pass = state.cursors[BUSINESS_DEFINITIONS[unfinished].entity]?.pass || 0;
+      state.offset = state.cursors[BUSINESS_DEFINITIONS[unfinished].entity]?.offset || 0;
+    }
     if (state.results[definition.entity]) {
+      const previous = await getJson(storage, BUSINESS_CURRENT_KEY);
+      // Starting the next entity/capture must not erase still-fresh evidence
+      // for other entities and oscillate all their profile flags.
       await putJson(storage, BUSINESS_CURRENT_KEY, { id: state.id, startedAt: state.startedAt,
-        completedAt: new Date().toISOString(), results: state.results });
+        completedAt: new Date().toISOString(), results: { ...previous?.results, ...state.results } });
     }
     state.summary = Object.fromEntries(Object.entries(state.results).map(([entity, result]) => [entity, {
       status: result.status, code: result.code, documents: result.documents, activeDocuments: result.activeDocuments,
@@ -474,6 +536,7 @@ function leadHubConfig(env) {
 }
 
 async function leadHubRequest(env, path, options = {}) {
+  const startedAt = Date.now();
   const config = leadHubConfig(env);
   const response = await fetch(`${config.baseUrl}${path}`, {
     signal: AbortSignal.timeout(20000),
@@ -491,9 +554,10 @@ async function leadHubRequest(env, path, options = {}) {
     error.status = 502;
     error.code = "leadhub_api_request_failed";
     error.upstreamStatus = response.status;
+    error.retryAfterSeconds = Math.max(0, Number(response.headers.get("retry-after")) || 0);
     throw error;
   }
-  return { status: response.status, payload };
+  return { status: response.status, payload, durationMs: Date.now() - startedAt };
 }
 
 async function assertLeadHubWorkspace(env) {
@@ -531,11 +595,18 @@ function profileUserId(contactId) {
 }
 
 async function acceptedProfileWrite(env, path, options, safety, record, stage) {
-  const accepted = await leadHubRequest(env, path, options);
+  let accepted;
+  try { accepted = await leadHubRequest(env, path, options); }
+  catch (error) {
+    // 429 explicitly rejected this request. Preserve an earlier accepted
+    // stage, if any; never retry an ambiguous timeout/5xx as a fresh write.
+    if (error.upstreamStatus === 429) await record(safety, { rejected: true, httpStatus: 429 });
+    throw error;
+  }
   // Public OpenAPI promises 202 but no job_id for these write endpoints.
   // Acceptance is journalled, never confused with the subsequent GET readback.
   if (accepted.status !== 202) throw syncError("leadhub_write_acceptance_unverified", "LeadHub nepotvrdil přijetí zápisu.");
-  await record(safety, { stage, httpStatus: accepted.status });
+  await record(safety, { stage, httpStatus: accepted.status, providerDurationMs: accepted.durationMs });
 }
 
 // Uses the deployed secrets and READ operations only. A missing profile is not
@@ -657,7 +728,28 @@ export function buildLeadHubImportManifest(items, profiles, evidence = {}) {
     if (byEmail.length > 1 || byId.length > 1) return skip("DUPLICATE_TARGET_IDENTITY");
     if (!byEmail.length && !byId.length) return { ...entry, action: "CREATE", reason: "NO_MATCH_IN_COMPLETE_EXPORT" };
     if (!byEmail.length) return skip("EMAIL_CHANGE_REQUIRES_IDENTITY_RESOLUTION");
-    if (!byId.length) return skip("EMAIL_MATCH_WITHOUT_OWNED_USER_ID");
+    if (!byId.length) {
+      const candidate = profiles[byEmail[0]];
+      if (candidate.credentials.user_id !== null) return skip("FOREIGN_USER_ID_PRESERVED");
+      const normalizeName = value => clean(value).normalize("NFC").toLocaleLowerCase("cs");
+      if (!clean(item.firstName) || !clean(item.lastName)
+        || normalizeName(item.firstName) !== normalizeName(candidate.credentials.first_name)
+        || normalizeName(item.lastName) !== normalizeName(candidate.credentials.last_name)) {
+        return skip("UNOWNED_PROFILE_NAME_EVIDENCE_INSUFFICIENT");
+      }
+      // Official Profile schema permits an explicit null tag collection.
+      // Omitted/malformed collections are still unknown, not empty.
+      if (candidate.tags !== null && !Array.isArray(candidate.tags)) return skip("TARGET_TAGS_UNKNOWN");
+      const tags = (candidate.tags || []).filter(tag => tag?.name === TAG_NAME);
+      if (tags.length > 1 || (tags.length && clean(tags[0].data?.vistos_contact_id) !== contactId)) {
+        return skip("INTEGRATION_TAG_IDENTITY_CONFLICT");
+      }
+      // Link only through the owned tag and protected ledger. NEVER PUT a
+      // user_id onto an existing unowned profile (the API may merge identities).
+      return { ...entry, action: "UPDATE", reason: "UNIQUE_EMAIL_AND_FULL_NAME_TAG_ONLY_LINK",
+        identityBinding: { mode: "EXISTING_EMAIL_TAG_ONLY", credentials: candidate.credentials,
+          exportJobId: evidence.exportJobId } };
+    }
     if (byEmail[0] !== byId[0]) return skip("EMAIL_AND_USER_ID_MATCH_DIFFERENT_PROFILES");
     const profile = profiles[byId[0]];
     const credentials = profile.credentials;
@@ -690,7 +782,8 @@ function tagDataMatches(actual, expected) {
 
 function tagPayload(item, active, reason, checked) {
   return {
-    profile_identification: { user_id: profileUserId(item.contactId) },
+    profile_identification: item.identityBinding?.mode === "EXISTING_EMAIL_TAG_ONLY"
+      ? { email_address: item.normalizedEmail } : { user_id: profileUserId(item.contactId) },
     tag: {
       name: TAG_NAME,
       data: {
@@ -706,6 +799,15 @@ function tagPayload(item, active, reason, checked) {
       }
     }
   };
+}
+
+function profileIdentityMatches(payload, item) {
+  const credentials = payload?.credentials;
+  if (normalizeContactEmail(credentials?.email_address) !== item.normalizedEmail) return false;
+  if (item.identityBinding?.mode !== "EXISTING_EMAIL_TAG_ONLY") return credentials?.user_id === profileUserId(item.contactId);
+  const expected = item.identityBinding.credentials;
+  return expected?.user_id === null && credentials?.user_id === null
+    && Object.keys(expected).every(key => JSON.stringify(credentials[key]) === JSON.stringify(expected[key]));
 }
 
 async function subscriptionRead(env, email) {
@@ -774,12 +876,20 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
   const email = item.normalizedEmail;
   const encoded = encodeURIComponent(email);
   const before = await leadHubRequest(env, `/profiles/email-address/${encoded}`, { allow404: true });
-  if (before.status === 200 && (before.payload?.credentials?.user_id !== profileUserId(item.contactId)
-    || normalizeContactEmail(before.payload?.credentials?.email_address) !== email)) {
+  const linked = item.identityBinding?.mode === "EXISTING_EMAIL_TAG_ONLY";
+  if ((linked && before.status !== 200) || (before.status === 200 && !profileIdentityMatches(before.payload, item))) {
     const error = new Error("Profil stejného e-mailu nemá potvrzenou integrační identitu.");
     error.code = "leadhub_profile_identity_conflict";
     error.status = 409;
     throw error;
+  }
+  if (before.status === 200) {
+    const tags = before.payload.tags;
+    const owned = (Array.isArray(tags) ? tags : []).filter(tag => tag?.name === TAG_NAME);
+    if ((tags !== null && !Array.isArray(tags)) || owned.length > 1
+      || owned.some(tag => clean(tag.data?.vistos_contact_id) !== clean(item.contactId))) {
+      throw syncError("leadhub_profile_identity_conflict", "Aktuální integrační tag nepotvrdil jednoznačnou vazbu.");
+    }
   }
   const safety = await subscriptionRead(env, email);
   await readCampaignSafety(env);
@@ -793,8 +903,8 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
     }
   }
   const action = before.status === 404 ? "created" : "updated";
-  const profileNeedsWrite = before.status === 404 || (item.firstName && before.payload.credentials.first_name !== item.firstName)
-    || (item.lastName && before.payload.credentials.last_name !== item.lastName);
+  const profileNeedsWrite = !linked && (before.status === 404 || (item.firstName && before.payload.credentials.first_name !== item.firstName)
+    || (item.lastName && before.payload.credentials.last_name !== item.lastName));
   if (profileNeedsWrite) {
     await beforeWrite(safety, { action });
     await acceptedProfileWrite(env, "/profiles", {
@@ -808,10 +918,9 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
     }, safety, beforeWrite, "PROFILE_ACCEPTED");
   }
   const profileReadback = await readbackProfile(env, email, payload =>
-    payload?.credentials?.user_id === profileUserId(item.contactId)
-    && normalizeContactEmail(payload?.credentials?.email_address) === email
-    && (!item.firstName || payload.credentials.first_name === item.firstName)
-    && (!item.lastName || payload.credentials.last_name === item.lastName));
+    profileIdentityMatches(payload, item)
+    && (linked || ((!item.firstName || payload.credentials.first_name === item.firstName)
+      && (!item.lastName || payload.credentials.last_name === item.lastName))));
   if (!profileReadback) {
     const error = new Error("Identita nebo atributy profilu nebyly po zápisu potvrzené.");
     error.code = "leadhub_profile_identity_readback_failed";
@@ -830,8 +939,7 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
     const tags = Array.isArray(payload?.tags) ? payload.tags.filter(row => clean(row?.name) === TAG_NAME) : [];
     const tag = tags[0];
     const expected = tagPayload(item, true, "", safety).tag.data;
-    return payload?.credentials?.user_id === profileUserId(item.contactId)
-      && clean(payload?.credentials?.email_address).toLowerCase() === email
+    return profileIdentityMatches(payload, item)
       && tags.length === 1 && tagDataMatches(tag?.data, expected);
   });
   if (!readback) {
@@ -863,7 +971,7 @@ async function deactivateProfile(env, item, reason, beforeWrite = async () => {}
     if (existing.status === 404) {
       return { action: "deactivated", subscriptions: safety.subscriptions, suppressed: safety.suppressed, readback: true, profileAlreadyAbsent: true };
     }
-    if (existing.payload?.credentials?.user_id !== profileUserId(item.contactId)) {
+    if (!profileIdentityMatches(existing.payload, item)) {
       const error = new Error("Vyřazení by zasáhlo neověřenou identitu profilu.");
       error.code = "leadhub_deactivation_identity_conflict";
       error.status = 409;
@@ -880,8 +988,7 @@ async function deactivateProfile(env, item, reason, beforeWrite = async () => {}
     const readback = await readbackProfile(env, email, (payload) => {
       const tags = Array.isArray(payload?.tags) ? payload.tags : [];
       const tag = tags.find((row) => clean(row?.name) === TAG_NAME);
-      return payload?.credentials?.user_id === profileUserId(item.contactId)
-        && normalizeContactEmail(payload?.credentials?.email_address) === email
+      return profileIdentityMatches(payload, item)
         && clean(tag?.data?.vistos_contact_id) === clean(item.contactId)
         && Number(tag?.data?.targeting_enabled) === 0;
     });
@@ -1082,10 +1189,10 @@ async function inspectRetainedWriter(env, lock, options = {}) {
     const safety = await subscriptionRead(env, operation.normalizedEmail);
     const safetyUnchanged = Boolean(operation.beforeSafety) && JSON.stringify(operation.beforeSafety) === JSON.stringify(safety);
     const credentials = profile.payload?.credentials;
-    const identityMatches = profile.status === 200 && credentials?.user_id === profileUserId(item.contactId)
-      && normalizeContactEmail(credentials?.email_address) === item.normalizedEmail;
-    const namesMatch = identityMatches && (!item.firstName || credentials.first_name === item.firstName)
-      && (!item.lastName || credentials.last_name === item.lastName);
+    item.identityBinding ||= operation.identityBinding || tracked?.identityBinding;
+    const identityMatches = profile.status === 200 && profileIdentityMatches(profile.payload, item);
+    const namesMatch = identityMatches && (Boolean(item.identityBinding) || ((!item.firstName || credentials.first_name === item.firstName)
+      && (!item.lastName || credentials.last_name === item.lastName)));
     const tags = Array.isArray(profile.payload?.tags) ? profile.payload.tags.filter(tag => tag.name === TAG_NAME) : [];
     const expectedBusiness = operation.businessFlags || item.businessFlags || tracked?.businessFlags;
     const tagMatches = tags.length === 1 && clean(tags[0].data?.vistos_contact_id) === item.contactId
@@ -1139,6 +1246,7 @@ async function inspectRetainedWriter(env, lock, options = {}) {
       state.profiles[item.contactId] = { synced: true, active: result.tagMatches && operation.desired === "active",
         email: item.normalizedEmail, rowHash: item.rowHash, sourceModified: item.sourceModified,
         businessFlags: operation.businessFlags || item.businessFlags || null,
+        identityBinding: item.identityBinding || null,
         ...safety, lastSyncedAt: new Date().toISOString() };
       state.totals[action] = (state.totals[action] || 0) + 1;
       if (item.historical && state.historicalImport) {
@@ -1243,7 +1351,8 @@ async function refreshDeltaIdentities(env, state, selectedById) {
   await putJson(storage, `${prefix}/manifest.json`, manifest);
   state.manifestIdentityChecks ||= {};
   for (const item of manifest.items) state.manifestIdentityChecks[item.contactId] = {
-    action: item.action, email: item.normalizedEmail, reason: item.reason, exportJobId: jobId
+    action: item.action, email: item.normalizedEmail, reason: item.reason, exportJobId: jobId,
+    identityBinding: item.identityBinding || null
   };
   for (const id of ids) delete state.identityPending[id];
   state.lastIdentityExport = { jobId, completedAt: new Date().toISOString(), profiles: profiles.length,
@@ -1260,6 +1369,7 @@ function prioritizePending(items, profiles = {}) {
 }
 
 async function runProfileSyncUnlocked(env, options, writer) {
+  const runStartedAt = new Date().toISOString();
   const storage = bucket(env);
   const scheduledAt = (validDate(options.scheduledAt) || new Date()).toISOString();
   let state = await getJson(storage, SYNC_STATE_KEY);
@@ -1334,6 +1444,12 @@ async function runProfileSyncUnlocked(env, options, writer) {
   }
   const pendingById = new Map((state.pending || []).map((item) => [clean(item.contactId), item]));
   state.identityPending ||= {};
+  if (state.historicalImport && !state.unownedIdentityRecheckRequestedAt) {
+    for (const [id, checked] of Object.entries(state.manifestIdentityChecks || {})) {
+      if (checked.reason === "EMAIL_MATCH_WITHOUT_OWNED_USER_ID" && !state.profiles?.[id]?.synced) state.identityPending[id] = true;
+    }
+    state.unownedIdentityRecheckRequestedAt = new Date().toISOString();
+  }
   for (const id of changedIds) {
     const selected = selectedById.get(id), checked = state.manifestIdentityChecks?.[id];
     if (selected && state.historicalImport && !state.profiles?.[id]?.synced
@@ -1414,6 +1530,9 @@ async function runProfileSyncUnlocked(env, options, writer) {
   if (delta.rows.length || !state.snapshotKey || !state.dnsKey) await commitSourceVersion(storage, state, snapshot, dnsState, writer.owner);
   else await putJson(storage, SYNC_STATE_KEY, state);
   for (const item of current) {
+    item.identityBinding ||= state.profiles?.[item.contactId]?.identityBinding || state.manifestIdentityChecks?.[item.contactId]?.identityBinding;
+    const operationStartedAt = new Date().toISOString();
+    const timings = { startedAt: operationStartedAt, stages: [] };
     const operationKey = `${SYNC_PREFIX}/operations/${writer.owner}/${encodeURIComponent(item.contactId)}.json`;
     if (item.desired === "active") {
       const latest = await getVistosById(env, sourceSession, "Contact", item.contactId, columns);
@@ -1452,17 +1571,22 @@ async function runProfileSyncUnlocked(env, options, writer) {
     });
     let operationAction = item.desired === "inactive" ? "deactivated" : "updated";
     let operationSafety;
+    let lastAcceptedStage;
     const beforeWrite = async (safety, progress = {}) => {
+      if (progress.stage === "PROFILE_ACCEPTED" || progress.stage === "TAG_ACCEPTED") lastAcceptedStage = progress.stage;
+      const stage = progress.rejected ? lastAcceptedStage || "REQUEST_REJECTED" : progress.stage || "WRITE_INTENT";
+      timings.stages.push({ stage, elapsedMs: Date.now() - Date.parse(operationStartedAt), providerDurationMs: progress.providerDurationMs });
       operationSafety = safety;
       if (progress.action) operationAction = progress.action;
       await putJson(storage, operationKey, {
-        status: progress.stage || "WRITE_INTENT", httpStatus: progress.httpStatus || null, action: operationAction,
+        status: stage, httpStatus: progress.httpStatus || null, action: operationAction,
         contactId: item.contactId, normalizedEmail: item.normalizedEmail, desired: item.desired,
         businessFlags: item.businessFlags || null,
+        identityBinding: item.identityBinding || null, timings,
         sourceModified: item.sourceModified || null, rowHash: item.rowHash,
         beforeSafety: safety, startedAt: new Date().toISOString(), writer: writer.owner
       });
-      writer.sideEffectsStarted = true;
+      writer.sideEffectsStarted = !progress.rejected || Boolean(lastAcceptedStage);
     };
     let result;
     try {
@@ -1482,6 +1606,8 @@ async function runProfileSyncUnlocked(env, options, writer) {
       status: "READBACK_CONFIRMED", contactId: item.contactId, desired: item.desired,
       normalizedEmail: item.normalizedEmail, beforeSafety: operationSafety,
       businessFlags: item.businessFlags || null,
+      identityBinding: item.identityBinding || null,
+      timings: { ...timings, completedAt: new Date().toISOString(), durationMs: Date.now() - Date.parse(operationStartedAt) },
       sourceModified: item.sourceModified || null, rowHash: item.rowHash,
       finishedAt: new Date().toISOString(), writer: writer.owner, action: result.action,
       afterSafety: { subscriptions: result.subscriptions, suppressed: result.suppressed }
@@ -1494,10 +1620,11 @@ async function runProfileSyncUnlocked(env, options, writer) {
       email: item.normalizedEmail,
       rowHash: item.rowHash,
       businessFlags: item.businessFlags || null,
+      identityBinding: item.identityBinding || null,
       sourceModified: item.sourceModified || null,
       subscriptions: result.subscriptions,
       suppressed: result.suppressed,
-      lastSyncedAt: scheduledAt
+      lastSyncedAt: new Date().toISOString()
     };
     state.pending = state.pending.filter(pendingItem => pendingItem.contactId !== item.contactId);
     if (item.historical) {
@@ -1531,7 +1658,10 @@ async function runProfileSyncUnlocked(env, options, writer) {
   state.lastRun = {
     status: "completed",
     startedFrom: delta.periodFrom,
-    finishedAt: scheduledAt,
+    startedAt: runStartedAt,
+    finishedAt: new Date().toISOString(),
+    durationMs: Date.now() - Date.parse(runStartedAt),
+    sourceThrough: scheduledAt,
     sourceRows: delta.rows.length,
     changedContacts: changedIds.size,
     pagesRead: delta.pages,
@@ -1582,6 +1712,8 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
 }
 
 export const __test = {
+  hydrateBusinessRow,
+  profileIdentityMatches,
   tagDataMatches,
   businessFlagsFor,
   compactBusinessRow,

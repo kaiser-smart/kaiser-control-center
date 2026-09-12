@@ -47,6 +47,7 @@ export async function onRequestPost({ request, env }) {
       error: clean(error?.message) || "Vistos → LeadHub sync selhal.",
       code: clean(error?.code) || "vistos_leadhub_sync_failed",
       upstreamStatus: Number(error?.upstreamStatus) || 0,
+      retryAfterSeconds: Number(error?.retryAfterSeconds) || 0,
       subscriptionsChanged: 0,
       messagesSent: 0
     }, Number(error?.status) || 500);
