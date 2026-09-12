@@ -1494,21 +1494,31 @@ function pendingClass(item, profiles = {}) {
   return tracked.rowHash !== item.rowHash || tracked.email !== item.normalizedEmail ? "delta" : "business";
 }
 
-function prioritizePending(items, profiles = {}, cursor = 0) {
+function prioritizePending(items, profiles = {}, cursor = 0, historicalCursor = 0) {
   const queues = { urgent: [], delta: [], historical: [], business: [], skip: [] };
   for (const item of items) queues[pendingClass(item, profiles)].push(item);
   const positions = { delta: 0, historical: 0, business: 0 };
-  const result = queues.urgent.map(item => ({ ...item, queueClass: "urgent", queueCursorAfter: cursor }));
+  const history = [queues.historical.filter(item => item.historicalKind !== "link"),
+    queues.historical.filter(item => item.historicalKind === "link")];
+  const historyPositions = [0, 0];
+  const result = queues.urgent.map(item => ({ ...item, queueClass: "urgent", queueCursorAfter: cursor, historicalCursorAfter: historicalCursor }));
   let left = queues.delta.length + queues.historical.length + queues.business.length;
   while (left) {
     const kind = FAIR_QUEUE_CYCLE[cursor % FAIR_QUEUE_CYCLE.length];
     cursor = (cursor + 1) % FAIR_QUEUE_CYCLE.length;
-    const item = queues[kind][positions[kind]];
+    let item;
+    if (kind === "historical") {
+      for (let attempt = 0; attempt < 2 && !item; attempt++) {
+        const lane = historicalCursor % 2; historicalCursor = (historicalCursor + 1) % 2;
+        item = history[lane][historyPositions[lane]];
+        if (item) historyPositions[lane]++;
+      }
+    } else item = queues[kind][positions[kind]];
     if (!item) continue;
     positions[kind]++; left--;
-    result.push({ ...item, queueClass: kind, queueCursorAfter: cursor });
+    result.push({ ...item, queueClass: kind, queueCursorAfter: cursor, historicalCursorAfter: historicalCursor });
   }
-  return [...result, ...queues.skip.map(item => ({ ...item, queueClass: "skip", queueCursorAfter: cursor }))];
+  return [...result, ...queues.skip.map(item => ({ ...item, queueClass: "skip", queueCursorAfter: cursor, historicalCursorAfter: historicalCursor }))];
 }
 
 function queueStats(items, profiles, now = Date.now()) {
@@ -1730,7 +1740,10 @@ async function runProfileSyncUnlocked(env, options, writer) {
 
   for (const item of pendingById.values()) Object.assign(item, previousQueueTimes.get(item.contactId)
     || { enqueuedAt: runStartedAt, enqueuedAtEvidence: "ENQUEUED" });
-  const pending = prioritizePending([...pendingById.values()], state.profiles, state.queueCursor || 0);
+  for (const item of pendingById.values()) if (item.historical && !state.profiles?.[item.contactId]?.synced) {
+    item.historicalKind = state.manifestIdentityChecks?.[item.contactId]?.action === "CREATE" ? "create" : "link";
+  }
+  const pending = prioritizePending([...pendingById.values()], state.profiles, state.queueCursor || 0, state.historicalQueueCursor || 0);
   phase("businessIdentityAndQueue");
   const batchLimit = Math.min(Number(options.batchLimit) || PROFILE_BATCH_LIMIT, PROFILE_BATCH_LIMIT);
   const current = pending.slice(0, batchLimit);
@@ -1756,7 +1769,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
   try {
   await processBoundedProfiles(current, {
     concurrency: PROFILE_CONCURRENCY, budgetMs: PROFILE_DISPATCH_BUDGET_MS,
-    onDispatch: item => { dispatchedCursor = item.queueCursorAfter; },
+    onDispatch: item => { dispatchedCursor = item.queueCursorAfter; state.historicalQueueCursor = item.historicalCursorAfter; },
     onFailure: error => {
       writer.halted = true;
       if (error.code === "leadhub_subscription_or_suppression_changed") state.safetyIncident = { code: error.code, at: new Date().toISOString() };

@@ -927,6 +927,18 @@ try {
 const incidentR2 = new MemoryR2({ [syncStateKey]: JSON.stringify({ checkpoint: new Date().toISOString(), safetyIncident: { code: "synthetic" } }) });
 await assert.rejects(() => runVistosLeadHubProfileSync({ R2_ARCHIVE: incidentR2 }), error => error.code === "safety_incident_unresolved");
 console.log("Vistos bounded concurrent dispatcher, drain, ledger and persistent rate-limit tests passed");
+const oldLinks = Array.from({ length: 30 }, (_, i) => ({ contactId: `link-${i}`, desired: "active", historical: true, historicalKind: "link" }));
+const oldCreates = Array.from({ length: 30 }, (_, i) => ({ contactId: `create-${i}`, desired: "active", historical: true, historicalKind: "create" }));
+let historyFairQueue = [...oldLinks, ...oldCreates], historyCursor = 0, outerCursor = 0;
+const historyKinds = [];
+for (let step = 0; step < 20; step++) {
+  const next = __test.prioritizePending(historyFairQueue, {}, outerCursor, historyCursor)[0];
+  historyKinds.push(next.historicalKind);
+  outerCursor = next.queueCursorAfter; historyCursor = next.historicalCursorAfter;
+  historyFairQueue = historyFairQueue.filter(item => item.contactId !== next.contactId);
+}
+assert.deepEqual(historyKinds, Array.from({ length: 20 }, (_, i) => i % 2 ? "link" : "create"),
+  "thousands of unowned links cannot postpone all historical CREATE operations; the cursor survives every restart");
 
 // Exercise the actual coordinated writer with two new profiles, then resume
 // its persisted state. Synthetic subscriptions include an existing opt-out.

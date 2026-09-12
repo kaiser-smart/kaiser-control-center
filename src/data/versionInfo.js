@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.780"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.781"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -26,7 +26,7 @@ export const versionNews = [
   },
   {
     title: "Vistos → LeadHub: férová fronta a měřená propustnost",
-    text: "Urgentní vyřazení zůstávají první. Delta, historie a běžné obchodní vazby střídají kapacitu podle trvale uloženého pořadí. Diagnostika odlišuje nově dokončené profily od opakovaných aktualizací a měří jednotlivé fáze i stáří fronty."
+    text: "Urgentní vyřazení zůstávají první. Delta, historie a běžné obchodní vazby střídají kapacitu podle trvale uloženého pořadí. Také historie střídá zakládání a bezpečné propojení existujících profilů. Diagnostika odlišuje dokončené unikátní profily od opakovaných aktualizací a měří jednotlivé fáze i stáří fronty."
   },
   {
     title: "Vistos → LeadHub: trvalé pokračování importu",
