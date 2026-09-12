@@ -350,15 +350,22 @@ function apiFamily(path) {
 // Conservative spacing stays below official 30/min and 10/sec per endpoint,
 // or 1/sec for campaigns, including after process restart.
 function createApiLimiter(storage, reservations = {}, now = Date.now, sleep = delay) {
-  const reserve = serialExecutor();
-  return async (family, env) => {
-    const due = await reserve(async () => {
-      const slot = Math.max(now(), Number(reservations[family]) || 0);
-      reservations[family] = slot + (family === "campaignRead" ? 1100 : 2100);
-      await putJson(storage, RATE_STATE_KEY, reservations);
-      return slot;
+  const persist = serialExecutor(), families = new Map();
+  return (family, env) => {
+    const spacing = family === "campaignRead" ? 1200 : 2200;
+    if (!families.has(family)) {
+      families.set(family, serialExecutor());
+      // Restart never spends capacity immediately after an earlier writer.
+      reservations[family] = Math.max(Number(reservations[family]) || 0, now() + spacing);
+    }
+    return families.get(family)(async () => {
+      if (reservations[family] > now()) await sleep(reservations[family] - now(), env, "apiRateWait");
+      reservations[family] = now() + spacing;
+      await persist(() => putJson(storage, RATE_STATE_KEY, reservations));
+      // R2 latency must NOT consume the spacing budget. Keep this family
+      // serialized until the permit is actually returned for network dispatch.
+      reservations[family] = now() + spacing;
     });
-    if (due > now()) await sleep(due - now(), env, "apiRateWait");
   };
 }
 
@@ -652,6 +659,7 @@ async function leadHubRequest(env, path, options = {}) {
     error.status = 502;
     error.code = "leadhub_api_request_failed";
     error.upstreamStatus = response.status;
+    error.endpointFamily = family;
     error.retryAfterSeconds = Math.max(0, Number(response.headers.get("retry-after")) || 0);
     throw error;
   }
@@ -1871,7 +1879,9 @@ async function runProfileSyncUnlocked(env, options, writer) {
   } catch (error) {
     // Every dispatched lane has settled here. Preserve both completed ledger
     // commits and all remaining intents; never discard the undispatched tail.
-    state.lastFailure = { code: error.code || "unknown", at: new Date().toISOString(), metrics, ...run };
+    state.lastFailure = { code: error.code || "unknown", endpointFamily: error.endpointFamily || null,
+      upstreamStatus: error.upstreamStatus || null, retryAfterSeconds: error.retryAfterSeconds || 0,
+      at: new Date().toISOString(), metrics, ...run };
     await putJson(storage, SYNC_STATE_KEY, state);
     throw error;
   }
