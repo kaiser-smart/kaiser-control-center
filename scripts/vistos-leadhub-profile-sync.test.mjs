@@ -582,3 +582,56 @@ try {
   assert.equal(state.checkpoint, mixedState.checkpoint, "settlement never moves the checkpoint");
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos → LeadHub partially committed batch recovery tests passed");
+
+const ordered = __test.prioritizePending([
+  { contactId: "history", historical: true, desired: "active" },
+  { contactId: "new", desired: "active" },
+  { contactId: "owned", desired: "active" },
+  { contactId: "left", desired: "inactive" }
+], { owned: { synced: true } });
+assert.deepEqual(ordered.map(item => item.contactId), ["left", "owned", "new", "history"],
+  "deactivation and tracked-profile changes cannot wait behind historical import");
+
+const identityState = { baselineRunId: "synthetic-source", checkpoint: "2026-01-01T00:00:00Z",
+  identityPending: { "42": true }, profiles: {}, pending: [] };
+const identityStorage = new MemoryR2();
+const identitySelection = new Map([["42", selected]]);
+let identityJobStatus = "processing", identityProfiles = [];
+let exportStarts = 0;
+globalThis.fetch = async (url, options) => {
+  if (url.endsWith("/segments/query/profiles")) {
+    assert.equal(options.method, "POST");
+    assert.deepEqual(JSON.parse(options.body), { segments: [{ targetingBlocks: [] }] }, "all profiles, not just subscribers");
+    exportStarts++;
+    return Response.json({ job_id: "synthetic-identities" }, { status: 202 });
+  }
+  assert.equal(options.method || "GET", "GET", "identity resolution never writes profiles or subscriptions");
+  if (url.endsWith("/segments")) return Response.json([{ id: "b17444f7663241a0adb31b9a47dcf1a0" }]);
+  if (url.endsWith("/result")) return new Response(gzipSync(identityProfiles.map(profile => JSON.stringify(profile)).join("\n")));
+  return Response.json({ job_id: "synthetic-identities", state: identityJobStatus, errors: null });
+};
+try {
+  const env = { R2_ARCHIVE: identityStorage, LEADHUB_API_TOKEN: "synthetic" };
+  assert.deepEqual(await __test.refreshDeltaIdentities(env, identityState, identitySelection), []);
+  assert.equal(identityState.manifestIdentityChecks, undefined, "acceptance is not a completed collision check");
+  assert.deepEqual(await __test.refreshDeltaIdentities(env, identityState, identitySelection), []);
+  assert.equal(exportStarts, 1, "waiting jobs are resumed, not repeatedly created");
+  identityJobStatus = "done";
+  assert.deepEqual(await __test.refreshDeltaIdentities(env, identityState, identitySelection), ["42"]);
+  assert.equal(identityState.manifestIdentityChecks["42"].action, "CREATE");
+  assert.deepEqual(identityState.identityPending, {});
+  assert.equal(identityState.checkpoint, "2026-01-01T00:00:00Z");
+  assert.ok(identityStorage.values.has("protected-sync/vistos-leadhub-profiles/identity-exports/synthetic-identities/manifest.json"));
+  identityState.identityPending["42"] = true;
+  identityProfiles = [{ ...owned, credentials: { ...owned.credentials, user_id: "foreign-id" } }];
+  await __test.refreshDeltaIdentities(env, identityState, identitySelection);
+  await __test.refreshDeltaIdentities(env, identityState, identitySelection);
+  assert.equal(identityState.manifestIdentityChecks["42"].action, "SKIP", "email match alone never authorizes UPDATE");
+  identityState.identityPending["42"] = true;
+  identityProfiles = [{}];
+  await __test.refreshDeltaIdentities(env, identityState, identitySelection);
+  await assert.rejects(() => __test.refreshDeltaIdentities(env, identityState, identitySelection),
+    error => error.code === "delta_identity_manifest_blocked");
+  assert.equal(identityState.identityPending["42"], true, "failed export cannot lose pending identity checks");
+} finally { globalThis.fetch = originalFetch; }
+console.log("Vistos → LeadHub delta identity export and queue priority tests passed");

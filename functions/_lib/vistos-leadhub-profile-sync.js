@@ -1013,6 +1013,73 @@ async function commitSourceVersion(storage, state, snapshot, dnsState, owner) {
   await putJson(storage, SYNC_STATE_KEY, state);
 }
 
+// New delta identities need the same complete email AND user-id collision
+// check as the historical manifest. Waiting export jobs survive invocations;
+// they never grant profile/subscription write permission by themselves.
+async function refreshDeltaIdentities(env, state, selectedById) {
+  const storage = bucket(env);
+  const pendingIds = Object.keys(state.identityPending || {});
+  if (!pendingIds.length) return [];
+  if (!state.identityExport) {
+    await assertLeadHubWorkspace(env);
+    const accepted = await leadHubRequest(env, "/segments/query/profiles", {
+      method: "POST", body: { segments: [{ targetingBlocks: [] }] }
+    });
+    if (accepted.status !== 202 || !clean(accepted.payload?.job_id)) {
+      throw syncError("delta_identity_export_not_accepted", "Úplný export pro nové identity nebyl potvrzen.");
+    }
+    state.identityExport = { jobId: accepted.payload.job_id, requestedAt: new Date().toISOString(),
+      contactIds: pendingIds, status: "WAITING" };
+    await putJson(storage, SYNC_STATE_KEY, state);
+    return [];
+  }
+  const jobId = state.identityExport.jobId;
+  const job = await leadHubRequest(env, `/jobs/${encodeURIComponent(jobId)}`);
+  if (job.payload?.job_id !== jobId || job.payload?.errors?.length
+    || !["waiting", "processing", "done"].includes(job.payload?.state)) {
+    throw syncError("delta_identity_export_failed", "Export identit neprošel ověřením úlohy.");
+  }
+  if (job.payload.state !== "done") return [];
+  const config = leadHubConfig(env);
+  const response = await fetch(`${config.baseUrl}/jobs/${encodeURIComponent(jobId)}/result`, {
+    headers: { Authorization: config.token }, signal: AbortSignal.timeout(20000)
+  });
+  if (!response.ok) throw syncError("delta_identity_export_download_failed", "Úplný export identit nelze načíst.");
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes[0] !== 31 || bytes[1] !== 139) throw syncError("delta_identity_export_format_unverified", "Export identit nemá potvrzený gzip formát.");
+  const text = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+  let profiles;
+  try { profiles = text.split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line)); }
+  catch { throw syncError("delta_identity_export_parse_failed", "Export identit obsahuje nevalidní JSONL."); }
+  const ids = state.identityExport.contactIds;
+  const selected = ids.map(id => selectedById.get(id)).filter(Boolean);
+  const manifest = buildLeadHubImportManifest(selected, profiles, {
+    workspaceId: "8d8bf07372ad4244877308cbd94c8e78", sourceRunId: state.baselineRunId,
+    sourceCount: selected.length, exportCount: profiles.length, exportState: "done",
+    exportJobId: jobId, allProfiles: true
+  });
+  if (manifest.status !== "PLANNED") throw syncError("delta_identity_manifest_blocked", "Nové identity neprošly kontrolou úplného exportu.");
+  const prefix = `${SYNC_PREFIX}/identity-exports/${encodeURIComponent(jobId)}`;
+  await putJson(storage, `${prefix}/profiles.json`, profiles);
+  await putJson(storage, `${prefix}/manifest.json`, manifest);
+  state.manifestIdentityChecks ||= {};
+  for (const item of manifest.items) state.manifestIdentityChecks[item.contactId] = {
+    action: item.action, email: item.normalizedEmail, reason: item.reason, exportJobId: jobId
+  };
+  for (const id of ids) delete state.identityPending[id];
+  state.lastIdentityExport = { jobId, completedAt: new Date().toISOString(), profiles: profiles.length,
+    counts: manifest.counts, manifestKey: `${prefix}/manifest.json` };
+  state.identityExport = null;
+  await putJson(storage, SYNC_STATE_KEY, state);
+  return ids;
+}
+
+function prioritizePending(items, profiles = {}) {
+  const rank = item => item.desired === "inactive" ? 0 : profiles[item.contactId]?.synced ? 1 : item.historical ? 3 : 2;
+  // Stable ordering within each class; no alphabetical/random identity choice.
+  return [...items].sort((a, b) => rank(a) - rank(b));
+}
+
 async function runProfileSyncUnlocked(env, options, writer) {
   const storage = bucket(env);
   const scheduledAt = (validDate(options.scheduledAt) || new Date()).toISOString();
@@ -1076,6 +1143,13 @@ async function runProfileSyncUnlocked(env, options, writer) {
   const cleanup = buildLeadHubDataOnlySelection(snapshot.rows, snapshot.schemaMetadata, { domainStatuses });
   const selectedById = new Map((cleanup.dataOnly || []).map((item) => [clean(item.contactId), item]));
   const pendingById = new Map((state.pending || []).map((item) => [clean(item.contactId), item]));
+  state.identityPending ||= {};
+  for (const id of changedIds) {
+    const selected = selectedById.get(id), checked = state.manifestIdentityChecks?.[id];
+    if (selected && state.historicalImport && !state.profiles?.[id]?.synced
+      && (!checked || checked.email !== selected.normalizedEmail)) state.identityPending[id] = true;
+  }
+  for (const id of await refreshDeltaIdentities(env, state, selectedById)) changedIds.add(id);
 
   // Rebuild historical queue entries from the current selection, never from
   // the old manifest's names or eligibility. A new exclusion cancels the item.
@@ -1136,7 +1210,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
     }
   }
 
-  const pending = [...pendingById.values()];
+  const pending = prioritizePending([...pendingById.values()], state.profiles);
   const batchLimit = Math.min(Number(options.batchLimit) || PROFILE_BATCH_LIMIT, PROFILE_BATCH_LIMIT);
   const current = pending.slice(0, batchLimit);
   const remaining = pending.slice(batchLimit);
@@ -1302,6 +1376,9 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
     totals: state.totals,
     lastRun: state.lastRun,
     historicalImport: state.historicalImport || null,
+    identityChecksPending: Object.keys(state.identityPending || {}).length,
+    identityExport: state.identityExport ? { status: state.identityExport.status, requestedAt: state.identityExport.requestedAt } : null,
+    lastIdentityExport: state.lastIdentityExport || null,
     subscriptionsWriteEnabled: false,
     historicalBulkImportEnabled: Boolean(state.historicalImport),
     messagesEnabled: false
@@ -1309,6 +1386,8 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
 }
 
 export const __test = {
+  refreshDeltaIdentities,
+  prioritizePending,
   contactReadColumns,
   sourceValues,
   commitSourceVersion,
