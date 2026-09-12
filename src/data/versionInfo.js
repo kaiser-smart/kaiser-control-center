@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.778"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.779"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -22,7 +22,7 @@ export const versionInfo = {
 export const versionNews = [
   {
     title: "Vistos → LeadHub: řízená propustnost společného zapisovatele",
-    text: "Nezávislé identity se zpracovávají nejvýše ve dvou souběžných pruzích se společnými uloženými limity API. Stav každé operace a výsledky zpětného čtení přežijí restart; neprovedené položky zůstávají ve frontě. Kontroly odběrů, blokací a zákazu zpráv zůstávají povinné."
+    text: "Nezávislé identity se zpracovávají nejvýše ve dvou souběžných pruzích. Sdílený limiter dodržuje odstup skutečného odeslání i při pomalém uložení rezervace. Stav operací a zpětného čtení přežije restart; neprovedené položky zůstávají ve frontě. Kontroly odběrů, blokací a zákazu zpráv zůstávají povinné."
   },
   {
     title: "Vistos → LeadHub: férová fronta a měřená propustnost",

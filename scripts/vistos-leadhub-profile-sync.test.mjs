@@ -897,6 +897,28 @@ assert.ok(dispatchTimes.filter(time => time < dispatchTimes[0] + 60000).length <
 const savedRates = JSON.parse([...rateStorage.values.values()][0]);
 await __test.createApiLimiter(rateStorage, savedRates, () => rateClock, rateSleep)("profileRead", {});
 assert.ok(rateClock - dispatchTimes.at(-1) >= 2100, "restart honors the already reserved API capacity");
+// Slow reservation persistence cannot bunch subsequent network dispatches.
+const jitterR2 = new MemoryR2(); const jitterPut = jitterR2.put.bind(jitterR2); let jitterClock = 100000, jitterIndex = 0;
+jitterR2.put = async (...args) => { jitterClock += [5000, 1, 3000, 2][jitterIndex++ % 4]; return jitterPut(...args); };
+const jitterLimiter = __test.createApiLimiter(jitterR2, {}, () => jitterClock, async ms => { jitterClock += ms; });
+const campaignDispatches = [];
+for (let index = 0; index < 8; index++) { await jitterLimiter("campaignRead", {}); campaignDispatches.push(jitterClock); }
+assert.ok(campaignDispatches.every((at, index) => !index || at - campaignDispatches[index - 1] >= 1200),
+  "official 1/sec applies to actual dispatch, not planned reservation times");
+let haltedWrites = 0;
+const sharedHalt = { halted: false };
+globalThis.fetch = async (url, options) => {
+  if (options.method !== "GET") { haltedWrites++; assert.fail("incident must block provider dispatch"); }
+  if (url.includes("/subscriptions/")) return Response.json(url.endsWith("/suppressed") ? { is_suppressed: false } : { subscriptions: [] });
+  if (url.includes("/campaigns")) return Response.json([]);
+  return Response.json(owned);
+};
+try {
+  await assert.rejects(() => __test.upsertActiveProfile({ LEADHUB_API_TOKEN: "synthetic", syncWriter: sharedHalt,
+    syncApiLimiter: async family => { if (family === "tagWrite" || family === "profileWrite") sharedHalt.halted = true; }
+  }, { ...selected, businessFlags: { quote_direct: "YES" } }), error => error.code === "coordinator_halted");
+  assert.equal(haltedWrites, 0, "an incident while waiting for API capacity is checked again immediately before dispatch");
+} finally { globalThis.fetch = originalFetch; }
 const incidentR2 = new MemoryR2({ [syncStateKey]: JSON.stringify({ checkpoint: new Date().toISOString(), safetyIncident: { code: "synthetic" } }) });
 await assert.rejects(() => runVistosLeadHubProfileSync({ R2_ARCHIVE: incidentR2 }), error => error.code === "safety_incident_unresolved");
 console.log("Vistos bounded concurrent dispatcher, drain, ledger and persistent rate-limit tests passed");
