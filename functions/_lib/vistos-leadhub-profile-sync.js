@@ -23,10 +23,12 @@ const IMPORT_STATE_KEY = `${SYNC_PREFIX}/import-state.json`;
 const LEADHUB_BASE_URL = "https://api.leadhub.co";
 const CONTACT_PAGE_SIZE = 1000;
 const PROFILE_BATCH_LIMIT = 10;
-// Provider acceptance and safety readback can take tens of seconds each.
-// Keep historical invocations to one profile; never leave a third write
-// waiting behind two completed profiles in the same HTTP request.
-const IMPORT_BATCH_LIMIT = 1;
+// Count is only a ceiling. Dispatch is bounded by wall-time, shared provider
+// rate reservations, two independent identities and durable operation journals.
+const IMPORT_BATCH_LIMIT = 6;
+const PROFILE_CONCURRENCY = 2;
+const PROFILE_DISPATCH_BUDGET_MS = 35000;
+const RATE_STATE_KEY = `${SYNC_PREFIX}/api-rate-reservations.json`;
 const OVERLAP_MS = 10 * 60 * 1000;
 const TAG_NAME = "eSMART Vistos DATA_ONLY";
 const BUSINESS_STATE_KEY = `${SYNC_PREFIX}/business-state.json`;
@@ -321,6 +323,69 @@ async function measured(env, name, operation) {
   finally { addTiming(env.syncMetrics, name, Date.now() - started); }
 }
 
+function serialExecutor() {
+  let tail = Promise.resolve();
+  return operation => {
+    const result = tail.then(operation);
+    tail = result.catch(() => {});
+    return result;
+  };
+}
+
+async function readTogether(promises) {
+  const results = await Promise.allSettled(promises);
+  const failed = results.find(result => result.status === "rejected");
+  if (failed) throw failed.reason;
+  return results.map(result => result.value);
+}
+
+function apiFamily(path) {
+  return path.startsWith("/profiles/email-address/") ? "profileRead"
+    : path.startsWith("/subscriptions/") ? (path.endsWith("/suppressed") ? "suppressionRead" : "subscriptionsRead")
+    : path.startsWith("/campaigns") ? "campaignRead"
+    : path === "/profiles/tags" ? "tagWrite" : path === "/profiles" ? "profileWrite" : "otherLeadHub";
+}
+
+// One shared-writer-owned limiter; reservations persist before network I/O.
+// Conservative spacing stays below official 30/min and 10/sec per endpoint,
+// or 1/sec for campaigns, including after process restart.
+function createApiLimiter(storage, reservations = {}, now = Date.now, sleep = delay) {
+  const reserve = serialExecutor();
+  return async (family, env) => {
+    const due = await reserve(async () => {
+      const slot = Math.max(now(), Number(reservations[family]) || 0);
+      reservations[family] = slot + (family === "campaignRead" ? 1100 : 2100);
+      await putJson(storage, RATE_STATE_KEY, reservations);
+      return slot;
+    });
+    if (due > now()) await sleep(due - now(), env, "apiRateWait");
+  };
+}
+
+async function processBoundedProfiles(items, options, operation) {
+  const started = Date.now();
+  const ids = new Set(), emails = new Set();
+  for (const item of items) {
+    const email = normalizeContactEmail(item.normalizedEmail);
+    if (ids.has(item.contactId) || (email && emails.has(email))) throw syncError("batch_identity_collision", "Dávka obsahuje kolidující identity.");
+    ids.add(item.contactId); if (email) emails.add(email);
+  }
+  let next = 0, failure;
+  const lane = async () => {
+    while (!failure && next < items.length) {
+      if (next && Date.now() - started >= options.budgetMs) return;
+      const item = items[next++];
+      options.onDispatch?.(item);
+      try { await operation(item); }
+      catch (error) { failure ||= error; options.onFailure?.(error); }
+    }
+  };
+  // All started work settles before releasing the common lock. No floating
+  // Promise or cancellation of an accepted provider write.
+  await Promise.all(Array.from({ length: options.concurrency }, lane));
+  if (failure) throw failure;
+}
+
 function fingerprint(value) {
   const text = JSON.stringify(value);
   let hash = 2166136261;
@@ -527,7 +592,7 @@ async function loadContactDelta(env, checkpoint, periodTo, columns) {
   if (rows.length !== expected || rows.some(row => !clean(row.Id)) || new Set(rows.map(row => clean(row.Id))).size !== rows.length) {
     throw syncError("vistos_delta_incomplete", "Změnové stránky neprokázaly úplnost jednoznačných Contact ID.");
   }
-  return { rows, pages, filter, periodFrom: from.toISOString(), periodTo: to.toISOString() };
+  return { rows, pages, filter, periodFrom: from.toISOString(), periodTo: to.toISOString(), session };
 }
 
 async function verifyModifiedPositiveControl(env, snapshot) {
@@ -561,6 +626,11 @@ function leadHubConfig(env) {
 }
 
 async function leadHubRequest(env, path, options = {}) {
+  const family = apiFamily(path);
+  if (env.syncApiLimiter) await env.syncApiLimiter(family, env);
+  if (env.syncWriter?.halted && options.method && options.method !== "GET") {
+    throw syncError("coordinator_halted", "Zapisovatel zastavil zahajování dalších zápisů.");
+  }
   const startedAt = Date.now();
   const config = leadHubConfig(env);
   const response = await fetch(`${config.baseUrl}${path}`, {
@@ -575,10 +645,6 @@ async function leadHubRequest(env, path, options = {}) {
   });
   const payload = await response.json().catch(() => null);
   // Only operation families and timings, never email paths, bodies or secrets.
-  const family = path.startsWith("/profiles/email-address/") ? "profileRead"
-    : path.startsWith("/subscriptions/") ? (path.endsWith("/suppressed") ? "suppressionRead" : "subscriptionsRead")
-    : path.startsWith("/campaigns") ? "campaignRead"
-    : path === "/profiles/tags" ? "tagWrite" : path === "/profiles" ? "profileWrite" : "otherLeadHub";
   addTiming(env.syncMetrics, family, Date.now() - startedAt);
   if (env.syncMetrics && response.status === 429) env.syncMetrics.rateLimits++;
   if (!response.ok && !(options.allow404 && response.status === 404)) {
@@ -846,7 +912,7 @@ function profileIdentityMatches(payload, item) {
 
 async function subscriptionRead(env, email) {
   const encoded = encodeURIComponent(email);
-  const [subscriptions, suppressed] = await Promise.all([
+  const [subscriptions, suppressed] = await readTogether([
     leadHubRequest(env, `/subscriptions/email-address/${encoded}`, { allow404: true }),
     leadHubRequest(env, `/subscriptions/email-address/${encoded}/suppressed`, { allow404: true })
   ]);
@@ -884,7 +950,7 @@ async function readCampaignSafety(env) {
   const types = new Set(["targeted-emailing", "targeted-emailing-ab", "incremental-emailing", "targeted-sms", "incremental-sms", "popup"]);
   let rows = 0;
   for (let page = 0; page < 20; page += 1) {
-    if (page) await delay(1100, env, "campaignRateWait"); // Official campaign read limit: 1 request/second.
+    if (page && !env.syncApiLimiter) await delay(1100, env, "campaignRateWait"); // Official campaign read limit: 1 request/second.
     const read = await leadHubRequest(env, `/campaigns?page=${page}`);
     if (!Array.isArray(read.payload)) {
       const error = new Error("Neověřený formát seznamu kampaní; zápis zastaven.");
@@ -909,7 +975,10 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
   }
   const email = item.normalizedEmail;
   const encoded = encodeURIComponent(email);
-  const before = await leadHubRequest(env, `/profiles/email-address/${encoded}`, { allow404: true });
+  const [before, safety] = await readTogether([
+    leadHubRequest(env, `/profiles/email-address/${encoded}`, { allow404: true }),
+    subscriptionRead(env, email)
+  ]);
   const linked = item.identityBinding?.mode === "EXISTING_EMAIL_TAG_ONLY";
   if ((linked && before.status !== 200) || (before.status === 200 && !profileIdentityMatches(before.payload, item))) {
     const error = new Error("Profil stejného e-mailu nemá potvrzenou integrační identitu.");
@@ -925,13 +994,12 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
       throw syncError("leadhub_profile_identity_conflict", "Aktuální integrační tag nepotvrdil jednoznačnou vazbu.");
     }
   }
-  const safety = await subscriptionRead(env, email);
   await readCampaignSafety(env);
-  if (before.status === 200 && item.manifestAction === "NO_CHANGE") {
+  if (before.status === 200) {
     const tags = (before.payload.tags || []).filter(tag => tag?.name === TAG_NAME);
     const expected = tagPayload(item, true, "", safety).tag.data;
-    if ((!item.firstName || before.payload.credentials.first_name === item.firstName)
-      && (!item.lastName || before.payload.credentials.last_name === item.lastName)
+    if ((linked || ((!item.firstName || before.payload.credentials.first_name === item.firstName)
+      && (!item.lastName || before.payload.credentials.last_name === item.lastName)))
       && tags.length === 1 && tagDataMatches(tags[0].data, expected)) {
       return { action: "no_change", ...safety, readback: true };
     }
@@ -950,7 +1018,9 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
       ...(item.lastName ? { last_name: item.lastName } : {})
     }
     }, safety, beforeWrite, "PROFILE_ACCEPTED");
-  }
+  // This intermediate readback/safety check belongs to a credentials WRITE.
+  // With tag-only work no intervening mutation occurred: the initial identity
+  // and safety reads already are the before-write evidence.
   const profileReadback = await readbackProfile(env, email, payload =>
     profileIdentityMatches(payload, item)
     && (linked || ((!item.firstName || payload.credentials.first_name === item.firstName)
@@ -962,8 +1032,9 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
     throw error;
   }
   assertSafetyUnchanged(safety, await subscriptionRead(env, email));
-  await delay(1100, env, "campaignRateWait");
+  if (!env.syncApiLimiter) await delay(1100, env, "campaignRateWait");
   await readCampaignSafety(env);
+  }
   await beforeWrite(safety, { action });
   await acceptedProfileWrite(env, "/profiles/tags", {
     method: "POST",
@@ -1116,7 +1187,7 @@ export async function withVistosLeadHubWriter(env, operation) {
     error.code = "vistos_leadhub_writer_locked";
     throw error;
   }
-  const context = { owner, sideEffectsStarted: false };
+  const context = { owner, sideEffectsStarted: false, unsettled: new Set(), halted: false };
   let completed = false;
   try {
     const result = await operation(context);
@@ -1475,9 +1546,12 @@ async function runProfileSyncUnlocked(env, options, writer) {
   let phaseStarted = Date.now();
   const phase = name => { metrics.phases[name] = Date.now() - phaseStarted; phaseStarted = Date.now(); };
   const storage = bucket(env);
+  env.syncWriter = writer;
+  env.syncApiLimiter = createApiLimiter(storage, await getJson(storage, RATE_STATE_KEY) || {});
   const scheduledAt = (validDate(options.scheduledAt) || new Date()).toISOString();
   let state = await getJson(storage, SYNC_STATE_KEY);
   if (!state) return initializeState(env, scheduledAt);
+  if (state.safetyIncident) throw syncError("safety_incident_unresolved", "Nevyřešený bezpečnostní incident blokuje další zápisy.");
   if (!validDate(state.checkpoint)) {
     const error = new Error("Neplatný checkpoint synchronizace.");
     error.code = "vistos_leadhub_checkpoint_invalid";
@@ -1643,12 +1717,11 @@ async function runProfileSyncUnlocked(env, options, writer) {
   phase("businessIdentityAndQueue");
   const batchLimit = Math.min(Number(options.batchLimit) || PROFILE_BATCH_LIMIT, PROFILE_BATCH_LIMIT);
   const current = pending.slice(0, batchLimit);
-  const remaining = pending.slice(batchLimit);
   const run = { created: 0, updated: 0, deactivated: 0, no_change: 0, skipped: 0, readbackConfirmed: 0,
     newlyCompletedProfiles: 0, newlyCreatedProfiles: 0, newlyLinkedProfiles: 0, repeatedUpdates: 0,
     restoredSubscriptions: 0, messagesSent: 0 };
   state.profiles ||= {};
-  const sourceSession = current.some(item => item.desired === "active") ? await measured(env, "vistosLogin", () => loginVistosExecute(env)) : null;
+  const sourceSession = delta.session;
   const columns = contactReadColumns(snapshot);
   // Persist the reconciled source and queue before any provider write.
   state.pending = pending;
@@ -1656,7 +1729,17 @@ async function runProfileSyncUnlocked(env, options, writer) {
   if (delta.rows.length || !state.snapshotKey || !state.dnsKey) await commitSourceVersion(storage, state, snapshot, dnsState, writer.owner);
   else await putJson(storage, SYNC_STATE_KEY, state);
   phase("prepareAndPersist");
-  for (const item of current) {
+  const commit = serialExecutor();
+  let dispatchedCursor = state.queueCursor || 0;
+  try {
+  await processBoundedProfiles(current, {
+    concurrency: PROFILE_CONCURRENCY, budgetMs: PROFILE_DISPATCH_BUDGET_MS,
+    onDispatch: item => { dispatchedCursor = item.queueCursorAfter; },
+    onFailure: error => {
+      writer.halted = true;
+      if (error.code === "leadhub_subscription_or_suppression_changed") state.safetyIncident = { code: error.code, at: new Date().toISOString() };
+    }
+  }, async item => {
     const wasSynced = Boolean(state.profiles?.[item.contactId]?.synced);
     item.identityBinding ||= state.profiles?.[item.contactId]?.identityBinding || state.manifestIdentityChecks?.[item.contactId]?.identityBinding;
     const operationStartedAt = new Date().toISOString();
@@ -1686,12 +1769,14 @@ async function runProfileSyncUnlocked(env, options, writer) {
     }
     if (item.desired === "skip") {
       await putJson(storage, operationKey, { status: "SKIP", contactId: item.contactId, reason: item.reason, finishedAt: new Date().toISOString() });
+      await commit(async () => {
       state.pending = state.pending.filter(pendingItem => pendingItem.contactId !== item.contactId);
       if (item.historical) state.historicalImport.skipped += 1;
       run.skipped += 1;
-      state.queueCursor = item.queueCursorAfter;
+      state.queueCursor = dispatchedCursor;
       await putJson(storage, SYNC_STATE_KEY, state);
-      continue;
+      });
+      return;
     }
     await putJson(storage, operationKey, {
       status: "INTENT", contactId: item.contactId, desired: item.desired,
@@ -1702,6 +1787,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
     let operationSafety;
     let lastAcceptedStage;
     const beforeWrite = async (safety, progress = {}) => {
+      if (!progress.stage && !progress.rejected && writer.halted) throw syncError("coordinator_halted", "Koordinátor zastavil zahajování dalších zápisů.");
       if (progress.stage === "PROFILE_ACCEPTED" || progress.stage === "TAG_ACCEPTED") lastAcceptedStage = progress.stage;
       const stage = progress.rejected ? lastAcceptedStage || "REQUEST_REJECTED" : progress.stage || "WRITE_INTENT";
       timings.stages.push({ stage, elapsedMs: Date.now() - Date.parse(operationStartedAt), providerDurationMs: progress.providerDurationMs });
@@ -1715,7 +1801,9 @@ async function runProfileSyncUnlocked(env, options, writer) {
         sourceModified: item.sourceModified || null, rowHash: item.rowHash,
         beforeSafety: safety, startedAt: new Date().toISOString(), writer: writer.owner
       });
-      writer.sideEffectsStarted = !progress.rejected || Boolean(lastAcceptedStage);
+      if (!progress.rejected || lastAcceptedStage) writer.unsettled.add(item.contactId);
+      else writer.unsettled.delete(item.contactId);
+      writer.sideEffectsStarted = writer.unsettled.size > 0;
     };
     let result;
     try {
@@ -1725,13 +1813,16 @@ async function runProfileSyncUnlocked(env, options, writer) {
     } catch (error) {
       if (!["leadhub_profile_identity_conflict", "leadhub_deactivation_identity_conflict", "leadhub_invalid_source_identity", "leadhub_profile_attributes_invalid"].includes(error?.code)) throw error;
       await putJson(storage, operationKey, { status: "SKIP", contactId: item.contactId, reason: error.code, finishedAt: new Date().toISOString() });
+      await commit(async () => {
       state.pending = state.pending.filter(pendingItem => pendingItem.contactId !== item.contactId);
       if (item.historical) state.historicalImport.skipped += 1;
-      state.queueCursor = item.queueCursorAfter;
+      state.queueCursor = dispatchedCursor;
       await putJson(storage, SYNC_STATE_KEY, state);
       run.skipped += 1;
-      continue;
+      });
+      return;
     }
+    operationSafety ||= { subscriptions: result.subscriptions, suppressed: result.suppressed };
     await putJson(storage, operationKey, {
       status: "READBACK_CONFIRMED", contactId: item.contactId, desired: item.desired,
       normalizedEmail: item.normalizedEmail, beforeSafety: operationSafety,
@@ -1742,6 +1833,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
       finishedAt: new Date().toISOString(), writer: writer.owner, action: result.action,
       afterSafety: { subscriptions: result.subscriptions, suppressed: result.suppressed }
     });
+    await commit(async () => {
     run[result.action] += 1;
     if (!wasSynced && item.desired === "active") {
       run.newlyCompletedProfiles++;
@@ -1769,11 +1861,19 @@ async function runProfileSyncUnlocked(env, options, writer) {
     }
     state.totals ||= { created: 0, updated: 0, deactivated: 0, subscriptionChanges: 0, messagesSent: 0 };
     state.totals[result.action] = (state.totals[result.action] || 0) + 1;
-    state.queueCursor = item.queueCursorAfter;
+    state.queueCursor = dispatchedCursor;
     await putJson(storage, SYNC_STATE_KEY, state);
     // Only a fully read-back and committed operation may release its lock.
-    writer.sideEffectsStarted = false;
-    if (current.indexOf(item) < current.length - 1) await delay(7000, env, "interProfileWait");
+    writer.unsettled.delete(item.contactId);
+    writer.sideEffectsStarted = writer.unsettled.size > 0;
+    });
+  });
+  } catch (error) {
+    // Every dispatched lane has settled here. Preserve both completed ledger
+    // commits and all remaining intents; never discard the undispatched tail.
+    state.lastFailure = { code: error.code || "unknown", at: new Date().toISOString(), metrics, ...run };
+    await putJson(storage, SYNC_STATE_KEY, state);
+    throw error;
   }
   phase("profileOperations");
   if (run.readbackConfirmed > 0) {
@@ -1784,7 +1884,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
       status: "validated_by_profile_readback"
     };
   }
-  state.pending = remaining;
+  const remaining = state.pending;
   state.checkpoint = scheduledAt;
   state.status = "ACTIVE";
   state.totals ||= { created: 0, updated: 0, deactivated: 0, subscriptionChanges: 0, messagesSent: 0 };
@@ -1831,7 +1931,8 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
   const lock = await getJson(bucket(env), WRITER_LOCK_KEY);
   const business = await getJson(bucket(env), BUSINESS_STATE_KEY);
   const lastRun = validDate(state.lastRun?.finishedAt);
-  const current = lastRun && Date.now() - lastRun.getTime() < 15 * 60 * 1000 && state.lastRun?.status === "completed";
+  const failureAfterSuccess = state.lastFailure && (!lastRun || Date.parse(state.lastFailure.at) > lastRun.getTime());
+  const current = !state.safetyIncident && !failureAfterSuccess && lastRun && Date.now() - lastRun.getTime() < 15 * 60 * 1000 && state.lastRun?.status === "completed";
   return {
     syncStatus: lock ? "WRITER_BUSY_OR_RECONCILIATION_REQUIRED" : current ? state.status : "BLOCKED",
     storedStatus: state.status,
@@ -1845,6 +1946,8 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
     pending: state.pending?.length || 0,
     totals: state.totals,
     lastRun: state.lastRun,
+    lastFailure: state.lastFailure || null,
+    safetyIncident: state.safetyIncident || null,
     historicalImport: state.historicalImport || null,
     identityChecksPending: Object.keys(state.identityPending || {}).length,
     identityExport: state.identityExport ? { status: state.identityExport.status, requestedAt: state.identityExport.requestedAt } : null,
@@ -1858,6 +1961,9 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
 }
 
 export const __test = {
+  createApiLimiter,
+  processBoundedProfiles,
+  serialExecutor,
   queueStats,
   pendingClass,
   classifyHistoricalOrigins,

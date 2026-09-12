@@ -180,11 +180,12 @@ const identityCalls = [];
 globalThis.fetch = async (url, options) => {
   identityCalls.push({ url, method: options.method });
   assert.equal(options.method, "GET");
+  if (url.includes("/subscriptions/")) return Response.json(url.endsWith("/suppressed") ? { is_suppressed: false } : { subscriptions: [] });
   return Response.json({ credentials: { email_address: selected.normalizedEmail, user_id: "foreign-id" } });
 };
 try {
   await assert.rejects(() => __test.upsertActiveProfile({ LEADHUB_API_TOKEN: "test" }, selected), error => error.code === "leadhub_profile_identity_conflict");
-  assert.equal(identityCalls.length, 1);
+  assert.equal(identityCalls.length, 3, "parallel pre-write reads settle without any write");
 } finally { globalThis.fetch = originalFetch; }
 
 const safetyCalls = [];
@@ -825,6 +826,9 @@ try {
   assert.equal(linkWrites.length, 1);
   assert.deepEqual(linkWrites[0].profile_identification, { email_address: selected.normalizedEmail });
   assert.equal(linkReadback.credentials.user_id, null);
+  const again = await __test.upsertActiveProfile({ LEADHUB_API_TOKEN: "synthetic" }, { ...linkedItem, rowHash: "source-modified-but-same-final-data" });
+  assert.equal(again.action, "no_change");
+  assert.equal(linkWrites.length, 1, "same resulting tag and profile cause no repeated provider write");
 } finally { globalThis.fetch = originalFetch; }
 
 // Persisted continuation survives re-instantiation; cron never resets a live
@@ -849,6 +853,108 @@ try {
   assert.equal(continuationData.get("continuation").lastError.status, 429);
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos tag-only identity linking and durable continuation tests passed");
+
+// A shared dispatcher, not independent import writers: different identities
+// overlap, the same identity never does, and failures drain started work.
+const dispatchItems = Array.from({ length: 6 }, (_, index) => ({ contactId: String(index + 1), normalizedEmail: `synthetic-${index}@example.test` }));
+let running = 0, maxRunning = 0;
+const completions = [], dispatches = [];
+await __test.processBoundedProfiles(dispatchItems, { concurrency: 2, budgetMs: 1000,
+  onDispatch: item => dispatches.push(item.contactId) }, async item => {
+  running++; maxRunning = Math.max(maxRunning, running);
+  await new Promise(resolve => setTimeout(resolve, item.contactId === "1" ? 15 : 2));
+  completions.push(item.contactId); running--;
+});
+assert.equal(maxRunning, 2); assert.equal(running, 0);
+assert.equal(new Set(completions).size, 6);
+assert.deepEqual(dispatches, dispatchItems.map(item => item.contactId));
+let collisionCalls = 0;
+await assert.rejects(() => __test.processBoundedProfiles([dispatchItems[0], { ...dispatchItems[1], normalizedEmail: " SYNTHETIC-0@example.test " }],
+  { concurrency: 2, budgetMs: 1000 }, async () => { collisionCalls++; }), error => error.code === "batch_identity_collision");
+assert.equal(collisionCalls, 0, "collision must fail before dispatch, not after a provider write");
+const limited = [];
+await __test.processBoundedProfiles(dispatchItems, { concurrency: 2, budgetMs: 0 }, async item => limited.push(item.contactId));
+assert.equal(limited.length, 1, "elapsed budget retains undispatched work for the next invocation");
+let drained = false, halted = false; const failedDispatches = [];
+await assert.rejects(() => __test.processBoundedProfiles(dispatchItems, { concurrency: 2, budgetMs: 1000,
+  onDispatch: item => failedDispatches.push(item.contactId), onFailure: () => { halted = true; } }, async item => {
+  if (item.contactId === "1") { await new Promise(resolve => setTimeout(resolve, 2)); throw new Error("safety incident"); }
+  await new Promise(resolve => setTimeout(resolve, 10)); assert.equal(halted, true); drained = true;
+}), /safety incident/);
+assert.equal(drained, true); assert.deepEqual(failedDispatches, ["1", "2"]);
+const serialized = __test.serialExecutor(); let shared = 0;
+await Promise.all(Array.from({ length: 8 }, () => serialized(async () => {
+  const previous = shared; await new Promise(resolve => setTimeout(resolve, 1)); shared = previous + 1;
+})));
+assert.equal(shared, 8, "serialized ledger commits do not lose concurrent completions");
+const rateStorage = new MemoryR2(); let rateClock = 100000;
+const rateSleep = async ms => { rateClock += ms; };
+const limiter = __test.createApiLimiter(rateStorage, {}, () => rateClock, rateSleep);
+const dispatchTimes = [];
+for (let index = 0; index < 35; index++) { await limiter("profileRead", {}); dispatchTimes.push(rateClock); }
+assert.ok(dispatchTimes.every((time, index) => !index || time - dispatchTimes[index - 1] >= 2100));
+assert.ok(dispatchTimes.filter(time => time < dispatchTimes[0] + 60000).length <= 30);
+const savedRates = JSON.parse([...rateStorage.values.values()][0]);
+await __test.createApiLimiter(rateStorage, savedRates, () => rateClock, rateSleep)("profileRead", {});
+assert.ok(rateClock - dispatchTimes.at(-1) >= 2100, "restart honors the already reserved API capacity");
+const incidentR2 = new MemoryR2({ [syncStateKey]: JSON.stringify({ checkpoint: new Date().toISOString(), safetyIncident: { code: "synthetic" } }) });
+await assert.rejects(() => runVistosLeadHubProfileSync({ R2_ARCHIVE: incidentR2 }), error => error.code === "safety_incident_unresolved");
+console.log("Vistos bounded concurrent dispatcher, drain, ledger and persistent rate-limit tests passed");
+
+// Exercise the actual coordinated writer with two new profiles, then resume
+// its persisted state. Synthetic subscriptions include an existing opt-out.
+const batchRows = [701, 702].map(Id => ({ ...preparationRow, Id: String(Id), Email1: `synthetic-${Id}@example.test` }));
+const batchR2 = new MemoryR2({
+  [syncStateKey]: JSON.stringify({ checkpoint: "2026-09-11T01:00:00Z", profiles: {},
+    modifiedFilterVerification: { testedAt: new Date().toISOString() },
+    snapshotKey: "synthetic/snapshot", dnsKey: "synthetic/dns",
+    pending: batchRows.map(row => ({ contactId: row.Id, normalizedEmail: row.Email1, desired: "active", firstName: row.FirstName })) }),
+  "synthetic/snapshot": JSON.stringify({ rows: batchRows, schemaMetadata: preparationSchema }),
+  "synthetic/dns": JSON.stringify({ results: { "example.test": { status: "VALID_DOMAIN", checkedAt: "2026-09-11T00:00:00Z" } } })
+});
+const batchProfiles = new Map(); let batchWrites = 0;
+globalThis.fetch = async (url, options) => {
+  if (url.startsWith("https://vistos.example.test")) {
+    const body = JSON.parse(options.body);
+    if (body.LoginParam) return Response.json({ status: "OK" }, { headers: { "Set-Cookie": "VistosAccessToken=synthetic; Secure" } });
+    if (body.GetByIdParam) return Response.json({ status: "OK", data: batchRows.find(row => row.Id === String(body.GetByIdParam.EntityId)) });
+    return Response.json({ status: "OK", data: { recordsTotal: 2, recordsFiltered: 0, data: [] } });
+  }
+  if (url.includes("/subscriptions/")) {
+    assert.equal(options.method, "GET");
+    return Response.json(url.endsWith("/suppressed") ? { is_suppressed: false } : { subscriptions: twoStates });
+  }
+  if (url.includes("/campaigns")) return Response.json([]);
+  if (options.method === "PUT") {
+    assert.ok(url.endsWith("/profiles"));
+    const body = JSON.parse(options.body);
+    assert.equal(batchProfiles.has(body.email_address), false, "no repeated creation");
+    batchProfiles.set(body.email_address, { credentials: body, tags: [] }); batchWrites++;
+    return new Response(null, { status: 202 });
+  }
+  if (options.method === "POST") {
+    assert.ok(url.endsWith("/profiles/tags"));
+    const body = JSON.parse(options.body);
+    const profile = [...batchProfiles.values()].find(row => row.credentials.user_id === body.profile_identification.user_id);
+    assert.ok(profile); profile.tags = [body.tag]; batchWrites++;
+    return new Response(null, { status: 202 });
+  }
+  const profile = batchProfiles.get(decodeURIComponent(url.split("/").at(-1)));
+  return profile ? Response.json(profile) : new Response(null, { status: 404 });
+};
+try {
+  const batchEnv = { ...preparationEnv, R2_ARCHIVE: batchR2 };
+  const batch = await runVistosLeadHubProfileSync(batchEnv, { scheduledAt: "2026-09-11T01:01:00Z", batchLimit: 2 });
+  assert.equal(batch.newlyCompletedProfiles, 2); assert.equal(batch.newlyCreatedProfiles, 2);
+  const saved = JSON.parse(batchR2.values.get(syncStateKey));
+  assert.equal(Object.keys(saved.profiles).length, 2); assert.equal(saved.pending.length, 0);
+  assert.equal(saved.totals.created, 2); assert.equal(batchWrites, 4);
+  assert.ok(Object.values(saved.profiles).every(profile => JSON.stringify(profile.subscriptions) === JSON.stringify(twoStates)));
+  assert.equal(batchR2.values.has(retainedLockKey), false);
+  await runVistosLeadHubProfileSync(batchEnv, { scheduledAt: "2026-09-11T01:02:00Z" });
+  assert.equal(batchWrites, 4, "resume uses the common ledger; no duplicate profile or unchanged tag write");
+} finally { globalThis.fetch = originalFetch; }
+console.log("Vistos full two-profile concurrent writer + restart + preserved opt-out test passed");
 
 const pendingRow = { Id: "42", Modified: "2026-09-12T00:00:00Z" };
 const originState = { profiles: {}, pending: [{ contactId: "42", desired: "active" }, { contactId: "43", desired: "active" }],
