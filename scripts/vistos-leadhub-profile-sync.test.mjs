@@ -910,6 +910,17 @@ assert.ok(campaignDispatches.every((at, index) => !index || at - campaignDispatc
 const crashedAt = jitterClock;
 await __test.createApiLimiter(jitterR2, {}, () => jitterClock, async ms => { jitterClock += ms; })("campaignRead", {});
 assert.ok(jitterClock - crashedAt >= 1200, "even a crash without saved handoff gets a full cooldown after the previous writer has ended");
+const campaignEvents = [];
+await Promise.all([5000, 1, 3000, 2].map(latency => jitterLimiter.runCampaign(async () => {
+  campaignEvents.push({ type: "start", at: jitterClock });
+  jitterClock += latency; await Promise.resolve();
+  campaignEvents.push({ type: "end", at: jitterClock });
+}, {})));
+for (let index = 2; index < campaignEvents.length; index += 2) {
+  assert.equal(campaignEvents[index].type, "start");
+  assert.ok(campaignEvents[index].at - campaignEvents[index - 1].at >= 1200,
+    "campaign reads are spaced after prior response, not just local dispatch, even with variable provider latency");
+}
 let haltedWrites = 0;
 const sharedHalt = { halted: false };
 globalThis.fetch = async (url, options) => {
@@ -927,6 +938,18 @@ try {
 const incidentR2 = new MemoryR2({ [syncStateKey]: JSON.stringify({ checkpoint: new Date().toISOString(), safetyIncident: { code: "synthetic" } }) });
 await assert.rejects(() => runVistosLeadHubProfileSync({ R2_ARCHIVE: incidentR2 }), error => error.code === "safety_incident_unresolved");
 console.log("Vistos bounded concurrent dispatcher, drain, ledger and persistent rate-limit tests passed");
+const oldLinks = Array.from({ length: 30 }, (_, i) => ({ contactId: `link-${i}`, desired: "active", historical: true, historicalKind: "link" }));
+const oldCreates = Array.from({ length: 30 }, (_, i) => ({ contactId: `create-${i}`, desired: "active", historical: true, historicalKind: "create" }));
+let historyFairQueue = [...oldLinks, ...oldCreates], historyCursor = 0, outerCursor = 0;
+const historyKinds = [];
+for (let step = 0; step < 20; step++) {
+  const next = __test.prioritizePending(historyFairQueue, {}, outerCursor, historyCursor)[0];
+  historyKinds.push(next.historicalKind);
+  outerCursor = next.queueCursorAfter; historyCursor = next.historicalCursorAfter;
+  historyFairQueue = historyFairQueue.filter(item => item.contactId !== next.contactId);
+}
+assert.deepEqual(historyKinds, Array.from({ length: 20 }, (_, i) => i % 2 ? "link" : "create"),
+  "thousands of unowned links cannot postpone all historical CREATE operations; the cursor survives every restart");
 
 // Exercise the actual coordinated writer with two new profiles, then resume
 // its persisted state. Synthetic subscriptions include an existing opt-out.
