@@ -813,6 +813,18 @@ try {
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos tag-only identity linking and durable continuation tests passed");
 
+const pendingRow = { Id: "42", Modified: "2026-09-12T00:00:00Z" };
+const currentIntent = { ...selected, businessFlags: { contract_direct: "YES" } };
+const staleIntent = { ...selected, desired: "active", businessFlags: { contract_direct: "NO" } };
+const trackedIntent = { synced: true, active: true, email: selected.normalizedEmail,
+  rowHash: __test.fingerprint(pendingRow), businessFlags: currentIntent.businessFlags };
+assert.equal(__test.refreshPendingIntent(staleIntent, currentIntent, pendingRow, trackedIntent), null,
+  "stale business intent cannot overwrite the already committed current flags");
+assert.equal(__test.refreshPendingIntent(staleIntent, currentIntent, pendingRow, { ...trackedIntent, rowHash: "older" }).businessFlags.contract_direct, "YES");
+assert.equal(__test.refreshPendingIntent(staleIntent, null, pendingRow, trackedIntent).desired, "inactive",
+  "an excluded tracked profile must be removed from targeting, not silently skipped");
+assert.equal(__test.refreshPendingIntent({ ...staleIntent, desired: "inactive" }, currentIntent, pendingRow, trackedIntent).desired, "inactive");
+
 const hydratedFields = ["Id", "Directory_FK", "DirectoryManager_FK", "Koncovkakontakt_FK", "Status_FK"];
 const pageWithoutManager = { ...contractRows[0] }; delete pageWithoutManager.DirectoryManager_FK;
 let hydratedDetail = { Id: 1, Directory_FK: 10, DirectoryManager_FK: 42, Koncovkakontakt_FK: null, Status_FK: 74 };
