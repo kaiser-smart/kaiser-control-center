@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import worker, { runScheduledSync } from "../workers/vistos-leadhub-profile-sync-runner.js";
-import { __test, buildLeadHubImportManifest, runVistosLeadHubProfileSync, withVistosLeadHubWriter, prepareVistosLeadHubHistoricalImport, executeVistosLeadHubHistoricalImport, verifyCompleteContactCapture } from "../functions/_lib/vistos-leadhub-profile-sync.js";
+import { __test, buildLeadHubImportManifest, runVistosLeadHubProfileSync, withVistosLeadHubWriter, prepareVistosLeadHubHistoricalImport, executeVistosLeadHubHistoricalImport, verifyCompleteContactCapture, refreshVistosBusinessRelations } from "../functions/_lib/vistos-leadhub-profile-sync.js";
 import { onRequestGet, onRequestPost } from "../functions/api/receivables/vistos/leadhub-sync-internal.js";
 
 class MemoryR2 {
@@ -635,3 +635,82 @@ try {
   assert.equal(identityState.identityPending["42"], true, "failed export cannot lose pending identity checks");
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos → LeadHub delta identity export and queue priority tests passed");
+
+const contractDefinition = __test.BUSINESS_DEFINITIONS[0];
+const contractRows = [
+  { Id: 1, Directory_FK: "Company caption", Directory_FK_RecordId: 10, DirectoryManager_FK: 42, Koncovkakontakt_FK: null, Status_FK: 74 },
+  { Id: 2, Directory_FK: 20, DirectoryManager_FK: 43, Koncovkakontakt_FK: null, Status_FK: 75 }
+];
+const compact = contractRows.map(row => __test.compactBusinessRow(row, contractDefinition));
+const verifiedContracts = __test.verifyBusinessPasses({ total: 2, rows: compact }, { total: 2, rows: [...compact].reverse() }, contractDefinition);
+assert.deepEqual(verifiedContracts.directIds, ["42"]);
+assert.deepEqual(verifiedContracts.companyIds, ["10"]);
+assert.equal(verifiedContracts.activeDocuments, 1);
+assert.throws(() => __test.verifyBusinessPasses({ total: 2, rows: compact }, { total: 2, rows: [compact[0], compact[0]] }, contractDefinition));
+assert.throws(() => __test.verifyBusinessPasses({ total: 3, rows: compact }, { total: 2, rows: compact }, contractDefinition));
+const changedRelation = structuredClone(compact); changedRelation[0][1] = "99";
+assert.throws(() => __test.verifyBusinessPasses({ total: 2, rows: compact }, { total: 2, rows: changedRelation }, contractDefinition),
+  error => error.code === "business_passes_changed");
+assert.throws(() => __test.compactBusinessRow({ ...contractRows[0], Directory_FK_RecordId: undefined }, contractDefinition));
+const businessEvidence = { completedAt: new Date().toISOString(), results: { Contract: verifiedContracts } };
+const companyOnly = __test.businessFlagsFor({ Id: "99", Parent_FK: "Caption", Parent_FK_RecordId: 10 }, businessEvidence);
+assert.equal(companyOnly.contract_direct, "NO");
+assert.equal(companyOnly.contract_company, "YES");
+assert.equal(companyOnly.quote_company, "UNVERIFIED");
+const directOnly = __test.businessFlagsFor({ Id: "42", Parent_FK: 20 }, businessEvidence);
+assert.equal(directOnly.contract_direct, "YES");
+assert.equal(directOnly.contract_company, "NO");
+assert.equal(__test.businessFlagsFor({ Id: "42", Parent_FK: 10 }, businessEvidence, Date.now() + 5 * 3600000).contract_direct, "UNVERIFIED");
+assert.equal(__test.tagPayload({ ...selected, businessFlags: directOnly }, false, "LEFT_COMPANY", mixedSafety).tag.data.contract_direct, "NO",
+  "historical business relations cannot reactivate an excluded profile");
+const businessR2 = new MemoryR2();
+const businessEnv = { ...preparationEnv, R2_ARCHIVE: businessR2 };
+let businessRequests = 0;
+globalThis.fetch = async (url, options) => {
+  assert.ok(url.startsWith("https://vistos.example.test"), "relation capture never calls LeadHub");
+  const body = JSON.parse(options.body);
+  if (body.LoginParam) return Response.json({ status: "OK" }, { headers: { "Set-Cookie": "VistosAccessToken=synthetic; Secure" } });
+  assert.ok(body.GetPageParam || body.GetSchemaEntity, "only documented read operations");
+  const request = body.GetPageParam || body.GetSchemaEntity;
+  const definition = __test.BUSINESS_DEFINITIONS.find(item => item.entity === request.EntityName);
+  assert.ok(definition, "InvoiceIssued and ServiceList are never read");
+  if (body.GetSchemaEntity) return Response.json({ status: "OK", fields: ["Id", definition.company, ...definition.contacts,
+    ...(definition.status ? [definition.status] : [])].map(ColumnName => ({ ColumnName })) });
+  businessRequests++;
+  const rows = definition.entity === "Contract" ? contractRows : [{ Id: 3, Customer_FK: 10, CustomerManager_FK: null }];
+  return Response.json({ status: "OK", data: { recordsTotal: rows.length, recordsFiltered: rows.length, data: rows } });
+};
+try {
+  for (let step = 0; step < 6; step++) await refreshVistosBusinessRelations(businessEnv);
+  const saved = JSON.parse(businessR2.values.get("protected-sync/vistos-leadhub-profiles/business-current.json"));
+  assert.equal(businessRequests, 6, "two independent full passes per entity");
+  assert.equal(saved.results.Contract.status, "VERIFIED");
+  assert.equal(saved.results.OrderReceived.directIds.length, 0, "never infer an absent direct contact");
+  assert.equal(businessR2.values.has(syncStateKey), false, "business capture cannot change the delta checkpoint");
+  await refreshVistosBusinessRelations(businessEnv);
+  assert.equal(businessRequests, 6, "fresh business evidence is not needlessly re-read");
+  const normalBusinessFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => JSON.parse(options.body).GetPageParam
+    ? Response.json({ status: "OK", data: { data: [] } }) : normalBusinessFetch(url, options);
+  const noCountStorage = new MemoryR2();
+  const noCount = await refreshVistosBusinessRelations({ ...businessEnv, R2_ARCHIVE: noCountStorage });
+  assert.equal(noCount.results.Contract.code, "business_total_changed", "absent counts must never masquerade as verified zero documents");
+  const starts = [];
+  globalThis.fetch = async (url, options) => {
+    const request = JSON.parse(options.body).GetPageParam;
+    if (!request) return normalBusinessFetch(url, options);
+    starts.push(request.Start);
+    const rows = Array.from({ length: 1000 }, (_, i) => ({ ...contractRows[0], Id: request.Start + i + 1 }));
+    return Response.json({ status: "OK", data: { recordsTotal: 4000, recordsFiltered: 4000, data: rows } });
+  };
+  const blocksStorage = new MemoryR2();
+  const firstBlock = await refreshVistosBusinessRelations({ ...businessEnv, R2_ARCHIVE: blocksStorage });
+  assert.deepEqual(starts, [0, 1000, 2000], "one invocation must not read the whole large entity");
+  assert.equal(firstBlock.offset, 3000);
+  assert.equal(blocksStorage.values.has("protected-sync/vistos-leadhub-profiles/business-current.json"), false);
+  const secondBlock = await refreshVistosBusinessRelations({ ...businessEnv, R2_ARCHIVE: blocksStorage });
+  assert.equal(secondBlock.pass, 1);
+  assert.equal(secondBlock.offset, 0);
+  assert.equal(starts.at(-1), 3000, "the next stateless block resumes exactly at the stored offset");
+} finally { globalThis.fetch = originalFetch; }
+console.log("Vistos → LeadHub separate verified business relationship tests passed");

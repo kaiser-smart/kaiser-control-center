@@ -1,13 +1,15 @@
 import {
   getVistosById,
   getVistosPage,
+  getVistosSchemaEntity,
   loginVistosExecute
 } from "./vistos-execute-client.js";
 import {
   buildLeadHubDataOnlySelection,
   dnsMailRouteStatus,
   isSyntacticallyValidEmail,
-  normalizeContactEmail
+  normalizeContactEmail,
+  vistosSchemaColumnMetadata
 } from "./vistos-contacts-audit.js";
 
 const AUDIT_PREFIX = "protected-audits/vistos-contact-cleanup-v4";
@@ -27,6 +29,139 @@ const PROFILE_BATCH_LIMIT = 10;
 const IMPORT_BATCH_LIMIT = 1;
 const OVERLAP_MS = 10 * 60 * 1000;
 const TAG_NAME = "eSMART Vistos DATA_ONLY";
+const BUSINESS_STATE_KEY = `${SYNC_PREFIX}/business-state.json`;
+const BUSINESS_CURRENT_KEY = `${SYNC_PREFIX}/business-current.json`;
+const BUSINESS_DEFINITIONS = [
+  { entity: "Contract", prefix: "contract", company: "Directory_FK", contacts: ["DirectoryManager_FK", "Koncovkakontakt_FK"], status: "Status_FK", activeStatus: "74" },
+  { entity: "QuoteIssued", prefix: "quote", company: "Customer_FK", contacts: ["CustomerManager_FK"] },
+  { entity: "OrderReceived", prefix: "order", company: "Customer_FK", contacts: ["CustomerManager_FK"] }
+];
+
+function relationId(row, field) {
+  const value = row?.[`${field}_RecordId`] ?? row?.[field];
+  if (value == null || clean(value) === "") return null;
+  if (!/^\d+$/.test(clean(value))) throw syncError("business_fk_unverified", "Vazba neobsahuje jednoznačné číselné ID.");
+  return String(BigInt(clean(value)));
+}
+
+function compactBusinessRow(row, definition) {
+  const fields = ["Id", definition.company, ...definition.contacts, ...(definition.status ? [definition.status] : [])];
+  if (fields.some(field => !Object.hasOwn(row, field) && !Object.hasOwn(row, `${field}_RecordId`))) {
+    throw syncError("business_fields_missing", "Dokumentová projekce nevrátila požadovaná vazební pole.");
+  }
+  const values = fields.map(field => relationId(row, field));
+  if (!values[0]) throw syncError("business_document_id_missing", "Dokument nemá potvrzené ID.");
+  return values;
+}
+
+function verifyBusinessPasses(first, second, definition) {
+  const canonical = pass => {
+    if (!Number.isInteger(pass.total) || pass.rows.length !== pass.total
+      || new Set(pass.rows.map(row => row[0])).size !== pass.total) {
+      throw syncError("business_page_coverage_unverified", "Dokumentové stránky neprokázaly úplnost unikátních ID.");
+    }
+    return [...pass.rows].sort((a, b) => a[0].localeCompare(b[0]));
+  };
+  const left = canonical(first), right = canonical(second);
+  if (first.total !== second.total || JSON.stringify(left) !== JSON.stringify(right)) {
+    throw syncError("business_passes_changed", "Dva úplné běhy se liší v ID nebo vazbách; cílení zůstává neověřené.");
+  }
+  const relevant = definition.status ? right.filter(row => row.at(-1) === definition.activeStatus) : right;
+  return { status: "VERIFIED", documents: right.length, activeDocuments: definition.status ? relevant.length : null,
+    directIds: [...new Set(relevant.flatMap(row => row.slice(2, 2 + definition.contacts.length)).filter(Boolean))],
+    companyIds: [...new Set(relevant.map(row => row[1]).filter(Boolean))] };
+}
+
+// Separate short READ invocations. No invoice/service reads and no profile,
+// subscription, document or checkpoint writes. The shared lock serializes
+// publication of relation evidence with profile selection.
+export async function refreshVistosBusinessRelations(env) {
+  return withVistosLeadHubWriter(env, async () => {
+    const storage = bucket(env);
+    let state = await getJson(storage, BUSINESS_STATE_KEY);
+    if (state?.completedAt && Date.now() - Date.parse(state.completedAt) < 3600000) {
+      return { mode: "business-read", status: "CURRENT", results: state.summary, messagesSent: 0 };
+    }
+    if (!state || state.completedAt) state = { id: crypto.randomUUID(), startedAt: new Date().toISOString(),
+      entityIndex: 0, pass: 0, offset: 0, results: {}, blocks: 0 };
+    const definition = BUSINESS_DEFINITIONS[state.entityIndex];
+    const prefix = `${SYNC_PREFIX}/business/${state.id}`;
+    const columns = ["Id", definition.company, ...definition.contacts, ...(definition.status ? [definition.status] : [])];
+    try {
+      const session = await loginVistosExecute(env);
+      if (state.offset === 0 && state.pass === 0) {
+        const schema = await getVistosSchemaEntity(env, session, definition.entity);
+        const metadata = vistosSchemaColumnMetadata(schema);
+        await putJson(storage, `${prefix}/${definition.entity}-schema.json`, schema);
+        if (columns.some(field => !metadata.some(column => column.field === field))) {
+          throw syncError("business_schema_fields_missing", "Schéma nepotvrdilo požadovaná vazební pole.");
+        }
+      }
+      const passKey = `${prefix}/${definition.entity}-${state.pass}.json`;
+      const pass = await getJson(storage, passKey) || { total: null, rows: [] };
+      const blockStarted = Date.now();
+      for (let page = 0; page < 3; page++) {
+        if (page && Date.now() - blockStarted > 15000) break;
+        const read = await getVistosPage(env, session, definition.entity, columns, {}, state.offset, 1000);
+        const total = read.filtered;
+        if (!read.countEvidence?.filteredReported || !Number.isInteger(total) || total < 0 || (pass.total != null && pass.total !== total)) {
+          throw syncError("business_total_changed", "Počet dokumentů není potvrzený nebo se změnil během stránkování.");
+        }
+        pass.total = total;
+        if (!read.rows.length && state.offset < total) throw syncError("business_page_missing", "Chybí dokumentová stránka.");
+        pass.rows.push(...read.rows.map(row => compactBusinessRow(row, definition)));
+        state.offset += read.rows.length;
+        if (state.offset >= total) break;
+      }
+      await putJson(storage, passKey, pass);
+      state.blocks++;
+      if (state.offset >= pass.total) {
+        if (state.pass === 0) { state.pass = 1; state.offset = 0; }
+        else {
+          const first = await getJson(storage, `${prefix}/${definition.entity}-0.json`);
+          state.results[definition.entity] = { ...verifyBusinessPasses(first, pass, definition), verifiedAt: new Date().toISOString() };
+          state.entityIndex++; state.pass = 0; state.offset = 0;
+        }
+      }
+    } catch (error) {
+      state.results[definition.entity] = { status: "UNVERIFIED", code: clean(error?.code) || "business_read_failed" };
+      state.entityIndex++; state.pass = 0; state.offset = 0;
+    }
+    if (state.entityIndex >= BUSINESS_DEFINITIONS.length) state.completedAt = new Date().toISOString();
+    if (state.results[definition.entity]) {
+      await putJson(storage, BUSINESS_CURRENT_KEY, { id: state.id, startedAt: state.startedAt,
+        completedAt: new Date().toISOString(), results: state.results });
+    }
+    state.summary = Object.fromEntries(Object.entries(state.results).map(([entity, result]) => [entity, {
+      status: result.status, code: result.code, documents: result.documents, activeDocuments: result.activeDocuments,
+      directContactIds: result.directIds?.length, companyIds: result.companyIds?.length
+    }]));
+    await putJson(storage, BUSINESS_STATE_KEY, state);
+    return { mode: "business-read", status: state.completedAt ? "CAPTURED" : "READING", entity: definition.entity,
+      pass: state.pass, offset: state.offset, blocks: state.blocks, results: state.summary, messagesSent: 0 };
+  });
+}
+
+function businessFlagsFor(row, evidence, now = Date.now()) {
+  const fresh = evidence?.completedAt && now - Date.parse(evidence.completedAt) < 4 * 3600000;
+  const flags = {};
+  for (const definition of BUSINESS_DEFINITIONS) {
+    const result = fresh && evidence.results?.[definition.entity];
+    let direct = "UNVERIFIED", company = "UNVERIFIED";
+    if (result?.status === "VERIFIED" && (!result.verifiedAt || now - Date.parse(result.verifiedAt) < 4 * 3600000)) {
+      const contains = (values, id) => values instanceof Set ? values.has(id) : values.includes(id);
+      direct = contains(result.directIds, clean(row.Id)) ? "YES" : "NO";
+      try {
+        const companyId = relationId(row, "Parent_FK");
+        if (companyId !== "0") company = contains(result.companyIds, companyId) ? "YES" : "NO";
+      }
+      catch { /* Caption without an ID is not a confirmed company relation. */ }
+    }
+    flags[`${definition.prefix}_direct`] = direct;
+    flags[`${definition.prefix}_company`] = company;
+  }
+  return flags;
+}
 
 function clean(value) {
   return String(value ?? "").trim();
@@ -526,6 +661,7 @@ function tagPayload(item, active, reason, checked) {
         targeting_enabled: active ? 1 : 0,
         communication_status: clean(item.communicationStatus) || "UNKNOWN",
         newsletter_permission: "UNKNOWN",
+        ...(item.businessFlags ? Object.fromEntries(Object.entries(item.businessFlags).map(([key, value]) => [key, active ? value : "NO"])) : {}),
         suppression_checked: checked.suppressed ? 1 : 0,
         exclusion_reason: clean(reason) || "NONE"
       }
@@ -652,12 +788,12 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
     body: tagPayload(item, true, "", safety)
   }, safety, beforeWrite, "TAG_ACCEPTED");
   const readback = await readbackProfile(env, email, (payload) => {
-    const tags = Array.isArray(payload?.tags) ? payload.tags : [];
-    const tag = tags.find((row) => clean(row?.name) === TAG_NAME);
+    const tags = Array.isArray(payload?.tags) ? payload.tags.filter(row => clean(row?.name) === TAG_NAME) : [];
+    const tag = tags[0];
+    const expected = tagPayload(item, true, "", safety).tag.data;
     return payload?.credentials?.user_id === profileUserId(item.contactId)
       && clean(payload?.credentials?.email_address).toLowerCase() === email
-      && clean(tag?.data?.vistos_contact_id) === clean(item.contactId)
-      && Number(tag?.data?.targeting_enabled) === 1;
+      && tags.length === 1 && Object.entries(expected).every(([key, value]) => tag?.data?.[key] === value);
   });
   if (!readback) {
     const error = new Error("LeadHub profil nebyl po zápisu potvrzen zpětným čtením.");
@@ -912,10 +1048,13 @@ async function inspectRetainedWriter(env, lock, options = {}) {
     const namesMatch = identityMatches && (!item.firstName || credentials.first_name === item.firstName)
       && (!item.lastName || credentials.last_name === item.lastName);
     const tags = Array.isArray(profile.payload?.tags) ? profile.payload.tags.filter(tag => tag.name === TAG_NAME) : [];
+    const expectedBusiness = operation.businessFlags || item.businessFlags || tracked?.businessFlags;
     const tagMatches = tags.length === 1 && clean(tags[0].data?.vistos_contact_id) === item.contactId
       && tags[0].data?.source === "Vistos Contact" && tags[0].data?.newsletter_permission === "UNKNOWN"
       && Number(tags[0].data?.data_only) === (operation.desired === "active" ? 1 : 0)
-      && Number(tags[0].data?.targeting_enabled) === (operation.desired === "active" ? 1 : 0);
+      && Number(tags[0].data?.targeting_enabled) === (operation.desired === "active" ? 1 : 0)
+      && (!expectedBusiness || Object.entries(expectedBusiness).every(([key, value]) =>
+        tags[0].data?.[key] === (operation.desired === "active" ? value : "NO")));
     const allowedFields = new Set(["credentials", "tags", "first_name", "last_name", "user_id", "email_address", "profile", "data"]);
     const result = { profileHttpStatus: profile.status, identityMatches, namesMatch, tagMatches, alreadyCommitted,
       safetyUnchanged, integrationTagCount: tags.length,
@@ -960,6 +1099,7 @@ async function inspectRetainedWriter(env, lock, options = {}) {
       state.profiles ||= {}; state.totals ||= {};
       state.profiles[item.contactId] = { synced: true, active: result.tagMatches && operation.desired === "active",
         email: item.normalizedEmail, rowHash: item.rowHash, sourceModified: item.sourceModified,
+        businessFlags: operation.businessFlags || item.businessFlags || null,
         ...safety, lastSyncedAt: new Date().toISOString() };
       state.totals[action] = (state.totals[action] || 0) + 1;
       if (item.historical && state.historicalImport) {
@@ -1141,7 +1281,18 @@ async function runProfileSyncUnlocked(env, options, writer) {
   dnsState.updatedAt = scheduledAt;
   const domainStatuses = Object.fromEntries(Object.entries(dnsState.results || {}).map(([domain, value]) => [domain, value]));
   const cleanup = buildLeadHubDataOnlySelection(snapshot.rows, snapshot.schemaMetadata, { domainStatuses });
-  const selectedById = new Map((cleanup.dataOnly || []).map((item) => [clean(item.contactId), item]));
+  const businessEvidence = await getJson(storage, BUSINESS_CURRENT_KEY);
+  if (businessEvidence) for (const result of Object.values(businessEvidence.results || {})) {
+    if (result.status === "VERIFIED") { result.directIds = new Set(result.directIds); result.companyIds = new Set(result.companyIds); }
+  }
+  const selectedById = new Map((cleanup.dataOnly || []).map((item) => [clean(item.contactId), {
+    ...item, businessFlags: businessFlagsFor(oldRowsById.get(clean(item.contactId)), businessEvidence)
+  }]));
+  for (const [id, profile] of Object.entries(state.profiles || {})) {
+    const selected = selectedById.get(id);
+    if (businessEvidence && profile.synced && profile.active && selected && profile.email === selected.normalizedEmail
+      && JSON.stringify(profile.businessFlags) !== JSON.stringify(selected.businessFlags)) changedIds.add(id);
+  }
   const pendingById = new Map((state.pending || []).map((item) => [clean(item.contactId), item]));
   state.identityPending ||= {};
   for (const id of changedIds) {
@@ -1268,6 +1419,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
       await putJson(storage, operationKey, {
         status: progress.stage || "WRITE_INTENT", httpStatus: progress.httpStatus || null, action: operationAction,
         contactId: item.contactId, normalizedEmail: item.normalizedEmail, desired: item.desired,
+        businessFlags: item.businessFlags || null,
         sourceModified: item.sourceModified || null, rowHash: item.rowHash,
         beforeSafety: safety, startedAt: new Date().toISOString(), writer: writer.owner
       });
@@ -1290,6 +1442,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
     await putJson(storage, operationKey, {
       status: "READBACK_CONFIRMED", contactId: item.contactId, desired: item.desired,
       normalizedEmail: item.normalizedEmail, beforeSafety: operationSafety,
+      businessFlags: item.businessFlags || null,
       sourceModified: item.sourceModified || null, rowHash: item.rowHash,
       finishedAt: new Date().toISOString(), writer: writer.owner, action: result.action,
       afterSafety: { subscriptions: result.subscriptions, suppressed: result.suppressed }
@@ -1301,6 +1454,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
       active: item.desired === "active",
       email: item.normalizedEmail,
       rowHash: item.rowHash,
+      businessFlags: item.businessFlags || null,
       sourceModified: item.sourceModified || null,
       subscriptions: result.subscriptions,
       suppressed: result.suppressed,
@@ -1360,6 +1514,7 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
   const state = await getJson(bucket(env), SYNC_STATE_KEY);
   if (!state) return { syncStatus: "BLOCKED", reason: "not_initialized" };
   const lock = await getJson(bucket(env), WRITER_LOCK_KEY);
+  const business = await getJson(bucket(env), BUSINESS_STATE_KEY);
   const lastRun = validDate(state.lastRun?.finishedAt);
   const current = lastRun && Date.now() - lastRun.getTime() < 15 * 60 * 1000 && state.lastRun?.status === "completed";
   return {
@@ -1379,6 +1534,8 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
     identityChecksPending: Object.keys(state.identityPending || {}).length,
     identityExport: state.identityExport ? { status: state.identityExport.status, requestedAt: state.identityExport.requestedAt } : null,
     lastIdentityExport: state.lastIdentityExport || null,
+    businessRelations: business ? { startedAt: business.startedAt, completedAt: business.completedAt || null,
+      blocks: business.blocks, results: business.summary } : null,
     subscriptionsWriteEnabled: false,
     historicalBulkImportEnabled: Boolean(state.historicalImport),
     messagesEnabled: false
@@ -1386,6 +1543,10 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
 }
 
 export const __test = {
+  businessFlagsFor,
+  compactBusinessRow,
+  verifyBusinessPasses,
+  BUSINESS_DEFINITIONS,
   refreshDeltaIdentities,
   prioritizePending,
   contactReadColumns,

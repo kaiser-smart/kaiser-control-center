@@ -13,7 +13,8 @@ export async function runScheduledSync(env, scheduledTime) {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       scheduledAt: new Date(scheduledTime).toISOString(),
-      mode: env.RUN_MODE || (env.READ_PREFLIGHT_ONLY === "true" ? "read-preflight" : "sync"),
+      mode: env.BUSINESS_READ_ENABLED === "true" && new Date(scheduledTime).getUTCMinutes() % 5 === 4
+        ? "business-read" : env.RUN_MODE || (env.READ_PREFLIGHT_ONLY === "true" ? "read-preflight" : "sync"),
       recoveryOwner: env.RECOVERY_OWNER || undefined,
       runner: "kaiser-vistos-leadhub-profile-sync"
     })
@@ -49,6 +50,10 @@ export default {
       }
       if (summary.mode === "execute-import") {
         console.log("vistos_leadhub_profile_sync.import", summary);
+        return;
+      }
+      if (summary.mode === "business-read") {
+        console.log("vistos_leadhub_profile_sync.business_read", summary);
         return;
       }
       console.log("vistos_leadhub_profile_sync.completed", {
