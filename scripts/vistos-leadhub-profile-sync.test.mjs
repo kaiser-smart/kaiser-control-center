@@ -151,6 +151,29 @@ try {
   assert.equal(stale.status, "stale_schedule_skipped");
   assert.equal(r2.values.get("protected-sync/vistos-leadhub-profiles/state.json"), priorState, "checkpoint cannot rewind");
 } finally { globalThis.fetch = originalFetch; }
+// Detail hydration is READ-only, bounded to four concurrent requests, and
+// preserves the page's ID order despite different response completion times.
+let concurrentDetails = 0, maxConcurrentDetails = 0;
+const hydrationR2 = new MemoryR2();
+globalThis.fetch = async (_, options) => {
+  const body = JSON.parse(options.body);
+  if (body.LoginParam) return Response.json({ status: "OK" }, { headers: { "Set-Cookie": "VistosAccessToken=synthetic; Secure" } });
+  if (body.GetSchemaEntity) return Response.json({ status: "OK", fields: ["Id", "Directory_FK", "DirectoryManager_FK", "Koncovkakontakt_FK", "Status_FK"].map(ColumnName => ({ ColumnName })) });
+  if (body.GetPageParam) return Response.json({ status: "OK", data: { recordsTotal: 12, recordsFiltered: 12,
+    data: Array.from({ length: 12 }, (_, i) => ({ Id: i + 1, Directory_FK: 10, Koncovkakontakt_FK: null, Status_FK: 74 })) } });
+  assert.ok(body.GetByIdParam);
+  concurrentDetails++; maxConcurrentDetails = Math.max(maxConcurrentDetails, concurrentDetails);
+  await new Promise(resolve => setTimeout(resolve, 2 + (body.GetByIdParam.EntityId % 4)));
+  concurrentDetails--;
+  return Response.json({ status: "OK", data: { Id: body.GetByIdParam.EntityId, Directory_FK: 10, DirectoryManager_FK: 42, Koncovkakontakt_FK: null, Status_FK: 74 } });
+};
+try {
+  await refreshVistosBusinessRelations({ R2_ARCHIVE: hydrationR2, VISTOS_API_BASE_URL: "https://vistos.example.test",
+    VISTOS_API_USERNAME: "synthetic", VISTOS_API_PASSWORD: "synthetic" });
+  assert.equal(maxConcurrentDetails, 4); assert.equal(concurrentDetails, 0);
+  const savedPass = [...hydrationR2.values].find(([key]) => key.endsWith("/Contract-0.json"));
+  assert.deepEqual(JSON.parse(savedPass[1]).rows.map(row => row[0]), Array.from({ length: 12 }, (_, i) => String(i + 1)));
+} finally { globalThis.fetch = originalFetch; }
 
 // A matching address alone is never permission to attach/replace user_id.
 const identityCalls = [];

@@ -179,7 +179,7 @@ export async function refreshVistosBusinessRelations(env) {
       const blockStarted = Date.now();
       for (let page = 0; page < 3; page++) {
         if (page && Date.now() - blockStarted > 15000) break;
-        const pageSize = definition.entity === "Contract" ? 10 : 1000;
+        const pageSize = definition.entity === "Contract" ? 100 : 1000;
         const read = await getVistosPage(env, session, definition.entity, columns, {}, state.offset, pageSize);
         const total = read.filtered;
         if (!read.countEvidence?.filteredReported || !Number.isInteger(total) || total < 0 || (pass.total != null && pass.total !== total)) {
@@ -190,9 +190,16 @@ export async function refreshVistosBusinessRelations(env) {
         // A detail block is short and resumable even when its HTTP invocation
         // ends early. Persist rows before the cursor; retries trim to cursor.
         pass.rows = pass.rows.slice(0, state.offset);
-        for (const row of read.rows) {
-          pass.rows.push(await hydrateBusinessRow(env, session, row, definition, columns));
-          state.offset++;
+        for (let index = 0; index < read.rows.length; index += 4) {
+          // Bounded READ concurrency only. A chunk commits in original page
+          // order after every detail agrees; rejected chunks advance no cursor.
+          // Wait for all reads to settle before releasing the shared lock.
+          const chunk = await Promise.allSettled(read.rows.slice(index, index + 4)
+            .map(row => hydrateBusinessRow(env, session, row, definition, columns)));
+          const failed = chunk.find(result => result.status === "rejected");
+          if (failed) throw failed.reason;
+          pass.rows.push(...chunk.map(result => result.value));
+          state.offset += chunk.length;
           if (Date.now() - blockStarted > 15000) break;
         }
         if (state.offset >= total) break;
