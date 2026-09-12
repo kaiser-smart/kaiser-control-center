@@ -894,6 +894,8 @@ const dispatchTimes = [];
 for (let index = 0; index < 35; index++) { await limiter("profileRead", {}); dispatchTimes.push(rateClock); }
 assert.ok(dispatchTimes.every((time, index) => !index || time - dispatchTimes[index - 1] >= 2100));
 assert.ok(dispatchTimes.filter(time => time < dispatchTimes[0] + 60000).length <= 30);
+assert.equal(rateStorage.values.size, 0, "do not serialize every API read through remote storage while the durable writer lock is held");
+await limiter.persist();
 const savedRates = JSON.parse([...rateStorage.values.values()][0]);
 await __test.createApiLimiter(rateStorage, savedRates, () => rateClock, rateSleep)("profileRead", {});
 assert.ok(rateClock - dispatchTimes.at(-1) >= 2100, "restart honors the already reserved API capacity");
@@ -902,9 +904,12 @@ const jitterR2 = new MemoryR2(); const jitterPut = jitterR2.put.bind(jitterR2); 
 jitterR2.put = async (...args) => { jitterClock += [5000, 1, 3000, 2][jitterIndex++ % 4]; return jitterPut(...args); };
 const jitterLimiter = __test.createApiLimiter(jitterR2, {}, () => jitterClock, async ms => { jitterClock += ms; });
 const campaignDispatches = [];
-for (let index = 0; index < 8; index++) { await jitterLimiter("campaignRead", {}); campaignDispatches.push(jitterClock); }
+for (let index = 0; index < 8; index++) { await jitterLimiter("campaignRead", {}); campaignDispatches.push(jitterClock); if (index % 2) await jitterLimiter.persist(); }
 assert.ok(campaignDispatches.every((at, index) => !index || at - campaignDispatches[index - 1] >= 1200),
   "official 1/sec applies to actual dispatch, not planned reservation times");
+const crashedAt = jitterClock;
+await __test.createApiLimiter(jitterR2, {}, () => jitterClock, async ms => { jitterClock += ms; })("campaignRead", {});
+assert.ok(jitterClock - crashedAt >= 1200, "even a crash without saved handoff gets a full cooldown after the previous writer has ended");
 let haltedWrites = 0;
 const sharedHalt = { halted: false };
 globalThis.fetch = async (url, options) => {
@@ -935,6 +940,10 @@ const batchR2 = new MemoryR2({
   "synthetic/dns": JSON.stringify({ results: { "example.test": { status: "VALID_DOMAIN", checkedAt: "2026-09-11T00:00:00Z" } } })
 });
 const batchProfiles = new Map(); let batchWrites = 0;
+const batchInitial = Object.fromEntries(batchR2.values);
+let batchLedgerCommits = 0;
+const batchPut = batchR2.put.bind(batchR2);
+batchR2.put = async (key, ...args) => { if (key === syncStateKey) batchLedgerCommits++; return batchPut(key, ...args); };
 globalThis.fetch = async (url, options) => {
   if (url.startsWith("https://vistos.example.test")) {
     const body = JSON.parse(options.body);
@@ -971,10 +980,34 @@ try {
   const saved = JSON.parse(batchR2.values.get(syncStateKey));
   assert.equal(Object.keys(saved.profiles).length, 2); assert.equal(saved.pending.length, 0);
   assert.equal(saved.totals.created, 2); assert.equal(batchWrites, 4);
+  assert.equal(batchLedgerCommits, 2, "one pre-write queue commit and one confirmed batch ledger commit, not one large state per profile");
   assert.ok(Object.values(saved.profiles).every(profile => JSON.stringify(profile.subscriptions) === JSON.stringify(twoStates)));
   assert.equal(batchR2.values.has(retainedLockKey), false);
   await runVistosLeadHubProfileSync(batchEnv, { scheduledAt: "2026-09-11T01:02:00Z" });
   assert.equal(batchWrites, 4, "resume uses the common ledger; no duplicate profile or unchanged tag write");
+
+  // Crash-equivalent ledger persistence failure after both provider readbacks:
+  // recovery uses the durable operation journals and performs GETs only.
+  const faultR2 = new MemoryR2(batchInitial), faultPut = faultR2.put.bind(faultR2);
+  batchProfiles.clear(); batchWrites = 0;
+  faultR2.put = async (key, ...args) => {
+    if (key === syncStateKey && batchWrites > 0) throw new Error("synthetic batch ledger unavailable");
+    return faultPut(key, ...args);
+  };
+  await assert.rejects(() => runVistosLeadHubProfileSync({ ...batchEnv, R2_ARCHIVE: faultR2 },
+    { scheduledAt: "2026-09-11T01:01:00Z", batchLimit: 2 }), /synthetic batch ledger unavailable/);
+  assert.equal(batchWrites, 4);
+  assert.equal(Object.keys(JSON.parse(faultR2.values.get(syncStateKey)).profiles).length, 0);
+  const failedLock = JSON.parse(faultR2.values.get(retainedLockKey));
+  assert.equal(failedLock.terminal, true);
+  faultR2.values.set(retainedLockKey, JSON.stringify({ ...failedLock, startedAt: "2026-01-01T00:00:00Z" }));
+  faultR2.values.set(`protected-sync/vistos-leadhub-profiles/operations/${failedLock.owner}/read-only.json`,
+    JSON.stringify({ status: "INTENT", contactId: "999", desired: "active" }));
+  faultR2.put = faultPut;
+  const recovered = await executeVistosLeadHubHistoricalImport({ ...batchEnv, R2_ARCHIVE: faultR2 });
+  assert.equal(recovered.profileWrites, 0); assert.equal(batchWrites, 4);
+  assert.equal(Object.keys(JSON.parse(faultR2.values.get(syncStateKey)).profiles).length, 2);
+  assert.equal(faultR2.values.has(retainedLockKey), false, "read-only sibling intent cannot trap safely confirmed operations");
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos full two-profile concurrent writer + restart + preserved opt-out test passed");
 
