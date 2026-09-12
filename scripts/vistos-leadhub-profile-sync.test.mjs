@@ -622,8 +622,22 @@ const ordered = __test.prioritizePending([
   { contactId: "owned", desired: "active" },
   { contactId: "left", desired: "inactive" }
 ], { owned: { synced: true } });
-assert.deepEqual(ordered.map(item => item.contactId), ["left", "owned", "new", "history"],
-  "deactivation and tracked-profile changes cannot wait behind historical import");
+assert.deepEqual(ordered.map(item => item.contactId), ["left", "new", "history", "owned"],
+  "urgent removal remains first but routine business refresh cannot starve history");
+let fairCursor = 0;
+const fairCounts = { delta: 0, historical: 0, business: 0 };
+for (let turn = 0; turn < 40; turn++) {
+  // Refill every class continuously and emulate restart with only stored cursor.
+  const first = __test.prioritizePending(ordered.filter(x => x.desired !== "inactive"),
+    { owned: { synced: true } }, JSON.parse(JSON.stringify(fairCursor)))[0];
+  fairCounts[first.queueClass]++;
+  fairCursor = first.queueCursorAfter;
+}
+assert.deepEqual(fairCounts, { delta: 10, historical: 20, business: 10 });
+assert.equal(__test.pendingClass({ contactId: "owned", rowHash: "changed" }, { owned: { synced: true, rowHash: "old" } }), "delta");
+const ageStats = __test.queueStats([{ contactId: "h", historical: true, enqueuedAt: "2026-01-01T00:00:00Z", enqueuedAtEvidence: "ENQUEUED" }], {}, Date.parse("2026-01-01T01:00:00Z"));
+assert.equal(ageStats.historical.oldestObservedAgeSeconds, 3600);
+assert.equal(ageStats.historical.exactEnqueueTimeUnknown, 0);
 
 const identityState = { baselineRunId: "synthetic-source", checkpoint: "2026-01-01T00:00:00Z",
   identityPending: { "42": true }, profiles: {}, pending: [] };

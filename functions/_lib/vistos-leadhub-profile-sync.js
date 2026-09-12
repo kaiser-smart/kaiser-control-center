@@ -290,17 +290,35 @@ function bucket(env) {
 }
 
 async function getJson(storage, key) {
+  const started = Date.now();
+  try {
   const object = await storage.get(key);
   if (!object) return null;
-  if (typeof object.json === "function") return object.json();
+  if (typeof object.json === "function") return await object.json();
   return JSON.parse(await object.text());
+  } finally { addTiming(storage.syncMetrics, "storageRead", Date.now() - started); }
 }
 
 async function putJson(storage, key, value) {
+  const started = Date.now();
+  try {
   await storage.put(key, JSON.stringify(value), {
     httpMetadata: { contentType: "application/json; charset=utf-8" },
     customMetadata: { protected: "true", integration: "vistos-leadhub-profiles" }
   });
+  } finally { addTiming(storage.syncMetrics, "storageWrite", Date.now() - started); }
+}
+
+function addTiming(metrics, name, milliseconds) {
+  if (!metrics) return;
+  const entry = metrics.calls[name] ||= { count: 0, milliseconds: 0 };
+  entry.count++; entry.milliseconds += milliseconds;
+}
+
+async function measured(env, name, operation) {
+  const started = Date.now();
+  try { return await operation(); }
+  finally { addTiming(env.syncMetrics, name, Date.now() - started); }
 }
 
 function fingerprint(value) {
@@ -556,6 +574,13 @@ async function leadHubRequest(env, path, options = {}) {
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) })
   });
   const payload = await response.json().catch(() => null);
+  // Only operation families and timings, never email paths, bodies or secrets.
+  const family = path.startsWith("/profiles/email-address/") ? "profileRead"
+    : path.startsWith("/subscriptions/") ? (path.endsWith("/suppressed") ? "suppressionRead" : "subscriptionsRead")
+    : path.startsWith("/campaigns") ? "campaignRead"
+    : path === "/profiles/tags" ? "tagWrite" : path === "/profiles" ? "profileWrite" : "otherLeadHub";
+  addTiming(env.syncMetrics, family, Date.now() - startedAt);
+  if (env.syncMetrics && response.status === 429) env.syncMetrics.rateLimits++;
   if (!response.ok && !(options.allow404 && response.status === 404)) {
     const error = new Error(`LeadHub API request selhal (${response.status}).`);
     error.status = 502;
@@ -575,8 +600,10 @@ async function assertLeadHubWorkspace(env) {
   return { httpStatus: read.status, workspaceAnchorFound: true };
 }
 
-function delay(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+async function delay(milliseconds, env, reason = "fixedWait") {
+  const started = Date.now();
+  await new Promise((resolve) => setTimeout(resolve, milliseconds));
+  addTiming(env?.syncMetrics, reason, Date.now() - started);
 }
 
 async function readbackProfile(env, email, predicate) {
@@ -585,7 +612,7 @@ async function readbackProfile(env, email, predicate) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     last = await leadHubRequest(env, path, { allow404: true });
     if (last.status === 200 && predicate(last.payload)) return last.payload;
-    if (attempt < 7) await delay(Math.min(1500 * (attempt + 1), 3000));
+    if (attempt < 7) await delay(Math.min(1500 * (attempt + 1), 3000), env, "readbackPollWait");
   }
   return null;
 }
@@ -857,7 +884,7 @@ async function readCampaignSafety(env) {
   const types = new Set(["targeted-emailing", "targeted-emailing-ab", "incremental-emailing", "targeted-sms", "incremental-sms", "popup"]);
   let rows = 0;
   for (let page = 0; page < 20; page += 1) {
-    if (page) await delay(1100); // Official campaign read limit: 1 request/second.
+    if (page) await delay(1100, env, "campaignRateWait"); // Official campaign read limit: 1 request/second.
     const read = await leadHubRequest(env, `/campaigns?page=${page}`);
     if (!Array.isArray(read.payload)) {
       const error = new Error("Neověřený formát seznamu kampaní; zápis zastaven.");
@@ -935,7 +962,7 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
     throw error;
   }
   assertSafetyUnchanged(safety, await subscriptionRead(env, email));
-  await delay(1100);
+  await delay(1100, env, "campaignRateWait");
   await readCampaignSafety(env);
   await beforeWrite(safety, { action });
   await acceptedProfileWrite(env, "/profiles/tags", {
@@ -1369,10 +1396,43 @@ async function refreshDeltaIdentities(env, state, selectedById) {
   return ids;
 }
 
-function prioritizePending(items, profiles = {}) {
-  const rank = item => item.desired === "inactive" ? 0 : profiles[item.contactId]?.synced ? 1 : item.historical ? 3 : 2;
-  // Stable ordering within each class; no alphabetical/random identity choice.
-  return [...items].sort((a, b) => rank(a) - rank(b));
+const FAIR_QUEUE_CYCLE = ["delta", "historical", "business", "historical"];
+
+function pendingClass(item, profiles = {}) {
+  if (item.desired === "inactive") return "urgent";
+  if (item.desired === "skip") return "skip";
+  const tracked = profiles[item.contactId];
+  if (!tracked?.synced) return item.historical ? "historical" : "delta";
+  return tracked.rowHash !== item.rowHash || tracked.email !== item.normalizedEmail ? "delta" : "business";
+}
+
+function prioritizePending(items, profiles = {}, cursor = 0) {
+  const queues = { urgent: [], delta: [], historical: [], business: [], skip: [] };
+  for (const item of items) queues[pendingClass(item, profiles)].push(item);
+  const positions = { delta: 0, historical: 0, business: 0 };
+  const result = queues.urgent.map(item => ({ ...item, queueClass: "urgent", queueCursorAfter: cursor }));
+  let left = queues.delta.length + queues.historical.length + queues.business.length;
+  while (left) {
+    const kind = FAIR_QUEUE_CYCLE[cursor % FAIR_QUEUE_CYCLE.length];
+    cursor = (cursor + 1) % FAIR_QUEUE_CYCLE.length;
+    const item = queues[kind][positions[kind]];
+    if (!item) continue;
+    positions[kind]++; left--;
+    result.push({ ...item, queueClass: kind, queueCursorAfter: cursor });
+  }
+  return [...result, ...queues.skip.map(item => ({ ...item, queueClass: "skip", queueCursorAfter: cursor }))];
+}
+
+function queueStats(items, profiles, now = Date.now()) {
+  const result = Object.fromEntries(["urgent", "delta", "historical", "business", "skip"].map(kind =>
+    [kind, { pending: 0, oldestObservedAt: null, oldestObservedAgeSeconds: null, exactEnqueueTimeUnknown: 0 }]));
+  for (const item of items) {
+    const entry = result[pendingClass(item, profiles)]; entry.pending++;
+    if (item.enqueuedAtEvidence !== "ENQUEUED") entry.exactEnqueueTimeUnknown++;
+    if (item.enqueuedAt && (!entry.oldestObservedAt || item.enqueuedAt < entry.oldestObservedAt)) entry.oldestObservedAt = item.enqueuedAt;
+  }
+  for (const entry of Object.values(result)) if (entry.oldestObservedAt) entry.oldestObservedAgeSeconds = Math.max(0, Math.floor((now - Date.parse(entry.oldestObservedAt)) / 1000));
+  return result;
 }
 
 function refreshPendingIntent(item, selected, row, tracked) {
@@ -1405,6 +1465,15 @@ function classifyHistoricalOrigins(state, originalItems) {
 
 async function runProfileSyncUnlocked(env, options, writer) {
   const runStartedAt = new Date().toISOString();
+  const metrics = { calls: {}, phases: {}, rateLimits: 0 };
+  const originalStorage = bucket(env);
+  env = { ...env, syncMetrics: metrics, R2_ARCHIVE: new Proxy(originalStorage, { get(target, key) {
+    if (key === "syncMetrics") return metrics;
+    const value = Reflect.get(target, key, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  } }) };
+  let phaseStarted = Date.now();
+  const phase = name => { metrics.phases[name] = Date.now() - phaseStarted; phaseStarted = Date.now(); };
   const storage = bucket(env);
   const scheduledAt = (validDate(options.scheduledAt) || new Date()).toISOString();
   let state = await getJson(storage, SYNC_STATE_KEY);
@@ -1430,6 +1499,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
   }
 
   const oldRowsById = new Map(snapshot.rows.map((row) => [clean(row?.Id), row]));
+  phase("snapshotLoad");
   let historicalIds = new Set(state.historicalContactIds || []);
   if (state.historicalImport && !historicalIds.size) {
     const prepared = await getJson(storage, IMPORT_STATE_KEY);
@@ -1441,6 +1511,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
     state.modifiedFilterVerification = await verifyModifiedPositiveControl(env, snapshot);
   }
   const delta = await loadContactDelta(env, state.checkpoint, scheduledAt, contactReadColumns(snapshot));
+  phase("vistosDeltaAndPositiveControl");
   const changedIds = new Set();
   const impactedEmails = new Set();
   for (const row of delta.rows) {
@@ -1470,8 +1541,10 @@ async function runProfileSyncUnlocked(env, options, writer) {
   dnsState.domains = [...requiredDomains].sort();
   dnsState.nextDomainStart = dnsState.domains.length;
   dnsState.updatedAt = scheduledAt;
+  phase("deltaMergeAndDns");
   const domainStatuses = Object.fromEntries(Object.entries(dnsState.results || {}).map(([domain, value]) => [domain, value]));
   const cleanup = buildLeadHubDataOnlySelection(snapshot.rows, snapshot.schemaMetadata, { domainStatuses });
+  phase("cleanupSelection");
   const businessEvidence = await getJson(storage, BUSINESS_CURRENT_KEY);
   if (businessEvidence) for (const result of Object.values(businessEvidence.results || {})) {
     if (result.status === "VERIFIED") { result.directIds = new Set(result.directIds); result.companyIds = new Set(result.companyIds); }
@@ -1485,6 +1558,10 @@ async function runProfileSyncUnlocked(env, options, writer) {
       && JSON.stringify(profile.businessFlags) !== JSON.stringify(selected.businessFlags)) changedIds.add(id);
   }
   const pendingById = new Map((state.pending || []).map((item) => [clean(item.contactId), item]));
+  const previousQueueTimes = new Map((state.pending || []).map(item => [item.contactId, {
+    enqueuedAt: item.enqueuedAt || runStartedAt,
+    enqueuedAtEvidence: item.enqueuedAtEvidence || "FIRST_OBSERVED"
+  }]));
   state.identityPending ||= {};
   if (state.historicalImport && !state.unownedIdentityRecheckRequestedAt) {
     for (const [id, checked] of Object.entries(state.manifestIdentityChecks || {})) {
@@ -1560,26 +1637,33 @@ async function runProfileSyncUnlocked(env, options, writer) {
     }
   }
 
-  const pending = prioritizePending([...pendingById.values()], state.profiles);
+  for (const item of pendingById.values()) Object.assign(item, previousQueueTimes.get(item.contactId)
+    || { enqueuedAt: runStartedAt, enqueuedAtEvidence: "ENQUEUED" });
+  const pending = prioritizePending([...pendingById.values()], state.profiles, state.queueCursor || 0);
+  phase("businessIdentityAndQueue");
   const batchLimit = Math.min(Number(options.batchLimit) || PROFILE_BATCH_LIMIT, PROFILE_BATCH_LIMIT);
   const current = pending.slice(0, batchLimit);
   const remaining = pending.slice(batchLimit);
-  const run = { created: 0, updated: 0, deactivated: 0, no_change: 0, skipped: 0, readbackConfirmed: 0, restoredSubscriptions: 0, messagesSent: 0 };
+  const run = { created: 0, updated: 0, deactivated: 0, no_change: 0, skipped: 0, readbackConfirmed: 0,
+    newlyCompletedProfiles: 0, newlyCreatedProfiles: 0, newlyLinkedProfiles: 0, repeatedUpdates: 0,
+    restoredSubscriptions: 0, messagesSent: 0 };
   state.profiles ||= {};
-  const sourceSession = current.some(item => item.desired === "active") ? await loginVistosExecute(env) : null;
+  const sourceSession = current.some(item => item.desired === "active") ? await measured(env, "vistosLogin", () => loginVistosExecute(env)) : null;
   const columns = contactReadColumns(snapshot);
   // Persist the reconciled source and queue before any provider write.
   state.pending = pending;
   state.checkpoint = scheduledAt;
   if (delta.rows.length || !state.snapshotKey || !state.dnsKey) await commitSourceVersion(storage, state, snapshot, dnsState, writer.owner);
   else await putJson(storage, SYNC_STATE_KEY, state);
+  phase("prepareAndPersist");
   for (const item of current) {
+    const wasSynced = Boolean(state.profiles?.[item.contactId]?.synced);
     item.identityBinding ||= state.profiles?.[item.contactId]?.identityBinding || state.manifestIdentityChecks?.[item.contactId]?.identityBinding;
     const operationStartedAt = new Date().toISOString();
     const timings = { startedAt: operationStartedAt, stages: [] };
     const operationKey = `${SYNC_PREFIX}/operations/${writer.owner}/${encodeURIComponent(item.contactId)}.json`;
     if (item.desired === "active") {
-      const latest = await getVistosById(env, sourceSession, "Contact", item.contactId, columns);
+      const latest = await measured(env, "vistosCurrentContact", () => getVistosById(env, sourceSession, "Contact", item.contactId, columns));
       if (clean(latest.row?.Id) !== item.contactId) throw syncError("contact_current_identity_unverified", "Aktuální Contact detail nepotvrdil požadované ID.");
       if (sourceValues(latest.row, columns) !== sourceValues(oldRowsById.get(item.contactId), columns)) {
         const previous = oldRowsById.get(item.contactId);
@@ -1605,6 +1689,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
       state.pending = state.pending.filter(pendingItem => pendingItem.contactId !== item.contactId);
       if (item.historical) state.historicalImport.skipped += 1;
       run.skipped += 1;
+      state.queueCursor = item.queueCursorAfter;
       await putJson(storage, SYNC_STATE_KEY, state);
       continue;
     }
@@ -1642,6 +1727,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
       await putJson(storage, operationKey, { status: "SKIP", contactId: item.contactId, reason: error.code, finishedAt: new Date().toISOString() });
       state.pending = state.pending.filter(pendingItem => pendingItem.contactId !== item.contactId);
       if (item.historical) state.historicalImport.skipped += 1;
+      state.queueCursor = item.queueCursorAfter;
       await putJson(storage, SYNC_STATE_KEY, state);
       run.skipped += 1;
       continue;
@@ -1657,6 +1743,10 @@ async function runProfileSyncUnlocked(env, options, writer) {
       afterSafety: { subscriptions: result.subscriptions, suppressed: result.suppressed }
     });
     run[result.action] += 1;
+    if (!wasSynced && item.desired === "active") {
+      run.newlyCompletedProfiles++;
+      if (item.identityBinding) run.newlyLinkedProfiles++; else run.newlyCreatedProfiles++;
+    } else if (result.action === "updated") run.repeatedUpdates++;
     if (result.readback) run.readbackConfirmed += 1;
     state.profiles[item.contactId] = {
       synced: true,
@@ -1668,7 +1758,8 @@ async function runProfileSyncUnlocked(env, options, writer) {
       sourceModified: item.sourceModified || null,
       subscriptions: result.subscriptions,
       suppressed: result.suppressed,
-      lastSyncedAt: new Date().toISOString()
+      lastSyncedAt: new Date().toISOString(),
+      firstCompletedAt: state.profiles[item.contactId]?.firstCompletedAt || (!wasSynced ? new Date().toISOString() : null)
     };
     state.pending = state.pending.filter(pendingItem => pendingItem.contactId !== item.contactId);
     if (item.historical) {
@@ -1678,11 +1769,13 @@ async function runProfileSyncUnlocked(env, options, writer) {
     }
     state.totals ||= { created: 0, updated: 0, deactivated: 0, subscriptionChanges: 0, messagesSent: 0 };
     state.totals[result.action] = (state.totals[result.action] || 0) + 1;
+    state.queueCursor = item.queueCursorAfter;
     await putJson(storage, SYNC_STATE_KEY, state);
     // Only a fully read-back and committed operation may release its lock.
     writer.sideEffectsStarted = false;
-    if (current.indexOf(item) < current.length - 1) await delay(7000);
+    if (current.indexOf(item) < current.length - 1) await delay(7000, env, "interProfileWait");
   }
+  phase("profileOperations");
   if (run.readbackConfirmed > 0) {
     state.apiReadValidation = {
       profilesRead: true,
@@ -1717,9 +1810,16 @@ async function runProfileSyncUnlocked(env, options, writer) {
     skipped: run.skipped,
     pending: remaining.length,
     readbackConfirmed: run.readbackConfirmed,
+    newlyCompletedProfiles: run.newlyCompletedProfiles,
+    newlyCreatedProfiles: run.newlyCreatedProfiles,
+    newlyLinkedProfiles: run.newlyLinkedProfiles,
+    repeatedUpdates: run.repeatedUpdates,
+    queue: queueStats(remaining, state.profiles),
+    metrics,
     restoredSubscriptions: 0,
     messagesSent: 0
   };
+  state.throughputRuns = [...(state.throughputRuns || []), state.lastRun].slice(-120);
   await putJson(storage, `${SYNC_PREFIX}/runs/${scheduledAt.replace(/[:.]/g, "-")}.json`, state.lastRun);
   await putJson(storage, SYNC_STATE_KEY, state);
   return { syncStatus: "ACTIVE", checkpoint: state.checkpoint, ...state.lastRun, totals: state.totals };
@@ -1758,6 +1858,8 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
 }
 
 export const __test = {
+  queueStats,
+  pendingClass,
   classifyHistoricalOrigins,
   refreshPendingIntent,
   hydrateBusinessRow,
