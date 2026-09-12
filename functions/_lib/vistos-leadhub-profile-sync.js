@@ -346,12 +346,14 @@ function apiFamily(path) {
     : path === "/profiles/tags" ? "tagWrite" : path === "/profiles" ? "profileWrite" : "otherLeadHub";
 }
 
-// One shared-writer-owned limiter; reservations persist before network I/O.
-// Conservative spacing stays below official 30/min and 10/sec per endpoint,
-// or 1/sec for campaigns, including after process restart.
+// The durable workspace writer lock already excludes overlapping invocations.
+// Pace actual dispatch in memory, persist handoff once per drained batch, and
+// wait a full endpoint interval on EVERY fresh instance (including restart).
+// A crash cannot spend capacity immediately: uncertain writes retain the lock,
+// and even without a final rate handoff the next writer waits from its own start.
 function createApiLimiter(storage, reservations = {}, now = Date.now, sleep = delay) {
-  const persist = serialExecutor(), families = new Map();
-  return (family, env) => {
+  const families = new Map();
+  const limiter = (family, env) => {
     const spacing = family === "campaignRead" ? 1200 : 2200;
     if (!families.has(family)) {
       families.set(family, serialExecutor());
@@ -361,12 +363,10 @@ function createApiLimiter(storage, reservations = {}, now = Date.now, sleep = de
     return families.get(family)(async () => {
       if (reservations[family] > now()) await sleep(reservations[family] - now(), env, "apiRateWait");
       reservations[family] = now() + spacing;
-      await persist(() => putJson(storage, RATE_STATE_KEY, reservations));
-      // R2 latency must NOT consume the spacing budget. Keep this family
-      // serialized until the permit is actually returned for network dispatch.
-      reservations[family] = now() + spacing;
     });
   };
+  limiter.persist = () => putJson(storage, RATE_STATE_KEY, reservations);
+  return limiter;
 }
 
 async function processBoundedProfiles(items, options, operation) {
@@ -1285,8 +1285,17 @@ async function inspectRetainedWriter(env, lock, options = {}) {
   if (listed.truncated) throw syncError("writer_journal_incomplete", "Neuzavřený deník není úplný.");
   const checks = [];
   const verified = [];
+  let noWriteJournals = 0;
   for (const object of listed.objects) {
     const operation = await getJson(storage, object.key);
+    // WRITE_INTENT is durably recorded before any provider request. These
+    // earlier/explicitly rejected stages therefore cannot contain an accepted
+    // mutation and must not obstruct recovery of another independent profile.
+    if (["INTENT", "SKIP", "REQUEST_REJECTED"].includes(operation.status)) {
+      noWriteJournals++;
+      checks.push({ stage: "NO_PROVIDER_WRITE", status: operation.status });
+      continue;
+    }
     const tracked = state.profiles?.[operation.contactId];
     const alreadyCommitted = operation.status === "READBACK_CONFIRMED" && tracked?.synced === true
       && tracked.email === operation.normalizedEmail && tracked.rowHash === operation.rowHash
@@ -1329,7 +1338,7 @@ async function inspectRetainedWriter(env, lock, options = {}) {
   }
   const explicitlyObservedLegacyFailure = clean(options.recoveryOwner) === lock.owner;
   if (lock.phase !== "RECONCILING" && (lock.terminal === true || explicitlyObservedLegacyFailure)
-    && verified.length === listed.objects.length && verified.length > 0
+    && verified.length + noWriteJournals === listed.objects.length && verified.length > 0
     && verified.every(entry => entry.result.identityMatches && entry.result.namesMatch && entry.result.safetyUnchanged
       && (entry.result.profileAccepted || entry.result.tagAccepted || entry.result.readbackConfirmed)
       && (entry.result.tagMatches || (entry.result.profileAccepted && entry.result.integrationTagCount === 0)))) {
@@ -1354,7 +1363,7 @@ async function inspectRetainedWriter(env, lock, options = {}) {
       if (state.reconciledOperations[entry.operationKey]) continue;
       const { item, operation, result, safety } = entry;
       const action = operation.action || (item.manifestAction === "CREATE" && !state.profiles?.[item.contactId]?.synced ? "created" : "updated");
-      if (!["created", "updated", "deactivated"].includes(action)) throw syncError("writer_action_unverified", "Neznámý typ již provedené operace.");
+      if (!["created", "updated", "deactivated", "no_change"].includes(action)) throw syncError("writer_action_unverified", "Neznámý typ již provedené operace.");
       state.profiles ||= {}; state.totals ||= {};
       state.profiles[item.contactId] = { synced: true, active: result.tagMatches && operation.desired === "active",
         email: item.normalizedEmail, rowHash: item.rowHash, sourceModified: item.sourceModified,
@@ -1738,6 +1747,11 @@ async function runProfileSyncUnlocked(env, options, writer) {
   else await putJson(storage, SYNC_STATE_KEY, state);
   phase("prepareAndPersist");
   const commit = serialExecutor();
+  const readbackCompleted = new Set();
+  const releaseCommittedOperations = () => {
+    for (const id of readbackCompleted) writer.unsettled.delete(id);
+    writer.sideEffectsStarted = writer.unsettled.size > 0;
+  };
   let dispatchedCursor = state.queueCursor || 0;
   try {
   await processBoundedProfiles(current, {
@@ -1782,7 +1796,6 @@ async function runProfileSyncUnlocked(env, options, writer) {
       if (item.historical) state.historicalImport.skipped += 1;
       run.skipped += 1;
       state.queueCursor = dispatchedCursor;
-      await putJson(storage, SYNC_STATE_KEY, state);
       });
       return;
     }
@@ -1825,7 +1838,6 @@ async function runProfileSyncUnlocked(env, options, writer) {
       state.pending = state.pending.filter(pendingItem => pendingItem.contactId !== item.contactId);
       if (item.historical) state.historicalImport.skipped += 1;
       state.queueCursor = dispatchedCursor;
-      await putJson(storage, SYNC_STATE_KEY, state);
       run.skipped += 1;
       });
       return;
@@ -1870,10 +1882,10 @@ async function runProfileSyncUnlocked(env, options, writer) {
     state.totals ||= { created: 0, updated: 0, deactivated: 0, subscriptionChanges: 0, messagesSent: 0 };
     state.totals[result.action] = (state.totals[result.action] || 0) + 1;
     state.queueCursor = dispatchedCursor;
-    await putJson(storage, SYNC_STATE_KEY, state);
-    // Only a fully read-back and committed operation may release its lock.
-    writer.unsettled.delete(item.contactId);
-    writer.sideEffectsStarted = writer.unsettled.size > 0;
+    // The small READBACK_CONFIRMED journal is already durable. Keep the global
+    // lock until one coherent ledger commit covers the drained bounded batch;
+    // do not retransmit the entire 16 MB pending queue for every profile.
+    readbackCompleted.add(item.contactId);
     });
   });
   } catch (error) {
@@ -1883,6 +1895,8 @@ async function runProfileSyncUnlocked(env, options, writer) {
       upstreamStatus: error.upstreamStatus || null, retryAfterSeconds: error.retryAfterSeconds || 0,
       at: new Date().toISOString(), metrics, ...run };
     await putJson(storage, SYNC_STATE_KEY, state);
+    releaseCommittedOperations();
+    await env.syncApiLimiter.persist();
     throw error;
   }
   phase("profileOperations");
@@ -1932,6 +1946,8 @@ async function runProfileSyncUnlocked(env, options, writer) {
   state.throughputRuns = [...(state.throughputRuns || []), state.lastRun].slice(-120);
   await putJson(storage, `${SYNC_PREFIX}/runs/${scheduledAt.replace(/[:.]/g, "-")}.json`, state.lastRun);
   await putJson(storage, SYNC_STATE_KEY, state);
+  releaseCommittedOperations();
+  await env.syncApiLimiter.persist();
   return { syncStatus: "ACTIVE", checkpoint: state.checkpoint, ...state.lastRun, totals: state.totals };
 }
 
