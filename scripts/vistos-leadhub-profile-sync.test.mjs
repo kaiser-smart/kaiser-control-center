@@ -530,3 +530,55 @@ try {
   assert.equal(JSON.parse(retainedR2.values.get(syncStateKey)).totals.created, 1, "retrying settlement cannot count or create a second profile");
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos → LeadHub retained-writer READ reconciliation tests passed");
+
+// An interrupted batch can contain fully committed operations followed by an
+// accepted write. Every operation needs a live readback; only the latter is
+// newly adopted/counted. No writes to LeadHub are allowed during settlement.
+const mixedOwner = "synthetic-mixed-batch";
+const mixedSafety = { subscriptions: [{ code: "news", state: "unsubscribed" }], suppressed: true };
+const committedItem = { ...selected, contactId: "41", normalizedEmail: "committed@example.test" };
+const mixedProfiles = [committedItem, selected].map(item => ({ credentials: {
+  user_id: __test.profileUserId(item.contactId), email_address: item.normalizedEmail, first_name: item.firstName
+}, tags: [__test.tagPayload(item, true, "", mixedSafety).tag] }));
+const mixedState = { checkpoint: "2026-01-01T00:00:00Z", totals: { created: 1 },
+  pending: [{ ...selected, historical: true, manifestAction: "CREATE" }],
+  historicalImport: { created: 1, readbackConfirmed: 1 }, profiles: { "41": {
+    synced: true, active: true, email: committedItem.normalizedEmail, rowHash: "hash-41",
+    sourceModified: "2026-01-01T00:00:00Z", ...mixedSafety
+  } } };
+const mixedLock = { owner: mixedOwner, startedAt: "2026-01-01T00:00:00Z", terminal: true };
+const mixedSeed = { [retainedLockKey]: JSON.stringify(mixedLock), [syncStateKey]: JSON.stringify(mixedState) };
+for (const item of [committedItem, selected]) mixedSeed[`protected-sync/vistos-leadhub-profiles/operations/${mixedOwner}/${item.contactId}.json`] = JSON.stringify({
+  contactId: item.contactId, normalizedEmail: item.normalizedEmail, desired: "active", action: "created",
+  rowHash: `hash-${item.contactId}`, sourceModified: "2026-01-01T00:00:00Z",
+  status: item.contactId === "41" ? "READBACK_CONFIRMED" : "TAG_ACCEPTED",
+  beforeSafety: mixedSafety, afterSafety: mixedSafety
+});
+const mixedR2 = new MemoryR2(mixedSeed);
+let changedCommittedSafety = false;
+globalThis.fetch = async (url, options) => {
+  assert.equal(options.method, "GET", "settlement is provider READ-only");
+  if (url.includes("/subscriptions/")) return Response.json(url.endsWith("/suppressed")
+    ? { is_suppressed: !(changedCommittedSafety && url.includes("committed")) }
+    : { subscriptions: mixedSafety.subscriptions });
+  return Response.json(mixedProfiles.find(profile => url.endsWith(encodeURIComponent(profile.credentials.email_address))));
+};
+try {
+  changedCommittedSafety = true;
+  const rejected = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: mixedR2, LEADHUB_API_TOKEN: "synthetic" });
+  assert.equal(rejected.lockReleased, false, "previously committed operations still require unchanged live safety");
+  assert.equal(mixedR2.values.get(syncStateKey), mixedSeed[syncStateKey]);
+  changedCommittedSafety = false;
+  const settled = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: mixedR2, LEADHUB_API_TOKEN: "synthetic" });
+  assert.equal(settled.status, "READBACK_ADOPTED");
+  assert.equal(settled.profileWrites, 0);
+  assert.equal(settled.checks.filter(check => check.alreadyCommitted).length, 1);
+  const state = JSON.parse(mixedR2.values.get(syncStateKey));
+  assert.equal(state.totals.created, 2, "committed profiles must not be counted twice");
+  assert.equal(state.historicalImport.created, 2);
+  assert.equal(state.historicalImport.readbackConfirmed, 2);
+  assert.equal(state.pending.length, 0);
+  assert.deepEqual(state.profiles["41"], mixedState.profiles["41"], "do not rewrite committed profile evidence");
+  assert.equal(state.checkpoint, mixedState.checkpoint, "settlement never moves the checkpoint");
+} finally { globalThis.fetch = originalFetch; }
+console.log("Vistos → LeadHub partially committed batch recovery tests passed");
