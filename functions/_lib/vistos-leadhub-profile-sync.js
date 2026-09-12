@@ -1368,6 +1368,18 @@ function prioritizePending(items, profiles = {}) {
   return [...items].sort((a, b) => rank(a) - rank(b));
 }
 
+function refreshPendingIntent(item, selected, row, tracked) {
+  if (item.desired !== "active") return item;
+  if (!selected || selected.normalizedEmail !== item.normalizedEmail) {
+    return { ...item, desired: tracked?.synced && tracked.active ? "inactive" : "skip",
+      normalizedEmail: tracked?.synced ? tracked.email : item.normalizedEmail, reason: "SOURCE_CHANGED_OR_FILTERED" };
+  }
+  const current = { ...item, ...selected, rowHash: fingerprint(row), sourceModified: clean(row.Modified) };
+  if (tracked?.synced && tracked.active && tracked.email === current.normalizedEmail
+    && tracked.rowHash === current.rowHash && JSON.stringify(tracked.businessFlags) === JSON.stringify(current.businessFlags)) return null;
+  return current;
+}
+
 async function runProfileSyncUnlocked(env, options, writer) {
   const runStartedAt = new Date().toISOString();
   const storage = bucket(env);
@@ -1457,14 +1469,13 @@ async function runProfileSyncUnlocked(env, options, writer) {
   }
   for (const id of await refreshDeltaIdentities(env, state, selectedById)) changedIds.add(id);
 
-  // Rebuild historical queue entries from the current selection, never from
-  // the old manifest's names or eligibility. A new exclusion cancels the item.
+  // Rebuild ALL intents, including business refreshes queued by an older
+  // capture. Stale flags must never overwrite a more recent committed state.
+  let coalescedPending = 0;
   for (const [id, pendingItem] of pendingById) {
-    if (!pendingItem.historical) continue;
-    const selected = selectedById.get(id), row = oldRowsById.get(id);
-    if (!selected || selected.normalizedEmail !== pendingItem.normalizedEmail) {
-      pendingById.set(id, { ...pendingItem, desired: "skip", reason: "SOURCE_CHANGED_OR_FILTERED" });
-    } else pendingById.set(id, { ...pendingItem, ...selected, rowHash: fingerprint(row), sourceModified: clean(row.Modified) });
+    const current = refreshPendingIntent(pendingItem, selectedById.get(id), oldRowsById.get(id), state.profiles?.[id]);
+    if (current) pendingById.set(id, current);
+    else { pendingById.delete(id); coalescedPending++; }
   }
 
   for (const id of changedIds) {
@@ -1664,6 +1675,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
     sourceThrough: scheduledAt,
     sourceRows: delta.rows.length,
     changedContacts: changedIds.size,
+    coalescedPending,
     pagesRead: delta.pages,
     created: run.created,
     updated: run.updated,
@@ -1712,6 +1724,7 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
 }
 
 export const __test = {
+  refreshPendingIntent,
   hydrateBusinessRow,
   profileIdentityMatches,
   tagDataMatches,
