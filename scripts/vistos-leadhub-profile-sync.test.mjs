@@ -910,6 +910,17 @@ assert.ok(campaignDispatches.every((at, index) => !index || at - campaignDispatc
 const crashedAt = jitterClock;
 await __test.createApiLimiter(jitterR2, {}, () => jitterClock, async ms => { jitterClock += ms; })("campaignRead", {});
 assert.ok(jitterClock - crashedAt >= 1200, "even a crash without saved handoff gets a full cooldown after the previous writer has ended");
+const campaignEvents = [];
+await Promise.all([5000, 1, 3000, 2].map(latency => jitterLimiter.runCampaign(async () => {
+  campaignEvents.push({ type: "start", at: jitterClock });
+  jitterClock += latency; await Promise.resolve();
+  campaignEvents.push({ type: "end", at: jitterClock });
+}, {})));
+for (let index = 2; index < campaignEvents.length; index += 2) {
+  assert.equal(campaignEvents[index].type, "start");
+  assert.ok(campaignEvents[index].at - campaignEvents[index - 1].at >= 1200,
+    "campaign reads are spaced after prior response, not just local dispatch, even with variable provider latency");
+}
 let haltedWrites = 0;
 const sharedHalt = { halted: false };
 globalThis.fetch = async (url, options) => {

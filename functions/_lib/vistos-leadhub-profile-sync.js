@@ -353,6 +353,7 @@ function apiFamily(path) {
 // and even without a final rate handoff the next writer waits from its own start.
 function createApiLimiter(storage, reservations = {}, now = Date.now, sleep = delay) {
   const families = new Map();
+  const campaignGate = serialExecutor();
   const limiter = (family, env) => {
     const spacing = family === "campaignRead" ? 1200 : 2200;
     if (!families.has(family)) {
@@ -366,6 +367,12 @@ function createApiLimiter(storage, reservations = {}, now = Date.now, sleep = de
     });
   };
   limiter.persist = () => putJson(storage, RATE_STATE_KEY, reservations);
+  // The campaign endpoint permits only 1/s. Serialize through response arrival
+  // as well as dispatch: variable upstream latency must not bunch arrivals.
+  limiter.runCampaign = (operation, env) => campaignGate(async () => {
+    try { return await operation(); }
+    finally { await sleep(1200, env, "campaignResponseCooldown"); }
+  });
   return limiter;
 }
 
@@ -634,6 +641,9 @@ function leadHubConfig(env) {
 
 async function leadHubRequest(env, path, options = {}) {
   const family = apiFamily(path);
+  if (family === "campaignRead" && env.syncApiLimiter?.runCampaign && !env.syncCampaignGated) {
+    return env.syncApiLimiter.runCampaign(() => leadHubRequest({ ...env, syncCampaignGated: true }, path, options), env);
+  }
   if (env.syncApiLimiter) await env.syncApiLimiter(family, env);
   if (env.syncWriter?.halted && options.method && options.method !== "GET") {
     throw syncError("coordinator_halted", "Zapisovatel zastavil zahajování dalších zápisů.");
