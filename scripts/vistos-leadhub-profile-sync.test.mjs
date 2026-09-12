@@ -74,6 +74,13 @@ assert.throws(() => __test.assertSafetyUnchanged(safeRead(twoStates), safeRead()
 assert.throws(() => __test.profileUserId("9".repeat(60)), error => error.code === "leadhub_invalid_source_identity");
 assert.throws(() => __test.profileUserId(""), error => error.code === "leadhub_invalid_source_identity");
 const selected = { contactId: "42", normalizedEmail: "person@example.test", firstName: "Radim", lastName: "", communicationStatus: "UNKNOWN" };
+assert.equal(__test.tagDataMatches({ data_only: "1", targeting_enabled: "1", suppression_checked: "0", contract_direct: "YES" },
+  { data_only: 1, targeting_enabled: 1, suppression_checked: 0, contract_direct: "YES" }), true);
+for (const value of [null, undefined, "", "01", true, "true", " 1 ", 2]) {
+  assert.equal(__test.tagDataMatches({ data_only: value }, { data_only: 1 }), false);
+}
+assert.equal(__test.tagDataMatches({ contract_direct: "NO" }, { contract_direct: "YES" }), false);
+assert.equal(__test.tagDataMatches({}, { data_only: 0 }), false, "missing is not false");
 const owned = {
   credentials: { user_id: "vistos-contact-42", email_address: "person@example.test", first_name: "Radim", last_name: "Existing surname" },
   tags: [__test.tagPayload(selected, true, "", { suppressed: false }).tag]
@@ -89,6 +96,9 @@ globalThis.fetch = async () => { throw new Error("manifest must never call an AP
 try {
   assert.equal(plan().items[0].action, "CREATE");
   assert.equal(plan([selected], [owned]).items[0].action, "NO_CHANGE", "missing source surname does not clear existing surname");
+  const wireOwned = structuredClone(owned);
+  wireOwned.tags[0].data = Object.fromEntries(Object.entries(wireOwned.tags[0].data).map(([key, value]) => [key, String(value)]));
+  assert.equal(plan([selected], [wireOwned]).items[0].action, "NO_CHANGE", "wire-format flags must not cause unnecessary updates");
   assert.equal(plan([{ ...selected, firstName: "Martin" }], [owned]).items[0].action, "UPDATE");
   assert.equal(plan().readyForImport, false);
   assert.equal(plan().sendAllowed, false);
@@ -411,7 +421,7 @@ globalThis.fetch = async (url, options) => {
     const body = JSON.parse(options.body);
     const profile = [...importedProfiles.values()].find(item => item.credentials.user_id === body.profile_identification.user_id);
     assert.ok(profile, "tag writes must not create profiles implicitly");
-    profile.tags = [body.tag];
+    profile.tags = [{ ...body.tag, data: Object.fromEntries(Object.entries(body.tag.data).map(([key, value]) => [key, String(value)])) }];
     providerWrites += 1; return new Response(null, { status: 202 });
   }
   assert.equal(options.method, "GET");
@@ -451,7 +461,7 @@ try {
   deltaSourceRows = [{ ...preparationRow, DoNotWorkCompany: true, Modified: departureAt }];
   const departure = await executeVistosLeadHubHistoricalImport(preparationEnv, { scheduledAt: departureAt });
   assert.equal(departure.deactivated, 1, "delta excludes an already imported departed employee");
-  assert.equal(importedProfiles.get(preparationRow.Email1).tags[0].data.targeting_enabled, 0);
+  assert.equal(importedProfiles.get(preparationRow.Email1).tags[0].data.targeting_enabled, "0", "provider serializes numeric flags as text");
   assert.equal(importedProfiles.size, 1, "deactivation preserves the profile and its history");
   assert.deepEqual(JSON.parse(preparationR2.values.get(syncStateKey)).profiles[preparationRow.Id].subscriptions, existingStates);
 
