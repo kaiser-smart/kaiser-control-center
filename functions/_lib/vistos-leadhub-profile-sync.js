@@ -638,15 +638,21 @@ export function buildLeadHubImportManifest(items, profiles, evidence = {}) {
     const firstName = clean(item.firstName), lastName = clean(item.lastName);
     const namesEqual = (!firstName || firstName === clean(credentials.first_name))
       && (!lastName || lastName === clean(credentials.last_name));
-    const tagEqual = tag?.data?.source === "Vistos Contact"
-      && tag.data.data_only === 1 && tag.data.targeting_enabled === 1
-      && tag.data.newsletter_permission === "UNKNOWN"
-      && tag.data.communication_status === (clean(item.communicationStatus) || "UNKNOWN");
+    const tagEqual = tagDataMatches(tag?.data, { source: "Vistos Contact", data_only: 1, targeting_enabled: 1,
+      newsletter_permission: "UNKNOWN", communication_status: clean(item.communicationStatus) || "UNKNOWN" });
     return { ...entry, action: namesEqual && tagEqual ? "NO_CHANGE" : "UPDATE", reason: "EMAIL_AND_OWNED_USER_ID_MATCH" };
   });
   const counts = { CREATE: 0, UPDATE: 0, NO_CHANGE: 0, SKIP: 0 };
   manifest.forEach((item) => { counts[item.action] += 1; });
   return { status: "PLANNED", evidence: { ...evidence }, counts, items: manifest, readyForImport: false, sendAllowed: false };
+}
+
+function tagDataMatches(actual, expected) {
+  // Production GET evidence: LeadHub stores these sent numeric flags as
+  // strings. Accept exactly 0/1 or "0"/"1", not blanks, truthiness or "01".
+  const numericFlags = new Set(["data_only", "targeting_enabled", "suppression_checked"]);
+  return Object.entries(expected).every(([key, value]) => actual?.[key] === value
+    || (numericFlags.has(key) && (value === 0 || value === 1) && actual?.[key] === String(value)));
 }
 
 function tagPayload(item, active, reason, checked) {
@@ -749,7 +755,7 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
     const expected = tagPayload(item, true, "", safety).tag.data;
     if ((!item.firstName || before.payload.credentials.first_name === item.firstName)
       && (!item.lastName || before.payload.credentials.last_name === item.lastName)
-      && tags.length === 1 && Object.entries(expected).every(([key, value]) => tags[0].data?.[key] === value)) {
+      && tags.length === 1 && tagDataMatches(tags[0].data, expected)) {
       return { action: "no_change", ...safety, readback: true };
     }
   }
@@ -793,7 +799,7 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
     const expected = tagPayload(item, true, "", safety).tag.data;
     return payload?.credentials?.user_id === profileUserId(item.contactId)
       && clean(payload?.credentials?.email_address).toLowerCase() === email
-      && tags.length === 1 && Object.entries(expected).every(([key, value]) => tag?.data?.[key] === value);
+      && tags.length === 1 && tagDataMatches(tag?.data, expected);
   });
   if (!readback) {
     const error = new Error("LeadHub profil nebyl po zápisu potvrzen zpětným čtením.");
@@ -1543,6 +1549,7 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
 }
 
 export const __test = {
+  tagDataMatches,
   businessFlagsFor,
   compactBusinessRow,
   verifyBusinessPasses,
