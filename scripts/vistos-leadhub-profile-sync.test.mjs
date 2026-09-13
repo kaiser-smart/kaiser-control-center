@@ -304,6 +304,41 @@ globalThis.fetch = async () => Response.json({ error: "missing scope" }, { statu
 try { await assert.rejects(() => __test.readCampaignSafety({ LEADHUB_API_TOKEN: "synthetic" }), error => error.upstreamStatus === 403); }
 finally { globalThis.fetch = originalFetch; }
 const guardedWrites = [];
+// A confirmed no-op is READ-only even when campaigns would block a write.
+// A changed tag/name must still hit that gate, with no mutation or intent.
+for (const scenario of ["no-change", "tag-change", "name-change", "identity-conflict", "safety-unknown"]) {
+  const reads = [];
+  const profile = structuredClone(owned);
+  if (scenario === "tag-change") profile.tags[0].data.data_only = 0;
+  if (scenario === "name-change") profile.credentials.first_name = "Martin";
+  if (scenario === "identity-conflict") profile.credentials.user_id = "foreign";
+  globalThis.fetch = async (url, options) => {
+    assert.equal(options.method, "GET", "no mutation may bypass the campaign gate");
+    reads.push(url);
+    if (url.includes("/campaigns?")) return Response.json([{ campaign_type: "incremental-emailing", state: "active" }]);
+    if (url.endsWith("/suppressed")) return Response.json({ is_suppressed: scenario === "safety-unknown" ? null : false });
+    if (url.includes("/subscriptions/")) return Response.json({ subscriptions: twoStates });
+    return Response.json(profile);
+  };
+  try {
+    const invoke = () => __test.upsertActiveProfile({ LEADHUB_API_TOKEN: "synthetic" }, selected,
+      async () => assert.fail("no write intent is authorized"));
+    if (scenario === "no-change") {
+      const result = await invoke();
+      assert.equal(result.action, "no_change");
+      assert.equal(result.readback, true);
+      assert.deepEqual(result.subscriptions, safeRead(twoStates).subscriptions);
+      assert.equal(result.suppressed, false);
+      assert.equal(reads.length, 3, "only profile, subscriptions and suppression reads");
+    } else {
+      const code = scenario === "identity-conflict" ? "leadhub_profile_identity_conflict"
+        : scenario === "safety-unknown" ? "leadhub_safety_read_unverified" : "leadhub_message_campaign_blocks_write";
+      await assert.rejects(invoke, error => error.code === code);
+    }
+    assert.equal(reads.filter(url => url.includes("/campaigns?")).length,
+      ["tag-change", "name-change"].includes(scenario) ? 1 : 0);
+  } finally { globalThis.fetch = originalFetch; }
+}
 globalThis.fetch = async (url, options) => {
   guardedWrites.push(options.method);
   assert.equal(options.method, "GET");

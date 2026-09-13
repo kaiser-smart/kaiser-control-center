@@ -1016,7 +1016,6 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
       throw syncError("leadhub_profile_identity_conflict", "Aktuální integrační tag nepotvrdil jednoznačnou vazbu.");
     }
   }
-  await readCampaignSafety(env);
   if (before.status === 200) {
     const tags = (before.payload.tags || []).filter(tag => tag?.name === TAG_NAME);
     const expected = tagPayload(item, true, "", safety).tag.data;
@@ -1026,6 +1025,10 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
       return { action: "no_change", ...safety, readback: true };
     }
   }
+  // Identity, subscriptions, suppression and exact resulting data were read
+  // above. A proven NO_CHANGE performs no mutation and needs no write gate.
+  // Every actual profile/tag write still requires the campaign safety check.
+  await readCampaignSafety(env);
   const action = before.status === 404 ? "created" : "updated";
   const profileNeedsWrite = !linked && (before.status === 404 || (item.firstName && before.payload.credentials.first_name !== item.firstName)
     || (item.lastName && before.payload.credentials.last_name !== item.lastName));
@@ -1991,6 +1994,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
     created: run.created,
     updated: run.updated,
     deactivated: run.deactivated,
+    no_change: run.no_change,
     skipped: run.skipped,
     pending: remaining.length,
     readbackConfirmed: run.readbackConfirmed,
