@@ -976,6 +976,13 @@ await limiter.persist();
 const savedRates = JSON.parse([...rateStorage.values.values()][0]);
 await __test.createApiLimiter(rateStorage, savedRates, () => rateClock, rateSleep)("profileRead", {});
 assert.ok(rateClock - dispatchTimes.at(-1) >= 2100, "restart honors the already reserved API capacity");
+let delayedUseClock = 100000;
+const delayedUse = __test.createApiLimiter(new MemoryR2(), { tagWrite: 109000 }, () => delayedUseClock, async ms => { delayedUseClock += ms; });
+delayedUseClock += 5000; // protected source/ledger reads, under the writer lock
+await delayedUse("profileWrite", {});
+assert.equal(delayedUseClock, 105000, "restart cooldown already elapsed during preparation; do not repeat it at first use");
+await delayedUse("tagWrite", {});
+assert.equal(delayedUseClock, 109000, "saved future reservation still wins over elapsed startup cooldown");
 // Slow reservation persistence cannot bunch subsequent network dispatches.
 const jitterR2 = new MemoryR2(); const jitterPut = jitterR2.put.bind(jitterR2); let jitterClock = 100000, jitterIndex = 0;
 jitterR2.put = async (...args) => { jitterClock += [5000, 1, 3000, 2][jitterIndex++ % 4]; return jitterPut(...args); };
@@ -989,6 +996,7 @@ await __test.createApiLimiter(jitterR2, {}, () => jitterClock, async ms => { jit
 assert.ok(jitterClock - crashedAt >= 1200, "even a crash without saved handoff gets a full cooldown after the previous writer has ended");
 const campaignEvents = [];
 await Promise.all([5000, 1, 3000, 2].map(latency => jitterLimiter.runCampaign(async () => {
+  await jitterLimiter("campaignRead", {});
   campaignEvents.push({ type: "start", at: jitterClock });
   jitterClock += latency; await Promise.resolve();
   campaignEvents.push({ type: "end", at: jitterClock });
@@ -997,6 +1005,64 @@ for (let index = 2; index < campaignEvents.length; index += 2) {
   assert.equal(campaignEvents[index].type, "start");
   assert.ok(campaignEvents[index].at - campaignEvents[index - 1].at >= 1200,
     "campaign reads are spaced after prior response, not just local dispatch, even with variable provider latency");
+}
+assert.equal(jitterClock, campaignEvents.at(-1).at, "last campaign response returns without a trailing sleep");
+await jitterLimiter.persist();
+const campaignHandoff = JSON.parse([...jitterR2.values.values()][0]);
+const lastCampaignAt = jitterClock;
+await __test.createApiLimiter(jitterR2, campaignHandoff, () => jitterClock, async ms => { jitterClock += ms; })("campaignRead", {});
+assert.ok(jitterClock - lastCampaignAt >= 1200, "deferred cooldown survives the next writer");
+for (const family of ["profileRead", "profileWrite", "tagWrite", "subscriptionsRead", "suppressionRead"]) {
+  let time = 0; const times = [];
+  const l = __test.createApiLimiter(new MemoryR2(), {}, () => time, async ms => { time += ms; });
+  await Promise.all(Array.from({ length: 90 }, async () => { await l(family, {}); times.push(time); }));
+  // Every sliding window, not just the first minute; queued lanes share quota.
+  for (const at of times) {
+    assert.ok(times.filter(t => t >= at && t < at + 60000).length <= 30);
+    assert.ok(times.filter(t => t >= at && t < at + 1000).length <= 10);
+  }
+}
+assert.equal(__test.API_SPACING_MS.segmentsRead, 60200);
+assert.equal(__test.API_SPACING_MS.jobRead, 1200);
+assert.throws(() => limiter("undocumentedEndpoint", {}), error => error.code === "leadhub_rate_policy_missing");
+assert.equal(__test.retryAfterSeconds("17"), 17);
+assert.equal(__test.retryAfterSeconds("Sun, 13 Sep 2026 01:00:30 GMT", Date.parse("2026-09-13T01:00:00Z")), 30);
+assert.equal(__test.retryAfterSeconds(null), 60);
+assert.equal(__test.retryAfterSeconds("nonsense"), 60);
+const pausedR2 = new MemoryR2(); let pausedClock = 0, limitedCalls = 0;
+const pausedLimiter = __test.createApiLimiter(pausedR2, {}, () => pausedClock, async ms => { pausedClock += ms; });
+const pausedWriter = { halted: false };
+globalThis.fetch = async () => { limitedCalls++; return new Response(null, { status: 429, headers: { "Retry-After": "125" } }); };
+try {
+  await assert.rejects(() => __test.leadHubRequest({ LEADHUB_API_TOKEN: "synthetic", syncApiLimiter: pausedLimiter, syncWriter: pausedWriter },
+    "/profiles/email-address/synthetic@example.test"), error => error.upstreamStatus === 429 && error.retryAfterSeconds === 125);
+  assert.equal(pausedWriter.halted, true);
+  await assert.rejects(() => pausedLimiter("profileRead", {}), error => error.requestNotDispatched === true);
+  assert.equal(limitedCalls, 1, "queued requests do not spend quota after 429");
+  await pausedLimiter.persist();
+  assert.equal(JSON.parse([...pausedR2.values.values()][0]).profileRead, pausedClock + 125000);
+} finally { globalThis.fetch = originalFetch; }
+const controlState = {};
+const healthyMetrics = { calls: { profileRead: { count: 12, milliseconds: 24000, maxMs: 4000 } }, rateLimits: 0 };
+const confirmed = { readbackConfirmed: 3 };
+assert.equal(__test.profileConcurrency(controlState), 3);
+for (const at of [1000, 61000, 181000]) __test.recordThroughputControl(controlState, 3, healthyMetrics, confirmed, 60000, null, at);
+assert.equal(__test.profileConcurrency(controlState, 181000), 4);
+__test.recordThroughputControl(controlState, 4, healthyMetrics, confirmed, 60000, { code: "provider_429", retryAfterSeconds: 700 }, 200000);
+assert.equal(__test.profileConcurrency(controlState, 200000), 3);
+assert.equal(controlState.throughputControl.cooldownUntil, 900000);
+for (const at of [210000, 410000, 610000]) __test.recordThroughputControl(controlState, 3, healthyMetrics, confirmed, 60000, null, at);
+assert.equal(__test.profileConcurrency(controlState, 610000), 3, "successful calls cannot bypass cooldown");
+__test.recordThroughputControl(controlState, 3, { ...healthyMetrics, calls: { profileRead: { count: 1, milliseconds: 16000, maxMs: 16000 } } }, confirmed, 60000, null, 920000);
+assert.equal(__test.profileConcurrency(controlState, 920000), 2, "provider latency backs off without waiting for 429");
+for (const count of [3, 4]) {
+  let active = 0, peak = 0; const finished = new Set();
+  await __test.processBoundedProfiles(dispatchItems, { concurrency: count, budgetMs: 1000 }, async item => {
+    active++; peak = Math.max(peak, active);
+    await new Promise(resolve => setTimeout(resolve, 2));
+    finished.add(item.contactId); active--;
+  });
+  assert.equal(peak, count); assert.equal(finished.size, dispatchItems.length); assert.equal(active, 0);
 }
 let haltedWrites = 0;
 const haltedJournalEvents = [];
@@ -1031,11 +1097,12 @@ for (let step = 0; step < 20; step++) {
 assert.deepEqual(historyKinds, Array.from({ length: 20 }, (_, i) => i % 2 ? "link" : "create"),
   "thousands of unowned links cannot postpone all historical CREATE operations; the cursor survives every restart");
 
-// Exercise the actual coordinated writer with two new profiles, then resume
+// Exercise the actual coordinated writer with four new profiles, then resume
 // its persisted state. Synthetic subscriptions include an existing opt-out.
-const batchRows = [701, 702].map(Id => ({ ...preparationRow, Id: String(Id), Email1: `synthetic-${Id}@example.test` }));
+const batchRows = [701, 702, 703, 704].map(Id => ({ ...preparationRow, Id: String(Id), Email1: `synthetic-${Id}@example.test` }));
 const batchR2 = new MemoryR2({
   [syncStateKey]: JSON.stringify({ checkpoint: "2026-09-11T01:00:00Z", profiles: {},
+    throughputControl: { version: "endpoint-pacing-v1", concurrency: 4 },
     modifiedFilterVerification: { testedAt: new Date().toISOString() },
     snapshotKey: "synthetic/snapshot", dnsKey: "synthetic/dns",
     pending: batchRows.map(row => ({ contactId: row.Id, normalizedEmail: row.Email1, desired: "active", firstName: row.FirstName })) }),
@@ -1052,7 +1119,7 @@ globalThis.fetch = async (url, options) => {
     const body = JSON.parse(options.body);
     if (body.LoginParam) return Response.json({ status: "OK" }, { headers: { "Set-Cookie": "VistosAccessToken=synthetic; Secure" } });
     if (body.GetByIdParam) return Response.json({ status: "OK", data: batchRows.find(row => row.Id === String(body.GetByIdParam.EntityId)) });
-    return Response.json({ status: "OK", data: { recordsTotal: 2, recordsFiltered: 0, data: [] } });
+    return Response.json({ status: "OK", data: { recordsTotal: batchRows.length, recordsFiltered: 0, data: [] } });
   }
   if (url.includes("/subscriptions/")) {
     assert.equal(options.method, "GET");
@@ -1078,16 +1145,17 @@ globalThis.fetch = async (url, options) => {
 };
 try {
   const batchEnv = { ...preparationEnv, R2_ARCHIVE: batchR2 };
-  const batch = await runVistosLeadHubProfileSync(batchEnv, { scheduledAt: "2026-09-11T01:01:00Z", batchLimit: 2 });
-  assert.equal(batch.newlyCompletedProfiles, 2); assert.equal(batch.newlyCreatedProfiles, 2);
+  const batch = await runVistosLeadHubProfileSync(batchEnv, { scheduledAt: "2026-09-11T01:01:00Z", batchLimit: 4 });
+  assert.equal(batch.concurrency, 4);
+  assert.equal(batch.newlyCompletedProfiles, 4); assert.equal(batch.newlyCreatedProfiles, 4);
   const saved = JSON.parse(batchR2.values.get(syncStateKey));
-  assert.equal(Object.keys(saved.profiles).length, 2); assert.equal(saved.pending.length, 0);
-  assert.equal(saved.totals.created, 2); assert.equal(batchWrites, 4);
+  assert.equal(Object.keys(saved.profiles).length, 4); assert.equal(saved.pending.length, 0);
+  assert.equal(saved.totals.created, 4); assert.equal(batchWrites, 8);
   assert.equal(batchLedgerCommits, 2, "one pre-write queue commit and one confirmed batch ledger commit, not one large state per profile");
   assert.ok(Object.values(saved.profiles).every(profile => JSON.stringify(profile.subscriptions) === JSON.stringify(twoStates)));
   assert.equal(batchR2.values.has(retainedLockKey), false);
   await runVistosLeadHubProfileSync(batchEnv, { scheduledAt: "2026-09-11T01:02:00Z" });
-  assert.equal(batchWrites, 4, "resume uses the common ledger; no duplicate profile or unchanged tag write");
+  assert.equal(batchWrites, 8, "resume uses the common ledger; no duplicate profile or unchanged tag write");
 
   // Crash-equivalent ledger persistence failure after both provider readbacks:
   // recovery uses the durable operation journals and performs GETs only.
@@ -1098,8 +1166,8 @@ try {
     return faultPut(key, ...args);
   };
   await assert.rejects(() => runVistosLeadHubProfileSync({ ...batchEnv, R2_ARCHIVE: faultR2 },
-    { scheduledAt: "2026-09-11T01:01:00Z", batchLimit: 2 }), /synthetic batch ledger unavailable/);
-  assert.equal(batchWrites, 4);
+    { scheduledAt: "2026-09-11T01:01:00Z", batchLimit: 4 }), /synthetic batch ledger unavailable/);
+  assert.equal(batchWrites, 8);
   assert.equal(Object.keys(JSON.parse(faultR2.values.get(syncStateKey)).profiles).length, 0);
   const failedLock = JSON.parse(faultR2.values.get(retainedLockKey));
   assert.equal(failedLock.terminal, true);
@@ -1108,13 +1176,15 @@ try {
     JSON.stringify({ status: "INTENT", contactId: "999", desired: "active" }));
   faultR2.put = faultPut;
   const recovered = await executeVistosLeadHubHistoricalImport({ ...batchEnv, R2_ARCHIVE: faultR2 });
-  assert.equal(recovered.profileWrites, 0); assert.equal(batchWrites, 4);
-  assert.equal(Object.keys(JSON.parse(faultR2.values.get(syncStateKey)).profiles).length, 2);
+  assert.equal(recovered.profileWrites, 0); assert.equal(batchWrites, 8);
+  assert.equal(Object.keys(JSON.parse(faultR2.values.get(syncStateKey)).profiles).length, 4);
   assert.equal(faultR2.values.has(retainedLockKey), false, "read-only sibling intent cannot trap safely confirmed operations");
   const isolatedState = JSON.parse(batchInitial[syncStateKey]);
   isolatedState.quarantinedIdentities = {
     "701": { email: "previous-address@example.test", reason: "UNACKNOWLEDGED_TAG_INTENT" },
-    "other-id": { email: batchRows[1].Email1, reason: "UNACKNOWLEDGED_TAG_INTENT" }
+    "other-id": { email: batchRows[1].Email1, reason: "UNACKNOWLEDGED_TAG_INTENT" },
+    "703": { email: batchRows[2].Email1, reason: "UNACKNOWLEDGED_TAG_INTENT" },
+    "704": { email: batchRows[3].Email1, reason: "UNACKNOWLEDGED_TAG_INTENT" }
   };
   const isolatedR2 = new MemoryR2({ ...batchInitial, [syncStateKey]: JSON.stringify(isolatedState) });
   const writesBeforeIsolation = batchWrites;
@@ -1123,7 +1193,7 @@ try {
   assert.equal(batchWrites, writesBeforeIsolation, "neither changed email of quarantined ID nor same email on another ID can resurrect an intent");
   assert.equal(JSON.parse(isolatedR2.values.get(syncStateKey)).manifestIdentityChecks["701"].action, "SKIP");
 } finally { globalThis.fetch = originalFetch; }
-console.log("Vistos full two-profile concurrent writer + restart + preserved opt-out test passed");
+console.log("Vistos full four-profile concurrent writer + restart + preserved opt-out test passed");
 
 const pendingRow = { Id: "42", Modified: "2026-09-12T00:00:00Z" };
 const originState = { profiles: {}, pending: [{ contactId: "42", desired: "active" }, { contactId: "43", desired: "active" }],
