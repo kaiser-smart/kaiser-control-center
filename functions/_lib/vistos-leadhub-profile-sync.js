@@ -24,9 +24,9 @@ const LEADHUB_BASE_URL = "https://api.leadhub.co";
 const CONTACT_PAGE_SIZE = 1000;
 const PROFILE_BATCH_LIMIT = 10;
 // Count is only a ceiling. Dispatch is bounded by wall-time, shared provider
-// rate reservations, two independent identities and durable operation journals.
+// rate reservations, bounded independent identities and durable journals.
 const IMPORT_BATCH_LIMIT = 6;
-const PROFILE_CONCURRENCY = 2;
+const PACING_VERSION = "endpoint-pacing-v1";
 const PROFILE_DISPATCH_BUDGET_MS = 35000;
 const RATE_STATE_KEY = `${SYNC_PREFIX}/api-rate-reservations.json`;
 const OVERLAP_MS = 10 * 60 * 1000;
@@ -315,6 +315,7 @@ function addTiming(metrics, name, milliseconds) {
   if (!metrics) return;
   const entry = metrics.calls[name] ||= { count: 0, milliseconds: 0 };
   entry.count++; entry.milliseconds += milliseconds;
+  entry.maxMs = Math.max(entry.maxMs || 0, milliseconds);
 }
 
 async function measured(env, name, operation) {
@@ -343,8 +344,17 @@ function apiFamily(path) {
   return path.startsWith("/profiles/email-address/") ? "profileRead"
     : path.startsWith("/subscriptions/") ? (path.endsWith("/suppressed") ? "suppressionRead" : "subscriptionsRead")
     : path.startsWith("/campaigns") ? "campaignRead"
-    : path === "/profiles/tags" ? "tagWrite" : path === "/profiles" ? "profileWrite" : "otherLeadHub";
+    : path === "/profiles/tags" ? "tagWrite" : path === "/profiles" ? "profileWrite"
+    : path === "/segments" ? "segmentsRead" : path === "/segments/query/profiles" ? "exportWrite"
+    : path === "/jobs" ? "jobsRead" : /^\/jobs\/[^/]+$/.test(path) ? "jobRead" : "otherLeadHub";
 }
+
+// Verified https://api.leadhub.co/openapi.json, 2026-09-13. These are local
+// smooth pacing intervals, NOT provider-prescribed sleeps. 2.1s stays below
+// BOTH 10/s and 30/min; no burst credit is invented on a new invocation.
+const API_SPACING_MS = Object.freeze({ profileRead: 2100, subscriptionsRead: 2100,
+  suppressionRead: 2100, profileWrite: 2100, tagWrite: 2100,
+  campaignRead: 1200, jobRead: 1200, jobsRead: 10200, segmentsRead: 60200, exportWrite: 60200 });
 
 // The durable workspace writer lock already excludes overlapping invocations.
 // Pace actual dispatch in memory, persist handoff once per drained batch, and
@@ -352,28 +362,83 @@ function apiFamily(path) {
 // A crash cannot spend capacity immediately: uncertain writes retain the lock,
 // and even without a final rate handoff the next writer waits from its own start.
 function createApiLimiter(storage, reservations = {}, now = Date.now, sleep = delay) {
+  const startedAt = now();
   const families = new Map();
   const campaignGate = serialExecutor();
+  const blocked = new Map();
   const limiter = (family, env) => {
-    const spacing = family === "campaignRead" ? 1200 : 2200;
+    const spacing = API_SPACING_MS[family];
+    if (!spacing) throw syncError("leadhub_rate_policy_missing", "Endpoint nemá ověřený limit API.");
     if (!families.has(family)) {
       families.set(family, serialExecutor());
       // Restart never spends capacity immediately after an earlier writer.
-      reservations[family] = Math.max(Number(reservations[family]) || 0, now() + spacing);
+      // The prior writer has already drained before this limiter exists.
+      // Source/ledger reads count toward restart cooldown; do not restart the
+      // clock on the FIRST USE of each endpoint several seconds into a batch.
+      reservations[family] = Math.max(Number(reservations[family]) || 0, startedAt + spacing);
     }
     return families.get(family)(async () => {
+      if (blocked.has(family)) throw blocked.get(family);
       if (reservations[family] > now()) await sleep(reservations[family] - now(), env, "apiRateWait");
+      if (blocked.has(family)) throw blocked.get(family);
       reservations[family] = now() + spacing;
     });
   };
   limiter.persist = () => putJson(storage, RATE_STATE_KEY, reservations);
+  limiter.pause = (family, error) => {
+    reservations[family] = Math.max(reservations[family] || 0, now() + error.retryAfterSeconds * 1000);
+    const cancelled = syncError("leadhub_rate_paused", "Další požadavky endpointu čekají na další běh.", 503);
+    Object.assign(cancelled, { requestNotDispatched: true, endpointFamily: family, retryAfterSeconds: error.retryAfterSeconds });
+    blocked.set(family, cancelled);
+  };
   // The campaign endpoint permits only 1/s. Serialize through response arrival
   // as well as dispatch: variable upstream latency must not bunch arrivals.
   limiter.runCampaign = (operation, env) => campaignGate(async () => {
     try { return await operation(); }
-    finally { await sleep(1200, env, "campaignResponseCooldown"); }
+    // Reserve cooldown for the NEXT dispatch, not the caller returning this
+    // response. The normal limiter consumes it once, including after restart.
+    finally { reservations.campaignRead = Math.max(reservations.campaignRead || 0, now() + API_SPACING_MS.campaignRead); }
   });
   return limiter;
+}
+
+function retryAfterSeconds(value, now = Date.now()) {
+  const text = String(value ?? "").trim();
+  if (/^\d+(\.\d+)?$/.test(text)) return Math.max(1, Math.ceil(Number(text)));
+  const date = Date.parse(text);
+  return Number.isFinite(date) ? Math.max(1, Math.ceil((date - now) / 1000)) : 60;
+}
+
+// Small, persisted ramp under the SAME writer. API pacing remains independent
+// of lane count: success without 429 is not evidence of extra API quota.
+function profileConcurrency(state, now = Date.now()) {
+  const control = state.throughputControl;
+  if (control?.version !== PACING_VERSION) return 3; // measured previous baseline: 2
+  if (now < (control.cooldownUntil || 0)) return Math.max(1, Math.min(4, control.concurrency || 1));
+  return Math.max(1, Math.min(4, control.concurrency || 3));
+}
+
+function recordThroughputControl(state, concurrency, metrics, run, durationMs, error, now = Date.now()) {
+  const previous = state.throughputControl?.version === PACING_VERSION ? state.throughputControl : {};
+  const reads = metrics.calls.profileRead;
+  const slow = durationMs > 85000 || (reads?.maxMs || 0) > 15000
+    || (reads?.count > 0 && reads.milliseconds / reads.count > 6000);
+  if (error || metrics.rateLimits || slow) {
+    state.throughputControl = { version: PACING_VERSION, concurrency: Math.max(1, concurrency - 1),
+      healthyRuns: 0, confirmedProfiles: 0, windowStartedAt: now,
+      cooldownUntil: now + Math.max(600000, (error?.retryAfterSeconds || 0) * 1000),
+      reason: error?.code || (metrics.rateLimits ? "rate_limit" : "latency_budget") };
+    return;
+  }
+  const control = { ...previous, version: PACING_VERSION, concurrency,
+    windowStartedAt: previous.windowStartedAt || now, healthyRuns: (previous.healthyRuns || 0) + 1,
+    confirmedProfiles: (previous.confirmedProfiles || 0) + run.readbackConfirmed, reason: "measuring" };
+  if (now >= (control.cooldownUntil || 0) && now - control.windowStartedAt >= 180000
+    && control.healthyRuns >= 3 && control.confirmedProfiles >= 6 && concurrency < 4) {
+    Object.assign(control, { concurrency: concurrency + 1, windowStartedAt: now,
+      healthyRuns: 0, confirmedProfiles: 0, reason: "bounded_step_after_confirmed_readbacks" });
+  }
+  state.throughputControl = control;
 }
 
 async function processBoundedProfiles(items, options, operation) {
@@ -672,7 +737,11 @@ async function leadHubRequest(env, path, options = {}) {
     error.code = "leadhub_api_request_failed";
     error.upstreamStatus = response.status;
     error.endpointFamily = family;
-    error.retryAfterSeconds = Math.max(0, Number(response.headers.get("retry-after")) || 0);
+    error.retryAfterSeconds = response.status === 429 ? retryAfterSeconds(response.headers.get("retry-after")) : 0;
+    if (response.status === 429) {
+      env.syncApiLimiter?.pause?.(family, error);
+      if (env.syncWriter) env.syncWriter.halted = true;
+    }
     throw error;
   }
   return { status: response.status, payload, durationMs: Date.now() - startedAt };
@@ -698,6 +767,8 @@ async function readbackProfile(env, email, predicate) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     last = await leadHubRequest(env, path, { allow404: true });
     if (last.status === 200 && predicate(last.payload)) return last.payload;
+    // This observation wait already overlaps the limiter's absolute permit.
+    // Keep it outside its serial gate so other ready identities are not held.
     if (attempt < 7) await delay(Math.min(1500 * (attempt + 1), 3000), env, "readbackPollWait");
   }
   return null;
@@ -720,7 +791,7 @@ async function acceptedProfileWrite(env, path, options, safety, record, stage) {
   catch (error) {
     // 429 explicitly rejected this request. Preserve an earlier accepted
     // stage, if any; never retry an ambiguous timeout/5xx as a fresh write.
-    if (error.upstreamStatus === 429 || (error.code === "coordinator_halted" && error.requestNotDispatched === true)) {
+    if (error.upstreamStatus === 429 || error.requestNotDispatched === true) {
       await record(safety, { rejected: true, httpStatus: error.upstreamStatus || null, notDispatched: error.requestNotDispatched === true });
     }
     throw error;
@@ -1618,6 +1689,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
   const scheduledAt = (validDate(options.scheduledAt) || new Date()).toISOString();
   let state = await getJson(storage, SYNC_STATE_KEY);
   if (!state) return initializeState(env, scheduledAt);
+  const concurrency = profileConcurrency(state);
   if (state.safetyIncident) throw syncError("safety_incident_unresolved", "Nevyřešený bezpečnostní incident blokuje další zápisy.");
   if (!validDate(state.checkpoint)) {
     const error = new Error("Neplatný checkpoint synchronizace.");
@@ -1818,7 +1890,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
   let dispatchedCursor = state.queueCursor || 0;
   try {
   await processBoundedProfiles(current, {
-    concurrency: PROFILE_CONCURRENCY, budgetMs: PROFILE_DISPATCH_BUDGET_MS,
+    concurrency, budgetMs: PROFILE_DISPATCH_BUDGET_MS,
     onDispatch: item => { dispatchedCursor = item.queueCursorAfter; state.historicalQueueCursor = item.historicalCursorAfter; },
     onFailure: error => {
       writer.halted = true;
@@ -1954,6 +2026,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
   } catch (error) {
     // Every dispatched lane has settled here. Preserve both completed ledger
     // commits and all remaining intents; never discard the undispatched tail.
+    recordThroughputControl(state, concurrency, metrics, run, Date.now() - Date.parse(runStartedAt), error);
     state.lastFailure = { code: error.code || "unknown", endpointFamily: error.endpointFamily || null,
       upstreamStatus: error.upstreamStatus || null, retryAfterSeconds: error.retryAfterSeconds || 0,
       at: new Date().toISOString(), metrics, ...run };
@@ -1963,6 +2036,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
     throw error;
   }
   phase("profileOperations");
+  recordThroughputControl(state, concurrency, metrics, run, Date.now() - Date.parse(runStartedAt));
   if (run.readbackConfirmed > 0) {
     state.apiReadValidation = {
       profilesRead: true,
@@ -1986,6 +2060,8 @@ async function runProfileSyncUnlocked(env, options, writer) {
     startedAt: runStartedAt,
     finishedAt: new Date().toISOString(),
     durationMs: Date.now() - Date.parse(runStartedAt),
+    pacingVersion: PACING_VERSION,
+    concurrency,
     sourceThrough: scheduledAt,
     sourceRows: delta.rows.length,
     changedContacts: changedIds.size,
@@ -2052,6 +2128,12 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
 }
 
 export const __test = {
+  API_SPACING_MS,
+  retryAfterSeconds,
+  profileConcurrency,
+  recordThroughputControl,
+  leadHubRequest,
+  readbackProfile,
   createApiLimiter,
   processBoundedProfiles,
   serialExecutor,
