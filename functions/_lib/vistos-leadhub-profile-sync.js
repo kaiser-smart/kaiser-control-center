@@ -1275,7 +1275,8 @@ async function initializeState(env, scheduledAt) {
 export async function withVistosLeadHubWriter(env, operation) {
   const storage = bucket(env);
   const owner = crypto.randomUUID();
-  const acquired = await storage.put(WRITER_LOCK_KEY, JSON.stringify({ owner, startedAt: new Date().toISOString() }), {
+  const startedAt = new Date().toISOString();
+  const acquired = await storage.put(WRITER_LOCK_KEY, JSON.stringify({ owner, startedAt }), {
     onlyIf: new Headers({ "If-None-Match": "*" }),
     httpMetadata: { contentType: "application/json" },
     customMetadata: { protected: "true", integration: "vistos-leadhub-profiles" }
@@ -1286,7 +1287,7 @@ export async function withVistosLeadHubWriter(env, operation) {
     error.code = "vistos_leadhub_writer_locked";
     throw error;
   }
-  const context = { owner, sideEffectsStarted: false, unsettled: new Set(), halted: false };
+  const context = { owner, startedAt, sideEffectsStarted: false, unsettled: new Set(), halted: false };
   let completed = false;
   try {
     const result = await operation(context);
@@ -1742,7 +1743,8 @@ function classifyHistoricalOrigins(state, originalItems) {
 }
 
 async function runProfileSyncUnlocked(env, options, writer) {
-  const runStartedAt = new Date().toISOString();
+  // Include import-state/ledger reads performed by the outer coordinator.
+  const runStartedAt = writer.startedAt;
   const metrics = { calls: {}, phases: {}, rateLimits: 0 };
   const originalStorage = bucket(env);
   env = { ...env, syncMetrics: metrics, R2_ARCHIVE: new Proxy(originalStorage, { get(target, key) {
@@ -1950,7 +1952,10 @@ async function runProfileSyncUnlocked(env, options, writer) {
   if (delta.rows.length || !state.snapshotKey || !state.dnsKey) await commitSourceVersion(storage, state, snapshot, dnsState, writer.owner);
   else await putJson(storage, SYNC_STATE_KEY, state);
   phase("prepareAndPersist");
-  if (Date.now() - Date.parse(runStartedAt) >= PROFILE_PREPARATION_BUDGET_MS) {
+  const preparationElapsedMs = Date.now() - Date.parse(runStartedAt);
+  console.log("vistos_leadhub_profile_sync.prepared", { version: "whole-request-budget-v1",
+    elapsedMs: preparationElapsedMs, budgetMs: PROFILE_PREPARATION_BUDGET_MS, phases: metrics.phases });
+  if (preparationElapsedMs >= PROFILE_PREPARATION_BUDGET_MS) {
     await env.syncApiLimiter.persist();
     return { syncStatus: "PENDING", status: "SOURCE_PREPARED", checkpoint: state.checkpoint,
       pending: state.pending.length, sourceRows: delta.rows.length, metrics,

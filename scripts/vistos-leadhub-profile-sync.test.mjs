@@ -36,6 +36,10 @@ await assert.rejects(() => withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async
 unlockFirst();
 assert.equal(await writerOne, "first");
 assert.equal(await withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async () => "next"), "next");
+await withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async context => {
+  const lock = JSON.parse(lockR2.values.get("protected-sync/vistos-leadhub-profiles/writer-lock.json"));
+  assert.equal(context.startedAt, lock.startedAt, "HTTP budget starts at lock acquisition, not after outer ledger reads");
+});
 await assert.rejects(() => withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async () => { throw new Error("read failed"); }), /read failed/);
 assert.equal(lockR2.values.size, 0, "read-only failures release the writer");
 const claimedCleanupR2 = new MemoryR2();
