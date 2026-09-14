@@ -1362,9 +1362,10 @@ export async function executeVistosLeadHubHistoricalImport(env, options = {}) {
     }
     if (state.historicalImport.id !== prepared.id) throw syncError("historical_import_identity_conflict", "Evidence importu patří jinému manifestu.");
     const summary = await runProfileSyncUnlocked(env, { ...options,
-      batchLimit: state.historicalImport.readbackConfirmed ? IMPORT_BATCH_LIMIT : 1 }, writer);
-    const confirmed = await getJson(storage, SYNC_STATE_KEY);
-    return { ...summary, mode: "execute-import", historicalImport: confirmed.historicalImport, sendAllowed: false };
+      batchLimit: state.historicalImport.readbackConfirmed ? IMPORT_BATCH_LIMIT : 1 }, writer, state);
+    // The same exclusive writer already committed this exact in-memory state.
+    // Do not download the large ledger again before releasing its lock.
+    return { ...summary, mode: "execute-import", historicalImport: state.historicalImport, sendAllowed: false };
   });
 }
 
@@ -1742,7 +1743,7 @@ function classifyHistoricalOrigins(state, originalItems) {
   return ids;
 }
 
-async function runProfileSyncUnlocked(env, options, writer) {
+async function runProfileSyncUnlocked(env, options, writer, initialState) {
   // Include import-state/ledger reads performed by the outer coordinator.
   const runStartedAt = writer.startedAt;
   const metrics = { calls: {}, phases: {}, rateLimits: 0 };
@@ -1758,7 +1759,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
   env.syncWriter = writer;
   env.syncApiLimiter = createApiLimiter(storage, await getJson(storage, RATE_STATE_KEY) || {});
   const scheduledAt = (validDate(options.scheduledAt) || new Date()).toISOString();
-  let state = await getJson(storage, SYNC_STATE_KEY);
+  let state = initialState || await getJson(storage, SYNC_STATE_KEY);
   if (!state) return initializeState(env, scheduledAt);
   const concurrency = profileConcurrency(state);
   if (state.safetyIncident) throw syncError("safety_incident_unresolved", "Nevyřešený bezpečnostní incident blokuje další zápisy.");
