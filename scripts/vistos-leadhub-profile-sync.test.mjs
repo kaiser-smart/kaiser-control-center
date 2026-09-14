@@ -1151,6 +1151,23 @@ globalThis.fetch = async (url, options) => {
 };
 try {
   const batchEnv = { ...preparationEnv, R2_ARCHIVE: batchR2 };
+  const slowSourceR2 = new MemoryR2(batchInitial), slowSourcePut = slowSourceR2.put.bind(slowSourceR2);
+  const beforeSlowSourceNow = Date.now;
+  slowSourceR2.put = async (key, ...args) => {
+    const result = await slowSourcePut(key, ...args);
+    if (key === syncStateKey) Date.now = () => beforeSlowSourceNow() + 30000;
+    return result;
+  };
+  try {
+    const prepared = await runVistosLeadHubProfileSync({ ...batchEnv, R2_ARCHIVE: slowSourceR2 },
+      { scheduledAt: "2026-09-11T01:01:00Z", batchLimit: 4 });
+    assert.equal(prepared.status, "SOURCE_PREPARED");
+    assert.equal(prepared.profileWrites, 0); assert.equal(batchWrites, 0);
+    const persisted = JSON.parse(slowSourceR2.values.get(syncStateKey));
+    assert.equal(persisted.pending.length, 4);
+    assert.equal(persisted.checkpoint, "2026-09-11T01:01:00.000Z");
+    assert.equal(slowSourceR2.values.has(retainedLockKey), false, "slow preparation yields before any provider dispatch");
+  } finally { Date.now = beforeSlowSourceNow; }
   const batch = await runVistosLeadHubProfileSync(batchEnv, { scheduledAt: "2026-09-11T01:01:00Z", batchLimit: 4 });
   assert.equal(batch.concurrency, 4);
   assert.equal(batch.newlyCompletedProfiles, 4); assert.equal(batch.newlyCreatedProfiles, 4);
