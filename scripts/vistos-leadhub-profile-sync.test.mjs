@@ -38,6 +38,12 @@ assert.equal(await writerOne, "first");
 assert.equal(await withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async () => "next"), "next");
 await assert.rejects(() => withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async () => { throw new Error("read failed"); }), /read failed/);
 assert.equal(lockR2.values.size, 0, "read-only failures release the writer");
+const claimedCleanupR2 = new MemoryR2();
+await withVistosLeadHubWriter({ R2_ARCHIVE: claimedCleanupR2 }, async context => {
+  const key = "protected-sync/vistos-leadhub-profiles/writer-lock.json";
+  claimedCleanupR2.values.set(key, JSON.stringify({ owner: context.owner, phase: "COMMITTED_RELEASING", claimId: "recovery" }));
+});
+assert.equal(claimedCleanupR2.values.size, 1, "late original finalizer cannot remove a recovery claim");
 await assert.rejects(() => withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async context => { context.sideEffectsStarted = true; throw new Error("provider result unknown"); }), /provider result unknown/);
 await assert.rejects(() => withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async () => assert.fail("uncertain write was retried")), error => error.code === "vistos_leadhub_writer_locked");
 
@@ -1154,6 +1160,87 @@ try {
   assert.equal(batchLedgerCommits, 2, "one pre-write queue commit and one confirmed batch ledger commit, not one large state per profile");
   assert.ok(Object.values(saved.profiles).every(profile => JSON.stringify(profile.subscriptions) === JSON.stringify(twoStates)));
   assert.equal(batchR2.values.has(retainedLockKey), false);
+
+  // Reproduce termination after the complete batch commit, before finally
+  // releases its non-terminal lock. Recovery performs fresh GETs only and
+  // must not touch the ledger, queue, counters, checkpoint or provider data.
+  const committedSeed = Object.fromEntries(batchR2.values);
+  const committedOwner = saved.lastRun.writerOwner;
+  const committedLock = { owner: committedOwner, startedAt: new Date(Date.parse(saved.lastRun.startedAt) - 1000).toISOString() };
+  committedSeed[retainedLockKey] = JSON.stringify(committedLock);
+  const journalPrefix = `protected-sync/vistos-leadhub-profiles/operations/${committedOwner}/`;
+  const journalKeys = Object.keys(committedSeed).filter(key => key.startsWith(journalPrefix));
+  const receiptKey = `protected-sync/vistos-leadhub-profiles/runs/${saved.lastRun.sourceThrough.replace(/[:.]/g, "-")}.json`;
+  const nowBeforeRecovery = Date.now;
+  const recoveryFetch = globalThis.fetch;
+  Date.now = () => nowBeforeRecovery() + 180000;
+  try {
+    for (const scenario of ["complete", "legacy", "missing-journal", "unknown-intent", "ledger-mismatch",
+      "business-mismatch", "missing-receipt", "wrong-owner", "safety-changed", "identity-changed", "tag-changed",
+      "active-claim", "stale-claim", "cas-race", "receipt-failure", "cleanup-failure"]) {
+      const storage = new MemoryR2(committedSeed);
+      const update = (key, fn) => { const value = JSON.parse(storage.values.get(key)); fn(value); storage.values.set(key, JSON.stringify(value)); };
+      if (scenario === "legacy") for (const key of [syncStateKey, receiptKey]) update(key, value => {
+        const run = key === syncStateKey ? value.lastRun : value;
+        delete run.writerOwner; delete run.committedContactIds;
+      });
+      if (scenario === "missing-journal") storage.values.delete(journalKeys[0]);
+      if (scenario === "unknown-intent") update(journalKeys[0], value => { value.status = "WRITE_INTENT"; });
+      if (scenario === "ledger-mismatch") update(syncStateKey, value => { value.profiles["701"].rowHash = "different"; });
+      if (scenario === "business-mismatch") update(syncStateKey, value => { value.profiles["701"].businessFlags = { contract_direct: "YES" }; });
+      if (scenario === "missing-receipt") storage.values.delete(receiptKey);
+      if (scenario === "wrong-owner") update(syncStateKey, value => { value.lastRun.writerOwner = "other-writer"; });
+      if (["active-claim", "stale-claim"].includes(scenario)) update(retainedLockKey, value => {
+        value.phase = "COMMITTED_RELEASING"; value.claimId = "previous-attempt";
+        value.claimedAt = new Date(Date.now() - (scenario === "stale-claim" ? 180000 : 0)).toISOString();
+      });
+      const ledgerBefore = storage.values.get(syncStateKey);
+      const put = storage.put.bind(storage), remove = storage.delete.bind(storage);
+      let failOnce = true;
+      storage.put = async (key, ...args) => {
+        assert.notEqual(key, syncStateKey, "completed batch recovery never rewrites the global ledger");
+        if (key === retainedLockKey && scenario === "cas-race") {
+          storage.values.set(key, JSON.stringify({ owner: "new-writer" })); return null;
+        }
+        if (key.endsWith("/settled.json") && scenario === "receipt-failure" && failOnce) {
+          failOnce = false; throw new Error("synthetic recovery receipt failed");
+        }
+        return put(key, ...args);
+      };
+      storage.delete = async key => {
+        if (scenario === "cleanup-failure" && failOnce) { failOnce = false; throw new Error("synthetic cleanup failed"); }
+        return remove(key);
+      };
+      globalThis.fetch = async (url, options) => {
+        assert.equal(options.method, "GET", `${scenario}: recovery cannot replay a provider mutation`);
+        const response = await recoveryFetch(url, options);
+        const data = await response.json();
+        if (scenario === "safety-changed" && url.endsWith("/suppressed")) data.is_suppressed = true;
+        if (data.credentials && scenario === "identity-changed") data.credentials.user_id = "foreign";
+        if (data.tags && scenario === "tag-changed") data.tags = [];
+        return Response.json(data, { status: response.status });
+      };
+      const recover = () => executeVistosLeadHubHistoricalImport({ ...batchEnv, R2_ARCHIVE: storage });
+      if (["cas-race", "active-claim"].includes(scenario)) {
+        await assert.rejects(recover, error => error.code === "writer_reconciliation_changed");
+        assert.equal(storage.values.has(retainedLockKey), true);
+      } else if (["receipt-failure", "cleanup-failure"].includes(scenario)) {
+        await assert.rejects(recover, /synthetic/);
+        assert.equal(storage.values.has(retainedLockKey), true);
+        update(retainedLockKey, value => { value.claimedAt = new Date(Date.now() - 180000).toISOString(); });
+        assert.equal((await recover()).status, "COMMITTED_BATCH_RECOVERED", "restart retries only cleanup with fresh readback");
+      } else {
+        const result = await recover();
+        const allowed = ["complete", "legacy", "stale-claim"].includes(scenario);
+        assert.equal(result.status, allowed ? "COMMITTED_BATCH_RECOVERED" : "RECONCILIATION_REQUIRED", `${scenario}: ${JSON.stringify(result.checks)}`);
+        assert.equal(result.lockReleased, allowed, scenario);
+        assert.equal(result.profileWrites, 0);
+      }
+      assert.equal(storage.values.get(syncStateKey), ledgerBefore, scenario);
+      assert.equal(batchWrites, 8, scenario);
+    }
+  } finally { Date.now = nowBeforeRecovery; globalThis.fetch = recoveryFetch; }
+  console.log("Completed batch cleanup: terminal-less recovery, full receipt, safety, CAS and restart tests passed");
   await runVistosLeadHubProfileSync(batchEnv, { scheduledAt: "2026-09-11T01:02:00Z" });
   assert.equal(batchWrites, 8, "resume uses the common ledger; no duplicate profile or unchanged tag write");
 

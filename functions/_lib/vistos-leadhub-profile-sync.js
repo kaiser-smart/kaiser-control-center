@@ -1292,10 +1292,10 @@ export async function withVistosLeadHubWriter(env, operation) {
   } finally {
     if (completed || !context.sideEffectsStarted) {
       const lock = await getJson(storage, WRITER_LOCK_KEY);
-      if (lock?.owner === owner) await storage.delete(WRITER_LOCK_KEY);
+      if (lock?.owner === owner && !lock.phase) await storage.delete(WRITER_LOCK_KEY);
     } else {
       const lock = await getJson(storage, WRITER_LOCK_KEY);
-      if (lock?.owner === owner) await putJson(storage, WRITER_LOCK_KEY, {
+      if (lock?.owner === owner && !lock.phase) await putJson(storage, WRITER_LOCK_KEY, {
         ...lock, terminal: true, terminalAt: new Date().toISOString()
       });
     }
@@ -1364,8 +1364,43 @@ export async function executeVistosLeadHubHistoricalImport(env, options = {}) {
   });
 }
 
-// READ reconciliation does not take over or remove a lock. It does not retry
-// any accepted write and cannot modify a profile, tag, subscription or checkpoint.
+// A complete committed batch may lose its final lock cleanup. Prove the whole
+// batch, not just one accepted operation or elapsed time, before releasing it.
+async function committedBatchReceipt(storage, state, lock, verified, listedCount) {
+  const run = state.lastRun;
+  if (state.safetyIncident || run?.status !== "completed" || !verified.length
+    || verified.length !== listedCount || state.checkpoint !== run.sourceThrough
+    || !(Date.parse(lock.startedAt) <= Date.parse(run.startedAt))
+    || !(Date.parse(run.startedAt) <= Date.parse(run.finishedAt))
+    || !(Date.parse(run.finishedAt) < Date.now() - 120000)
+    || verified.length !== run.readbackConfirmed
+    || new Set(verified.map(entry => entry.operation.contactId)).size !== verified.length
+    || !verified.every(({ operation, alreadyCommitted, result }) => alreadyCommitted
+      && operation.writer === lock.owner && operation.status === "READBACK_CONFIRMED"
+      && Date.parse(operation.timings?.startedAt) >= Date.parse(run.startedAt)
+      && Date.parse(operation.finishedAt) >= Date.parse(operation.timings?.startedAt)
+      && Date.parse(operation.finishedAt) <= Date.parse(run.finishedAt)
+      && result.identityMatches && result.namesMatch && result.tagMatches && result.safetyUnchanged)) return null;
+  for (const action of ["created", "updated", "deactivated", "no_change"]) {
+    if (verified.filter(entry => entry.operation.action === action).length !== run[action]) return null;
+  }
+  if (verified.some(entry => !["created", "updated", "deactivated", "no_change"].includes(entry.operation.action))) return null;
+  if (run.writerOwner !== undefined) {
+    if (run.writerOwner !== lock.owner || !Array.isArray(run.committedContactIds)
+      || JSON.stringify([...run.committedContactIds].sort()) !== JSON.stringify(verified.map(entry => entry.operation.contactId).sort())) return null;
+  }
+  // Older runs have no owner receipt. Require their independently persisted
+  // complete run record as well as owner-scoped journals and exact ledger match.
+  const recorded = await getJson(storage, `${SYNC_PREFIX}/runs/${run.sourceThrough.replace(/[:.]/g, "-")}.json`);
+  // Storage timing metrics continue accumulating while these two records are
+  // persisted. Compare the immutable completion receipt, not those timings.
+  const fields = ["status", "writerOwner", "committedContactIds", "startedAt", "finishedAt", "sourceThrough",
+    "created", "updated", "deactivated", "no_change", "skipped", "readbackConfirmed"];
+  return recorded && fields.every(field => JSON.stringify(recorded[field]) === JSON.stringify(run[field])) ? run : null;
+}
+
+// READ reconciliation never retries provider writes. A fully committed batch
+// only needs a fenced audit receipt and lock cleanup, not another ledger write.
 async function inspectRetainedWriter(env, lock, options = {}) {
   const storage = bucket(env);
   const state = await getJson(storage, SYNC_STATE_KEY);
@@ -1389,6 +1424,7 @@ async function inspectRetainedWriter(env, lock, options = {}) {
       && tracked.email === operation.normalizedEmail && tracked.rowHash === operation.rowHash
       && tracked.sourceModified === operation.sourceModified
       && tracked.active === (operation.desired === "active")
+      && JSON.stringify(tracked.businessFlags || null) === JSON.stringify(operation.businessFlags || null)
       && JSON.stringify({ subscriptions: tracked.subscriptions, suppressed: tracked.suppressed }) === JSON.stringify(operation.afterSafety);
     const item = (state.pending || []).find(entry => entry.contactId === operation.contactId)
       || (alreadyCommitted ? { contactId: operation.contactId, normalizedEmail: operation.normalizedEmail } : null);
@@ -1431,15 +1467,45 @@ async function inspectRetainedWriter(env, lock, options = {}) {
     checks.push(result);
     verified.push({ operationKey: object.key, operation, item, result, safety, alreadyCommitted });
   }
+  const committed = await committedBatchReceipt(storage, state, lock, verified, listed.objects.length);
+  if (committed && (!lock.phase || lock.phase === "COMMITTED_RELEASING")) {
+    const liveObject = await storage.get(WRITER_LOCK_KEY);
+    const live = liveObject ? await liveObject.json() : null;
+    if (!live || live.owner !== lock.owner || !liveObject.httpEtag
+      || (live.phase && live.phase !== "COMMITTED_RELEASING")
+      || (live.phase === "COMMITTED_RELEASING" && !(Date.parse(live.claimedAt) < Date.now() - 120000))) {
+      throw syncError("writer_reconciliation_changed", "Dokončenou dávku již uzavírá jiný běh.");
+    }
+    const claimId = crypto.randomUUID();
+    const claimed = await storage.put(WRITER_LOCK_KEY, JSON.stringify({ ...live,
+      phase: "COMMITTED_RELEASING", claimId, claimedAt: new Date().toISOString() }), {
+      onlyIf: new Headers({ "If-Match": liveObject.httpEtag }),
+      httpMetadata: { contentType: "application/json" }, customMetadata: { protected: "true" }
+    });
+    if (!claimed) throw syncError("writer_reconciliation_changed", "Vlastník dokončené dávky se změnil.");
+    await putJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/settled.json`, {
+      settledAt: new Date().toISOString(), reason: "COMMITTED_BATCH_RECOVERED",
+      profilesConfirmed: verified.length, profileWrites: 0, ledgerWrites: 0,
+      safetyUnchanged: true, checkpointChanged: false, committedRunFinishedAt: committed.finishedAt
+    });
+    const current = await getJson(storage, WRITER_LOCK_KEY);
+    if (current?.owner !== lock.owner || current.claimId !== claimId) {
+      throw syncError("writer_reconciliation_changed", "Zámek dokončené dávky se během uzavírání změnil.");
+    }
+    await storage.delete(WRITER_LOCK_KEY);
+    return { mode: "execute-import", status: "COMMITTED_BATCH_RECOVERED", checks,
+      profilesConfirmed: verified.length, profileWrites: 0, ledgerWrites: 0,
+      lockReleased: true, checkpointChanged: false, sendAllowed: false };
+  }
   const explicitlyObservedLegacyFailure = clean(options.recoveryOwner) === lock.owner;
-  if (lock.phase !== "RECONCILING" && (lock.terminal === true || explicitlyObservedLegacyFailure)
+  if (!lock.phase && (lock.terminal === true || explicitlyObservedLegacyFailure)
     && verified.length + noWriteJournals === listed.objects.length && verified.length > 0
     && verified.every(entry => entry.result.identityMatches && entry.result.namesMatch && entry.result.safetyUnchanged
       && (entry.result.quarantinable || ((entry.result.profileAccepted || entry.result.tagAccepted || entry.result.readbackConfirmed)
       && (entry.result.tagMatches || (entry.result.profileAccepted && entry.result.integrationTagCount === 0)))))) {
     const liveObject = await storage.get(WRITER_LOCK_KEY);
     const live = liveObject ? await liveObject.json() : null;
-    if (!live || live.owner !== lock.owner || live.phase === "RECONCILING" || !liveObject.httpEtag) {
+    if (!live || live.owner !== lock.owner || live.phase || !liveObject.httpEtag) {
       throw syncError("writer_reconciliation_changed", "Vlastník neuzavřené operace se změnil.");
     }
     // CAS, not a TTL takeover: only the observed terminal operation can be
@@ -2056,6 +2122,8 @@ async function runProfileSyncUnlocked(env, options, writer) {
   }
   state.lastRun = {
     status: "completed",
+    writerOwner: writer.owner,
+    committedContactIds: [...readbackCompleted].sort(),
     startedFrom: delta.periodFrom,
     startedAt: runStartedAt,
     finishedAt: new Date().toISOString(),
