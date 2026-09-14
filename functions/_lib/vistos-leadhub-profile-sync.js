@@ -740,6 +740,10 @@ async function leadHubRequest(env, path, options = {}) {
     error.code = "leadhub_api_request_failed";
     error.upstreamStatus = response.status;
     error.endpointFamily = family;
+    // Only the initial GET can establish a no-write rejection. Never mark
+    // post-write readback, safety reads or mutations as safe to skip.
+    error.preWriteProfileReadRejected = options.profilePreflight === true
+      && (!options.method || options.method === "GET") && family === "profileRead" && response.status === 422;
     error.retryAfterSeconds = response.status === 429 ? retryAfterSeconds(response.headers.get("retry-after")) : 0;
     if (response.status === 429) {
       env.syncApiLimiter?.pause?.(family, error);
@@ -1065,6 +1069,22 @@ async function readCampaignSafety(env) {
   error.code = "leadhub_campaign_safety_incomplete"; error.status = 409; throw error;
 }
 
+function canIsolateProfileReadRejection(error, item, wasSynced, writeStarted) {
+  return error?.preWriteProfileReadRejected === true && error.code === "leadhub_api_request_failed"
+    && error.endpointFamily === "profileRead" && error.upstreamStatus === 422
+    && item.desired === "active" && !wasSynced && !item.profileAlreadyCreated && !writeStarted;
+}
+
+function applyProfileReadRejections(pendingById, state) {
+  for (const [id, item] of pendingById) {
+    const rejected = state.profileReadRejections?.[id];
+    if (rejected?.email === item.normalizedEmail && rejected.rowHash === item.rowHash
+      && item.desired === "active" && !state.profiles?.[id]?.synced && !item.profileAlreadyCreated) {
+      pendingById.delete(id);
+    }
+  }
+}
+
 async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
   if ([item.firstName, item.lastName].some(value => [...clean(value)].length > 50)) {
     throw syncError("leadhub_profile_attributes_invalid", "Jméno přesahuje doložený limit API; nebude zkráceno odhadem.");
@@ -1072,7 +1092,7 @@ async function upsertActiveProfile(env, item, beforeWrite = async () => {}) {
   const email = item.normalizedEmail;
   const encoded = encodeURIComponent(email);
   const [before, safety] = await readTogether([
-    leadHubRequest(env, `/profiles/email-address/${encoded}`, { allow404: true }),
+    leadHubRequest(env, `/profiles/email-address/${encoded}`, { allow404: true, profilePreflight: true }),
     subscriptionRead(env, email)
   ]);
   const linked = item.identityBinding?.mode === "EXISTING_EMAIL_TAG_ONLY";
@@ -1937,6 +1957,10 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
   for (const item of pendingById.values()) if (item.historical && !state.profiles?.[item.contactId]?.synced) {
     item.historicalKind = state.manifestIdentityChecks?.[item.contactId]?.action === "CREATE" ? "create" : "link";
   }
+  // A rejected source version stays excluded across restarts and business
+  // refreshes. A changed source may be read again; existing profiles and
+  // urgent exclusions must never disappear behind this no-write SKIP.
+  applyProfileReadRejections(pendingById, state);
   const pending = prioritizePending([...pendingById.values()], state.profiles, state.queueCursor || 0, state.historicalQueueCursor || 0);
   phase("businessIdentityAndQueue");
   const batchLimit = Math.min(Number(options.batchLimit) || PROFILE_BATCH_LIMIT, PROFILE_BATCH_LIMIT);
@@ -2048,6 +2072,23 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
         ? await upsertActiveProfile(env, item, beforeWrite)
         : await deactivateProfile(env, item, item.reason, beforeWrite);
     } catch (error) {
+      if (canIsolateProfileReadRejection(error, item, wasSynced,
+        Boolean(lastAcceptedStage) || writer.unsettled.has(item.contactId))) {
+        const rejected = { reason: "PROFILE_READ_REJECTED_422", email: item.normalizedEmail,
+          rowHash: item.rowHash, sourceModified: item.sourceModified || null,
+          checkedAt: new Date().toISOString(), upstreamStatus: 422, profileWrites: 0 };
+        await putJson(storage, operationKey, { status: "SKIP", contactId: item.contactId,
+          ...rejected, finishedAt: rejected.checkedAt, writer: writer.owner });
+        await commit(async () => {
+          state.profileReadRejections ||= {};
+          state.profileReadRejections[item.contactId] = rejected;
+          state.pending = state.pending.filter(pendingItem => pendingItem.contactId !== item.contactId);
+          if (item.historical) state.historicalImport.skipped += 1;
+          state.queueCursor = dispatchedCursor;
+          run.skipped += 1;
+        });
+        return;
+      }
       if (!["leadhub_profile_identity_conflict", "leadhub_deactivation_identity_conflict", "leadhub_invalid_source_identity", "leadhub_profile_attributes_invalid"].includes(error?.code)) throw error;
       await putJson(storage, operationKey, { status: "SKIP", contactId: item.contactId, reason: error.code, finishedAt: new Date().toISOString() });
       await commit(async () => {
@@ -2198,6 +2239,7 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
     lastFailure: state.lastFailure || null,
     safetyIncident: state.safetyIncident || null,
     quarantinedProfiles: Object.keys(state.quarantinedIdentities || {}).length,
+    profileReadRejectedRecords: Object.keys(state.profileReadRejections || {}).length,
     historicalImport: state.historicalImport || null,
     identityChecksPending: Object.keys(state.identityPending || {}).length,
     identityExport: state.identityExport ? { status: state.identityExport.status, requestedAt: state.identityExport.requestedAt } : null,
@@ -2211,6 +2253,8 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
 }
 
 export const __test = {
+  canIsolateProfileReadRejection,
+  applyProfileReadRejections,
   API_SPACING_MS,
   retryAfterSeconds,
   profileConcurrency,
