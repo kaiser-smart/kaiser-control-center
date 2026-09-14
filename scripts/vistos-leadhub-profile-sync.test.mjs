@@ -36,6 +36,10 @@ await assert.rejects(() => withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async
 unlockFirst();
 assert.equal(await writerOne, "first");
 assert.equal(await withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async () => "next"), "next");
+await withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async context => {
+  const lock = JSON.parse(lockR2.values.get("protected-sync/vistos-leadhub-profiles/writer-lock.json"));
+  assert.equal(context.startedAt, lock.startedAt, "HTTP budget starts at lock acquisition, not after outer ledger reads");
+});
 await assert.rejects(() => withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async () => { throw new Error("read failed"); }), /read failed/);
 assert.equal(lockR2.values.size, 0, "read-only failures release the writer");
 const claimedCleanupR2 = new MemoryR2();
@@ -509,12 +513,19 @@ try {
   assert.equal(JSON.parse(preparationR2.values.get(syncStateKey)).pending.length, 1, "rejected source read retains the queue");
   assert.equal(preparationR2.values.has("protected-sync/vistos-leadhub-profiles/writer-lock.json"), false);
   currentSourceRow = preparationRow;
-  const canary = await executeVistosLeadHubHistoricalImport(preparationEnv, { scheduledAt: new Date(Date.parse(runAt) + 60000).toISOString() });
+  const canaryGet = preparationR2.get.bind(preparationR2);
+  let canaryLedgerReads = 0, canary;
+  preparationR2.get = async key => { if (key === syncStateKey) canaryLedgerReads++; return canaryGet(key); };
+  try {
+    canary = await executeVistosLeadHubHistoricalImport(preparationEnv, { scheduledAt: new Date(Date.parse(runAt) + 60000).toISOString() });
+  } finally { preparationR2.get = canaryGet; }
+  assert.equal(canaryLedgerReads, 1, "one owned ledger read, not duplicate preflight and post-commit downloads");
   assert.equal(canary.created, 1);
   assert.equal(canary.historicalImport.readbackConfirmed, 1);
   assert.equal(canary.historicalImport.remaining, 0);
   assert.equal(providerWrites, 2, "one profile and one integration tag, no subscription write");
   const confirmed = JSON.parse(preparationR2.values.get(syncStateKey));
+  assert.deepEqual(canary.historicalImport, confirmed.historicalImport, "returned counts match the exact committed shared ledger");
   assert.equal(confirmed.profiles[preparationRow.Id].synced, true, "imported identities enter the same delta registry");
   assert.deepEqual(confirmed.profiles[preparationRow.Id].subscriptions, existingStates);
   assert.equal(confirmed.totals.created, 1);

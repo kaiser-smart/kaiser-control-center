@@ -1275,7 +1275,8 @@ async function initializeState(env, scheduledAt) {
 export async function withVistosLeadHubWriter(env, operation) {
   const storage = bucket(env);
   const owner = crypto.randomUUID();
-  const acquired = await storage.put(WRITER_LOCK_KEY, JSON.stringify({ owner, startedAt: new Date().toISOString() }), {
+  const startedAt = new Date().toISOString();
+  const acquired = await storage.put(WRITER_LOCK_KEY, JSON.stringify({ owner, startedAt }), {
     onlyIf: new Headers({ "If-None-Match": "*" }),
     httpMetadata: { contentType: "application/json" },
     customMetadata: { protected: "true", integration: "vistos-leadhub-profiles" }
@@ -1286,7 +1287,7 @@ export async function withVistosLeadHubWriter(env, operation) {
     error.code = "vistos_leadhub_writer_locked";
     throw error;
   }
-  const context = { owner, sideEffectsStarted: false, unsettled: new Set(), halted: false };
+  const context = { owner, startedAt, sideEffectsStarted: false, unsettled: new Set(), halted: false };
   let completed = false;
   try {
     const result = await operation(context);
@@ -1361,9 +1362,10 @@ export async function executeVistosLeadHubHistoricalImport(env, options = {}) {
     }
     if (state.historicalImport.id !== prepared.id) throw syncError("historical_import_identity_conflict", "Evidence importu patří jinému manifestu.");
     const summary = await runProfileSyncUnlocked(env, { ...options,
-      batchLimit: state.historicalImport.readbackConfirmed ? IMPORT_BATCH_LIMIT : 1 }, writer);
-    const confirmed = await getJson(storage, SYNC_STATE_KEY);
-    return { ...summary, mode: "execute-import", historicalImport: confirmed.historicalImport, sendAllowed: false };
+      batchLimit: state.historicalImport.readbackConfirmed ? IMPORT_BATCH_LIMIT : 1 }, writer, state);
+    // The same exclusive writer already committed this exact in-memory state.
+    // Do not download the large ledger again before releasing its lock.
+    return { ...summary, mode: "execute-import", historicalImport: state.historicalImport, sendAllowed: false };
   });
 }
 
@@ -1741,8 +1743,9 @@ function classifyHistoricalOrigins(state, originalItems) {
   return ids;
 }
 
-async function runProfileSyncUnlocked(env, options, writer) {
-  const runStartedAt = new Date().toISOString();
+async function runProfileSyncUnlocked(env, options, writer, initialState) {
+  // Include import-state/ledger reads performed by the outer coordinator.
+  const runStartedAt = writer.startedAt;
   const metrics = { calls: {}, phases: {}, rateLimits: 0 };
   const originalStorage = bucket(env);
   env = { ...env, syncMetrics: metrics, R2_ARCHIVE: new Proxy(originalStorage, { get(target, key) {
@@ -1756,7 +1759,7 @@ async function runProfileSyncUnlocked(env, options, writer) {
   env.syncWriter = writer;
   env.syncApiLimiter = createApiLimiter(storage, await getJson(storage, RATE_STATE_KEY) || {});
   const scheduledAt = (validDate(options.scheduledAt) || new Date()).toISOString();
-  let state = await getJson(storage, SYNC_STATE_KEY);
+  let state = initialState || await getJson(storage, SYNC_STATE_KEY);
   if (!state) return initializeState(env, scheduledAt);
   const concurrency = profileConcurrency(state);
   if (state.safetyIncident) throw syncError("safety_incident_unresolved", "Nevyřešený bezpečnostní incident blokuje další zápisy.");
@@ -1950,7 +1953,10 @@ async function runProfileSyncUnlocked(env, options, writer) {
   if (delta.rows.length || !state.snapshotKey || !state.dnsKey) await commitSourceVersion(storage, state, snapshot, dnsState, writer.owner);
   else await putJson(storage, SYNC_STATE_KEY, state);
   phase("prepareAndPersist");
-  if (Date.now() - Date.parse(runStartedAt) >= PROFILE_PREPARATION_BUDGET_MS) {
+  const preparationElapsedMs = Date.now() - Date.parse(runStartedAt);
+  console.log("vistos_leadhub_profile_sync.prepared", { version: "whole-request-budget-v1",
+    elapsedMs: preparationElapsedMs, budgetMs: PROFILE_PREPARATION_BUDGET_MS, phases: metrics.phases });
+  if (preparationElapsedMs >= PROFILE_PREPARATION_BUDGET_MS) {
     await env.syncApiLimiter.persist();
     return { syncStatus: "PENDING", status: "SOURCE_PREPARED", checkpoint: state.checkpoint,
       pending: state.pending.length, sourceRows: delta.rows.length, metrics,
