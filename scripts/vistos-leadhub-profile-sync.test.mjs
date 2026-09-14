@@ -84,6 +84,39 @@ assert.throws(() => __test.assertSafetyUnchanged(safeRead(twoStates), safeRead()
 assert.throws(() => __test.profileUserId("9".repeat(60)), error => error.code === "leadhub_invalid_source_identity");
 assert.throws(() => __test.profileUserId(""), error => error.code === "leadhub_invalid_source_identity");
 const selected = { contactId: "42", normalizedEmail: "person@example.test", firstName: "Radim", lastName: "", communicationStatus: "UNKNOWN" };
+const rejectedRead = { code: "leadhub_api_request_failed", endpointFamily: "profileRead", upstreamStatus: 422, preWriteProfileReadRejected: true };
+const rejectedItem = { ...selected, desired: "active", rowHash: "source-version" };
+assert.equal(__test.canIsolateProfileReadRejection(rejectedRead, rejectedItem, false, false), true);
+for (const [error, item, synced, writeStarted] of [
+  [{ ...rejectedRead, upstreamStatus: 429 }, rejectedItem, false, false],
+  [{ ...rejectedRead, upstreamStatus: 403 }, rejectedItem, false, false],
+  [{ ...rejectedRead, upstreamStatus: 500 }, rejectedItem, false, false],
+  [{ ...rejectedRead, endpointFamily: "subscriptionsRead" }, rejectedItem, false, false],
+  [{ ...rejectedRead, endpointFamily: "suppressionRead" }, rejectedItem, false, false],
+  [{ ...rejectedRead, preWriteProfileReadRejected: false }, rejectedItem, false, false],
+  [rejectedRead, rejectedItem, true, false],
+  [rejectedRead, rejectedItem, false, true],
+  [rejectedRead, { ...rejectedItem, profileAlreadyCreated: true }, false, false],
+  [rejectedRead, { ...rejectedItem, desired: "inactive" }, false, false]
+]) assert.equal(__test.canIsolateProfileReadRejection(error, item, synced, writeStarted), false);
+const rejectionState = { profiles: {}, profileReadRejections: { "42": { email: selected.normalizedEmail, rowHash: "source-version" } } };
+const rejectionQueue = new Map([["42", rejectedItem], ["43", { ...rejectedItem, contactId: "43" }]]);
+__test.applyProfileReadRejections(rejectionQueue, rejectionState);
+assert.deepEqual([...rejectionQueue.keys()], ["43"], "one rejected identity never removes its safe neighbour");
+for (const item of [{ ...rejectedItem, normalizedEmail: "changed@example.test" }, { ...rejectedItem, rowHash: "new-source" },
+  { ...rejectedItem, desired: "inactive" }, { ...rejectedItem, profileAlreadyCreated: true }]) {
+  const queue = new Map([["42", item]]);
+  __test.applyProfileReadRejections(queue, rejectionState);
+  assert.equal(queue.size, 1, "source changes and prior writes retain normal identity/safety checks");
+}
+for (const preflight of [false, true]) {
+  globalThis.fetch = async () => Response.json({ detail: [] }, { status: 422 });
+  try {
+    await assert.rejects(() => __test.leadHubRequest({ LEADHUB_API_TOKEN: "synthetic" },
+      "/profiles/email-address/person%40example.test", { profilePreflight: preflight }),
+    error => error.preWriteProfileReadRejected === preflight);
+  } finally { globalThis.fetch = originalFetch; }
+}
 assert.equal(__test.tagDataMatches({ data_only: "1", targeting_enabled: "1", suppression_checked: "0", contract_direct: "YES" },
   { data_only: 1, targeting_enabled: 1, suppression_checked: 0, contract_direct: "YES" }), true);
 for (const value of [null, undefined, "", "01", true, "true", " 1 ", 2]) {
@@ -513,6 +546,36 @@ try {
   assert.equal(JSON.parse(preparationR2.values.get(syncStateKey)).pending.length, 1, "rejected source read retains the queue");
   assert.equal(preparationR2.values.has("protected-sync/vistos-leadhub-profiles/writer-lock.json"), false);
   currentSourceRow = preparationRow;
+  // A real coordinator pass durably isolates only a rejected pre-write GET.
+  // Re-instantiation keeps the rejection; it must not be retried every tick.
+  const rejectionStorage = new MemoryR2(Object.fromEntries(preparationR2.values));
+  const fixtureFetch = globalThis.fetch;
+  let rejectedGets = 0;
+  globalThis.fetch = async (url, options) => {
+    if (url.includes("/profiles/email-address/")) {
+      rejectedGets++;
+      return Response.json({ detail: [{ loc: ["path", "email_address"], type: "value_error", msg: "synthetic rejection" }] }, { status: 422 });
+    }
+    return fixtureFetch(url, options);
+  };
+  try {
+    const rejected = await executeVistosLeadHubHistoricalImport({ ...preparationEnv, R2_ARCHIVE: rejectionStorage },
+      { scheduledAt: new Date(Date.parse(runAt) + 60000).toISOString() });
+    assert.equal(rejected.skipped, 1);
+    assert.equal(providerWrites, 0);
+    assert.equal(rejectedGets, 1);
+    const saved = JSON.parse(rejectionStorage.values.get(syncStateKey));
+    assert.equal(saved.pending.length, 0);
+    assert.equal(saved.profileReadRejections[preparationRow.Id].reason, "PROFILE_READ_REJECTED_422");
+    assert.equal(saved.profiles[preparationRow.Id], undefined, "SKIP is not a completed profile");
+    assert.equal(rejectionStorage.values.has("protected-sync/vistos-leadhub-profiles/writer-lock.json"), false);
+    assert.ok([...rejectionStorage.values].some(([key, value]) => key.includes("/operations/")
+      && JSON.parse(value).status === "SKIP" && JSON.parse(value).profileWrites === 0));
+    await executeVistosLeadHubHistoricalImport({ ...preparationEnv, R2_ARCHIVE: rejectionStorage },
+      { scheduledAt: new Date(Date.parse(runAt) + 120000).toISOString() });
+    assert.equal(rejectedGets, 1, "unchanged rejected source is not retried after restart");
+    assert.equal(providerWrites, 0);
+  } finally { globalThis.fetch = fixtureFetch; }
   const canaryGet = preparationR2.get.bind(preparationR2);
   let canaryLedgerReads = 0, canary;
   preparationR2.get = async key => { if (key === syncStateKey) canaryLedgerReads++; return canaryGet(key); };
