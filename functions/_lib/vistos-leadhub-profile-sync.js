@@ -28,6 +28,9 @@ const PROFILE_BATCH_LIMIT = 10;
 const IMPORT_BATCH_LIMIT = 6;
 const PACING_VERSION = "endpoint-pacing-v1";
 const PROFILE_DISPATCH_BUDGET_MS = 35000;
+// Reserve the write/readback window within the same HTTP request. A slow
+// source catch-up must commit its queue and yield BEFORE dispatching writes.
+const PROFILE_PREPARATION_BUDGET_MS = 25000;
 const RATE_STATE_KEY = `${SYNC_PREFIX}/api-rate-reservations.json`;
 const OVERLAP_MS = 10 * 60 * 1000;
 const TAG_NAME = "eSMART Vistos DATA_ONLY";
@@ -1947,6 +1950,12 @@ async function runProfileSyncUnlocked(env, options, writer) {
   if (delta.rows.length || !state.snapshotKey || !state.dnsKey) await commitSourceVersion(storage, state, snapshot, dnsState, writer.owner);
   else await putJson(storage, SYNC_STATE_KEY, state);
   phase("prepareAndPersist");
+  if (Date.now() - Date.parse(runStartedAt) >= PROFILE_PREPARATION_BUDGET_MS) {
+    await env.syncApiLimiter.persist();
+    return { syncStatus: "PENDING", status: "SOURCE_PREPARED", checkpoint: state.checkpoint,
+      pending: state.pending.length, sourceRows: delta.rows.length, metrics,
+      profileWrites: 0, readbackConfirmed: 0, messagesSent: 0, sendAllowed: false };
+  }
   const commit = serialExecutor();
   const readbackCompleted = new Set();
   const releaseCommittedOperations = () => {
