@@ -424,7 +424,11 @@ function profileConcurrency(state, now = Date.now()) {
 function recordThroughputControl(state, concurrency, metrics, run, durationMs, error, now = Date.now()) {
   const previous = state.throughputControl?.version === PACING_VERSION ? state.throughputControl : {};
   const reads = metrics.calls.profileRead;
-  const slow = durationMs > 85000 || (reads?.maxMs || 0) > 15000
+  // One slow GET is not evidence of sustained overload: production outliers
+  // also occur at one lane and otherwise renew cooldown forever. Keep maxMs
+  // as telemetry; back off on aggregate latency, the whole-run budget or errors.
+  // Existing cooldowns and gradual recovery from confirmed readbacks survive.
+  const slow = durationMs > 85000
     || (reads?.count > 0 && reads.milliseconds / reads.count > 6000);
   if (error || metrics.rateLimits || slow) {
     state.throughputControl = { version: PACING_VERSION, concurrency: Math.max(1, concurrency - 1),

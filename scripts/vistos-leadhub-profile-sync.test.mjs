@@ -1135,6 +1135,39 @@ for (const at of [210000, 410000, 610000]) __test.recordThroughputControl(contro
 assert.equal(__test.profileConcurrency(controlState, 610000), 3, "successful calls cannot bypass cooldown");
 __test.recordThroughputControl(controlState, 3, { ...healthyMetrics, calls: { profileRead: { count: 1, milliseconds: 16000, maxMs: 16000 } } }, confirmed, 60000, null, 920000);
 assert.equal(__test.profileConcurrency(controlState, 920000), 2, "provider latency backs off without waiting for 429");
+// Production batches contained one 16s GET among seven reads averaging 4.45s.
+// Repeated outliers must not reset a ten-minute cooldown indefinitely at one lane.
+const outlierMetrics = { calls: { profileRead: { count: 7, milliseconds: 31138, maxMs: 16335 } }, rateLimits: 0 };
+let recoveringControl = { throughputControl: { version: "endpoint-pacing-v1", concurrency: 1,
+  cooldownUntil: 601000, windowStartedAt: 1000, healthyRuns: 0, confirmedProfiles: 0 } };
+for (const at of [61000, 181000, 400000]) {
+  __test.recordThroughputControl(recoveringControl, 1, outlierMetrics, confirmed, 60000, null, at);
+  assert.equal(recoveringControl.throughputControl.cooldownUntil, 601000, "an isolated slow read cannot extend the existing cooldown");
+  assert.equal(__test.profileConcurrency(recoveringControl, at), 1, "the existing cooldown still applies");
+  recoveringControl = JSON.parse(JSON.stringify(recoveringControl)); // persisted state across invocations
+}
+__test.recordThroughputControl(recoveringControl, 1, outlierMetrics, confirmed, 60000, null, 601000);
+assert.equal(__test.profileConcurrency(recoveringControl, 601000), 2, "confirmed bounded batches recover one lane after cooldown");
+for (const at of [661000, 721000, 781000]) __test.recordThroughputControl(recoveringControl, 2, outlierMetrics, confirmed, 60000, null, at);
+assert.equal(__test.profileConcurrency(recoveringControl, 781000), 3, "recovery remains gradual");
+for (const at of [841000, 901000, 961000]) __test.recordThroughputControl(recoveringControl, 3, outlierMetrics, confirmed, 60000, null, at);
+assert.equal(__test.profileConcurrency(recoveringControl, 961000), 4);
+__test.recordThroughputControl(recoveringControl, 4, outlierMetrics, confirmed, 60000, null, 1200000);
+assert.equal(__test.profileConcurrency(recoveringControl, 1200000), 4, "outliers do not lower lanes or increase the existing maximum");
+const noReadbackControl = { throughputControl: { version: "endpoint-pacing-v1", concurrency: 1 } };
+for (const at of [1000, 181000, 361000, 541000]) __test.recordThroughputControl(noReadbackControl, 1, outlierMetrics, { readbackConfirmed: 0 }, 60000, null, at);
+assert.equal(__test.profileConcurrency(noReadbackControl, 541000), 1, "elapsed time without confirmed results cannot increase concurrency");
+for (const [metrics, duration, error] of [
+  [healthyMetrics, 85001, null],
+  [{ calls: { profileRead: { count: 10, milliseconds: 60010, maxMs: 16000 } }, rateLimits: 0 }, 60000, null],
+  [{ ...healthyMetrics, rateLimits: 1 }, 60000, null],
+  [healthyMetrics, 60000, { code: "leadhub_subscription_or_suppression_changed" }]
+]) {
+  const guardedControl = { throughputControl: { version: "endpoint-pacing-v1", concurrency: 4 } };
+  __test.recordThroughputControl(guardedControl, 4, metrics, confirmed, duration, error, 1000);
+  assert.equal(__test.profileConcurrency(guardedControl, 1000), 3, "aggregate slowness, time budget and errors still back off");
+  assert.equal(guardedControl.throughputControl.cooldownUntil, 601000);
+}
 for (const count of [3, 4]) {
   let active = 0, peak = 0; const finished = new Set();
   await __test.processBoundedProfiles(dispatchItems, { concurrency: count, budgetMs: 1000 }, async item => {

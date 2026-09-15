@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.788"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.789"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Vistos → LeadHub: návrat výkonu po ojedinělém pomalém čtení",
+    text: "Jednotlivé pomalé čtení už samo neprodlužuje omezení souběhu. Po potvrzených výsledcích a uplynutí stávajícího čekání se výkon obnovuje postupně. Chyby, limity API, pomalý průměr a dlouhé běhy nadále zpomalují import; ověření identity, odběrů, blokací a výsledku každého zápisu zůstává beze změny."
+  },
   {
     title: "Vistos → LeadHub: odmítnutá položka neblokuje bezpečnou frontu",
     text: "Odmítnutí prvního čtení nového profilu HTTP 422 se eviduje jako samostatný SKIP bez zápisu. Stejná zdrojová verze se při dalších bězích znovu nezkouší. Již synchronizované profily, rozpracované zápisy, odběry a blokace si zachovávají všechny ochrany."
