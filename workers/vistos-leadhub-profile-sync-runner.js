@@ -16,6 +16,8 @@ export async function runScheduledSync(env, scheduledTime, requestedMode) {
       mode: requestedMode || (env.BUSINESS_READ_ENABLED === "true" && new Date(scheduledTime).getUTCMinutes() % 5 === 4
         ? "business-read" : env.RUN_MODE || (env.READ_PREFLIGHT_ONLY === "true" ? "read-preflight" : "sync")),
       recoveryOwner: env.RECOVERY_OWNER || undefined,
+      ...(requestedMode === "csv-step" ? { batchId: env.CSV_BATCH_ID, batchSize: Number(env.CSV_BATCH_SIZE) || 5,
+        armBatchId: env.CSV_ARM_BATCH_ID, submittedBatchId: env.CSV_SUBMITTED_BATCH_ID, receipt: env.CSV_IMPORT_RECEIPT } : {}),
       runner: "kaiser-vistos-leadhub-profile-sync"
     })
   });
@@ -50,10 +52,18 @@ export class VistosContinuationController {
     const startedAt = Date.now();
     // Never two business blocks consecutively: delta reconciliation and its
     // priority queue run between blocks even while the historical backlog grows.
-    const business = this.env.BUSINESS_READ_ENABLED === "true" && state.lastMode !== "business-read"
+    const csvConfig = [this.env.CSV_BATCH_ID, this.env.CSV_ARM_BATCH_ID, this.env.CSV_SUBMITTED_BATCH_ID, this.env.CSV_IMPORT_RECEIPT].join("|");
+    const csvPending = this.env.CSV_BATCH_ID && (state.csvConfig !== csvConfig
+      || !["READY", "ARMED", "ADOPTED", "EMPTY", "BLOCKED"].includes(state.csvStatus));
+    // Every auxiliary step is followed by the ordinary writer. CSV and
+    // business take turns, so neither can starve delta or the other queue.
+    const auxiliaryAllowed = !state.lastMode || state.lastMode === "execute-import";
+    const csv = csvPending && auxiliaryAllowed && state.lastAuxiliary !== "csv-step";
+    const business = !csv && this.env.BUSINESS_READ_ENABLED === "true" && auxiliaryAllowed
       && startedAt - state.lastBusinessAt >= 60000;
-    const mode = business ? "business-read" : "execute-import";
+    const mode = csv || (csvPending && auxiliaryAllowed && !business) ? "csv-step" : business ? "business-read" : "execute-import";
     state.lastMode = mode;
+    if (mode !== "execute-import") state.lastAuxiliary = mode;
     if (business) state.lastBusinessAt = startedAt;
     // Persist wakeup before network I/O. A crash/restart resumes from the R2
     // journal, never from a guessed successful POST response.
@@ -66,8 +76,9 @@ export class VistosContinuationController {
       state.steps++;
       state.lastSuccessAt = new Date().toISOString();
       state.lastSummary = summary;
+      if (mode === "csv-step") { state.csvConfig = csvConfig; state.csvStatus = summary.status; }
       if (summary.status === "RECONCILIATION_REQUIRED") nextDelay = 60000;
-      else if (!business && !summary.pending && !summary.historicalImport?.remaining) nextDelay = 60000;
+      else if (mode === "execute-import" && !summary.pending && !summary.historicalImport?.remaining) nextDelay = 60000;
       console.log("vistos_leadhub_profile_sync.continuation", { mode, durationMs: Date.now() - startedAt,
         pending: summary.pending ?? summary.historicalImport?.remaining ?? null,
         created: summary.created || 0, updated: summary.updated || 0, status: summary.status || summary.syncStatus });

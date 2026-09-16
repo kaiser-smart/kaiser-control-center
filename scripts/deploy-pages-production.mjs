@@ -173,6 +173,7 @@ runVisible("node", ["scripts/sarlota-voice-smoke.test.mjs"]);
 runVisible("node", ["scripts/customer-messaging.test.mjs"]);
 runVisible("node", ["scripts/vistos-contacts-audit.test.mjs"]);
 runVisible("node", ["scripts/vistos-leadhub-profile-sync.test.mjs"]);
+runVisible("node", ["scripts/vistos-leadhub-csv.test.mjs"]);
 runVisible("node", ["scripts/rcs-consent.test.mjs"]);
 runVisible("node", ["scripts/rcs-template-assets.test.mjs"]);
 runVisible("node", ["scripts/rcs-template-center.test.mjs"]);
