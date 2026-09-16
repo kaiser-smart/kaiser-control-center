@@ -1477,13 +1477,16 @@ export async function stepVistosLeadHubCsvImport(env, options = {}) {
           batch.exportCompletedAt = new Date().toISOString(); batch.phase = "PREFLIGHT";
         }
       } else if (batch.phase === "PREFLIGHT") {
-        const item = batch.items.find(entry => entry.status === "RESERVED");
-        if (item) {
+        const items = batch.items.filter(entry => entry.status === "RESERVED").slice(0, 5);
+        if (items.length) {
           const snapshot = await getJson(storage, state.snapshotKey);
-          const row = snapshot.rows.find(entry => clean(entry.Id) === item.contactId);
-          const pending = state.pending.find(entry => entry.contactId === item.contactId);
           const columns = contactReadColumns(snapshot);
           const session = await loginVistosExecute(env);
+          const readStartedAt = Date.now();
+          for (const item of items) {
+          if (Date.now() - readStartedAt >= 20000) break;
+          const row = snapshot.rows.find(entry => clean(entry.Id) === item.contactId);
+          const pending = state.pending.find(entry => entry.contactId === item.contactId);
           const latest = await getVistosById(env, session, "Contact", item.contactId, columns);
           if (!row || fingerprint(row) !== item.rowHash || clean(latest.row?.Id) !== item.contactId || pending?.desired !== "active" || pending.rowHash !== item.rowHash
             || sourceValues(row, columns) !== sourceValues(latest.row, columns)) {
@@ -1494,6 +1497,7 @@ export async function stepVistosLeadHubCsvImport(env, options = {}) {
             if (profile.status !== 404 || safety.suppressed || safety.subscriptions.length) {
               item.status = "SKIP"; item.reason = "CSV_NOT_NEW_EMPTY_UNBLOCKED_PROFILE";
             } else { item.beforeSafety = safety; item.checkedAt = new Date().toISOString(); item.status = "CHECKED"; }
+          }
           }
         } else {
           const checked = batch.items.filter(entry => entry.status === "CHECKED");
@@ -1520,9 +1524,12 @@ export async function stepVistosLeadHubCsvImport(env, options = {}) {
         if (!clean(options.receipt)) throw syncError("csv_receipt_missing", "Chybí doložený výsledek standardního CSV průvodce.");
         batch.receipt = clean(options.receipt); batch.phase = "VERIFY"; batch.submittedObservedAt = new Date().toISOString();
       } else if (batch.phase === "VERIFY") {
-        const item = batch.items.find(entry => entry.status === "CHECKED");
-        if (!item) batch.phase = "ADOPTED";
+        const items = batch.items.filter(entry => entry.status === "CHECKED").slice(0, 5);
+        if (!items.length) batch.phase = "ADOPTED";
         else {
+          const readStartedAt = Date.now();
+          for (const item of items) {
+          if (Date.now() - readStartedAt >= 20000) break;
           const profile = await leadHubRequest(env, `/profiles/email-address/${encodeURIComponent(item.normalizedEmail)}`, { allow404: true });
           if (profile.status === 404) { item.lastReadback = "NOT_FOUND"; item.lastCheckedAt = new Date().toISOString(); }
           else {
@@ -1531,6 +1538,7 @@ export async function stepVistosLeadHubCsvImport(env, options = {}) {
             await putJson(storage, `${SYNC_PREFIX}/csv/${id}/readbacks/${item.contactId}.json`, {
               checkedAt: item.adoptedAt, profile: profile.payload, beforeSafety: item.beforeSafety, afterSafety: safety,
               status: "PROFILE_READBACK_CONFIRMED", targetingPending: true, profileWrites: 0 });
+          }
           }
         }
       }
