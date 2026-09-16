@@ -1,5 +1,5 @@
 import { json } from "../../../_lib/auth.js";
-import { runVistosLeadHubProfileSync, verifyVistosLeadHubReadAccess, prepareVistosLeadHubHistoricalImport, executeVistosLeadHubHistoricalImport, refreshVistosBusinessRelations } from "../../../_lib/vistos-leadhub-profile-sync.js";
+import { runVistosLeadHubProfileSync, verifyVistosLeadHubReadAccess, prepareVistosLeadHubHistoricalImport, executeVistosLeadHubHistoricalImport, refreshVistosBusinessRelations, stepVistosLeadHubCsvImport } from "../../../_lib/vistos-leadhub-profile-sync.js";
 
 function clean(value) {
   return String(value ?? "").trim();
@@ -25,6 +25,10 @@ export async function onRequestPost({ request, env }) {
   }
   try {
     const body = await request.json().catch(() => ({}));
+    if (body.mode === "csv-step") return json(await stepVistosLeadHubCsvImport(env, {
+      batchId: clean(body.batchId), batchSize: body.batchSize,
+      armBatchId: clean(body.armBatchId), submittedBatchId: clean(body.submittedBatchId), receipt: clean(body.receipt)
+    }));
     if (body.mode === "read-preflight") return json(await verifyVistosLeadHubReadAccess(env));
     if (body.mode === "business-read") return json(await refreshVistosBusinessRelations(env));
     if (body.mode === "prepare-import") return json(await prepareVistosLeadHubHistoricalImport(env));

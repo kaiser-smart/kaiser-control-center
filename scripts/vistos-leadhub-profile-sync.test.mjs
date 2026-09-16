@@ -1403,6 +1403,16 @@ try {
   assert.equal(isolated.newlyCompletedProfiles, 0);
   assert.equal(batchWrites, writesBeforeIsolation, "neither changed email of quarantined ID nor same email on another ID can resurrect an intent");
   assert.equal(JSON.parse(isolatedR2.values.get(syncStateKey)).manifestIdentityChecks["701"].action, "SKIP");
+  const reservedState = JSON.parse(batchInitial[syncStateKey]);
+  reservedState.csvBatch = { id: "synthetic-reservation", phase: "ARMED", items: batchRows.map(row => ({
+    contactId: String(row.Id), normalizedEmail: row.Email1, status: "CHECKED"
+  })) };
+  const reservedR2 = new MemoryR2({ ...batchInitial, [syncStateKey]: JSON.stringify(reservedState) });
+  const reservedResult = await runVistosLeadHubProfileSync({ ...batchEnv, R2_ARCHIVE: reservedR2 },
+    { scheduledAt: "2026-09-11T01:03:00Z", batchLimit: 4 });
+  assert.equal(reservedResult.readbackConfirmed, 0, "ordinary writer cannot touch CSV-reserved identities");
+  assert.equal(batchWrites, writesBeforeIsolation, "normal queue coalescing cannot bypass CSV reservations");
+  assert.equal(JSON.parse(reservedR2.values.get(syncStateKey)).csvBatch.phase, "ARMED");
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos full four-profile concurrent writer + restart + preserved opt-out test passed");
 
