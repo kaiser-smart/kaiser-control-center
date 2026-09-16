@@ -40,6 +40,7 @@ assert.equal(response.status,401,"CSV does not introduce a public endpoint");
 const originalFetch = globalThis.fetch, originalTimeout = globalThis.setTimeout;
 let exportProfiles = [{ credentials:{ email_address:"unrelated@example.test",user_id:null },tags:[] }];
 let providerProfile = null, suppressed = false, states = [], campaigns = [], current = row;
+let multipleRows = null, multipleProfiles = null;
 let writes = 0, exportCalls = 0;
 // Tests remove only wall-clock waits; production uses the existing limiter.
 globalThis.setTimeout = (fn,ms,...args) => originalTimeout(fn,0,...args);
@@ -48,7 +49,7 @@ globalThis.fetch = async (url,options = {}) => {
     const body = JSON.parse(options.body);
     if (body.LoginParam) return Response.json({status:"OK",data:{}},{headers:{"set-cookie":"VistosAccessToken=synthetic; Path=/"}});
     assert.ok(body.GetByIdParam,"CSV only reads a single current Contact");
-    return Response.json({status:"OK",data:current});
+    return Response.json({status:"OK",data:multipleRows?.get(String(body.GetByIdParam.EntityId)) || current});
   }
   if (url.endsWith("/segments/query/profiles")) {
     assert.deepEqual(JSON.parse(options.body),{segments:[{targetingBlocks:[]}]});
@@ -60,7 +61,10 @@ globalThis.fetch = async (url,options = {}) => {
   if (url.endsWith("/result")) return new Response(gzipSync(exportProfiles.map(p=>JSON.stringify(p)).join("\n")));
   if (url.includes("/campaigns?")) return Response.json(campaigns);
   if (url.includes("/subscriptions/")) return Response.json(url.endsWith("/suppressed") ? {is_suppressed:suppressed} : {subscriptions:states});
-  if (url.includes("/profiles/email-address/")) return providerProfile ? Response.json(providerProfile) : new Response(null,{status:404});
+  if (url.includes("/profiles/email-address/")) {
+    const profile=multipleProfiles ? multipleProfiles.get(decodeURIComponent(url.split('/').at(-1))) : providerProfile;
+    return profile ? Response.json(profile) : new Response(null,{status:404});
+  }
   writes++; throw new Error("Unexpected endpoint");
 };
 try {
@@ -110,6 +114,36 @@ try {
   assert.equal(adopted.checkpoint,seed[key].checkpoint);
   assert.equal(adopted.profiles[42].subscriptions.length,0);
   assert.equal(writes,0);
+  const manySeed=structuredClone(seed);
+  const manyRows=Array.from({length:5},(_,i)=>({...row,Id:String(100+i),Email1:`synthetic-${i}@example.test`}));
+  multipleRows=new Map(manyRows.map(r=>[r.Id,r])); multipleProfiles=new Map();
+  manySeed.snapshot.rows=manyRows;
+  manySeed[key].pending=manyRows.map(r=>({...item,contactId:r.Id,normalizedEmail:r.Email1,rowHash:__test.fingerprint(r)}));
+  manySeed[key].manifestIdentityChecks=Object.fromEntries(manyRows.map(r=>[r.Id,{action:'CREATE',email:r.Email1}]));
+  const many=new MemoryR2(manySeed), nextMany=extra=>stepVistosLeadHubCsvImport(env(many),{...opts,...extra});
+  exportProfiles=[];
+  for(let i=0;i<5;i++) await nextMany();
+  assert.equal(many.read().csvBatch.items.filter(i=>i.status==='CHECKED').length,5,'one short step checks five rows with one source login');
+  await nextMany(); await nextMany({armBatchId:opts.batchId}); await nextMany({submittedBatchId:opts.batchId,receipt:'synthetic five-row UI import'});
+  for(const r of manyRows.slice(1))multipleProfiles.set(r.Email1,{credentials:{user_id:`vistos-contact-${r.Id}`,email_address:r.Email1,first_name:null,last_name:r.LastName},tags:[]});
+  await nextMany();
+  assert.equal(many.read().csvBatch.items.filter(i=>i.status==='ADOPTED').length,4,'missing first result does not block confirmed independent results');
+  assert.equal(many.read().csvBatch.items[0].status,'CHECKED');
+  assert.equal(many.read().totals.created,4);
+  await nextMany();assert.equal(many.read().totals.created,4,'absent result is never retried as a write or double-counted');
+  assert.equal(writes,0);
+  multipleProfiles=new Map();
+  const bounded=new MemoryR2(manySeed), nextBounded=()=>stepVistosLeadHubCsvImport(env(bounded),opts);
+  for(let i=0;i<4;i++) await nextBounded();
+  const fixtureFetch=globalThis.fetch, realNow=Date.now; let elapsed=0;
+  Date.now=()=>realNow()+elapsed;
+  globalThis.fetch=async(url,options)=>{ const result=await fixtureFetch(url,options);
+    if(url.includes('/profiles/email-address/'))elapsed+=21000; return result; };
+  try { await nextBounded(); }
+  finally { Date.now=realNow;globalThis.fetch=fixtureFetch; }
+  assert.equal(bounded.read().csvBatch.items.filter(i=>i.status==='CHECKED').length,1,'slow reads yield with remaining reservations intact');
+  assert.equal(bounded.read().csvBatch.items.filter(i=>i.status==='RESERVED').length,4);
+  multipleRows=null;multipleProfiles=null;
 
   // Export collision, current-source mismatch, expired preflight and source
   // changes during the human/UI handoff all fail closed before CSV submission.
