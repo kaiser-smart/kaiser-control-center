@@ -8,6 +8,7 @@ on:
       - "workers/vistos-leadhub-*.js"
       - "scripts/vistos-*.mjs"
       - "package.json"
+      - "wrangler.vistos-leadhub-profile-sync-runner.toml"
       - ".github/workflows/vistos-integration-tests.yml"
 
 permissions:
