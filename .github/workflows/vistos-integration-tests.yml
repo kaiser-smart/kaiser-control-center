@@ -1,0 +1,34 @@
+name: Vistos integration safety
+
+on:
+  pull_request:
+    paths:
+      - "functions/_lib/vistos-*.js"
+      - "functions/api/receivables/vistos/**"
+      - "workers/vistos-leadhub-*.js"
+      - "scripts/vistos-*.mjs"
+      - "package.json"
+      - ".github/workflows/vistos-integration-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vistos-safety-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  safety-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: npm run lint
+      - name: Contact selection, shared writer and CSV safety
+        run: npm run test:vistos-contacts
+      - name: Build
+        run: npm run build
