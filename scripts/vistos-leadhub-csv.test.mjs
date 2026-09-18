@@ -160,8 +160,8 @@ try {
   for(let i=0;i<4;i++) await nextFull();
   assert.equal(full.read().csvBatch.items.length,47,'whole remainder must not truncate to batchSize or twenty');
   await nextFull();
-  assert.equal(full.read().csvBatch.items.filter(i=>i.status==='CHECKED').length,20,'bounded parallel reads, not a whole-dataset HTTP request');
-  await nextFull(); await nextFull();
+  assert.equal(full.read().csvBatch.items.filter(i=>i.status==='CHECKED').length,28,'one block stays below the documented 30/min endpoint ceiling');
+  await nextFull();
   assert.equal(full.read().csvBatch.items.filter(i=>i.status==='CHECKED').length,47);
   await nextFull();
   assert.equal(full.read().csvBatch.phase,'EXPORT','all preflight observations require a NEW full identity export');

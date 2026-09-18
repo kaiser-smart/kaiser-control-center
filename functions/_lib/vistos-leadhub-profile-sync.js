@@ -31,6 +31,11 @@ const PROFILE_DISPATCH_BUDGET_MS = 35000;
 // Reserve the write/readback window within the same HTTP request. A slow
 // source catch-up must commit its queue and yield BEFORE dispatching writes.
 const PROFILE_PREPARATION_BUDGET_MS = 25000;
+// LeadHub documents 10/s and 30/min for each profile/subscription read
+// endpoint. Keep two requests per minute in reserve and allow the already
+// serialized endpoint families to drain one full, resumable CSV block.
+const CSV_READ_BLOCK_LIMIT = 28;
+const CSV_READ_BLOCK_BUDGET_MS = 70000;
 const RATE_STATE_KEY = `${SYNC_PREFIX}/api-rate-reservations.json`;
 const OVERLAP_MS = 10 * 60 * 1000;
 const TAG_NAME = "eSMART Vistos DATA_ONLY";
@@ -1394,10 +1399,11 @@ async function prepareCsvFile(storage, state, batch) {
 
 async function csvReadBlock(items, wholeRemainder, read) {
   const startedAt = Date.now();
-  const limit = wholeRemainder ? 20 : 5;
+  const limit = wholeRemainder ? CSV_READ_BLOCK_LIMIT : 5;
+  const budgetMs = wholeRemainder ? CSV_READ_BLOCK_BUDGET_MS : 20000;
   let cursor = 0, failed;
   await Promise.all(Array.from({ length: wholeRemainder ? 3 : 1 }, async () => {
-    while (!failed && cursor < Math.min(limit, items.length) && Date.now() - startedAt < 20000) {
+    while (!failed && cursor < Math.min(limit, items.length) && Date.now() - startedAt < budgetMs) {
       const item = items[cursor++];
       try { await read(item); } catch (error) { failed ||= error; }
     }

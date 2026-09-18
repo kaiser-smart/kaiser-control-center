@@ -66,9 +66,12 @@ export class VistosContinuationController {
     let mode = csv || (csvPending && auxiliaryAllowed && !business) ? "csv-step" : business ? "business-read" : "execute-import";
     if (csvPending && this.env.CSV_SCOPE === "remaining") {
       // Consume available READ capacity for the whole reserved remainder, but
-      // return to delta at least every two minutes (or four short blocks).
+      // return to delta at least every five minutes (or four full blocks).
+      // Five minutes is the production delta contract; the previous two-minute
+      // ceiling caused ordinary business refreshes to interrupt almost every
+      // second CSV block and left most of the documented READ quota unused.
       // Business refresh retains a slot at least every five minutes.
-      const writerDue = !state.lastWriterAt || startedAt - state.lastWriterAt >= 120000 || (state.csvSinceWriter || 0) >= 4;
+      const writerDue = !state.lastWriterAt || startedAt - state.lastWriterAt >= 300000 || (state.csvSinceWriter || 0) >= 4;
       const businessDue = this.env.BUSINESS_READ_ENABLED === "true" && startedAt - state.lastBusinessAt >= 300000;
       mode = writerDue ? "execute-import" : businessDue ? "business-read" : "csv-step";
     }
