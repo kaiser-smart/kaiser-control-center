@@ -143,6 +143,67 @@ try {
   finally { Date.now=realNow;globalThis.fetch=fixtureFetch; }
   assert.equal(bounded.read().csvBatch.items.filter(i=>i.status==='CHECKED').length,1,'slow reads yield with remaining reservations intact');
   assert.equal(bounded.read().csvBatch.items.filter(i=>i.status==='RESERVED').length,4);
+
+  // The explicit whole-remainder scope reserves EVERY safe pending identity,
+  // not another canary. Each READ block remains bounded and resumable.
+  const fullSeed=structuredClone(seed);
+  const fullRows=Array.from({length:47},(_,i)=>({...row,Id:String(1000+i),Email1:`whole-${i}@example.test`}));
+  multipleRows=new Map(fullRows.map(r=>[r.Id,r])); multipleProfiles=new Map();
+  fullSeed.snapshot.rows=fullRows;
+  fullSeed[key].checkpoint=new Date().toISOString();
+  fullSeed[key].pending=fullRows.map(r=>({...item,contactId:r.Id,normalizedEmail:r.Email1,rowHash:__test.fingerprint(r)}));
+  fullSeed[key].manifestIdentityChecks=Object.fromEntries(fullRows.map(r=>[r.Id,{action:'CREATE',email:r.Email1}]));
+  const full=new MemoryR2(fullSeed), fullOptions={...opts,scope:'remaining',batchSize:1};
+  const nextFull=extra=>stepVistosLeadHubCsvImport(env(full),{...fullOptions,...extra});
+  exportProfiles=[];
+  const exportCountBeforeFull=exportCalls;
+  for(let i=0;i<4;i++) await nextFull();
+  assert.equal(full.read().csvBatch.items.length,47,'whole remainder must not truncate to batchSize or twenty');
+  await nextFull();
+  assert.equal(full.read().csvBatch.items.filter(i=>i.status==='CHECKED').length,20,'bounded parallel reads, not a whole-dataset HTTP request');
+  await nextFull(); await nextFull();
+  assert.equal(full.read().csvBatch.items.filter(i=>i.status==='CHECKED').length,47);
+  await nextFull();
+  assert.equal(full.read().csvBatch.phase,'EXPORT','all preflight observations require a NEW full identity export');
+  assert.equal(full.read().csvBatch.preparedKey,undefined,'no upload file before final identity revalidation');
+  const sourceChanged=full.read();
+  sourceChanged.pending.find(p=>p.contactId===fullRows[2].Id).desired='inactive';
+  await full.put(key,JSON.stringify(sourceChanged));
+  exportProfiles=[{credentials:{email_address:fullRows[0].Email1,user_id:'foreign-owner'},tags:[]},
+    {credentials:{email_address:'different@example.test',user_id:`vistos-contact-${fullRows[1].Id}`},tags:[]}];
+  await nextFull(); await nextFull();
+  assert.equal(exportCalls-exportCountBeforeFull,2);
+  assert.equal(full.read().csvBatch.phase,'READY');
+  const fullPrepared=full.read(full.read().csvBatch.preparedKey);
+  assert.equal(fullPrepared.rows.length,44);
+  assert.ok(fullPrepared.finalIdentityRequestedAt);
+  assert.ok(fullPrepared.safetyReadStartedAt);
+  assert.ok(fullPrepared.safetyReadFinishedAt);
+  assert.equal(full.read().csvBatch.items.filter(i=>i.status==='SKIP').length,3);
+  assert.equal(full.read().checkpoint,fullSeed[key].checkpoint,'full CSV never rewinds delta');
+  const readyFull=structuredClone(full.read());
+  for(const scenario of ['stale-delta','expired-final-export','missing-final-export']) {
+    const testState=structuredClone(readyFull);
+    if(scenario==='stale-delta') testState.checkpoint='2020-01-01T00:00:00Z';
+    if(scenario==='expired-final-export') testState.csvBatch.validUntil='2020-01-01T00:00:00Z';
+    if(scenario==='missing-final-export') delete testState.csvBatch.finalIdentityJobId;
+    const isolated=new MemoryR2({...fullSeed,[key]:testState});
+    await assert.rejects(()=>stepVistosLeadHubCsvImport(env(isolated),{...fullOptions,armBatchId:opts.batchId}));
+    assert.equal(isolated.read().csvBatch.phase,'READY');
+  }
+  await nextFull({armBatchId:opts.batchId});
+  await nextFull({submittedBatchId:opts.batchId,receipt:'SYNTHETIC_WHOLE_IMPORT_44'});
+  for(const r of fullRows.slice(23)) multipleProfiles.set(r.Email1,{credentials:{user_id:`vistos-contact-${r.Id}`,email_address:r.Email1,first_name:null,last_name:r.LastName},tags:[]});
+  await nextFull(); await nextFull(); await nextFull();
+  assert.equal(Object.keys(full.read().profiles).length,24,'twenty missing leading results do not starve the rest of the file');
+  assert.equal(full.read().csvBatch.phase,'VERIFY','missing results are not successes');
+  for(const r of fullRows.slice(3,23)) multipleProfiles.set(r.Email1,{credentials:{user_id:`vistos-contact-${r.Id}`,email_address:r.Email1,first_name:null,last_name:r.LastName},tags:[]});
+  await nextFull(); await nextFull(); await nextFull(); await nextFull();
+  assert.equal(full.read().csvBatch.phase,'ADOPTED');
+  assert.equal(Object.keys(full.read().profiles).length,44,'all identities adopted separately under same ledger');
+  assert.equal(full.read().totals.created,44);
+  await nextFull(); assert.equal(full.read().totals.created,44,'restart cannot count the whole file twice');
+  assert.equal(writes,0);
   multipleRows=null;multipleProfiles=null;
 
   providerProfile=null;
@@ -208,5 +269,10 @@ try {
   const readyCalls=modes.filter(m=>m==="csv-step").length;
   for(let i=0;i<4;i++) await new VistosContinuationController(storage,config).alarm();
   assert.equal(modes.filter(m=>m==="csv-step").length,readyCalls,"ready CSV does not burn quota while waiting for UI");
+  data.clear(); modes.length=0; csvPhase='PREFLIGHT'; config.CSV_SCOPE='remaining';
+  for(let i=0;i<12;i++) await new VistosContinuationController(storage,config).alarm();
+  assert.deepEqual(modes.slice(0,7),['execute-import','business-read','csv-step','csv-step','csv-step','csv-step','execute-import']);
+  assert.equal(modes.filter(m=>m==='csv-step').length,8,'whole remainder consumes READ slots without extra canary runs');
+  assert.equal(modes.filter(m=>m==='execute-import').length,3,'ordinary writer is not starved');
 } finally { globalThis.fetch=originalFetch; }
 console.log("CSV coordinator: reservation, complete export, collisions, source freshness, UI arming, per-row readback, safety stop, restart and fairness passed");

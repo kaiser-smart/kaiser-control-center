@@ -17,6 +17,7 @@ export async function runScheduledSync(env, scheduledTime, requestedMode) {
         ? "business-read" : env.RUN_MODE || (env.READ_PREFLIGHT_ONLY === "true" ? "read-preflight" : "sync")),
       recoveryOwner: env.RECOVERY_OWNER || undefined,
       ...(requestedMode === "csv-step" ? { batchId: env.CSV_BATCH_ID, batchSize: Number(env.CSV_BATCH_SIZE) || 5,
+        scope: env.CSV_SCOPE,
         quarantineBatchId: env.CSV_QUARANTINE_BATCH_ID,
         armBatchId: env.CSV_ARM_BATCH_ID, submittedBatchId: env.CSV_SUBMITTED_BATCH_ID, receipt: env.CSV_IMPORT_RECEIPT } : {}),
       runner: "kaiser-vistos-leadhub-profile-sync"
@@ -53,7 +54,7 @@ export class VistosContinuationController {
     const startedAt = Date.now();
     // Never two business blocks consecutively: delta reconciliation and its
     // priority queue run between blocks even while the historical backlog grows.
-    const csvConfig = [this.env.CSV_BATCH_ID, this.env.CSV_ARM_BATCH_ID, this.env.CSV_SUBMITTED_BATCH_ID, this.env.CSV_IMPORT_RECEIPT, this.env.CSV_QUARANTINE_BATCH_ID].join("|");
+    const csvConfig = [this.env.CSV_BATCH_ID, this.env.CSV_SCOPE, this.env.CSV_ARM_BATCH_ID, this.env.CSV_SUBMITTED_BATCH_ID, this.env.CSV_IMPORT_RECEIPT, this.env.CSV_QUARANTINE_BATCH_ID].join("|");
     const csvPending = this.env.CSV_BATCH_ID && (state.csvConfig !== csvConfig
       || !["READY", "ARMED", "ADOPTED", "EMPTY", "BLOCKED", "QUARANTINED"].includes(state.csvStatus));
     // Every auxiliary step is followed by the ordinary writer. CSV and
@@ -62,10 +63,18 @@ export class VistosContinuationController {
     const csv = csvPending && auxiliaryAllowed && state.lastAuxiliary !== "csv-step";
     const business = !csv && this.env.BUSINESS_READ_ENABLED === "true" && auxiliaryAllowed
       && startedAt - state.lastBusinessAt >= 60000;
-    const mode = csv || (csvPending && auxiliaryAllowed && !business) ? "csv-step" : business ? "business-read" : "execute-import";
+    let mode = csv || (csvPending && auxiliaryAllowed && !business) ? "csv-step" : business ? "business-read" : "execute-import";
+    if (csvPending && this.env.CSV_SCOPE === "remaining") {
+      // Consume available READ capacity for the whole reserved remainder, but
+      // return to delta at least every two minutes (or four short blocks).
+      // Business refresh retains a slot at least every five minutes.
+      const writerDue = !state.lastWriterAt || startedAt - state.lastWriterAt >= 120000 || (state.csvSinceWriter || 0) >= 4;
+      const businessDue = this.env.BUSINESS_READ_ENABLED === "true" && startedAt - state.lastBusinessAt >= 300000;
+      mode = writerDue ? "execute-import" : businessDue ? "business-read" : "csv-step";
+    }
     state.lastMode = mode;
     if (mode !== "execute-import") state.lastAuxiliary = mode;
-    if (business) state.lastBusinessAt = startedAt;
+    if (mode === "business-read") state.lastBusinessAt = startedAt;
     // Persist wakeup before network I/O. A crash/restart resumes from the R2
     // journal, never from a guessed successful POST response.
     await this.storage.setAlarm(startedAt + 180000);
@@ -77,6 +86,8 @@ export class VistosContinuationController {
       state.steps++;
       state.lastSuccessAt = new Date().toISOString();
       state.lastSummary = summary;
+      if (mode === "execute-import") { state.lastWriterAt = startedAt; state.csvSinceWriter = 0; }
+      if (mode === "csv-step") state.csvSinceWriter = (state.csvSinceWriter || 0) + 1;
       if (mode === "csv-step") { state.csvConfig = csvConfig; state.csvStatus = summary.status; }
       if (summary.status === "RECONCILIATION_REQUIRED") nextDelay = 60000;
       else if (mode === "execute-import" && !summary.pending && !summary.historicalImport?.remaining) nextDelay = 60000;

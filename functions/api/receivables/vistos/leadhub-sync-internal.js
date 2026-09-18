@@ -26,7 +26,7 @@ export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json().catch(() => ({}));
     if (body.mode === "csv-step") return json(await stepVistosLeadHubCsvImport(env, {
-      batchId: clean(body.batchId), batchSize: body.batchSize,
+      batchId: clean(body.batchId), batchSize: body.batchSize, scope: clean(body.scope),
       quarantineBatchId: clean(body.quarantineBatchId),
       armBatchId: clean(body.armBatchId), submittedBatchId: clean(body.submittedBatchId), receipt: clean(body.receipt)
     }));

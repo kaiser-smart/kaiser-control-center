@@ -1349,10 +1349,62 @@ function csvReservationMatches(batch, item) {
 
 function csvSummary(batch) {
   return { mode: "csv-step", status: batch?.phase || "NOT_REQUESTED", batchId: batch?.id || null,
+    scope: batch?.scope || "sample", reserved: batch?.items?.length || 0,
     counts: (batch?.items || []).reduce((counts, item) => {
       counts[item.status] = (counts[item.status] || 0) + 1; return counts;
     }, {}), preparedKey: batch?.preparedKey || null, validUntil: batch?.validUntil || null,
     profileWrites: 0, checkpointChanged: false, messagesSent: 0, sendAllowed: false };
+}
+
+// A whole-remainder CSV is prepared over many resumable READ blocks. The
+// per-address safety observations remain dated evidence, never re-labelled as
+// fresh. A SECOND complete identity export is required after those reads, and
+// current delta intents must still match before a file can be armed.
+function csvCurrentSourceMatches(state, item, pendingById) {
+  const pending = pendingById.get(item.contactId);
+  return pending?.desired === "active" && pending.normalizedEmail === item.normalizedEmail
+    && pending.rowHash === item.rowHash && !state.profiles?.[item.contactId]?.synced
+    && !state.quarantinedIdentities?.[item.contactId];
+}
+
+async function prepareCsvFile(storage, state, batch) {
+  const checked = batch.items.filter(entry => entry.status === "CHECKED");
+  if (!checked.length) { batch.phase = "EMPTY"; return; }
+  if (checked.some(item => item.beforeSafety?.suppressed !== false
+    || !Array.isArray(item.beforeSafety?.subscriptions) || item.beforeSafety.subscriptions.length)) {
+    throw syncError("csv_safety_evidence_missing", "CSV obsahuje chybějící nebo nebezpečnou kontrolu odběrů a blokací.");
+  }
+  const firstCheck = Math.min(...checked.map(entry => Date.parse(entry.checkedAt)));
+  const lastCheck = Math.max(...checked.map(entry => Date.parse(entry.checkedAt)));
+  if (![firstCheck, lastCheck].every(Number.isFinite)) throw syncError("csv_safety_evidence_missing", "Chybí čas kontroly odběrů a blokací.");
+  const validatedAt = batch.scope === "remaining" ? Date.parse(batch.finalIdentityRequestedAt) : firstCheck;
+  if (!Number.isFinite(validatedAt)) throw syncError("csv_final_identity_missing", "Chybí závěrečný úplný export identit.");
+  batch.validUntil = new Date(validatedAt + 30 * 60000).toISOString();
+  batch.preparedKey = `${SYNC_PREFIX}/csv/${batch.id}/prepared.json`;
+  await putJson(storage, batch.preparedKey, { workspaceId: "8d8bf07372ad4244877308cbd94c8e78", batchId: batch.id,
+    scope: batch.scope || "sample", validUntil: batch.validUntil,
+    safetyReadStartedAt: new Date(firstCheck).toISOString(), safetyReadFinishedAt: new Date(lastCheck).toISOString(),
+    finalIdentityCheckedAt: batch.finalIdentityCheckedAt || null,
+    finalIdentityRequestedAt: batch.finalIdentityRequestedAt || null, sourceCheckpoint: state.checkpoint,
+    format: ["user_id", "email", "firstname", "lastname"],
+    rows: checked.map(entry => [profileUserId(entry.contactId), entry.normalizedEmail, entry.firstName, entry.lastName]),
+    subscribe: false, unsubscribe: false, blacklist: false, tags: false, sendAllowed: false });
+  batch.phase = "READY";
+}
+
+async function csvReadBlock(items, wholeRemainder, read) {
+  const startedAt = Date.now();
+  const limit = wholeRemainder ? 20 : 5;
+  let cursor = 0, failed;
+  await Promise.all(Array.from({ length: wholeRemainder ? 3 : 1 }, async () => {
+    while (!failed && cursor < Math.min(limit, items.length) && Date.now() - startedAt < 20000) {
+      const item = items[cursor++];
+      try { await read(item); } catch (error) { failed ||= error; }
+    }
+  }));
+  // Drain all started reads before persisting state or handing the common
+  // limiter to delta. No detached promises and no parallel profile writes.
+  if (failed) throw failed;
 }
 
 async function csvExportProfiles(response) {
@@ -1376,8 +1428,7 @@ async function csvExportProfiles(response) {
   } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
 }
 
-function adoptCsvItem(state, batch, item, profile, safety, now) {
-  if (item.status === "ADOPTED") return;
+function validateCsvReadback(state, item, profile, safety) {
   if (item.status !== "CHECKED" || profile.status !== 200
     || !profileIdentityMatches(profile.payload, item)
     || clean(profile.payload?.credentials?.first_name) !== item.firstName
@@ -1386,6 +1437,11 @@ function adoptCsvItem(state, batch, item, profile, safety, now) {
   }
   assertSafetyUnchanged(item.beforeSafety, safety);
   if (state.profiles?.[item.contactId]?.synced) throw syncError("csv_ledger_identity_conflict", "Rezervovanou CSV identitu už vlastní jiná operace.");
+}
+
+function adoptCsvItem(state, batch, item, profile, safety, now) {
+  if (item.status === "ADOPTED") return;
+  validateCsvReadback(state, item, profile, safety);
   state.profiles ||= {};
   state.profiles[item.contactId] = { synced: true, active: false, email: item.normalizedEmail,
     rowHash: item.rowHash, sourceModified: item.sourceModified, businessFlags: null,
@@ -1428,10 +1484,15 @@ export async function stepVistosLeadHubCsvImport(env, options = {}) {
         const firstName = csvFirstName(pending.firstName), lastName = clean(pending.lastName);
         if ((!firstName && !lastName) || [firstName, lastName].some(name => [...name].length > 50)) continue;
         emails.add(pending.normalizedEmail); ids.add(pending.contactId);
-        items.push({ ...pending, firstName, lastName, status: "RESERVED" });
-        if (items.length >= Math.max(1, Math.min(20, Number(options.batchSize) || 5))) break;
+        // Do not duplicate derived targeting/queue metadata for thousands of
+        // reserved rows. The ordinary writer rebuilds it from current data.
+        items.push({ contactId: pending.contactId, normalizedEmail: pending.normalizedEmail,
+          sourceModified: pending.sourceModified, rowHash: pending.rowHash,
+          desired: "active", historical: true, firstName, lastName, status: "RESERVED" });
+        if (options.scope !== "remaining" && items.length >= Math.max(1, Math.min(20, Number(options.batchSize) || 5))) break;
       }
       batch = state.csvBatch = { id, phase: items.length ? "WORKSPACE" : "EMPTY", items,
+        scope: options.scope === "remaining" ? "remaining" : "sample",
         sourceSnapshotKey: state.snapshotKey, checkpointAtReservation: state.checkpoint,
         reservedAt: new Date().toISOString(), sendAllowed: false };
       await putJson(storage, SYNC_STATE_KEY, state);
@@ -1447,7 +1508,7 @@ export async function stepVistosLeadHubCsvImport(env, options = {}) {
       } else if (batch.phase === "EXPORT") {
         const job = await leadHubRequest(env, "/segments/query/profiles", { method: "POST", body: { segments: [{ targetingBlocks: [] }] } });
         if (job.status !== 202 || !clean(job.payload?.job_id)) throw syncError("csv_export_not_accepted", "CSV export profilů nebyl přijat.");
-        batch.exportJobId = job.payload.job_id; batch.phase = "EXPORT_WAIT";
+        batch.exportJobId = job.payload.job_id; batch.exportRequestedAt = new Date().toISOString(); batch.phase = "EXPORT_WAIT";
       } else if (batch.phase === "EXPORT_WAIT") {
         const job = await leadHubRequest(env, `/jobs/${encodeURIComponent(batch.exportJobId)}`);
         if (job.status !== 200 || job.payload?.job_id !== batch.exportJobId || job.payload?.errors?.length
@@ -1468,54 +1529,74 @@ export async function stepVistosLeadHubCsvImport(env, options = {}) {
             sourceRunId: state.baselineRunId, sourceCount: batch.items.length, exportCount: profiles.length,
             exportState: "done", exportJobId: batch.exportJobId, allProfiles: true });
           if (manifest.status !== "PLANNED") throw syncError("csv_manifest_unverified", "CSV manifest neprošel kontrolou úplnosti.");
+          const manifestById = new Map(manifest.items.map(entry => [entry.contactId, entry]));
+          const pendingById = new Map(state.pending.map(entry => [entry.contactId, entry]));
           for (const item of batch.items) {
-            const match = manifest.items.find(entry => entry.contactId === item.contactId);
+            if (item.status === "SKIP") continue;
+            const match = manifestById.get(item.contactId);
             if (!match || match.action !== "CREATE") { item.status = "SKIP"; item.reason = `CSV_EXISTING_OR_COLLIDING_IDENTITY:${match?.reason || "MISSING"}`; }
+            else if (batch.finalExport && !csvCurrentSourceMatches(state, item, pendingById)) {
+              item.status = "SKIP"; item.reason = "CSV_SOURCE_CHANGED_DURING_PREPARATION";
+            }
           }
-          await putJson(storage, `${SYNC_PREFIX}/csv/${id}/export.json`, profiles);
-          await putJson(storage, `${SYNC_PREFIX}/csv/${id}/manifest.json`, manifest);
-          batch.exportCompletedAt = new Date().toISOString(); batch.phase = "PREFLIGHT";
+          const suffix = batch.finalExport ? "final-" : "";
+          await putJson(storage, `${SYNC_PREFIX}/csv/${id}/${suffix}export.json`, profiles);
+          await putJson(storage, `${SYNC_PREFIX}/csv/${id}/${suffix}manifest.json`, manifest);
+          batch.exportCompletedAt = new Date().toISOString();
+          if (batch.finalExport) {
+            batch.finalIdentityCheckedAt = batch.exportCompletedAt;
+            batch.finalIdentityRequestedAt = batch.exportRequestedAt;
+            batch.finalIdentityJobId = batch.exportJobId;
+            await prepareCsvFile(storage, state, batch);
+          } else batch.phase = "PREFLIGHT";
         }
       } else if (batch.phase === "PREFLIGHT") {
-        const items = batch.items.filter(entry => entry.status === "RESERVED").slice(0, 5);
+        const items = batch.items.filter(entry => entry.status === "RESERVED");
         if (items.length) {
           const snapshot = await getJson(storage, state.snapshotKey);
           const columns = contactReadColumns(snapshot);
           const session = await loginVistosExecute(env);
-          const readStartedAt = Date.now();
-          for (const item of items) {
-          if (Date.now() - readStartedAt >= 20000) break;
-          const row = snapshot.rows.find(entry => clean(entry.Id) === item.contactId);
-          const pending = state.pending.find(entry => entry.contactId === item.contactId);
+          const rowsById = new Map(snapshot.rows.map(entry => [clean(entry.Id), entry]));
+          const pendingById = new Map(state.pending.map(entry => [entry.contactId, entry]));
+          await csvReadBlock(items, batch.scope === "remaining", async item => {
+          const row = rowsById.get(item.contactId);
+          const pending = pendingById.get(item.contactId);
           const latest = await getVistosById(env, session, "Contact", item.contactId, columns);
           if (!row || fingerprint(row) !== item.rowHash || clean(latest.row?.Id) !== item.contactId || pending?.desired !== "active" || pending.rowHash !== item.rowHash
             || sourceValues(row, columns) !== sourceValues(latest.row, columns)) {
             item.status = "SKIP"; item.reason = "CSV_SOURCE_CHANGED";
           } else {
-            const profile = await leadHubRequest(env, `/profiles/email-address/${encodeURIComponent(item.normalizedEmail)}`, { allow404: true });
+            let profile;
+            try {
+              profile = await leadHubRequest(env, `/profiles/email-address/${encodeURIComponent(item.normalizedEmail)}`, { allow404: true, profilePreflight: true });
+            } catch (error) {
+              if (!canIsolateProfileReadRejection(error, item, state.profiles?.[item.contactId]?.synced, false)) throw error;
+              item.status = "SKIP"; item.reason = "CSV_PROFILE_READ_REJECTED_422";
+              state.profileReadRejections ||= {};
+              state.profileReadRejections[item.contactId] = { email: item.normalizedEmail, rowHash: item.rowHash,
+                reason: item.reason, checkedAt: new Date().toISOString() };
+              return;
+            }
             const safety = await subscriptionRead(env, item.normalizedEmail);
             if (profile.status !== 404 || safety.suppressed || safety.subscriptions.length) {
               item.status = "SKIP"; item.reason = "CSV_NOT_NEW_EMPTY_UNBLOCKED_PROFILE";
             } else { item.beforeSafety = safety; item.checkedAt = new Date().toISOString(); item.status = "CHECKED"; }
           }
-          }
+          });
         } else {
           const checked = batch.items.filter(entry => entry.status === "CHECKED");
           if (!checked.length) batch.phase = "EMPTY";
-          else {
-            batch.phase = "READY";
-            batch.validUntil = new Date(Math.min(...checked.map(entry => Date.parse(entry.checkedAt))) + 30 * 60000).toISOString();
-            batch.preparedKey = `${SYNC_PREFIX}/csv/${id}/prepared.json`;
-            await putJson(storage, batch.preparedKey, { workspaceId: "8d8bf07372ad4244877308cbd94c8e78", batchId: id,
-              validUntil: batch.validUntil, format: ["user_id", "email", "firstname", "lastname"],
-              rows: checked.map(entry => [profileUserId(entry.contactId), entry.normalizedEmail, entry.firstName, entry.lastName]),
-              subscribe: false, unsubscribe: false, blacklist: false, tags: false, sendAllowed: false });
-          }
+          else if (batch.scope === "remaining") { batch.finalExport = true; batch.phase = "EXPORT"; }
+          else await prepareCsvFile(storage, state, batch);
         }
       } else if (batch.phase === "READY" && options.armBatchId === id) {
+        if (batch.scope === "remaining" && (!batch.finalIdentityJobId
+          || !Number.isFinite(Date.parse(state.checkpoint)) || Date.now() - Date.parse(state.checkpoint) > 5 * 60000)) {
+          throw syncError("csv_live_delta_unverified", "CSV vyžaduje závěrečný úplný export a aktuální návaznost delty.");
+        }
+        const pendingById = new Map(state.pending.map(entry => [entry.contactId, entry]));
         if (Date.now() >= Date.parse(batch.validUntil) || !batch.items.filter(entry => entry.status === "CHECKED").every(entry =>
-          state.pending.some(pending => pending.contactId === entry.contactId && pending.desired === "active"
-            && pending.normalizedEmail === entry.normalizedEmail && pending.rowHash === entry.rowHash))) {
+          csvCurrentSourceMatches(state, entry, pendingById))) {
           throw syncError("csv_preflight_expired_or_changed", "CSV se nesmí nahrát: kontrola vypršela nebo se změnil zdroj.");
         }
         await readCampaignSafety(env);
@@ -1524,12 +1605,11 @@ export async function stepVistosLeadHubCsvImport(env, options = {}) {
         if (!clean(options.receipt)) throw syncError("csv_receipt_missing", "Chybí doložený výsledek standardního CSV průvodce.");
         batch.receipt = clean(options.receipt); batch.phase = "VERIFY"; batch.submittedObservedAt = new Date().toISOString();
       } else if (batch.phase === "VERIFY") {
-        const items = batch.items.filter(entry => entry.status === "CHECKED").slice(0, 5);
+        const items = batch.items.filter(entry => entry.status === "CHECKED")
+          .sort((left, right) => String(left.lastCheckedAt || "").localeCompare(String(right.lastCheckedAt || "")));
         if (!items.length) batch.phase = batch.items.some(item => item.status === "QUARANTINED") ? "QUARANTINED" : "ADOPTED";
         else {
-          const readStartedAt = Date.now();
-          for (const item of items) {
-          if (Date.now() - readStartedAt >= 20000) break;
+          await csvReadBlock(items, batch.scope === "remaining", async item => {
           const profile = await leadHubRequest(env, `/profiles/email-address/${encodeURIComponent(item.normalizedEmail)}`, { allow404: true });
           if (profile.status === 404) {
             item.lastReadback = "NOT_FOUND"; item.lastCheckedAt = new Date().toISOString();
@@ -1547,23 +1627,26 @@ export async function stepVistosLeadHubCsvImport(env, options = {}) {
           }
           else {
             const safety = await subscriptionRead(env, item.normalizedEmail);
-            adoptCsvItem(state, batch, item, profile, safety, new Date().toISOString());
+            validateCsvReadback(state, item, profile, safety);
+            const checkedAt = new Date().toISOString();
             await putJson(storage, `${SYNC_PREFIX}/csv/${id}/readbacks/${item.contactId}.json`, {
-              checkedAt: item.adoptedAt, profile: profile.payload, beforeSafety: item.beforeSafety, afterSafety: safety,
+              checkedAt, profile: profile.payload, beforeSafety: item.beforeSafety, afterSafety: safety,
               status: "PROFILE_READBACK_CONFIRMED", targetingPending: true, profileWrites: 0 });
+            adoptCsvItem(state, batch, item, profile, safety, checkedAt);
           }
-          }
+          });
         }
       }
     } catch (error) {
       if (["csv_identity_readback_unverified", "csv_ledger_identity_conflict", "leadhub_subscription_or_suppression_changed"].includes(error.code)) {
         batch.phase = "BLOCKED"; batch.error = error.code;
         state.safetyIncident = { code: error.code, at: new Date().toISOString() };
-        await putJson(storage, SYNC_STATE_KEY, state);
       }
       throw error;
-    } finally { await env.syncApiLimiter.persist(); }
-    await putJson(storage, SYNC_STATE_KEY, state);
+    } finally {
+      await putJson(storage, SYNC_STATE_KEY, state);
+      await env.syncApiLimiter.persist();
+    }
     return csvSummary(batch);
   });
 }
@@ -2236,9 +2319,15 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
   // urgent exclusions must never disappear behind this no-write SKIP.
   applyProfileReadRejections(pendingById, state);
   const pending = prioritizePending([...pendingById.values()], state.profiles, state.queueCursor || 0, state.historicalQueueCursor || 0);
+  // CSV honorific cleanup must survive subsequent tag/delta updates. Persist
+  // the normalized intent before WRITE_INTENT so recovery reads the same names.
+  for (const item of pending) if (state.profiles?.[item.contactId]?.csvBatchId) item.firstName = csvFirstName(item.firstName);
   phase("businessIdentityAndQueue");
   const batchLimit = Math.min(Number(options.batchLimit) || PROFILE_BATCH_LIMIT, PROFILE_BATCH_LIMIT);
-  const current = pending.filter(item => !csvReservationMatches(state.csvBatch, item)).slice(0, batchLimit);
+  const reserved = (state.csvBatch?.items || []).filter(item => !["SKIP", "ADOPTED"].includes(item.status));
+  const reservedIds = new Set(reserved.map(item => item.contactId));
+  const reservedEmails = new Set(reserved.map(item => item.normalizedEmail));
+  const current = pending.filter(item => !reservedIds.has(item.contactId) && !reservedEmails.has(item.normalizedEmail)).slice(0, batchLimit);
   const run = { created: 0, updated: 0, deactivated: 0, no_change: 0, skipped: 0, readbackConfirmed: 0,
     newlyCompletedProfiles: 0, newlyCreatedProfiles: 0, newlyLinkedProfiles: 0, repeatedUpdates: 0,
     restoredSubscriptions: 0, messagesSent: 0 };
@@ -2399,6 +2488,7 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
       businessFlags: item.businessFlags || null,
       identityBinding: item.identityBinding || null,
       sourceModified: item.sourceModified || null,
+      ...(state.profiles[item.contactId]?.csvBatchId ? { csvBatchId: state.profiles[item.contactId].csvBatchId } : {}),
       subscriptions: result.subscriptions,
       suppressed: result.suppressed,
       lastSyncedAt: new Date().toISOString(),

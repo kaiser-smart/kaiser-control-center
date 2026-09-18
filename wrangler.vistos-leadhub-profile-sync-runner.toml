@@ -8,6 +8,10 @@ APP_BASE_URL = "https://smart-odpady.ai"
 # Short shared-writer steps continued by one durable workspace alarm.
 RUN_MODE = "execute-import"
 BUSINESS_READ_ENABLED = "true"
+# Whole approved historical remainder. Arming and observed UI receipt remain
+# separate explicit controls; this configuration cannot upload or subscribe.
+CSV_BATCH_ID = "csv-20260918-whole"
+CSV_SCOPE = "remaining"
 
 [triggers]
 crons = ["* * * * *"]
