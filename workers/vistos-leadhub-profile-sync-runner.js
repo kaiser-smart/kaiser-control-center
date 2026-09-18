@@ -17,6 +17,7 @@ export async function runScheduledSync(env, scheduledTime, requestedMode) {
         ? "business-read" : env.RUN_MODE || (env.READ_PREFLIGHT_ONLY === "true" ? "read-preflight" : "sync")),
       recoveryOwner: env.RECOVERY_OWNER || undefined,
       ...(requestedMode === "csv-step" ? { batchId: env.CSV_BATCH_ID, batchSize: Number(env.CSV_BATCH_SIZE) || 5,
+        quarantineBatchId: env.CSV_QUARANTINE_BATCH_ID,
         armBatchId: env.CSV_ARM_BATCH_ID, submittedBatchId: env.CSV_SUBMITTED_BATCH_ID, receipt: env.CSV_IMPORT_RECEIPT } : {}),
       runner: "kaiser-vistos-leadhub-profile-sync"
     })
@@ -52,9 +53,9 @@ export class VistosContinuationController {
     const startedAt = Date.now();
     // Never two business blocks consecutively: delta reconciliation and its
     // priority queue run between blocks even while the historical backlog grows.
-    const csvConfig = [this.env.CSV_BATCH_ID, this.env.CSV_ARM_BATCH_ID, this.env.CSV_SUBMITTED_BATCH_ID, this.env.CSV_IMPORT_RECEIPT].join("|");
+    const csvConfig = [this.env.CSV_BATCH_ID, this.env.CSV_ARM_BATCH_ID, this.env.CSV_SUBMITTED_BATCH_ID, this.env.CSV_IMPORT_RECEIPT, this.env.CSV_QUARANTINE_BATCH_ID].join("|");
     const csvPending = this.env.CSV_BATCH_ID && (state.csvConfig !== csvConfig
-      || !["READY", "ARMED", "ADOPTED", "EMPTY", "BLOCKED"].includes(state.csvStatus));
+      || !["READY", "ARMED", "ADOPTED", "EMPTY", "BLOCKED", "QUARANTINED"].includes(state.csvStatus));
     // Every auxiliary step is followed by the ordinary writer. CSV and
     // business take turns, so neither can starve delta or the other queue.
     const auxiliaryAllowed = !state.lastMode || state.lastMode === "execute-import";

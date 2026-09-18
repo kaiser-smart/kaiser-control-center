@@ -145,6 +145,31 @@ try {
   assert.equal(bounded.read().csvBatch.items.filter(i=>i.status==='RESERVED').length,4);
   multipleRows=null;multipleProfiles=null;
 
+  providerProfile=null;
+  for (const scenario of ["isolate", "no-request", "wrong-batch", "recent", "known-receipt"]) {
+    const uncertain=structuredClone(beforeAdoption);
+    uncertain.csvBatch.receipt="UI_SUBMIT_OUTCOME_UNKNOWN_SYNTHETIC";
+    uncertain.csvBatch.submittedObservedAt="2026-01-01T00:00:00Z";
+    if(scenario==="recent") uncertain.csvBatch.submittedObservedAt=new Date().toISOString();
+    if(scenario==="known-receipt") uncertain.csvBatch.receipt="CONFIRMED_IMPORT_RECEIPT";
+    const isolated=new MemoryR2({...seed,[key]:uncertain});
+    const options={...opts,quarantineBatchId:scenario==="no-request"?undefined:scenario==="wrong-batch"?"different-batch":opts.batchId};
+    await stepVistosLeadHubCsvImport(env(isolated),options);
+    const result=await stepVistosLeadHubCsvImport(env(isolated),options);
+    if(scenario==="isolate") {
+      assert.equal(result.status,"QUARANTINED");
+      assert.equal(isolated.read().quarantinedIdentities[42].reason,"CSV_SUBMISSION_UNVERIFIED");
+      assert.equal(isolated.read().pending.length,0);
+      assert.equal(isolated.read().totals.created,0,"quarantine is not successful import");
+      assert.equal(isolated.read().checkpoint,uncertain.checkpoint);
+      assert.equal((await stepVistosLeadHubCsvImport(env(isolated),{batchId:"independent-batch"})).status,"EMPTY");
+      assert.ok(isolated.read(`${prefix}/csv/${opts.batchId}/receipt.json`),"uncertain receipt is preserved");
+    } else {
+      assert.equal(result.status,"VERIFY");
+      assert.equal(isolated.read().csvBatch.items[0].status,"CHECKED");
+    }
+  }
+
   // Export collision, current-source mismatch, expired preflight and source
   // changes during the human/UI handoff all fail closed before CSV submission.
   providerProfile=null;
