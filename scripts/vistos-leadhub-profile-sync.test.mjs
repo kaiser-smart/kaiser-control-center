@@ -680,6 +680,48 @@ try {
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos → LeadHub retained-writer READ reconciliation tests passed");
 
+// Empty journal recovery is scoped to an explicitly observed interrupted
+// owner; age alone, an uncertain mutation, incomplete listing or a race fails.
+for (const scenario of ["empty", "no-approval", "wrong-owner", "young", "journal", "truncated", "cas-race", "late-journal", "resume-claim"]) {
+  const lock = { owner: "empty-read-owner", startedAt: "2026-01-01T00:00:00Z" };
+  if (scenario === "young") lock.startedAt = new Date(Date.now() - 180000).toISOString();
+  if (scenario === "resume-claim") Object.assign(lock, { phase: "READ_ONLY_RELEASING", claimId: "interrupted-claim", claimedAt: "2026-01-01T00:00:01Z" });
+  const state = { checkpoint: "2026-01-01T00:00:00Z", pending: [], csvBatch: { phase: "VERIFY", items: [{ status: "CHECKED" }] } };
+  const seed = { [retainedLockKey]: JSON.stringify(lock), [syncStateKey]: JSON.stringify(state) };
+  const journalKey = "protected-sync/vistos-leadhub-profiles/operations/empty-read-owner/42.json";
+  if (scenario === "journal") seed[journalKey] = JSON.stringify({ status: "WRITE_INTENT" });
+  const storage = new MemoryR2(seed);
+  let lists = 0;
+  const list = storage.list.bind(storage), put = storage.put.bind(storage);
+  storage.list = async opts => {
+    lists++;
+    if (scenario === "truncated") return { objects: [], truncated: true };
+    if (scenario === "late-journal" && lists === 2) storage.values.set(journalKey, JSON.stringify({ status: "WRITE_INTENT" }));
+    return list(opts);
+  };
+  storage.put = async (key, value, options) => {
+    if (key === retainedLockKey && scenario === "cas-race") return null;
+    return put(key, value, options);
+  };
+  globalThis.fetch = async () => assert.fail("empty-lock recovery cannot call the provider");
+  try {
+    const run = executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: storage }, {
+      recoveryOwner: scenario === "no-approval" ? undefined : scenario === "wrong-owner" ? "other" : lock.owner
+    });
+    if (["truncated", "cas-race", "late-journal"].includes(scenario)) {
+      await assert.rejects(run, error => ["writer_journal_incomplete", "writer_reconciliation_changed"].includes(error.code));
+      assert.ok(storage.values.has(retainedLockKey));
+    } else {
+      const result = await run;
+      const recovered = ["empty", "resume-claim"].includes(scenario);
+      assert.equal(result.status, recovered ? "READ_ONLY_INTERRUPTION_RECOVERED" : "RECONCILIATION_REQUIRED");
+      assert.equal(storage.values.has(retainedLockKey), !recovered);
+      assert.equal(result.profileWrites, 0);
+    }
+    assert.equal(storage.values.get(syncStateKey), JSON.stringify(state), "checkpoint, CSV reservations and ledger must remain identical");
+  } finally { globalThis.fetch = originalFetch; }
+}
+
 // An interrupted batch can contain fully committed operations followed by an
 // accepted write. Every operation needs a live readback; only the latter is
 // newly adopted/counted. No writes to LeadHub are allowed during settlement.

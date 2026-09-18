@@ -1411,7 +1411,7 @@ export async function stepVistosLeadHubCsvImport(env, options = {}) {
       throw syncError("csv_coordinator_unavailable", "CSV vyžaduje existující bezpečnou integrační evidenci.");
     }
     let batch = state.csvBatch;
-    if (batch && batch.id !== id && !["ADOPTED", "EMPTY"].includes(batch.phase)) {
+    if (batch && batch.id !== id && !["ADOPTED", "EMPTY", "QUARANTINED"].includes(batch.phase)) {
       throw syncError("csv_previous_batch_unresolved", "Předchozí CSV dávka není ověřená; rezervace nelze obejít.");
     }
     if (!batch || batch.id !== id) {
@@ -1437,7 +1437,7 @@ export async function stepVistosLeadHubCsvImport(env, options = {}) {
       await putJson(storage, SYNC_STATE_KEY, state);
       return csvSummary(batch);
     }
-    if (["ADOPTED", "EMPTY", "BLOCKED"].includes(batch.phase)) return csvSummary(batch);
+    if (["ADOPTED", "EMPTY", "BLOCKED", "QUARANTINED"].includes(batch.phase)) return csvSummary(batch);
     if (["READY", "ARMED"].includes(batch.phase) && options.submittedBatchId !== id && options.armBatchId !== id) return csvSummary(batch);
     env = { ...env, syncWriter: writer, syncApiLimiter: createApiLimiter(storage, await getJson(storage, RATE_STATE_KEY) || {}) };
     try {
@@ -1525,13 +1525,26 @@ export async function stepVistosLeadHubCsvImport(env, options = {}) {
         batch.receipt = clean(options.receipt); batch.phase = "VERIFY"; batch.submittedObservedAt = new Date().toISOString();
       } else if (batch.phase === "VERIFY") {
         const items = batch.items.filter(entry => entry.status === "CHECKED").slice(0, 5);
-        if (!items.length) batch.phase = "ADOPTED";
+        if (!items.length) batch.phase = batch.items.some(item => item.status === "QUARANTINED") ? "QUARANTINED" : "ADOPTED";
         else {
           const readStartedAt = Date.now();
           for (const item of items) {
           if (Date.now() - readStartedAt >= 20000) break;
           const profile = await leadHubRequest(env, `/profiles/email-address/${encodeURIComponent(item.normalizedEmail)}`, { allow404: true });
-          if (profile.status === 404) { item.lastReadback = "NOT_FOUND"; item.lastCheckedAt = new Date().toISOString(); }
+          if (profile.status === 404) {
+            item.lastReadback = "NOT_FOUND"; item.lastCheckedAt = new Date().toISOString();
+            // A missing result is NOT a failed import that may be retried.
+            // Explicitly isolate an old uncertain UI submission and preserve
+            // both identities permanently, allowing independent batches only.
+            if (options.quarantineBatchId === id && batch.receipt?.startsWith("UI_SUBMIT_OUTCOME_UNKNOWN_")
+              && Date.parse(batch.submittedObservedAt) < Date.now() - 24 * 60 * 60000) {
+              item.status = "QUARANTINED"; item.reason = "CSV_SUBMISSION_UNVERIFIED";
+              state.quarantinedIdentities ||= {};
+              state.quarantinedIdentities[item.contactId] = { email: item.normalizedEmail,
+                reason: item.reason, csvBatchId: id, quarantinedAt: item.lastCheckedAt, operationOutcome: "UNVERIFIED" };
+              state.pending = state.pending.filter(pending => pending.contactId !== item.contactId && pending.normalizedEmail !== item.normalizedEmail);
+            }
+          }
           else {
             const safety = await subscriptionRead(env, item.normalizedEmail);
             adoptCsvItem(state, batch, item, profile, safety, new Date().toISOString());
@@ -1656,6 +1669,42 @@ async function inspectRetainedWriter(env, lock, options = {}) {
   const state = await getJson(storage, SYNC_STATE_KEY);
   const listed = await storage.list({ prefix: `${SYNC_PREFIX}/operations/${lock.owner}/`, limit: 100 });
   if (listed.truncated) throw syncError("writer_journal_incomplete", "Neuzavřený deník není úplný.");
+  // Explicit incident recovery only, never an automatic TTL takeover. A
+  // terminated read-only/source-preparation request can leave an empty lock.
+  // Every provider mutation has a durable journal BEFORE dispatch; absence
+  // of the complete journal is therefore different from an unknown intent.
+  if (clean(options.recoveryOwner) === lock.owner && listed.objects.length === 0
+    && Date.parse(lock.startedAt) < Date.now() - 600000
+    && (!lock.phase || (lock.phase === "READ_ONLY_RELEASING" && Date.parse(lock.claimedAt) < Date.now() - 120000))) {
+    const liveObject = await storage.get(WRITER_LOCK_KEY);
+    const live = liveObject ? await liveObject.json() : null;
+    if (!live || JSON.stringify(live) !== JSON.stringify(lock) || !liveObject.httpEtag) {
+      throw syncError("writer_reconciliation_changed", "Vlastník přerušeného čtení se změnil.");
+    }
+    const claimId = crypto.randomUUID();
+    const claimed = await storage.put(WRITER_LOCK_KEY, JSON.stringify({ ...live,
+      phase: "READ_ONLY_RELEASING", claimId, claimedAt: new Date().toISOString() }), {
+      onlyIf: new Headers({ "If-Match": liveObject.httpEtag }),
+      httpMetadata: { contentType: "application/json" }, customMetadata: { protected: "true" }
+    });
+    if (!claimed) throw syncError("writer_reconciliation_changed", "Přerušené čtení již převzal jiný běh.");
+    const rechecked = await storage.list({ prefix: `${SYNC_PREFIX}/operations/${lock.owner}/`, limit: 100 });
+    if (rechecked.truncated || rechecked.objects.length) {
+      throw syncError("writer_reconciliation_changed", "Objevil se zápisový záměr; zámek zůstává zachován.");
+    }
+    await putJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/settled.json`, {
+      settledAt: new Date().toISOString(), reason: "OBSERVED_READ_ONLY_INTERRUPTION",
+      profileWrites: 0, ledgerWrites: 0, journalEntries: 0, checkpointChanged: false,
+      csvReservationsChanged: false, explicitOwnerMatched: true
+    });
+    const current = await getJson(storage, WRITER_LOCK_KEY);
+    if (current?.owner !== lock.owner || current.claimId !== claimId) {
+      throw syncError("writer_reconciliation_changed", "Vlastník přerušeného čtení se během uzavírání změnil.");
+    }
+    await storage.delete(WRITER_LOCK_KEY);
+    return { mode: "execute-import", status: "READ_ONLY_INTERRUPTION_RECOVERED",
+      profileWrites: 0, ledgerWrites: 0, lockReleased: true, checkpointChanged: false, sendAllowed: false };
+  }
   const checks = [];
   const verified = [];
   let noWriteJournals = 0;
