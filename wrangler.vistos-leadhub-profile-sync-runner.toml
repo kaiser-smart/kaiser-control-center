@@ -12,6 +12,9 @@ BUSINESS_READ_ENABLED = "true"
 # separate explicit controls; this configuration cannot upload or subscribe.
 CSV_BATCH_ID = "csv-20260918-whole"
 CSV_SCOPE = "remaining"
+# Observed interrupted READ, 2026-09-18: only this exact owner may enter the
+# existing >10-minute, empty-journal, CAS-guarded recovery. No TTL takeover.
+RECOVERY_OWNER = "b88bd75a-6df9-408b-8a01-bbfb5fbd023a"
 
 [triggers]
 crons = ["* * * * *"]
