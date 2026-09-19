@@ -2593,6 +2593,26 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
   const lastRun = validDate(state.lastRun?.finishedAt);
   const failureAfterSuccess = state.lastFailure && (!lastRun || Date.parse(state.lastFailure.at) > lastRun.getTime());
   const current = !state.safetyIncident && !failureAfterSuccess && lastRun && Date.now() - lastRun.getTime() < 15 * 60 * 1000 && state.lastRun?.status === "completed";
+  const csvItems = Array.isArray(state.csvBatch?.items) ? state.csvBatch.items : [];
+  const csvCounts = csvItems.reduce((counts, item) => {
+    const status = clean(item?.status).toUpperCase() || "UNKNOWN";
+    counts[status] = (counts[status] || 0) + 1;
+    return counts;
+  }, { RESERVED: 0, CHECKED: 0, SKIP: 0, ADOPTED: 0, QUARANTINED: 0 });
+  const csvBatch = state.csvBatch ? {
+    id: clean(state.csvBatch.id) || null,
+    phase: clean(state.csvBatch.phase) || "UNKNOWN",
+    scope: clean(state.csvBatch.scope) || null,
+    counts: { ...csvCounts, total: csvItems.length },
+    armedAt: state.csvBatch.armedAt || null,
+    validUntil: state.csvBatch.validUntil || null,
+    submittedObservedAt: state.csvBatch.submittedObservedAt || null,
+    receiptStored: Boolean(clean(state.csvBatch.receipt)),
+    importSubmitted: Boolean(clean(state.csvBatch.receipt) && state.csvBatch.submittedObservedAt),
+    importConfirmed: state.csvBatch.phase === "ADOPTED",
+    finalIdentityCheckedAt: state.csvBatch.finalIdentityCheckedAt || state.csvBatch.exportCompletedAt || null
+  } : null;
+  const lockStartedAt = validDate(lock?.startedAt);
   return {
     syncStatus: lock ? "WRITER_BUSY_OR_RECONCILIATION_REQUIRED" : current ? state.status : "BLOCKED",
     storedStatus: state.status,
@@ -2606,7 +2626,25 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
     pending: state.pending?.length || 0,
     totals: state.totals,
     lastRun: state.lastRun,
+    lastRunSummary: state.lastRun ? {
+      status: state.lastRun.status || null,
+      startedAt: state.lastRun.startedAt || null,
+      finishedAt: state.lastRun.finishedAt || null,
+      durationMs: Number(state.lastRun.durationMs || 0),
+      created: Number(state.lastRun.created || 0),
+      updated: Number(state.lastRun.updated || 0),
+      deactivated: Number(state.lastRun.deactivated || 0),
+      noChange: Number(state.lastRun.no_change || 0),
+      skipped: Number(state.lastRun.skipped || 0),
+      readbackConfirmed: Number(state.lastRun.readbackConfirmed || 0),
+      newlyCompletedProfiles: Number(state.lastRun.newlyCompletedProfiles || 0),
+      repeatedUpdates: Number(state.lastRun.repeatedUpdates || 0),
+      rateLimits: Number(state.lastRun.metrics?.rateLimits || 0),
+      restoredSubscriptions: Number(state.lastRun.restoredSubscriptions || 0),
+      messagesSent: Number(state.lastRun.messagesSent || 0)
+    } : null,
     lastFailure: state.lastFailure || null,
+    lastFailureCurrent: Boolean(failureAfterSuccess),
     safetyIncident: state.safetyIncident || null,
     quarantinedProfiles: Object.keys(state.quarantinedIdentities || {}).length,
     profileReadRejectedRecords: Object.keys(state.profileReadRejections || {}).length,
@@ -2614,6 +2652,12 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
     identityChecksPending: Object.keys(state.identityPending || {}).length,
     identityExport: state.identityExport ? { status: state.identityExport.status, requestedAt: state.identityExport.requestedAt } : null,
     lastIdentityExport: state.lastIdentityExport || null,
+    csvBatch,
+    writerLock: {
+      active: Boolean(lock),
+      startedAt: lock?.startedAt || null,
+      ageSeconds: lockStartedAt ? Math.max(0, Math.floor((Date.now() - lockStartedAt.getTime()) / 1000)) : null
+    },
     businessRelations: business ? { startedAt: business.startedAt, completedAt: business.completedAt || null,
       blocks: business.blocks, results: business.summary } : null,
     subscriptionsWriteEnabled: false,
