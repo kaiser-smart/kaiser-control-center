@@ -41252,6 +41252,74 @@ const vistosAuditV4State = {
   result: null
 };
 
+const vistosLeadHubStatusState = {
+  loaded: false,
+  loading: false,
+  data: null,
+  error: "",
+  loadedAt: ""
+};
+
+function vistosLeadHubStatusNumber(value) {
+  return Number(value || 0).toLocaleString("cs-CZ");
+}
+
+function vistosLeadHubStatusPanel() {
+  const state = vistosLeadHubStatusState;
+  const data = state.data;
+  if (state.loading && !data) {
+    return `<section class="module-panel" aria-labelledby="vistos-leadhub-status-title"><h2 id="vistos-leadhub-status-title">Vistos → LeadHub · provozní stav</h2><p data-vistos-leadhub-status-loading>Načítám chráněný read-only stav…</p></section>`;
+  }
+  if (state.error && !data) {
+    return `<section class="module-panel" aria-labelledby="vistos-leadhub-status-title"><h2 id="vistos-leadhub-status-title">Vistos → LeadHub · provozní stav</h2><p class="module-feedback__error" role="alert">${escapeHtml(state.error)}</p><button class="secondary-link" type="button" data-vistos-leadhub-status-refresh>Opakovat načtení</button></section>`;
+  }
+  if (!data) return "";
+  const csv = data.csvBatch;
+  const counts = csv?.counts || {};
+  const run = data.lastRunSummary || {};
+  const totals = data.totals || {};
+  return `
+    <section class="module-panel" aria-labelledby="vistos-leadhub-status-title" data-vistos-leadhub-status>
+      <p class="module-feedback__eyebrow">CHRÁNĚNÝ READ-ONLY READBACK</p>
+      <h2 id="vistos-leadhub-status-title">Vistos → LeadHub · provozní stav</h2>
+      <p>Načteno ${escapeHtml(formatDateTime(state.loadedAt))}. Tato karta nic nespouští, nemění checkpoint ani neposílá zprávy.</p>
+      <dl>
+        <div><dt>Synchronizace</dt><dd><strong>${escapeHtml(data.syncStatus || "NEOVĚŘENO")}</strong> · uložený stav ${escapeHtml(data.storedStatus || "NEOVĚŘENO")}</dd></div>
+        <div><dt>Checkpoint</dt><dd>${escapeHtml(formatDateTime(data.checkpoint))}</dd></div>
+        <div><dt>Poslední běh</dt><dd>${escapeHtml(run.status || "NEOVĚŘENO")} · ${escapeHtml(formatDateTime(run.finishedAt))} · potvrzeno ${vistosLeadHubStatusNumber(run.readbackConfirmed)} profilů</dd></div>
+        <div><dt>Chyby a limity</dt><dd>${data.lastFailure ? `${data.lastFailureCurrent ? "Aktuální" : "Historická"} chyba ${escapeHtml(formatDateTime(data.lastFailure.at))}: ${escapeHtml(data.lastFailure.code || data.lastFailure.message || "bez kódu")}` : "Bez evidované chyby"} · HTTP 429 v posledním běhu ${vistosLeadHubStatusNumber(run.rateLimits)}</dd></div>
+        <div><dt>Zámek zapisovatele</dt><dd>${data.writerLock?.active ? `Aktivní od ${escapeHtml(formatDateTime(data.writerLock.startedAt))}` : "Neaktivní"}</dd></div>
+        <div><dt>CSV dávka</dt><dd>${csv ? `${escapeHtml(csv.phase)} · ${vistosLeadHubStatusNumber(counts.total)} profilů · RESERVED ${vistosLeadHubStatusNumber(counts.RESERVED)} · CHECKED ${vistosLeadHubStatusNumber(counts.CHECKED)} · SKIP ${vistosLeadHubStatusNumber(counts.SKIP)} · ADOPTED ${vistosLeadHubStatusNumber(counts.ADOPTED)} · QUARANTINED ${vistosLeadHubStatusNumber(counts.QUARANTINED)}` : "Není evidována"}</dd></div>
+        <div><dt>CSV potvrzení</dt><dd>${csv ? `receipt ${csv.receiptStored ? "uložen" : "neuložen"} · odeslání ${csv.importSubmitted ? "pozorováno" : "nepotvrzeno"} · import ${csv.importConfirmed ? "potvrzen" : "nepotvrzen"}` : "Nevztahuje se"}</dd></div>
+        <div><dt>Bezpečnost</dt><dd>Změny odběrů ${vistosLeadHubStatusNumber(totals.subscriptionChanges)} · obnovené odběry ${vistosLeadHubStatusNumber(run.restoredSubscriptions)} · odeslané zprávy ${vistosLeadHubStatusNumber(totals.messagesSent)}</dd></div>
+      </dl>
+      <button class="secondary-link" type="button" data-vistos-leadhub-status-refresh ${state.loading ? "disabled" : ""}>${state.loading ? "Načítám…" : "Obnovit stav"}</button>
+      ${state.error ? `<p class="module-feedback__error" role="alert">Poslední obnovení selhalo: ${escapeHtml(state.error)}</p>` : ""}
+    </section>
+  `;
+}
+
+async function loadVistosLeadHubStatus({ force = false } = {}) {
+  if (vistosLeadHubStatusState.loading || (vistosLeadHubStatusState.loaded && !force)) return;
+  vistosLeadHubStatusState.loading = true;
+  vistosLeadHubStatusState.error = "";
+  render();
+  try {
+    vistosLeadHubStatusState.data = await apiJson("/api/receivables/vistos/leadhub-sync-status");
+    vistosLeadHubStatusState.loaded = true;
+    vistosLeadHubStatusState.loadedAt = new Date().toISOString();
+  } catch (error) {
+    vistosLeadHubStatusState.error = error?.payload?.error || error?.message || "Stav synchronizace se nepodařilo načíst.";
+  } finally {
+    vistosLeadHubStatusState.loading = false;
+    render();
+  }
+}
+
+function ensureVistosLeadHubStatus() {
+  if (!vistosLeadHubStatusState.loaded && !vistosLeadHubStatusState.loading) void loadVistosLeadHubStatus();
+}
+
 function vistosAuditV4Panel() {
   if (!vistosAuditV4State.running && !vistosAuditV4State.error && !vistosAuditV4State.result) return "";
   return `
@@ -41688,6 +41756,7 @@ function modulePage(moduleItem, user, isDashboard = false) {
       ${costsPanel}
       ${reportsPanel}
       ${genericSettingsPanel}
+      ${!isDashboard && moduleItem.id === "vistos" ? vistosLeadHubStatusPanel() : ""}
       ${!isDashboard && moduleItem.id === "vistos" ? vistosAuditV4Panel() : ""}
     </main>
   `;
@@ -54927,6 +54996,9 @@ function renderAuthenticatedApp(user) {
     if (moduleItem.id === "costs") {
       void loadFleetFuelAnalytics();
     }
+    if (moduleItem.id === "vistos") {
+      ensureVistosLeadHubStatus();
+    }
     if (moduleItem.id === "absence") {
       loadEmployeeList();
       loadAbsenceRequests();
@@ -59439,6 +59511,13 @@ window.addEventListener("offline", () => handleCollectionDailyDriverConnectivity
 window.addEventListener("online", () => handleCollectionDailyDriverConnectivityChange(true));
 
 document.addEventListener("click", async (event) => {
+  const vistosLeadHubStatusRefresh = event.target.closest("[data-vistos-leadhub-status-refresh]");
+  if (vistosLeadHubStatusRefresh) {
+    event.preventDefault();
+    await loadVistosLeadHubStatus({ force: true });
+    return;
+  }
+
   const vistosAuditV4Button = event.target.closest("[data-vistos-audit-v4]");
   if (vistosAuditV4Button) {
     event.preventDefault();
