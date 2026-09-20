@@ -112,7 +112,12 @@ export class VistosContinuationController {
         identityMatches: summary.checks.filter(check => check.identityMatches).length,
         tagMatches: summary.checks.filter(check => check.tagMatches).length,
         safetyUnchanged: summary.checks.filter(check => check.safetyUnchanged).length,
-        quarantinable: summary.checks.filter(check => check.quarantinable).length
+        quarantinable: summary.checks.filter(check => check.quarantinable).length,
+        acceptedTagMismatch: summary.checks.filter(check => check.acceptedTagMismatch).length,
+        profileAccepted: summary.checks.filter(check => check.profileAccepted).length,
+        tagAccepted: summary.checks.filter(check => check.tagAccepted).length,
+        readbackConfirmed: summary.checks.filter(check => check.readbackConfirmed).length,
+        integrationTagMissing: summary.checks.filter(check => Number(check.integrationTagCount) === 0).length
       } : undefined;
       console.log("vistos_leadhub_profile_sync.continuation", { mode, durationMs: Date.now() - startedAt,
         pending: summary.pending ?? summary.historicalImport?.remaining ?? null,
