@@ -94,9 +94,19 @@ export class VistosContinuationController {
       if (mode === "csv-step") { state.csvConfig = csvConfig; state.csvStatus = summary.status; }
       if (summary.status === "RECONCILIATION_REQUIRED") nextDelay = 60000;
       else if (mode === "execute-import" && !summary.pending && !summary.historicalImport?.remaining) nextDelay = 60000;
+      const reconciliation = Array.isArray(summary.checks) ? {
+        total: summary.checks.length,
+        noProviderWrite: summary.checks.filter(check => check.stage === "NO_PROVIDER_WRITE").length,
+        providerReadbacks: summary.checks.filter(check => !check.stage).length,
+        identityMatches: summary.checks.filter(check => check.identityMatches).length,
+        tagMatches: summary.checks.filter(check => check.tagMatches).length,
+        safetyUnchanged: summary.checks.filter(check => check.safetyUnchanged).length,
+        quarantinable: summary.checks.filter(check => check.quarantinable).length
+      } : undefined;
       console.log("vistos_leadhub_profile_sync.continuation", { mode, durationMs: Date.now() - startedAt,
         pending: summary.pending ?? summary.historicalImport?.remaining ?? null,
-        created: summary.created || 0, updated: summary.updated || 0, status: summary.status || summary.syncStatus });
+        created: summary.created || 0, updated: summary.updated || 0, status: summary.status || summary.syncStatus,
+        ...(reconciliation ? { reconciliation } : {}) });
     } catch (error) {
       state.failures++;
       state.lastError = { code: error.code || "continuation_request_failed", status: error.status || 0,
