@@ -282,6 +282,7 @@ assert.match(config, /crons = \["\* \* \* \* \*"\]/);
 assert.match(config, /RUN_MODE = "execute-import"/);
 assert.match(config, /CSV_SUBMITTED_BATCH_ID = "csv-20260918-whole"/);
 assert.match(config, /CSV_IMPORT_RECEIPT = "LEADHUB_UI_CONFIRMED_9374_IMPORTED_20260920"/);
+assert.match(config, /RECOVERY_OWNER = "9d91c9f4-fa3e-4844-af1a-6752aef37bf7"/);
 
 const unauthorized = await onRequestPost({
   request: new Request("https://example.test/api/receivables/vistos/leadhub-sync-internal", {
