@@ -1015,13 +1015,14 @@ for (const scenario of ["unchanged", "safety-changed", "foreign-id", "live-write
   try {
     const result = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: storage, LEADHUB_API_TOKEN: "synthetic" });
     assert.equal(result.profileWrites, 0);
-    if (scenario === "unchanged") {
+    if (["unchanged", "accepted-tag"].includes(scenario)) {
       assert.equal(result.status, "AMBIGUOUS_INTENT_SKIPPED");
       assert.equal(result.profilesConfirmed, 0); assert.equal(result.profilesQuarantined, 1);
       assert.equal(result.lockReleased, true);
       const saved = JSON.parse(storage.values.get(syncStateKey));
       assert.equal(saved.pending.length, 0); assert.deepEqual(saved.profiles, {});
-      assert.equal(saved.manifestIdentityChecks["42"].reason, "UNACKNOWLEDGED_TAG_INTENT");
+      assert.equal(saved.manifestIdentityChecks["42"].reason,
+        scenario === "accepted-tag" ? "ACCEPTED_TAG_OUTCOME_UNVERIFIED" : "UNACKNOWLEDGED_TAG_INTENT");
       assert.equal(saved.quarantinedIdentities["42"].operationOutcome, "UNVERIFIED");
       assert.equal(saved.historicalImport.skipped, 56);
       assert.equal(saved.checkpoint, seedState.checkpoint);

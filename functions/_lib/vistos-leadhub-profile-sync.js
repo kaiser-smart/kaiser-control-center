@@ -1849,6 +1849,12 @@ async function inspectRetainedWriter(env, lock, options = {}) {
     result.quarantinable = lock.terminal === true && operation.status === "WRITE_INTENT"
       && item.identityBinding?.mode === "EXISTING_EMAIL_TAG_ONLY"
       && identityMatches && namesMatch && safetyUnchanged && tags.length === 0;
+    // An acknowledged profile/tag request with an exact identity and unchanged
+    // safety, but without the expected final tag, is an ambiguous provider
+    // outcome. Never replay it. The explicitly named retained writer may
+    // quarantine only that identity while releasing independently proven work.
+    result.acceptedTagMismatch = ["TAG_ACCEPTED", "READBACK_CONFIRMED"].includes(operation.status)
+      && identityMatches && namesMatch && safetyUnchanged && !tagMatches;
     await putJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/${operation.contactId}.json`, {
       checkedAt: new Date().toISOString(), operation, expected: item, profile: profile.payload, safety, result
     });
@@ -1889,7 +1895,8 @@ async function inspectRetainedWriter(env, lock, options = {}) {
   if (!lock.phase && (lock.terminal === true || explicitlyObservedLegacyFailure)
     && verified.length + noWriteJournals === listed.objects.length && verified.length > 0
     && verified.every(entry => entry.result.identityMatches && entry.result.namesMatch && entry.result.safetyUnchanged
-      && (entry.result.quarantinable || ((entry.result.profileAccepted || entry.result.tagAccepted || entry.result.readbackConfirmed)
+      && (entry.result.quarantinable || entry.result.acceptedTagMismatch
+        || ((entry.result.profileAccepted || entry.result.tagAccepted || entry.result.readbackConfirmed)
       && (entry.result.tagMatches || (entry.result.profileAccepted && entry.result.integrationTagCount === 0)))))) {
     const liveObject = await storage.get(WRITER_LOCK_KEY);
     const live = liveObject ? await liveObject.json() : null;
@@ -1911,15 +1918,16 @@ async function inspectRetainedWriter(env, lock, options = {}) {
       if (entry.alreadyCommitted) continue;
       if (state.reconciledOperations[entry.operationKey]) continue;
       const { item, operation, result, safety } = entry;
-      if (result.quarantinable) {
+      if (result.quarantinable || result.acceptedTagMismatch) {
+        const reason = result.acceptedTagMismatch ? "ACCEPTED_TAG_OUTCOME_UNVERIFIED" : "UNACKNOWLEDGED_TAG_INTENT";
         state.quarantinedIdentities ||= {};
         state.quarantinedIdentities[item.contactId] = { email: item.normalizedEmail,
-          reason: "UNACKNOWLEDGED_TAG_INTENT", journalKey: entry.operationKey,
+          reason, journalKey: entry.operationKey,
           quarantinedAt: new Date().toISOString(), operationOutcome: "UNVERIFIED" };
         state.pending = state.pending.filter(pending => pending.contactId !== item.contactId && pending.normalizedEmail !== item.normalizedEmail);
         state.manifestIdentityChecks ||= {};
         state.manifestIdentityChecks[item.contactId] = { ...state.manifestIdentityChecks[item.contactId],
-          email: item.normalizedEmail, action: "SKIP", reason: "UNACKNOWLEDGED_TAG_INTENT" };
+          email: item.normalizedEmail, action: "SKIP", reason };
         if (item.historical && state.historicalImport) state.historicalImport.skipped++;
         state.reconciledOperations[entry.operationKey] = { quarantined: true, confirmedAt: new Date().toISOString() };
         continue;
@@ -1950,15 +1958,15 @@ async function inspectRetainedWriter(env, lock, options = {}) {
     if (state.historicalImport) state.historicalImport.remaining = state.pending.filter(item => item.historical).length;
     await putJson(storage, SYNC_STATE_KEY, state);
     await putJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/settled.json`, {
-      settledAt: new Date().toISOString(), profilesConfirmed: verified.filter(entry => !entry.result.quarantinable).length,
-      profilesQuarantined: verified.filter(entry => entry.result.quarantinable).length,
-      profileOnly: verified.filter(entry => !entry.result.quarantinable && !entry.result.tagMatches).length,
+      settledAt: new Date().toISOString(), profilesConfirmed: verified.filter(entry => !entry.result.quarantinable && !entry.result.acceptedTagMismatch).length,
+      profilesQuarantined: verified.filter(entry => entry.result.quarantinable || entry.result.acceptedTagMismatch).length,
+      profileOnly: verified.filter(entry => !entry.result.quarantinable && !entry.result.acceptedTagMismatch && !entry.result.tagMatches).length,
       profileWrites: 0, safetyUnchanged: true, legacyTerminalResponseObserved: explicitlyObservedLegacyFailure
     });
     await storage.delete(WRITER_LOCK_KEY);
-    return { mode: "execute-import", status: verified.some(entry => entry.result.quarantinable) ? "AMBIGUOUS_INTENT_SKIPPED" : "READBACK_ADOPTED", checks,
-      profilesConfirmed: verified.filter(entry => !entry.result.quarantinable).length,
-      profilesQuarantined: verified.filter(entry => entry.result.quarantinable).length,
+    return { mode: "execute-import", status: verified.some(entry => entry.result.quarantinable || entry.result.acceptedTagMismatch) ? "AMBIGUOUS_INTENT_SKIPPED" : "READBACK_ADOPTED", checks,
+      profilesConfirmed: verified.filter(entry => !entry.result.quarantinable && !entry.result.acceptedTagMismatch).length,
+      profilesQuarantined: verified.filter(entry => entry.result.quarantinable || entry.result.acceptedTagMismatch).length,
       profileWrites: 0, lockReleased: true, checkpointChanged: false, sendAllowed: false };
   }
   return { mode: "execute-import", status: "RECONCILIATION_REQUIRED", checks,
