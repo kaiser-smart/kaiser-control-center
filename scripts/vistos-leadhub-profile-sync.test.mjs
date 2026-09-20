@@ -993,9 +993,10 @@ try {
 
 // An unacknowledged legacy tag intent is never replayed. Only a terminated
 // writer with the exact unchanged unowned identity/safety may isolate it.
-for (const scenario of ["unchanged", "safety-changed", "foreign-id", "live-writer", "accepted-tag", "tag-present"]) {
+for (const scenario of ["unchanged", "safety-changed", "foreign-id", "live-writer", "accepted-tag", "tag-present", "explicit-owner-tag-present"]) {
   const owner = `quarantine-${scenario}`;
-  const lock = { owner, startedAt: "2026-01-01T00:00:00Z", terminal: scenario !== "live-writer" };
+  const lock = { owner, startedAt: "2026-01-01T00:00:00Z",
+    terminal: !["live-writer", "explicit-owner-tag-present"].includes(scenario) };
   const item = { ...linkedItem, historical: true, desired: "active", manifestAction: "UPDATE" };
   const seedState = { checkpoint: "2026-01-01T00:00:00Z", profiles: {}, pending: [item],
     historicalImport: { skipped: 55 }, manifestIdentityChecks: { "42": { action: "UPDATE" } } };
@@ -1010,12 +1011,14 @@ for (const scenario of ["unchanged", "safety-changed", "foreign-id", "live-write
     if (url.includes("/subscriptions/")) return Response.json({ subscriptions: mixedSafety.subscriptions });
     return Response.json({ ...unownedProfile,
       credentials: { ...unownedProfile.credentials, user_id: scenario === "foreign-id" ? "foreign" : null },
-      tags: scenario === "tag-present" ? [{ name: __test.TAG_NAME, data: { unknown: true } }] : [] });
+      tags: ["tag-present", "explicit-owner-tag-present"].includes(scenario)
+        ? [{ name: __test.TAG_NAME, data: { unknown: true } }] : [] });
   };
   try {
-    const result = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: storage, LEADHUB_API_TOKEN: "synthetic" });
+    const result = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: storage, LEADHUB_API_TOKEN: "synthetic" },
+      { recoveryOwner: scenario === "explicit-owner-tag-present" ? owner : undefined });
     assert.equal(result.profileWrites, 0);
-    if (["unchanged", "accepted-tag"].includes(scenario)) {
+    if (["unchanged", "accepted-tag", "tag-present", "explicit-owner-tag-present"].includes(scenario)) {
       assert.equal(result.status, "AMBIGUOUS_INTENT_SKIPPED");
       assert.equal(result.profilesConfirmed, 0); assert.equal(result.profilesQuarantined, 1);
       assert.equal(result.lockReleased, true);
