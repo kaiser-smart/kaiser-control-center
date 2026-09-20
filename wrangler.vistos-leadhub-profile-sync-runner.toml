@@ -12,6 +12,11 @@ BUSINESS_READ_ENABLED = "true"
 # separate explicit controls; this configuration cannot upload or subscribe.
 CSV_BATCH_ID = "csv-20260918-whole"
 CSV_SCOPE = "remaining"
+# The standard LeadHub UI confirmed one successful submission of the exact
+# whole batch (9,374 rows). These values only unlock per-profile readback and
+# adoption by the existing coordinator; they never resubmit the CSV.
+CSV_SUBMITTED_BATCH_ID = "csv-20260918-whole"
+CSV_IMPORT_RECEIPT = "LEADHUB_UI_CONFIRMED_9374_IMPORTED_20260920"
 # Observed interrupted READ, 2026-09-18: only this exact owner may enter the
 # existing >10-minute, empty-journal, CAS-guarded recovery. No TTL takeover.
 RECOVERY_OWNER = "b88bd75a-6df9-408b-8a01-bbfb5fbd023a"

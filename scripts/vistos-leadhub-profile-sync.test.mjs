@@ -280,6 +280,8 @@ assert.match(source, /\/subscriptions\/email-address\//);
 assert.doesNotMatch(source, /subscriptions[^\n]+method: "POST"/);
 assert.match(config, /crons = \["\* \* \* \* \*"\]/);
 assert.match(config, /RUN_MODE = "execute-import"/);
+assert.match(config, /CSV_SUBMITTED_BATCH_ID = "csv-20260918-whole"/);
+assert.match(config, /CSV_IMPORT_RECEIPT = "LEADHUB_UI_CONFIRMED_9374_IMPORTED_20260920"/);
 
 const unauthorized = await onRequestPost({
   request: new Request("https://example.test/api/receivables/vistos/leadhub-sync-internal", {
