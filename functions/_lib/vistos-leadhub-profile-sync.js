@@ -1846,9 +1846,9 @@ async function inspectRetainedWriter(env, lock, options = {}) {
     // it. For a terminated writer, a still-unowned tag-only identity with no
     // integration tag and unchanged safety can be isolated permanently as SKIP.
     // This is not a successful operation or permission to mutate that profile.
-    result.quarantinable = lock.terminal === true && operation.status === "WRITE_INTENT"
-      && item.identityBinding?.mode === "EXISTING_EMAIL_TAG_ONLY"
-      && identityMatches && namesMatch && safetyUnchanged && tags.length === 0;
+    result.quarantinable = operation.status === "WRITE_INTENT"
+      && (lock.terminal === true || clean(options.recoveryOwner) === lock.owner)
+      && identityMatches && namesMatch && safetyUnchanged && !tagMatches;
     // An acknowledged profile/tag request with an exact identity and unchanged
     // safety, but without the expected final tag, is an ambiguous provider
     // outcome. Never replay it. The explicitly named retained writer may
