@@ -282,7 +282,7 @@ assert.match(config, /crons = \["\* \* \* \* \*"\]/);
 assert.match(config, /RUN_MODE = "execute-import"/);
 assert.match(config, /CSV_SUBMITTED_BATCH_ID = "csv-20260918-whole"/);
 assert.match(config, /CSV_IMPORT_RECEIPT = "LEADHUB_UI_CONFIRMED_9374_IMPORTED_20260920"/);
-assert.match(config, /RECOVERY_OWNER = "9d91c9f4-fa3e-4844-af1a-6752aef37bf7"/);
+assert.match(config, /RECOVERY_OWNER = "d3cb7b02-1ce4-4bfb-aca2-2b5afddaa308"/);
 
 const unauthorized = await onRequestPost({
   request: new Request("https://example.test/api/receivables/vistos/leadhub-sync-internal", {
@@ -408,6 +408,7 @@ try {
   const summary = await runScheduledSync({ APP_BASE_URL: "https://smart-odpady.ai", VISTOS_LEADHUB_SYNC_TOKEN: "runner-secret" }, Date.parse("2026-09-10T10:05:00Z"));
   assert.equal(summary.syncStatus, "ACTIVE");
   assert.equal(calls[0].options.headers.Authorization, "Bearer runner-secret");
+  assert.ok(calls[0].options.signal instanceof AbortSignal, "internal runner request must have a timeout signal");
   const pending = [];
   await worker.scheduled({ cron: "*/5 * * * *", scheduledTime: Date.parse("2026-09-10T10:10:00Z") }, { APP_BASE_URL: "https://smart-odpady.ai", VISTOS_LEADHUB_SYNC_TOKEN: "runner-secret" }, { waitUntil(promise) { pending.push(promise); } });
   assert.equal(pending.length, 1);
@@ -1054,6 +1055,10 @@ try {
   assert.match(continuationData.get("continuation").scheduledConfig, /new-confirmed-receipt/);
   const changedConfigAlarm = nextAlarm;
   await c.ensureScheduled(); assert.equal(nextAlarm, changedConfigAlarm);
+  continuationEnv.RECOVERY_OWNER = "current-read-lock";
+  await c.ensureScheduled();
+  assert.match(continuationData.get("continuation").scheduledConfig, /current-read-lock/,
+    "changing the incident recovery owner must wake the durable coordinator");
   await c.alarm();
   await new VistosContinuationController(continuationStorage, continuationEnv).alarm();
   assert.deepEqual(modes, ["business-read", "execute-import"]);

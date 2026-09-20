@@ -1,9 +1,10 @@
 const CRON = "*/5 * * * *";
 const PREPARATION_CRON = "* * * * *";
+const INTERNAL_REQUEST_TIMEOUT_MS = 120000;
 
 function csvConfig(env) {
   return [env.CSV_BATCH_ID, env.CSV_SCOPE, env.CSV_ARM_BATCH_ID, env.CSV_SUBMITTED_BATCH_ID,
-    env.CSV_IMPORT_RECEIPT, env.CSV_QUARANTINE_BATCH_ID].join("|");
+    env.CSV_IMPORT_RECEIPT, env.CSV_QUARANTINE_BATCH_ID, env.RECOVERY_OWNER].join("|");
 }
 
 function baseUrl(env) {
@@ -16,6 +17,7 @@ export async function runScheduledSync(env, scheduledTime, requestedMode) {
   const response = await fetch(`${baseUrl(env)}/api/receivables/vistos/leadhub-sync-internal`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(INTERNAL_REQUEST_TIMEOUT_MS),
     body: JSON.stringify({
       scheduledAt: new Date(scheduledTime).toISOString(),
       mode: requestedMode || (env.BUSINESS_READ_ENABLED === "true" && new Date(scheduledTime).getUTCMinutes() % 5 === 4
