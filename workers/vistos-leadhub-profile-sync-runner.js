@@ -1,6 +1,11 @@
 const CRON = "*/5 * * * *";
 const PREPARATION_CRON = "* * * * *";
 
+function csvConfig(env) {
+  return [env.CSV_BATCH_ID, env.CSV_SCOPE, env.CSV_ARM_BATCH_ID, env.CSV_SUBMITTED_BATCH_ID,
+    env.CSV_IMPORT_RECEIPT, env.CSV_QUARANTINE_BATCH_ID].join("|");
+}
+
 function baseUrl(env) {
   return String(env.APP_BASE_URL || "https://smart-odpady.ai").replace(/\/+$/, "");
 }
@@ -46,7 +51,13 @@ export async function runScheduledSync(env, scheduledTime, requestedMode) {
 export class VistosContinuationController {
   constructor(storage, env) { this.storage = storage; this.env = env; }
   async ensureScheduled() {
-    if (await this.storage.getAlarm() === null) await this.storage.setAlarm(Date.now() + 1000);
+    const [alarm, state] = await Promise.all([this.storage.getAlarm(), this.storage.get("continuation")]);
+    const deployedConfig = csvConfig(this.env);
+    if (alarm === null || state?.scheduledConfig !== deployedConfig) {
+      await this.storage.put("continuation", { ...(state || { steps: 0, failures: 0, lastBusinessAt: 0 }),
+        scheduledConfig: deployedConfig });
+      await this.storage.setAlarm(Date.now() + 1000);
+    }
     return { scheduled: true };
   }
   async alarm() {
@@ -54,8 +65,8 @@ export class VistosContinuationController {
     const startedAt = Date.now();
     // Never two business blocks consecutively: delta reconciliation and its
     // priority queue run between blocks even while the historical backlog grows.
-    const csvConfig = [this.env.CSV_BATCH_ID, this.env.CSV_SCOPE, this.env.CSV_ARM_BATCH_ID, this.env.CSV_SUBMITTED_BATCH_ID, this.env.CSV_IMPORT_RECEIPT, this.env.CSV_QUARANTINE_BATCH_ID].join("|");
-    const csvPending = this.env.CSV_BATCH_ID && (state.csvConfig !== csvConfig
+    const currentCsvConfig = csvConfig(this.env);
+    const csvPending = this.env.CSV_BATCH_ID && (state.csvConfig !== currentCsvConfig
       || !["READY", "ARMED", "ADOPTED", "EMPTY", "BLOCKED", "QUARANTINED"].includes(state.csvStatus));
     // Every auxiliary step is followed by the ordinary writer. CSV and
     // business take turns, so neither can starve delta or the other queue.
@@ -91,7 +102,7 @@ export class VistosContinuationController {
       state.lastSummary = summary;
       if (mode === "execute-import") { state.lastWriterAt = startedAt; state.csvSinceWriter = 0; }
       if (mode === "csv-step") state.csvSinceWriter = (state.csvSinceWriter || 0) + 1;
-      if (mode === "csv-step") { state.csvConfig = csvConfig; state.csvStatus = summary.status; }
+      if (mode === "csv-step") { state.csvConfig = currentCsvConfig; state.csvStatus = summary.status; }
       if (summary.status === "RECONCILIATION_REQUIRED") nextDelay = 60000;
       else if (mode === "execute-import" && !summary.pending && !summary.historicalImport?.remaining) nextDelay = 60000;
       const reconciliation = Array.isArray(summary.checks) ? {

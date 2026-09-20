@@ -1045,6 +1045,11 @@ try {
   const c = new VistosContinuationController(continuationStorage, continuationEnv);
   await c.ensureScheduled(); const firstAlarm = nextAlarm;
   await c.ensureScheduled(); assert.equal(nextAlarm, firstAlarm);
+  continuationEnv.CSV_IMPORT_RECEIPT = "new-confirmed-receipt";
+  await c.ensureScheduled();
+  assert.match(continuationData.get("continuation").scheduledConfig, /new-confirmed-receipt/);
+  const changedConfigAlarm = nextAlarm;
+  await c.ensureScheduled(); assert.equal(nextAlarm, changedConfigAlarm);
   await c.alarm();
   await new VistosContinuationController(continuationStorage, continuationEnv).alarm();
   assert.deepEqual(modes, ["business-read", "execute-import"]);
