@@ -1762,7 +1762,19 @@ async function inspectRetainedWriter(env, lock, options = {}) {
   // terminated read-only/source-preparation request can leave an empty lock.
   // Every provider mutation has a durable journal BEFORE dispatch; absence
   // of the complete journal is therefore different from an unknown intent.
-  if (clean(options.recoveryOwner) === lock.owner && listed.objects.length === 0
+  const explicitOwnerMatched = clean(options.recoveryOwner) === lock.owner;
+  // A request that acquired the lock only after the last fully committed run,
+  // then produced no durable operation journal, cannot have dispatched a
+  // provider mutation: every such mutation is journaled before dispatch. This
+  // lets the coordinator recover recurring transport interruptions without a
+  // deployment for each random owner, while retaining the same CAS + double
+  // empty-journal proof. Any safety incident or overlapping committed run
+  // disables this automatic read-only proof.
+  const automaticReadOnlyProof = !state?.safetyIncident
+    && state?.lastRun?.status === "completed"
+    && validDate(state.lastRun.finishedAt)
+    && Date.parse(state.lastRun.finishedAt) <= Date.parse(lock.startedAt);
+  if ((explicitOwnerMatched || automaticReadOnlyProof) && listed.objects.length === 0
     && Date.parse(lock.startedAt) < Date.now() - 600000
     && (!lock.phase || (lock.phase === "READ_ONLY_RELEASING" && Date.parse(lock.claimedAt) < Date.now() - 120000))) {
     const liveObject = await storage.get(WRITER_LOCK_KEY);
@@ -1784,7 +1796,7 @@ async function inspectRetainedWriter(env, lock, options = {}) {
     await putJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/settled.json`, {
       settledAt: new Date().toISOString(), reason: "OBSERVED_READ_ONLY_INTERRUPTION",
       profileWrites: 0, ledgerWrites: 0, journalEntries: 0, checkpointChanged: false,
-      csvReservationsChanged: false, explicitOwnerMatched: true
+      csvReservationsChanged: false, explicitOwnerMatched, automaticReadOnlyProof
     });
     const current = await getJson(storage, WRITER_LOCK_KEY);
     if (current?.owner !== lock.owner || current.claimId !== claimId) {

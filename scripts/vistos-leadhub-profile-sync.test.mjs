@@ -684,13 +684,15 @@ try {
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos → LeadHub retained-writer READ reconciliation tests passed");
 
-// Empty journal recovery is scoped to an explicitly observed interrupted
-// owner; age alone, an uncertain mutation, incomplete listing or a race fails.
-for (const scenario of ["empty", "no-approval", "wrong-owner", "young", "journal", "truncated", "cas-race", "late-journal", "resume-claim"]) {
+// Empty journal recovery accepts either an explicitly observed owner or a
+// stale request proven to have started after the last committed run. Age alone,
+// an uncertain mutation, incomplete listing or a race still fails.
+for (const scenario of ["empty", "proven-empty", "no-approval", "wrong-owner", "young", "journal", "truncated", "cas-race", "late-journal", "resume-claim"]) {
   const lock = { owner: "empty-read-owner", startedAt: "2026-01-01T00:00:00Z" };
   if (scenario === "young") lock.startedAt = new Date(Date.now() - 180000).toISOString();
   if (scenario === "resume-claim") Object.assign(lock, { phase: "READ_ONLY_RELEASING", claimId: "interrupted-claim", claimedAt: "2026-01-01T00:00:01Z" });
-  const state = { checkpoint: "2026-01-01T00:00:00Z", pending: [], csvBatch: { phase: "VERIFY", items: [{ status: "CHECKED" }] } };
+  const state = { checkpoint: "2026-01-01T00:00:00Z", pending: [], csvBatch: { phase: "VERIFY", items: [{ status: "CHECKED" }] },
+    ...(scenario === "proven-empty" ? { lastRun: { status: "completed", finishedAt: "2025-12-31T23:59:59Z" } } : {}) };
   const seed = { [retainedLockKey]: JSON.stringify(lock), [syncStateKey]: JSON.stringify(state) };
   const journalKey = "protected-sync/vistos-leadhub-profiles/operations/empty-read-owner/42.json";
   if (scenario === "journal") seed[journalKey] = JSON.stringify({ status: "WRITE_INTENT" });
@@ -710,14 +712,14 @@ for (const scenario of ["empty", "no-approval", "wrong-owner", "young", "journal
   globalThis.fetch = async () => assert.fail("empty-lock recovery cannot call the provider");
   try {
     const run = executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: storage }, {
-      recoveryOwner: scenario === "no-approval" ? undefined : scenario === "wrong-owner" ? "other" : lock.owner
+      recoveryOwner: ["no-approval", "proven-empty"].includes(scenario) ? undefined : scenario === "wrong-owner" ? "other" : lock.owner
     });
     if (["truncated", "cas-race", "late-journal"].includes(scenario)) {
       await assert.rejects(run, error => ["writer_journal_incomplete", "writer_reconciliation_changed"].includes(error.code));
       assert.ok(storage.values.has(retainedLockKey));
     } else {
       const result = await run;
-      const recovered = ["empty", "resume-claim"].includes(scenario);
+      const recovered = ["empty", "proven-empty", "resume-claim"].includes(scenario);
       assert.equal(result.status, recovered ? "READ_ONLY_INTERRUPTION_RECOVERED" : "RECONCILIATION_REQUIRED");
       assert.equal(storage.values.has(retainedLockKey), !recovered);
       assert.equal(result.profileWrites, 0);
