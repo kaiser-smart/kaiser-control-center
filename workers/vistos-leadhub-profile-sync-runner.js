@@ -1,6 +1,7 @@
 const CRON = "*/5 * * * *";
 const PREPARATION_CRON = "* * * * *";
 const INTERNAL_REQUEST_TIMEOUT_MS = 120000;
+const ALARM_STALE_AFTER_MS = 60000;
 
 function csvConfig(env) {
   return [env.CSV_BATCH_ID, env.CSV_SCOPE, env.CSV_ARM_BATCH_ID, env.CSV_SUBMITTED_BATCH_ID,
@@ -55,7 +56,9 @@ export class VistosContinuationController {
   async ensureScheduled() {
     const [alarm, state] = await Promise.all([this.storage.getAlarm(), this.storage.get("continuation")]);
     const deployedConfig = csvConfig(this.env);
-    if (alarm === null || state?.scheduledConfig !== deployedConfig) {
+    const alarmAt = Number(alarm);
+    const alarmIsStale = Number.isFinite(alarmAt) && alarmAt < Date.now() - ALARM_STALE_AFTER_MS;
+    if (alarm === null || alarmIsStale || state?.scheduledConfig !== deployedConfig) {
       await this.storage.put("continuation", { ...(state || { steps: 0, failures: 0, lastBusinessAt: 0 }),
         scheduledConfig: deployedConfig });
       await this.storage.setAlarm(Date.now() + 1000);
