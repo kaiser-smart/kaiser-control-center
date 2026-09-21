@@ -17,9 +17,10 @@ CSV_SCOPE = "remaining"
 # adoption by the existing coordinator; they never resubmit the CSV.
 CSV_SUBMITTED_BATCH_ID = "csv-20260918-whole"
 CSV_IMPORT_RECEIPT = "LEADHUB_UI_CONFIRMED_9374_IMPORTED_20260920"
-# Observed interrupted READ, 2026-09-20: only this exact owner may enter the
-# existing >10-minute, empty-journal, CAS-guarded recovery. No TTL takeover.
-RECOVERY_OWNER = "d3cb7b02-1ce4-4bfb-aca2-2b5afddaa308"
+# Observed interrupted READ, 2026-09-21. Updating the observed owner also
+# wakes the durable alarm after deployment; the endpoint independently
+# requires the >10-minute, empty-journal, CAS-guarded recovery proof.
+RECOVERY_OWNER = "65b822fd-d096-4ba1-a337-9c0269b32fba"
 
 [triggers]
 crons = ["* * * * *"]
