@@ -1057,6 +1057,12 @@ try {
   assert.match(continuationData.get("continuation").scheduledConfig, /new-confirmed-receipt/);
   const changedConfigAlarm = nextAlarm;
   await c.ensureScheduled(); assert.equal(nextAlarm, changedConfigAlarm);
+  nextAlarm = Date.now() - 61000;
+  await c.ensureScheduled();
+  assert.ok(nextAlarm > Date.now(), "cron watchdog must replace a past-due durable alarm");
+  const recoveredAlarm = nextAlarm;
+  await c.ensureScheduled(); assert.equal(nextAlarm, recoveredAlarm,
+    "cron watchdog must not keep moving a healthy future alarm");
   continuationEnv.RECOVERY_OWNER = "current-read-lock";
   await c.ensureScheduled();
   assert.match(continuationData.get("continuation").scheduledConfig, /current-read-lock/,
