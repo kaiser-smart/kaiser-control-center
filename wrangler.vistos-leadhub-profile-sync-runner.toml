@@ -20,7 +20,7 @@ CSV_IMPORT_RECEIPT = "LEADHUB_UI_CONFIRMED_9374_IMPORTED_20260920"
 # Observed interrupted READ, 2026-09-21. Updating the observed owner also
 # wakes the durable alarm after deployment; the endpoint independently
 # requires the >10-minute, empty-journal, CAS-guarded recovery proof.
-RECOVERY_OWNER = "65b822fd-d096-4ba1-a337-9c0269b32fba"
+RECOVERY_OWNER = "8ae3c4b2-9e56-4902-ad9e-77f2573f511e"
 
 [triggers]
 crons = ["* * * * *"]
