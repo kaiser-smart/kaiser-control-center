@@ -347,6 +347,12 @@ function soapFaultMessage(xml) {
 }
 
 function assertIsdsStatus(xml, httpStatus) {
+  if (httpStatus === 401) {
+    throw new DataBoxIsdsError("ISDS odmítlo login nebo heslo. Nelze určit, který údaj je chybný.", 401, "data_box_isds_auth_failed");
+  }
+  if (httpStatus === 403) {
+    throw new DataBoxIsdsError("ISDS odmítlo přístup účtu ke službě.", 403, "data_box_isds_access_denied");
+  }
   const code = tagValue(xml, "dmStatusCode");
   const message = tagValue(xml, "dmStatusMessage");
 
