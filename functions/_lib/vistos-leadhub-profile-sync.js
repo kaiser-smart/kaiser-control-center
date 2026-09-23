@@ -1861,6 +1861,12 @@ async function inspectRetainedWriter(env, lock, options = {}) {
     result.quarantinable = operation.status === "WRITE_INTENT"
       && (lock.terminal === true || clean(options.recoveryOwner) === lock.owner)
       && identityMatches && namesMatch && safetyUnchanged && !tagMatches;
+    // The provider may have applied a tag before the writer could persist its
+    // acknowledgement. A terminated intent is settled only by exact live
+    // identity, tag and unchanged subscription/suppression readback.
+    result.unacknowledgedTagConfirmed = operation.status === "WRITE_INTENT"
+      && (lock.terminal === true || clean(options.recoveryOwner) === lock.owner)
+      && identityMatches && namesMatch && safetyUnchanged && tagMatches;
     // An acknowledged profile/tag request with an exact identity and unchanged
     // safety, but without the expected final tag, is an ambiguous provider
     // outcome. Never replay it. The explicitly named retained writer may
@@ -1907,7 +1913,7 @@ async function inspectRetainedWriter(env, lock, options = {}) {
   if (!lock.phase && (lock.terminal === true || explicitlyObservedLegacyFailure)
     && verified.length + noWriteJournals === listed.objects.length && verified.length > 0
     && verified.every(entry => entry.result.identityMatches && entry.result.namesMatch && entry.result.safetyUnchanged
-      && (entry.result.quarantinable || entry.result.acceptedTagMismatch
+      && (entry.result.quarantinable || entry.result.acceptedTagMismatch || entry.result.unacknowledgedTagConfirmed
         || ((entry.result.profileAccepted || entry.result.tagAccepted || entry.result.readbackConfirmed)
       && (entry.result.tagMatches || (entry.result.profileAccepted && entry.result.integrationTagCount === 0)))))) {
     const liveObject = await storage.get(WRITER_LOCK_KEY);

@@ -684,6 +684,55 @@ try {
 } finally { globalThis.fetch = originalFetch; }
 console.log("Vistos → LeadHub retained-writer READ reconciliation tests passed");
 
+// A provider tag can be fully visible even when the interrupted writer only
+// persisted WRITE_INTENT. Exact live readback may settle it, but a live writer
+// must never be taken over and no provider mutation may be replayed.
+const intentOwner = "synthetic-confirmed-intent";
+const intentLock = { owner: intentOwner, startedAt: "2026-01-01T00:00:00Z" };
+const intentState = { checkpoint: "2026-01-01T00:00:00Z", pending: [{ ...selected, manifestAction: "UPDATE" }],
+  profiles: {}, totals: { updated: 0, subscriptionChanges: 0, messagesSent: 0 } };
+const intentJournalKey = `protected-sync/vistos-leadhub-profiles/operations/${intentOwner}/42.json`;
+const intentStorage = new MemoryR2({
+  [retainedLockKey]: JSON.stringify(intentLock), [syncStateKey]: JSON.stringify(intentState),
+  [intentJournalKey]: JSON.stringify({ contactId: "42", normalizedEmail: selected.normalizedEmail,
+    desired: "active", action: "updated", rowHash: selected.rowHash, sourceModified: selected.sourceModified,
+    status: "WRITE_INTENT", beforeSafety: { subscriptions: [], suppressed: false } })
+});
+let intentSafetyChanged = false;
+let intentIdentityChanged = false;
+globalThis.fetch = async (url, options) => {
+  assert.equal(options.method, "GET", "confirmed intent reconciliation never replays the provider write");
+  if (url.endsWith("/suppressed")) return Response.json({ is_suppressed: intentSafetyChanged });
+  if (url.includes("/subscriptions/")) return Response.json({ subscriptions: [] });
+  return Response.json({ ...owned, credentials: { ...owned.credentials,
+    user_id: intentIdentityChanged ? "foreign" : owned.credentials.user_id },
+    tags: [__test.tagPayload(selected, true, "", { subscriptions: [], suppressed: false }).tag] });
+};
+try {
+  const live = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: intentStorage, LEADHUB_API_TOKEN: "synthetic" });
+  assert.equal(live.status, "RECONCILIATION_REQUIRED");
+  assert.equal(intentStorage.values.get(syncStateKey), JSON.stringify(intentState));
+  intentStorage.values.set(retainedLockKey, JSON.stringify({ ...intentLock, terminal: true }));
+  intentSafetyChanged = true;
+  assert.equal((await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: intentStorage, LEADHUB_API_TOKEN: "synthetic" })).status,
+    "RECONCILIATION_REQUIRED", "a changed suppression blocks settlement");
+  intentSafetyChanged = false; intentIdentityChanged = true;
+  assert.equal((await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: intentStorage, LEADHUB_API_TOKEN: "synthetic" })).status,
+    "RECONCILIATION_REQUIRED", "a different identity blocks settlement");
+  intentIdentityChanged = false;
+  const settled = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: intentStorage, LEADHUB_API_TOKEN: "synthetic" });
+  assert.equal(settled.status, "READBACK_ADOPTED");
+  assert.equal(settled.profileWrites, 0);
+  assert.equal(settled.lockReleased, true);
+  assert.equal(settled.checks[0].unacknowledgedTagConfirmed, true);
+  const saved = JSON.parse(intentStorage.values.get(syncStateKey));
+  assert.equal(saved.totals.updated, 1);
+  assert.equal(saved.totals.subscriptionChanges, 0);
+  assert.equal(saved.totals.messagesSent, 0);
+  assert.equal(saved.pending.length, 0);
+  assert.equal(saved.checkpoint, intentState.checkpoint);
+} finally { globalThis.fetch = originalFetch; }
+
 // Empty journal recovery accepts either an explicitly observed owner or a
 // stale request proven to have started after the last committed run. Age alone,
 // an uncertain mutation, incomplete listing or a race still fails.
