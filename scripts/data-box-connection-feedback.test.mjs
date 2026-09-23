@@ -37,6 +37,8 @@ assert.equal(refreshes, 3);
 assert.match(humanError({payload:{code:'data_box_isds_access_denied'}}), /oprávnění účtu/);
 assert.match(humanError({payload:{code:'data_box_plus_mailbox_credentials_missing'}}), /Chybí aktivní login nebo heslo/);
 assert.match(humanError({name:'TypeError', message:'Failed to fetch'}), /chyba nepotvrzuje/);
+assert.match(humanError({payload:{error:'Nepřihlášeno.'}}), /Přihlášení do Smart odpady vypršelo/);
+assert.match(humanError({payload:{error:'Nemáte oprávnění.'}}), /oprávnění ve Smart odpady/);
 const client = readFileSync(new URL('../functions/_lib/data-box-isds-client.js', import.meta.url), 'utf8');
 const statusSource = client.slice(client.indexOf('function assertIsdsStatus'), client.indexOf('async function withTimeout'));
 const check = new Function(`class DataBoxIsdsError extends Error { constructor(message,status,code) { super(message); this.status=status; this.code=code; } } const tagValue=()=>''; const soapFaultMessage=()=>''; ${statusSource}; return assertIsdsStatus;`)();

@@ -30787,7 +30787,7 @@ function dataBoxPlusMailboxEditForm(mailbox) {
       <label><span>ID datové schránky</span><input name="isdsId" value="${escapeHtml(mailbox.isdsId)}" autocomplete="off" placeholder="např. abc123" /></label>
       <label><span>Login</span><input name="username" autocomplete="username" placeholder="${escapeHtml(mailbox.usernameMasked || "ponechat beze změny")}" /></label>
       <label class="ds-plus-checkbox"><input type="checkbox" name="active" ${mailbox.credentialActive === false ? "" : "checked"} /> <span>Aktivní pro automatické načítání</span></label>
-      <button class="secondary-action" type="submit">Uložit schránku</button>
+      <button class="secondary-action" type="submit" ${dataBoxPlusState.mailboxTestingId || dataBoxPlusState.mailboxSaving ? "disabled" : ""}>Uložit schránku</button>
     </form>
   `;
 }
@@ -30797,7 +30797,7 @@ function dataBoxPlusMailboxPasswordForm(mailbox) {
     <form class="ds-plus-mailbox-form ds-plus-mailbox-form--password" data-ds-plus-mailbox-password-form data-mailbox-id="${escapeHtml(mailbox.id)}">
       <label><span>Login</span><input name="username" autocomplete="username" placeholder="${escapeHtml(mailbox.usernameMasked || "doplnit při prvním uložení")}" /></label>
       <label><span>Nové heslo</span><input name="password" type="password" autocomplete="new-password" required /></label>
-      <button class="secondary-action" type="submit">Změnit heslo</button>
+      <button class="secondary-action" type="submit" ${dataBoxPlusState.mailboxTestingId || dataBoxPlusState.mailboxSaving ? "disabled" : ""}>Změnit heslo</button>
       ${dataBoxPlusHelp("Změnit heslo", "Nové heslo se uloží šifrovaně do DSP vaultu. Heslo se nezobrazí v prohlížeči ani v historii. Změna se zapíše do auditu.")}
     </form>
   `;
@@ -30805,6 +30805,8 @@ function dataBoxPlusMailboxPasswordForm(mailbox) {
 
 function dataBoxPlusConnectionError(error = {}) {
   const code = String(error.payload?.code || error.code || "");
+  if (error.payload?.error === "Nepřihlášeno.") return "Přihlášení do Smart odpady vypršelo. Přihlaste se znovu a test zopakujte. Login ani heslo datové schránky zatím nebyly ověřeny.";
+  if (error.payload?.error === "Nemáte oprávnění.") return "K testování připojení nemáte oprávnění ve Smart odpady. Požádejte správce aplikace; nejde o potvrzenou chybu hesla schránky.";
   if (code === "data_box_plus_mailbox_credentials_missing" || code === "data_box_isds_not_configured") {
     return "Chybí aktivní login nebo heslo. V nastavení schránky zkontrolujte Login, uložené Heslo a zapnutí přístupu.";
   }
