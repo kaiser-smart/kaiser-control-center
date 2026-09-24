@@ -61,3 +61,30 @@ assert.throws(() => check('',401), {code:'data_box_isds_auth_failed'});
 assert.throws(() => check('',403), {code:'data_box_isds_access_denied'});
 assert.throws(() => check('',503), {code:'data_box_isds_http_failed'});
 console.log('Connection feedback: ID validation, pending, duplicate guard, success, retry, auth, permissions, unknown response and outage passed.');
+
+const storeSource = readFileSync(new URL('../functions/_lib/data-box-plus-store.js', import.meta.url), 'utf8');
+const bootstrapSource = storeSource.slice(storeSource.indexOf('export async function ensureDataBoxPlusMailboxes'), storeSource.indexOf('export async function ensureDataBoxPlusMailboxes') + storeSource.slice(storeSource.indexOf('export async function ensureDataBoxPlusMailboxes')).indexOf('\nexport ', 1)).replace('export async function', 'async function');
+let configuredSlot7 = false;
+const ensuredSlots = [];
+const bootstrap = new Function('configuredAccounts', 'ensureMailbox', `
+ const LEGACY_BOOTSTRAP_MAILBOX_COUNT = 7;
+ const MAILBOX_NAMES = [];
+ const dataBoxPlusDatabase = () => ({});
+ const dataBoxIsdsStatus = () => ({accounts:configuredAccounts()});
+ const dataBoxIsdsAccountConfigs = configuredAccounts;
+ const fallbackAccountMap = () => new Map();
+ const sourceDataBoxMap = async () => new Map();
+ const sourceDataBoxIdForSlot = slot => String(slot);
+ const sourceLabelForRow = (_, name) => name;
+ const cleanString = value => String(value || '').trim();
+ const mailboxRowsWithCredentials = async () => [];
+ ${bootstrapSource}
+ return ensureDataBoxPlusMailboxes;
+`)(() => configuredSlot7 ? [{slot:7,isdsId:'abc1234'}] : [], async (_, account) => ensuredSlots.push(account.slot));
+await bootstrap({});
+assert.deepEqual(ensuredSlots, [1,2,3,4,5,6], 'Removed empty slot 7 must not be recreated');
+ensuredSlots.length = 0;
+configuredSlot7 = true;
+await bootstrap({});
+assert.deepEqual(ensuredSlots, [1,2,3,4,5,6,7], 'Configured slot 7 must remain supported');
+console.log('Empty holding bootstrap removal and configured slot preservation passed.');
