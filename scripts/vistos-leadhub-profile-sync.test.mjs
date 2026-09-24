@@ -921,6 +921,38 @@ const directOnly = __test.businessFlagsFor({ Id: "42", Parent_FK: 20 }, business
 assert.equal(directOnly.contract_direct, "YES");
 assert.equal(directOnly.contract_company, "NO");
 assert.equal(__test.businessFlagsFor({ Id: "42", Parent_FK: 10 }, businessEvidence, Date.now() + 5 * 3600000).contract_direct, "UNVERIFIED");
+const businessRow = { Id: "42", Parent_FK: 10, Modified: "2026-09-24T00:00:00Z" };
+const trackedBusiness = { synced: true, active: true, email: "owned@example.test",
+  rowHash: __test.fingerprint(businessRow), businessFlags: {
+    contract_direct: "YES", contract_company: "YES", quote_direct: "NO", quote_company: "NO",
+    order_direct: "NO", order_company: "NO"
+  } };
+const expiredBusiness = __test.businessFlagsForProfile(businessRow, businessEvidence,
+  trackedBusiness, trackedBusiness.email, Date.now() + 5 * 3600000);
+assert.equal(expiredBusiness.deferred, false);
+assert.deepEqual(expiredBusiness.flags, trackedBusiness.businessFlags,
+  "expired evidence must not erase readback-confirmed flags on an unchanged source row");
+assert.equal(__test.refreshPendingIntent({ contactId: "42", normalizedEmail: trackedBusiness.email,
+  desired: "active", businessFlags: { contract_direct: "UNVERIFIED" } },
+  { contactId: "42", normalizedEmail: trackedBusiness.email, businessFlags: expiredBusiness.flags },
+  businessRow, trackedBusiness), null,
+"an expired capture must coalesce an obsolete business UPDATE instead of re-enqueuing it");
+const changedBusinessRow = { ...businessRow, Parent_FK: 20 };
+assert.equal(__test.businessFlagsForProfile(changedBusinessRow, businessEvidence,
+  trackedBusiness, trackedBusiness.email, Date.now() + 5 * 3600000).deferred, true,
+"a changed source relation must wait for fresh evidence before rewriting a confirmed tag");
+assert.equal(__test.businessFlagsForProfile(businessRow, businessEvidence,
+  trackedBusiness, "different@example.test", Date.now() + 5 * 3600000).flags.contract_direct, "UNVERIFIED",
+"confirmed flags must never be borrowed across identities");
+assert.equal(__test.businessFlagsForProfile(businessRow, businessEvidence,
+  null, trackedBusiness.email, Date.now() + 5 * 3600000).flags.contract_direct, "UNVERIFIED",
+"a new profile cannot inherit a prior profile's business evidence");
+const newerBusinessEvidence = { completedAt: new Date().toISOString(), results: {
+  Contract: { status: "VERIFIED", directIds: [], companyIds: [], verifiedAt: new Date().toISOString() }
+} };
+assert.equal(__test.businessFlagsForProfile(businessRow, newerBusinessEvidence,
+  trackedBusiness, trackedBusiness.email).flags.contract_direct, "NO",
+"fresh verified evidence must replace a stale confirmed relation");
 assert.equal(__test.tagPayload({ ...selected, businessFlags: directOnly }, false, "LEFT_COMPANY", mixedSafety).tag.data.contract_direct, "NO",
   "historical business relations cannot reactivate an excluded profile");
 const businessR2 = new MemoryR2();

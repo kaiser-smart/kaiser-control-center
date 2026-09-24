@@ -275,6 +275,24 @@ function businessFlagsFor(row, evidence, now = Date.now()) {
   return flags;
 }
 
+// A capture's freshness controls NEW decisions, not whether a previously
+// read-back-confirmed tag may be erased. Keep the last confirmed flags only
+// while the source row and owned identity are unchanged. If either changed,
+// defer that existing profile's write until fresh relation evidence arrives.
+function businessFlagsForProfile(row, evidence, tracked, normalizedEmail, now = Date.now()) {
+  const flags = businessFlagsFor(row, evidence, now);
+  const previous = tracked?.businessFlags;
+  if (!tracked?.synced || !tracked.active || tracked.email !== normalizedEmail || !previous) {
+    return { flags, deferred: false };
+  }
+  const expired = Object.keys(flags).filter(key => flags[key] === "UNVERIFIED"
+    && (previous[key] === "YES" || previous[key] === "NO"));
+  if (!expired.length) return { flags, deferred: false };
+  if (!row || tracked.rowHash !== fingerprint(row)) return { flags, deferred: true };
+  for (const key of expired) flags[key] = previous[key];
+  return { flags, deferred: false };
+}
+
 function clean(value) {
   return String(value ?? "").trim();
 }
@@ -2243,9 +2261,13 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
   if (businessEvidence) for (const result of Object.values(businessEvidence.results || {})) {
     if (result.status === "VERIFIED") { result.directIds = new Set(result.directIds); result.companyIds = new Set(result.companyIds); }
   }
-  const selectedById = new Map((cleanup.dataOnly || []).map((item) => [clean(item.contactId), {
-    ...item, firstName: csvFirstName(item.firstName), businessFlags: businessFlagsFor(oldRowsById.get(clean(item.contactId)), businessEvidence)
-  }]));
+  const selectedById = new Map((cleanup.dataOnly || []).map((item) => {
+    const id = clean(item.contactId);
+    const business = businessFlagsForProfile(oldRowsById.get(id), businessEvidence,
+      state.profiles?.[id], item.normalizedEmail);
+    return [id, { ...item, firstName: csvFirstName(item.firstName),
+      businessFlags: business.flags, businessDeferred: business.deferred }];
+  }));
   for (const [id, profile] of Object.entries(state.profiles || {})) {
     const selected = selectedById.get(id);
     if (businessEvidence && profile.synced && profile.active && selected && profile.email === selected.normalizedEmail
@@ -2359,7 +2381,8 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
   const reserved = (state.csvBatch?.items || []).filter(item => !["SKIP", "ADOPTED"].includes(item.status));
   const reservedIds = new Set(reserved.map(item => item.contactId));
   const reservedEmails = new Set(reserved.map(item => item.normalizedEmail));
-  const current = pending.filter(item => !reservedIds.has(item.contactId) && !reservedEmails.has(item.normalizedEmail)).slice(0, batchLimit);
+  const current = pending.filter(item => !item.businessDeferred
+    && !reservedIds.has(item.contactId) && !reservedEmails.has(item.normalizedEmail)).slice(0, batchLimit);
   const run = { created: 0, updated: 0, deactivated: 0, no_change: 0, skipped: 0, readbackConfirmed: 0,
     newlyCompletedProfiles: 0, newlyCreatedProfiles: 0, newlyLinkedProfiles: 0, repeatedUpdates: 0,
     restoredSubscriptions: 0, messagesSent: 0 };
@@ -2716,6 +2739,7 @@ export const __test = {
   profileIdentityMatches,
   tagDataMatches,
   businessFlagsFor,
+  businessFlagsForProfile,
   compactBusinessRow,
   verifyBusinessPasses,
   BUSINESS_DEFINITIONS,
