@@ -53047,3 +53047,16 @@ body.collection-driver-blackview-simulator-active #app {
     width: calc(100% - 18px);
   }
 }
+
+.ds-plus-connection-result {
+  padding: 14px;
+  border: 1px solid currentColor;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.ds-plus-connection-result strong { display: block; font-size: 1.0625rem; }
+.ds-plus-connection-result p { margin: 6px 0; font-weight: 400; }
+.ds-plus-connection-result small { display: block; font-size: .875rem; }

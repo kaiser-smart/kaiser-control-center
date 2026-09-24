@@ -1832,6 +1832,7 @@ const dataBoxPlusState = {
   lastLoadedAt: 0,
   mailboxSaving: false,
   mailboxTestingId: "",
+  mailboxTestResults: {},
   accessSettingsOpen: false,
   mailboxes: [],
   messages: [],
@@ -30786,7 +30787,7 @@ function dataBoxPlusMailboxEditForm(mailbox) {
       <label><span>ID datové schránky</span><input name="isdsId" value="${escapeHtml(mailbox.isdsId)}" autocomplete="off" placeholder="např. abc123" /></label>
       <label><span>Login</span><input name="username" autocomplete="username" placeholder="${escapeHtml(mailbox.usernameMasked || "ponechat beze změny")}" /></label>
       <label class="ds-plus-checkbox"><input type="checkbox" name="active" ${mailbox.credentialActive === false ? "" : "checked"} /> <span>Aktivní pro automatické načítání</span></label>
-      <button class="secondary-action" type="submit">Uložit schránku</button>
+      <button class="secondary-action" type="submit" ${dataBoxPlusState.mailboxTestingId || dataBoxPlusState.mailboxSaving ? "disabled" : ""}>Uložit schránku</button>
     </form>
   `;
 }
@@ -30796,10 +30797,42 @@ function dataBoxPlusMailboxPasswordForm(mailbox) {
     <form class="ds-plus-mailbox-form ds-plus-mailbox-form--password" data-ds-plus-mailbox-password-form data-mailbox-id="${escapeHtml(mailbox.id)}">
       <label><span>Login</span><input name="username" autocomplete="username" placeholder="${escapeHtml(mailbox.usernameMasked || "doplnit při prvním uložení")}" /></label>
       <label><span>Nové heslo</span><input name="password" type="password" autocomplete="new-password" required /></label>
-      <button class="secondary-action" type="submit">Změnit heslo</button>
+      <button class="secondary-action" type="submit" ${dataBoxPlusState.mailboxTestingId || dataBoxPlusState.mailboxSaving ? "disabled" : ""}>Změnit heslo</button>
       ${dataBoxPlusHelp("Změnit heslo", "Nové heslo se uloží šifrovaně do DSP vaultu. Heslo se nezobrazí v prohlížeči ani v historii. Změna se zapíše do auditu.")}
     </form>
   `;
+}
+
+function dataBoxPlusConnectionError(error = {}) {
+  const code = String(error.payload?.code || error.code || "");
+  if (error.payload?.error === "Nepřihlášeno.") return "Přihlášení do Smart odpady vypršelo. Přihlaste se znovu a test zopakujte. Login ani heslo datové schránky zatím nebyly ověřeny.";
+  if (error.payload?.error === "Nemáte oprávnění.") return "K testování připojení nemáte oprávnění ve Smart odpady. Požádejte správce aplikace; nejde o potvrzenou chybu hesla schránky.";
+  if (code === "data_box_plus_mailbox_credentials_missing" || code === "data_box_isds_not_configured") {
+    return "Chybí aktivní login nebo heslo. V nastavení schránky zkontrolujte Login, uložené Heslo a zapnutí přístupu.";
+  }
+  if (code === "data_box_isds_auth_failed") {
+    return "ISDS odmítlo přihlášení. Zkontrolujte login a heslo; služba nerozlišuje, který z těchto údajů je chybný. ID schránky není přihlašovací jméno.";
+  }
+  if (code === "data_box_isds_access_denied") {
+    return "ISDS odmítlo přístup. Zkontrolujte oprávnění účtu k této schránce a stav účtu v ISDS. Chybné heslo tím není potvrzené.";
+  }
+  if (code === "data_box_plus_mailbox_not_found") return "Schránka už není dostupná. Obnovte seznam schránek.";
+  if (code === "data_box_isds_http_failed" || /abort|timeout|network|fetch/i.test(error.name + " " + error.message)) {
+    return "Spojení se službou se nepodařilo dokončit. Zkuste test později; chyba nepotvrzuje nesprávné heslo, login ani ID.";
+  }
+  return "Připojení se nepodařilo ověřit. Nelze určit, zda je chybný login, heslo nebo nastavení služby. Zkontrolujte přístupy v ISDS; pokud fungují, obraťte se na správce aplikace.";
+}
+
+function dataBoxPlusMailboxTestFeedback(mailbox) {
+  const result = dataBoxPlusState.mailboxTestResults[mailbox.id];
+  if (!result) return "";
+  const titles = { pending: "Ověřuji připojení…", success: "Připojení je v pořádku", error: "Připojení se nepodařilo ověřit" };
+  const tone = { pending: "quiet", success: "success", error: "danger" }[result.status];
+  return `<div class="ds-plus-connection-result ds-plus-badge--${tone}" role="${result.status === "error" ? "alert" : "status"}" aria-live="polite" aria-atomic="true">
+    <strong>${titles[result.status]}</strong>
+    <p>${escapeHtml(result.message)}</p>
+    ${result.finishedAt ? `<small>Test dokončen: ${escapeHtml(formatDateTime(result.finishedAt))}</small>` : ""}
+  </div>`;
 }
 
 function dataBoxPlusMailboxCard(mailbox) {
@@ -30839,9 +30872,10 @@ function dataBoxPlusMailboxCard(mailbox) {
         ? `<p class="ds-plus-mailbox-warning">Archiv čeká na bezpečné opakování: ${escapeHtml(Number(archive.errorMessages || 0))} zpráv, ${escapeHtml(Number(archive.jobsFailed || 0))} dávek.</p>`
         : ""}
       ${lastProblem}
+      ${dataBoxPlusMailboxTestFeedback(mailbox)}
       <div class="ds-plus-mailbox-actions">
-        <button class="secondary-action" type="button" data-ds-plus-mailbox-test="${escapeHtml(mailbox.id)}" ${testing || dataBoxPlusState.mailboxSaving ? "disabled" : ""}>
-          ${testing ? "Ověřuji připojení…" : "Otestovat připojení"}
+        <button class="secondary-action" type="button" data-ds-plus-mailbox-test="${escapeHtml(mailbox.id)}" ${dataBoxPlusState.mailboxTestingId || dataBoxPlusState.mailboxSaving ? "disabled" : ""}>
+          ${testing ? "Ověřuji připojení…" : dataBoxPlusState.mailboxTestResults[mailbox.id] ? "Zopakovat test připojení" : "Otestovat připojení"}
         </button>
         <details>
           <summary>Upravit schránku</summary>
@@ -44755,7 +44789,7 @@ function dataBoxPlusMailboxPayload(form) {
 }
 
 async function saveDataBoxPlusMailboxForm(form) {
-  if (dataBoxPlusState.mailboxSaving) return;
+  if (dataBoxPlusState.mailboxSaving || dataBoxPlusState.mailboxTestingId) return;
   dataBoxPlusState.mailboxSaving = true;
   dataBoxPlusState.notice = "Ukládám schránku do DSP. Heslo se v prohlížeči nebude zobrazovat.";
   render();
@@ -44766,6 +44800,7 @@ async function saveDataBoxPlusMailboxForm(form) {
       method: mailboxId ? "PATCH" : "POST",
       body: JSON.stringify(payload)
     });
+    delete dataBoxPlusState.mailboxTestResults[mailboxId];
     dataBoxPlusState.notice = "Schránka je uložená. Přístupy jsou uložené jen serverově a změna je v historii.";
     await loadDataBoxPlusData({ force: true, renderAfter: false });
   } catch (error) {
@@ -44777,7 +44812,7 @@ async function saveDataBoxPlusMailboxForm(form) {
 }
 
 async function saveDataBoxPlusMailboxPasswordForm(form) {
-  if (dataBoxPlusState.mailboxSaving) return;
+  if (dataBoxPlusState.mailboxSaving || dataBoxPlusState.mailboxTestingId) return;
   const mailboxId = String(form?.dataset?.mailboxId || "").trim();
   if (!mailboxId) return;
   dataBoxPlusState.mailboxSaving = true;
@@ -44791,6 +44826,7 @@ async function saveDataBoxPlusMailboxPasswordForm(form) {
         password: String(form.elements.password?.value || "").trim()
       })
     });
+    delete dataBoxPlusState.mailboxTestResults[mailboxId];
     dataBoxPlusState.notice = "Heslo je změněné a zapsané do historie. V prohlížeči se nezobrazuje.";
     await loadDataBoxPlusData({ force: true, renderAfter: false });
   } catch (error) {
@@ -44803,24 +44839,42 @@ async function saveDataBoxPlusMailboxPasswordForm(form) {
 
 async function testDataBoxPlusMailboxConnection(mailboxIdValue) {
   const mailboxId = String(mailboxIdValue || "").trim();
-  if (!mailboxId || dataBoxPlusState.mailboxTestingId) return;
+  if (!mailboxId || dataBoxPlusState.mailboxTestingId || dataBoxPlusState.mailboxSaving) return;
+  const mailbox = dataBoxPlusMailboxes().find((item) => item.id === mailboxId);
+  if (!mailbox) return;
+  const isdsId = String(mailbox.isdsId || "").trim();
+  if (!/^[a-z0-9]{7}$/i.test(isdsId)) {
+    dataBoxPlusState.mailboxTestResults[mailboxId] = {
+      status: "error", finishedAt: new Date().toISOString(),
+      message: isdsId ? "ID datové schránky má nesprávný formát. V části Upravit schránku zadejte 7 písmen nebo číslic. Login a heslo zatím nebyly testovány." : "Chybí ID datové schránky. Doplňte jej v části Upravit schránku. Login a heslo zatím nebyly testovány."
+    };
+    render();
+    return;
+  }
   dataBoxPlusState.mailboxTestingId = mailboxId;
-  dataBoxPlusState.notice = "Ověřuji přihlášení k ISDS. Nic se neodesílá.";
+  dataBoxPlusState.mailboxTestResults[mailboxId] = {
+    status: "pending", message: "Ověřuji uložený login a heslo u ISDS. Počkejte na výsledek."
+  };
   render();
   try {
     const result = await apiJson(`/api/data-box-plus/mailboxes/${encodeURIComponent(mailboxId)}/test`, {
       method: "POST",
       body: JSON.stringify({})
     });
-    dataBoxPlusState.notice = result.message || "Připojení k ISDS je ověřené.";
-    await loadDataBoxPlusData({ force: true, renderAfter: false });
+    if (result.status !== "success") throw new Error("Neověřený výsledek testu");
+    dataBoxPlusState.mailboxTestResults[mailboxId] = {
+      status: "success", finishedAt: new Date().toISOString(),
+      message: "ISDS přijalo uložený login a heslo a povolilo načtení seznamu zpráv. Test nic neodeslal. Shodu zadaného ID s přihlášenou schránkou tento test neověřuje."
+    };
   } catch (error) {
-    dataBoxPlusState.notice = dataBoxPlusHumanError(error.payload?.error || error.message || "Připojení k ISDS se nepodařilo ověřit.");
-    await loadDataBoxPlusData({ force: true, renderAfter: false });
+    dataBoxPlusState.mailboxTestResults[mailboxId] = {
+      status: "error", finishedAt: new Date().toISOString(), message: dataBoxPlusConnectionError(error)
+    };
   } finally {
     dataBoxPlusState.mailboxTestingId = "";
     render();
   }
+  await loadDataBoxPlusData({ force: true });
 }
 
 async function importDataBoxPlusCredentialsFromDataBox() {
