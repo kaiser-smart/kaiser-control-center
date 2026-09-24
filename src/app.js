@@ -44861,7 +44861,11 @@ async function testDataBoxPlusMailboxConnection(mailboxIdValue) {
       method: "POST",
       body: JSON.stringify({})
     });
-    if (result.status !== "success") throw new Error("Neověřený výsledek testu");
+    if (result.status !== "success") {
+      const error = new Error(result.error || "Neověřený výsledek testu");
+      error.payload = result;
+      throw error;
+    }
     dataBoxPlusState.mailboxTestResults[mailboxId] = {
       status: "success", finishedAt: new Date().toISOString(),
       message: "ISDS přijalo uložený login a heslo a povolilo načtení seznamu zpráv. Test nic neodeslal. Shodu zadaného ID s přihlášenou schránkou tento test neověřuje."
