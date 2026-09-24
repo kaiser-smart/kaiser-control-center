@@ -1959,6 +1959,9 @@ export async function ensureDataBoxPlusMailboxes(env) {
       isdsId: "",
       configured: false
     };
+    // Slot 7 was a placeholder, not an existing connected mailbox. Do not
+    // recreate it after removal unless an actual ISDS account is configured.
+    if (slot === 7 && !account.configured && !cleanString(sourceBox?.isds_id || account.isdsId)) continue;
     await ensureMailbox(db, {
       ...account,
       label: sourceLabelForRow({
