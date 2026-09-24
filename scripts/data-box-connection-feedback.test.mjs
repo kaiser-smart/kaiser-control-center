@@ -34,6 +34,21 @@ assert.equal(state.mailboxTestingId, '');
 pending = test('a'); resolveRequest({}); await pending;
 assert.equal(state.mailboxTestResults.a.status, 'error', 'HTTP 200 without confirmed success must fail closed');
 assert.equal(refreshes, 3);
+pending = test('a');
+resolveRequest({status:'error', code:'data_box_isds_auth_failed', error:'ISDS odmítlo login nebo heslo.'}); await pending;
+assert.equal(state.mailboxTestResults.a.status, 'error');
+assert.match(state.mailboxTestResults.a.message, /ISDS odmítlo přihlášení/);
+const routeSource = readFileSync(new URL('../functions/api/data-box-plus/mailboxes/[id]/test.js', import.meta.url), 'utf8');
+const routeBody = routeSource.slice(routeSource.indexOf('export async function')).replace('export async function', 'async function');
+const handler = new Function('json', 'requireUserPermission', 'testDataBoxPlusMailboxConnection', 'dataBoxPlusStoreErrorResponse', `${routeBody}; return onRequestPost;`)(
+ (payload, status = 200) => ({payload, status}), async () => ({user:{}}),
+ async () => { throw {code:'data_box_isds_auth_failed'}; },
+ (error) => ({payload:{code:error.code,error:'ISDS odmítlo login nebo heslo.'},status:502})
+);
+const rejectedLogin = await handler({request:{},env:{},params:{id:'a'}});
+assert.equal(rejectedLogin.status, 200);
+assert.equal(rejectedLogin.payload.status, 'error');
+assert.equal(rejectedLogin.payload.code, 'data_box_isds_auth_failed');
 assert.match(humanError({payload:{code:'data_box_isds_access_denied'}}), /oprávnění účtu/);
 assert.match(humanError({payload:{code:'data_box_plus_mailbox_credentials_missing'}}), /Chybí aktivní login nebo heslo/);
 assert.match(humanError({name:'TypeError', message:'Failed to fetch'}), /chyba nepotvrzuje/);
