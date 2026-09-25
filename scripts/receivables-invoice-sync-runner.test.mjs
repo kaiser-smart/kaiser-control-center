@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { scheduledReceivablesAction } from "../functions/_lib/receivables-invoice-sync-runner.js";
+import { scheduledReceivablesAction, runReceivablesInvoiceSyncAutomation } from "../functions/_lib/receivables-invoice-sync-runner.js";
 import {
   assertIncrementalFilter,
   incrementalPageTotal,
@@ -22,18 +22,18 @@ assert.equal(
 );
 assert.equal(
   scheduledReceivablesAction(new Date("2026-07-12T00:30:00.000Z")),
-  "full",
-  "Sunday 02:30 Europe/Prague must schedule full reconciliation"
+  "",
+  "Sunday must not restart the already imported invoice history"
 );
 assert.equal(
   scheduledReceivablesAction(new Date("2026-10-25T00:30:00.000Z")),
-  "full",
-  "the first repeated 02:30 during DST fallback must select the weekly full action"
+  "",
+  "DST must not trigger an unsolicited full reimport"
 );
 assert.equal(
   scheduledReceivablesAction(new Date("2026-10-25T01:30:00.000Z")),
-  "full",
-  "the repeated 02:30 is handled by the runner dedupe key"
+  "",
+  "the repeated DST hour must not restart history"
 );
 assert.equal(
   scheduledReceivablesAction(new Date("2026-07-11T04:15:00.000Z")),
@@ -93,3 +93,13 @@ assert.equal(methodNotAllowed.status, 405);
 assert.equal(methodNotAllowed.headers.get("Allow"), "POST");
 
 console.log("receivables invoice sync runner tests passed");
+
+// Scoped opt-in must retain a fail-closed archive capacity guard using supported D1 metadata.
+for (const size of [0, 8_600_000_000, 2_300_000_000]) {
+  const archive = { prepare(sql) { return {
+    async all() { assert.equal(sql, "SELECT 1 AS capacity_probe"); return {results: [], meta: {size_after: size}}; },
+    async first() { return sql.includes("vistos_invoice_snapshot") ? {status: "snapshot", parser_summary_json: '{"syncedThrough":"2026-09-25T00:00:00Z"}'} : null; }
+  }; } };
+  const result = await runReceivablesInvoiceSyncAutomation({DB_ARCHIVE: archive, DB_AUDIT: archive, D1_CAPACITY_BLOCK_BULK_WRITES: "true", RECEIVABLES_INVOICE_SYNC_ENABLED: "true"}, {scheduledTime: Date.parse("2026-09-25T09:15:00Z")});
+  assert.equal(result.status, size > 0 && size < 8_500_000_000 ? "not_scheduled" : "blocked");
+}

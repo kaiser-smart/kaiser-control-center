@@ -1,3 +1,4 @@
+import { receivablesInvoicePage } from "./data/receivablesInvoicePagination.js";
 import { moduleDashboards, modules } from "./data/modules.js";
 import {
   RCS_SMS_AUTOPILOT_MODULE_KEY,
@@ -1197,6 +1198,7 @@ const receivablesState = {
   customers: [],
   selectedCustomerId: "",
   customerDetail: null,
+  customerInvoicePage: 1,
   customerLoading: false,
   customerError: "",
   insolvencyPreview: null,
@@ -1230,6 +1232,7 @@ const receivablesState = {
   kbPaymentSyncError: "",
   kbPaymentSyncMessage: "",
   invoiceSnapshot: null,
+  invoiceSync: null,
   invoiceSnapshotRows: [],
   invoiceSnapshotPagination: null,
   invoiceSnapshotLoaded: false,
@@ -38802,7 +38805,7 @@ function receivablesInvoiceSnapshotSummary(snapshot) {
     ["Entita", summary.invoiceEntity || "-"],
     ["Ready", summary.acceptedCount || 0],
     ["Kontrola", summary.reviewCount || 0],
-    ["Uloženo", batch.createdAt ? formatDateTime(batch.createdAt) : "-"],
+    ["Aktualizováno do", summary.syncedThrough ? formatDateTime(summary.syncedThrough) : "počáteční import"],
     ["Ořezáno", summary.capped ? "ano" : "ne"]
   ];
 
@@ -38937,9 +38940,9 @@ function receivablesInvoiceSnapshotPanel() {
   const loadedRows = Number(summary.loadedRows || 0);
   const expectedRows = Number(summary.totalRows || totalRows || 0);
   const stillAdvancing = Boolean(summary.capped && expectedRows > 0 && loadedRows < expectedRows);
-  const statusLabel = receivablesState.invoiceSnapshotLoading
-    ? "načítám"
-    : stillAdvancing ? "dávkově načítám" : summary.capped ? "snapshot capped" : "read-only";
+  const statusLabel = receivablesState.invoiceSnapshotError ? "aktualizace selhala"
+    : receivablesState.invoiceSnapshotLoading ? "načítám"
+    : stillAdvancing ? "import není dokončený" : "uložený seznam";
   const safetyRows = [
     ["Vistos API", "read-only"],
     ["D1 zápis", "jen snapshot/staging"],
@@ -38955,8 +38958,9 @@ function receivablesInvoiceSnapshotPanel() {
       <div class="receivables-panel__head">
         <div>
           <p class="module-feedback__eyebrow">Vistos faktury</p>
-          <h2 id="receivables-invoice-snapshot-title">Automatický read-only snapshot za 24 měsíců</h2>
-          <p>Import záložka načítá snapshot automaticky po dávkách. Data zůstávají ve stagingu a bez zápisu do ledgeru.</p>
+          <h2 id="receivables-invoice-snapshot-title">Vydané faktury z Vistosu</h2>
+          <p>Po počátečním importu se načítají nové a změněné faktury. Synchronizace běží na serveru i při zavřené aplikaci; otevření seznamu nespouští nový úplný import.</p>
+          <button class="secondary-link" type="button" data-receivables-invoice-sync ${receivablesState.invoiceSnapshotLoading ? "disabled" : ""}>Aktualizovat změny</button>
         </div>
         ${receivablesPill(statusLabel, stillAdvancing || summary.capped ? "warning" : "ready")}
       </div>
@@ -40164,7 +40168,8 @@ function receivablesCustomerDetailSection() {
   const pack = detail.package || {};
   const displayed = receivablesDisplayedRatingMetrics(rating, pack);
   const detailInvoices = Array.isArray(detail.invoices) ? detail.invoices : [];
-  const visibleDetailInvoices = detailInvoices.slice(0, 10);
+  const invoicePage = receivablesInvoicePage(detailInvoices, receivablesState.customerInvoicePage);
+  const visibleDetailInvoices = invoicePage.rows;
   const blockingReasons = Array.isArray(rating.blockingReasons) ? rating.blockingReasons : [];
   const timeline = [
     ...(detail.decisions || []).map((item) => ({ when: item.createdAt, type: "AI", channel: item.channel, content: item.reason, result: item.action })),
@@ -40288,14 +40293,21 @@ function receivablesCustomerDetailSection() {
       <div class="receivables-panel__head">
         <div>
           <p class="module-feedback__eyebrow">Balíček</p>
-          <h2 id="receivables-invoices-title">Otevřené faktury</h2>
+          <h2 id="receivables-invoices-title">Faktury zákazníka</h2>
         </div>
       </div>
       ${receivablesInvoiceBlock({
-        title: "Otevřené faktury zákazníka",
+        title: "Všechny uložené faktury zákazníka",
         description: "Detail zákazníka ukazuje faktury ve stejném pracovním bloku.",
         visibleCount: visibleDetailInvoices.length,
         totalCount: detailInvoices.length,
+        controls: `<nav class="receivables-pagination" aria-label="Stránkování faktur zákazníka">
+          <span>${invoicePage.start}–${invoicePage.end} z ${invoicePage.totalRows} faktur · strana ${invoicePage.page} z ${invoicePage.totalPages}</span>
+          <button class="secondary-link" type="button" data-receivables-customer-invoice-page="1" ${invoicePage.page === 1 ? "disabled" : ""}>První</button>
+          <button class="secondary-link" type="button" data-receivables-customer-invoice-page="${invoicePage.page - 1}" ${invoicePage.page === 1 ? "disabled" : ""}>Předchozí</button>
+          <button class="secondary-link" type="button" data-receivables-customer-invoice-page="${invoicePage.page + 1}" ${invoicePage.page === invoicePage.totalPages ? "disabled" : ""}>Další</button>
+          <button class="secondary-link" type="button" data-receivables-customer-invoice-page="${invoicePage.totalPages}" ${invoicePage.page === invoicePage.totalPages ? "disabled" : ""}>Poslední</button>
+        </nav>`,
         content: `
           <div class="receivables-table-wrap">
             <table class="receivables-table">
@@ -44952,6 +44964,7 @@ async function loadReceivablesCustomerDetail(customerId, options = {}) {
     }
     if (preview?.ratingPreviewError) detail.ratingPreviewError = preview.ratingPreviewError;
     receivablesState.customerDetail = detail;
+    receivablesState.customerInvoicePage = 1;
   } catch (error) {
     receivablesState.customerError = error.payload?.error || error.message || "Detail zákazníka se teď nepodařilo načíst.";
   } finally {
@@ -45049,10 +45062,9 @@ async function loadReceivablesImportBatches(options = {}) {
 }
 
 function receivablesInvoiceSnapshotShouldAdvance() {
-  const summary = receivablesState.invoiceSnapshot?.summary || {};
-  const loadedRows = Number(summary.loadedRows || 0);
-  const totalRows = Number(summary.totalRows || 0);
-  return Boolean(summary.capped && totalRows > 0 && loadedRows < totalRows);
+  const sync = receivablesState.invoiceSync;
+  const summary = sync?.summary || receivablesState.invoiceSnapshot?.summary || {};
+  return Boolean(summary.capped || ["snapshot_loading", "incremental_loading", "incremental_running", "incremental_applying"].includes(sync?.batch?.status));
 }
 
 function scheduleReceivablesInvoiceSnapshotAdvance() {
@@ -45069,16 +45081,12 @@ function scheduleReceivablesInvoiceSnapshotAdvance() {
   if (receivablesState.invoiceSnapshotLoading || receivablesState.invoiceSnapshotAdvanceTimer) {
     return;
   }
-  if (receivablesState.invoiceSnapshotAdvanceRuns >= 60) {
-    receivablesState.invoiceSnapshotMessage = "Dávkový snapshot je pozastavený po 60 dávkách. Obnov stránku pro pokračování.";
-    return;
-  }
 
   receivablesState.invoiceSnapshotAdvanceTimer = window.setTimeout(() => {
     receivablesState.invoiceSnapshotAdvanceTimer = 0;
     receivablesState.invoiceSnapshotAdvanceRuns += 1;
-    void loadReceivablesInvoiceSnapshot({ advance: true });
-  }, 1200);
+    void loadReceivablesInvoiceSnapshot({ poll: true });
+  }, 15000);
 }
 
 async function loadReceivablesInvoiceSnapshot(options = {}) {
@@ -45099,17 +45107,17 @@ async function loadReceivablesInvoiceSnapshot(options = {}) {
     params.set("invoiceLookbackMonths", "24");
     params.set("vistosPageSize", "1000");
     params.set("pagesPerRun", "1");
-    if (options.live === true) {
-      params.set("mode", "live");
-    } else if (options.advance === true) {
-      params.set("mode", "advance");
+    if (options.page && receivablesState.invoiceSnapshot?.batch?.id) {
+      params.set("batchId", receivablesState.invoiceSnapshot.batch.id);
     }
-    const result = await apiJson(`/api/receivables/vistos/invoice-snapshot?${params.toString()}`);
+    const result = await apiJson(`/api/receivables/vistos/invoice-snapshot?${params.toString()}`,
+      options.sync === true ? { method: "POST" } : {});
+    receivablesState.invoiceSync = result.sync || null;
     receivablesState.invoiceSnapshot = result.snapshot || null;
     receivablesState.invoiceSnapshotRows = Array.isArray(result.rows) ? result.rows : [];
     receivablesState.invoiceSnapshotPagination = result.pagination || null;
     receivablesState.invoiceSnapshotLoaded = true;
-    receivablesState.invoiceSnapshotMessage = result.snapshot?.summary?.recommendedNextStep || "";
+    receivablesState.invoiceSnapshotMessage = result.message || result.snapshot?.summary?.recommendedNextStep || "";
     const summary = receivablesState.invoiceSnapshot?.summary || {};
     if (!summary.capped && !receivablesState.ledgerMappingLoading) {
       void loadReceivablesLedgerMapping();
@@ -60387,6 +60395,21 @@ document.addEventListener("click", async (event) => {
     event.preventDefault();
     receivablesState.importLoaded = false;
     await loadReceivablesImportBatches({ renderAfter: true });
+    return;
+  }
+
+  const customerInvoicePageButton = event.target.closest("[data-receivables-customer-invoice-page]");
+  if (customerInvoicePageButton) {
+    event.preventDefault();
+    receivablesState.customerInvoicePage = Number(customerInvoicePageButton.dataset.receivablesCustomerInvoicePage) || 1;
+    render();
+    return;
+  }
+
+  const receivablesInvoiceSync = event.target.closest("[data-receivables-invoice-sync]");
+  if (receivablesInvoiceSync) {
+    event.preventDefault();
+    await loadReceivablesInvoiceSnapshot({ sync: true, page: 1, renderAfter: true });
     return;
   }
 
