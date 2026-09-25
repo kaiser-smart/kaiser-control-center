@@ -71,7 +71,7 @@ test('CalDAV discovers actual collection paths, creates, reads, edits and delete
   assert.equal(edited.etag, '"2"');
   await f.calendar.mutate({ calendarId, eventId: created.eventId, etag: edited.etag }, true);
   assert.equal(f.objects.size, 0);
-  assert.ok(f.calls.every(c => c.redirect === 'error'));
+  assert.ok(f.calls.every(c => c.redirect === 'manual'));
 });
 test('repeat calendar creation conflicts without duplicating; attendee writes are rejected', async () => {
   const f = fixture(); const args = { calendarId, requestId: crypto.randomUUID(), event: eventData };
@@ -120,4 +120,34 @@ test('unsupported groupware modules are reported honestly', () => {
     assert.equal(status.modules.find(m => m.id === id).implementation, 'NOT_IMPLEMENTED');
   }
   assert.equal(status.modules.find(m => m.id === 'labels').implementation, 'CONNECTOR_STORAGE');
+});
+
+test('DAV invokes a native-style fetch without binding the provider as its receiver', async () => {
+  let requests=0;
+  for(const Provider of [CalDav, CardDav]) {
+    const provider=new Provider({MAILBOX_CREDENTIALS:'{"test":"synthetic-password"}'},
+      {address:'pilot@example.test',credential_key:'test'}, function(url,request) {
+        assert.equal(this,undefined, 'Workers fetch rejects an arbitrary receiver');
+        assert.equal(url,'https://syncdav.forpsi.com/');
+        assert.equal(request.method,'PROPFIND');assert.equal(request.redirect,'manual');
+        requests++;
+        return Promise.resolve(new Response('<d:multistatus xmlns:d="DAV:"/>',{status:207}));
+      });
+    assert.deepEqual(await provider.propfind('https://syncdav.forpsi.com/','<d:current-user-principal/>'),[]);
+  }
+  assert.equal(requests,2);
+});
+
+test('DAV rejects all redirects without forwarding credentials or performing a follow-up request', async () => {
+  for(const status of [301,302,303,307,308]) {
+    let requests=0;
+    const provider=new CalDav({MAILBOX_CREDENTIALS:'{"test":"synthetic-password"}'},
+      {address:'pilot@example.test',credential_key:'test'}, async(url,request)=>{
+        requests++;
+        assert.equal(url,'https://syncdav.forpsi.com/');assert.equal(request.redirect,'manual');
+        return new Response(null,{status,headers:{location:'https://attacker.example/private'}});
+      });
+    await assert.rejects(provider.calendars(),/DAV_REDIRECT_DENIED/);
+    assert.equal(requests,1);
+  }
 });

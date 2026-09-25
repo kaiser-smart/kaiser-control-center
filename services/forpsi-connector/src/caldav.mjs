@@ -81,11 +81,14 @@ export class CalDav {
   async request(url, method, body, headers = {}) {
     const password = await mailboxPassword(this.env, this.mailbox);
     const authorization = `Basic ${Buffer.from(`${this.mailbox.address}:${password}`).toString('base64')}`;
-    const response = await this.fetcher(safeDavUrl(url), { method, redirect: 'error',
+    // Native Workers fetch must not receive the DAV instance as its `this` value.
+    const fetcher = this.fetcher;
+    const response = await fetcher(safeDavUrl(url), { method, redirect: 'manual',
       signal: AbortSignal.timeout(20000), headers: { authorization,
         'content-type': 'application/xml; charset=utf-8', ...headers }, ...(body === undefined ? {} : { body }) });
     if (!response.ok) {
-      const error = new ConnectorError(response.status === 412 ? 'CALENDAR_VERSION_CONFLICT' :
+      const error = new ConnectorError(response.status >= 300 && response.status < 400 ? 'DAV_REDIRECT_DENIED' :
+        response.status === 412 ? 'CALENDAR_VERSION_CONFLICT' :
         [401,403].includes(response.status) ? 'CALDAV_ACCESS_DENIED' : 'CALDAV_UNAVAILABLE');
       error.httpStatus = response.status;
       await response.body?.cancel();
