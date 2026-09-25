@@ -10,6 +10,7 @@ const codes = new Set([
   'CALDAV_DISCOVERY_UNAVAILABLE', 'CARDDAV_DISCOVERY_UNAVAILABLE',
   'DAV_URL_DENIED', 'DAV_XML_DENIED', 'DAV_RESPONSE_TOO_LARGE', 'DAV_REDIRECT_DENIED',
   'CREDENTIALS_NOT_CONFIGURED', 'MAILBOX_NOT_CONFIGURED',
+  'ADMIN_RESOURCE_LIMIT',
 ]);
 const stages = new Set(['root', 'principal', 'collections']);
 const commands = new Map([

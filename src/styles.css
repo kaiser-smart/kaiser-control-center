@@ -53092,3 +53092,9 @@ body.collection-driver-blackview-simulator-active #app {
 .forpsi-admin details { margin: .8rem 0; }
 .forpsi-admin summary { cursor: pointer; min-height: 32px; }
 .forpsi-admin [hidden] { display: none; }
+.forpsi-service-status { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr)); gap:.75rem; margin:1rem 0; }
+.forpsi-service-status > div { min-width:0; padding:.65rem; border:1px solid var(--border-color,#d6d6d6); border-radius:var(--card-radius,12px); }
+.forpsi-service-status dt { font-size:.9rem; }
+.forpsi-service-status dd { margin:.3rem 0 0; font-weight:600; }
+.forpsi-resource-list { max-height:16rem; overflow:auto; padding-left:1.25rem; overflow-wrap:anywhere; }
+.forpsi-resources section { min-width:0; }

@@ -87,3 +87,52 @@ test('simulated approval cannot activate a mailbox in provider mode; duplicate c
   await executeAdmin('verify',{id:m.id,revision:1},{...f,verificationMode:'simulated'});
   await assert.rejects(executeAdmin('set_active',{id:m.id,revision:2,active:true},f),/VERIFICATION_REQUIRED/);
 });
+
+test('resource discovery works while paused and disabled; returns only metadata without mutations',async()=>{
+  const f=context(),p=payload();const {mailbox:m}=await executeAdmin('save',p,f);
+  f.env.CONNECTOR_ENABLED='false';
+  f.provider.listFolders=async()=>({folders:[{path:'INBOX',name:'Inbox',selectable:true,secret:'must-not-return'}]});
+  f.calendarFactory=()=>({calendars:async()=>({calendars:[{id:'opaque-internal',name:'Vlastní',components:['VEVENT']}]})});
+  const before=f.sqlite.prepare('SELECT total_changes() AS n').get().n;
+  const {resources:r}=await executeAdmin('resources',{id:m.id,revision:m.revision},f);
+  assert.equal(r.folders.status,'available'); assert.equal(r.calendars.items[0].name,'Vlastní');
+  assert.equal(r.addressBooks.status,'empty'); assert.equal(r.revision,m.revision);
+  assert.ok(!JSON.stringify(r).includes('must-not-return'));assert.ok(!JSON.stringify(r).includes('opaque-internal'));
+  assert.equal((await f.store.first('SELECT revision FROM mailboxes WHERE id=?',m.id)).revision,1);
+  assert.equal((await executeAdmin('overview',{},f)).audit.length,1);
+  assert.equal(f.calls.length,0); assert.equal(f.sqlite.prepare('SELECT total_changes() AS n').get().n,before);
+});
+test('resources preserve partial failures, redact errors, bound results and enforce tenant/revision',async()=>{
+  const f=context(); f.calendarFactory=()=>({calendars:async()=>{throw new Error('secret-password');}});
+  f.contactFactory=()=>({addressBooks:async()=>({addressBooks:Array.from({length:501},()=>({name:'Book'}))})});
+  const {resources:r}=await executeAdmin('resources',{id:'mail-a',revision:1},f);
+  assert.equal(r.folders.status,'available'); assert.equal(r.calendars.status,'failed');
+  assert.equal(r.addressBooks.diagnostic.code,'ADMIN_RESOURCE_LIMIT'); assert.ok(!JSON.stringify(r).includes('secret-password'));
+  await assert.rejects(executeAdmin('resources',{id:'mail-b',revision:1},f),/MAILBOX_NOT_FOUND/);
+  await assert.rejects(executeAdmin('resources',{id:'mail-a',revision:2},f),/VERSION_CONFLICT/);
+  f.provider.listFolders=async()=>{f.sqlite.exec("UPDATE mailboxes SET revision=revision+1 WHERE id='mail-a'");return {folders:[]};};
+  await assert.rejects(executeAdmin('resources',{id:'mail-a',revision:1},f),/VERSION_CONFLICT/);
+});
+test('folder choices are checked against live selectable folders before an atomic paused save',async()=>{
+  const f=context(),p=payload();let {mailbox:m}=await executeAdmin('save',p,f);
+  f.provider.listFolders=async()=>({folders:[{path:'Sent',selectable:true},{path:'Parent',selectable:false}]});
+  const {password,...plain}=p;
+  const edit={...plain,id:m.id,revision:m.revision,sentFolder:'Missing'};
+  await assert.rejects(executeAdmin('save',edit,f),/FOLDER_NOT_AVAILABLE/);
+  await assert.rejects(executeAdmin('save',{...edit,sentFolder:'Parent'},f),/FOLDER_NOT_AVAILABLE/);
+  await assert.rejects(executeAdmin('save',{...edit,sentFolder:'Sent',password:'new-password'},f),/FOLDER_RELOAD_REQUIRED/);
+  assert.equal((await executeAdmin('overview',{},f)).audit.length,1);
+  ({mailbox:m}=await executeAdmin('save',{...edit,sentFolder:'Sent'},f));
+  assert.equal(m.sent_folder,'Sent');assert.equal(m.active,0);assert.equal(m.revision,2);
+  assert.equal(await mailboxPassword(f.env,await f.store.first('SELECT * FROM mailboxes WHERE id=?',m.id)),password);
+  await assert.rejects(executeAdmin('save',{...edit,sentFolder:'Sent'},f),/VERSION_CONFLICT/);
+  assert.equal(f.calls.length,0);
+});
+test('new mailbox cannot save unverified folder paths; provider failure leaves settings untouched',async()=>{
+  const f=context(),p=payload();
+  await assert.rejects(executeAdmin('save',{...p,sentFolder:'Sent'},f),/FOLDER_RELOAD_REQUIRED/);
+  const {mailbox:m}=await executeAdmin('save',p,f); const {password,...plain}=p;
+  f.provider.listFolders=async()=>{throw new Error('offline');};
+  await assert.rejects(executeAdmin('save',{...plain,id:m.id,revision:1,sentFolder:'Sent'},f),/offline/);
+  assert.equal((await f.store.first('SELECT revision FROM mailboxes WHERE id=?',m.id)).revision,1);
+});

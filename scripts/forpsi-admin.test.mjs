@@ -69,3 +69,41 @@ test('oversized payload is rejected before Worker and upstream errors do not lea
   assert.equal(calls,0);
   const r=await forwardForpsiAdmin({env,request:await req(env,admin)});assert.ok(!(await r.text()).includes('secret-value-from-provider'));
 });
+
+test('SO.ai exposes resource discovery through existing session, origin and tenant boundaries',async()=>{
+  const {env,f}=setup();f.env.CONNECTOR_ENABLED='false';
+  const body={operation:'resources',payload:{id:'mail-a',revision:1}};
+  // Prevent real DAV factories from making any network call in this isolated HTTP test.
+  f.env.MAILBOX_CREDENTIALS='{}';
+  const result=await forwardForpsiAdmin({env,request:await req(env,admin,body)});
+  assert.equal(result.status,200);const data=await result.json();
+  assert.equal(data.resources.folders.items[0].path,'INBOX');
+  assert.equal(data.resources.calendars.status,'failed');
+  assert.equal((await forwardForpsiAdmin({env,request:await req(env,user,body)})).status,403);
+  assert.equal((await forwardForpsiAdmin({env,request:await req(env,admin,body,'https://evil.example')})).status,403);
+  assert.equal((await forwardForpsiAdmin({env,request:await req(env,admin,{operation:'resources',payload:{id:'mail-b',revision:1}})})).status,404);
+  assert.equal(f.calls.length,0);
+});
+
+test('loading resources preserves the dirty form, excludes parent folders and isolates owner changes',async()=>{
+  const listeners={};
+  const root={isConnected:true,innerHTML:'',addEventListener:(name,fn)=>{listeners[name]=fn;},querySelector:()=>null,querySelectorAll:()=>[]};
+  const data={mailboxes:[{id:'ui-mail',revision:1,address:'test@example.test',display_name:'Test'}],grants:[],audit:[],queue:[],rules:[],labels:[],truncated:{},capabilities:{modules:[]},connectorEnabled:false,credentialStorageReady:true};
+  let guarded=0; let pending;
+  const apiJson=async(_url,options)=>options?new Promise(resolve=>pending=resolve):data;
+  mountForpsiAdmin({querySelector:()=>root},{owner:'resources-ui-owner',apiJson,guard:()=>guarded++});
+  await new Promise(resolve=>setImmediate(resolve));
+  const click=action=>listeners.click({target:{closest:()=>({dataset:{forpsiAction:action,id:'ui-mail'}})},preventDefault(){},stopPropagation(){}});
+  click('edit');listeners.input({target:{name:'displayName',value:'Unsaved <name>',form:{matches:()=>true}}});click('resources');
+  assert.equal(guarded,0);
+  pending({resources:{mailboxId:'ui-mail',revision:1,folders:{status:'available',items:[{path:'Parent',selectable:false},{path:'<Safe>',selectable:true}]},calendars:{status:'empty',items:[]},addressBooks:{status:'empty',items:[]}}});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.match(root.innerHTML,/value="Unsaved &lt;name&gt;"/);assert.equal(forpsiDirtyTarget()?.type,'forpsi');
+  assert.ok(!root.innerHTML.includes('<option value="Parent"'));assert.ok(root.innerHTML.includes('<option value="&lt;Safe&gt;"'));
+  click('resources');const oldPending=pending;
+  mountForpsiAdmin({querySelector:()=>root},{owner:'different-owner',apiJson:async()=>({...data,mailboxes:[]}),guard:()=>guarded++});
+  oldPending({resources:{mailboxId:'ui-mail',revision:1,folders:{items:[{path:'private-leak'}]}}});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(!root.innerHTML.includes('private-leak'));assert.ok(!root.innerHTML.includes('Unsaved'));assert.equal(forpsiDirtyTarget(),null);
+  root.isConnected=false;
+});

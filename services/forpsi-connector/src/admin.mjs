@@ -6,6 +6,7 @@ import { credentialContext } from './credentials.mjs';
 import { capabilities } from './capabilities.mjs';
 import { requireValue, ConnectorError } from './errors.mjs';
 import { providerDiagnostic } from './diagnostics.mjs';
+import { readResources, validateFolderChange } from './admin-resources.mjs';
 
 const id = z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/);
 const revision = z.number().int().positive();
@@ -16,7 +17,7 @@ const save = z.object({ id: id.optional(), requestId: z.string().uuid(), revisio
   password: z.string().min(1).max(1024).optional() }).strict();
 const selection = z.object({ id, revision }).strict();
 const schemas = { overview: z.object({}).strict(), save,
-  verify: selection, set_active: selection.extend({ active: z.boolean() }) };
+  verify: selection, resources: selection, set_active: selection.extend({ active: z.boolean() }) };
 const publicColumns = `m.id,m.address,m.display_name,m.active,m.revision,m.drafts_folder,m.sent_folder,m.trash_folder,
   m.updated_at,m.updated_by,m.verified_at,m.verification_json`;
 function publicMailbox(m) {
@@ -68,6 +69,7 @@ export async function executeAdmin(operation, raw, ctx) {
     const m = p.id ? await mailbox(store, tenant, p.id) : { id: `mail_${p.requestId}`, tenant_id: tenant, address: p.address };
     requireValue(!p.id || (m.revision === p.revision && m.address === p.address), 'VERSION_CONFLICT');
     if (!p.id) requireValue(!(await store.first('SELECT id FROM mailboxes WHERE tenant_id=? AND address=? COLLATE NOCASE',tenant,p.address)), 'MAILBOX_EXISTS');
+    await validateFolderChange(m,p,ctx);
     const changeId = crypto.randomUUID();
     const now = Date.now();
     let ciphertext;
@@ -93,6 +95,11 @@ export async function executeAdmin(operation, raw, ctx) {
   }
   const m = await mailbox(store, tenant, p.id);
   requireValue(m.revision === p.revision, 'VERSION_CONFLICT');
+  if (operation === 'resources') {
+    const resources = await readResources(m,ctx);
+    requireValue((await mailbox(store,tenant,m.id)).revision === m.revision, 'VERSION_CONFLICT');
+    return { resources };
+  }
   const changeId = crypto.randomUUID();
   if (operation === 'set_active') {
     if (p.active) {
