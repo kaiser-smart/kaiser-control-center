@@ -3,6 +3,7 @@ import { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
 import { simpleParser } from 'mailparser';
 import { requireValue } from './errors.mjs';
+import { smtpSocketFactory } from './smtp-socket.mjs';
 
 const MAX_MESSAGE = 2 * 1024 * 1024;
 const publicEnvelope = item => ({ uid: item.uid, subject: item.envelope?.subject ?? '',
@@ -147,6 +148,7 @@ export class Forpsi {
   async smtp() {
     const password = await mailboxPassword(this.env, this.mailbox);
     return this.transportFactory({ host: 'smtp.forpsi.com', port: 465, secure: true,
+      getSocket: smtpSocketFactory(),
       auth: { user: this.mailbox.address, pass: password },
       tls: { rejectUnauthorized: true, minVersion: 'TLSv1.2', servername: 'smtp.forpsi.com' },
       logger: false, debug: false, pool: false, connectionTimeout: 15000,

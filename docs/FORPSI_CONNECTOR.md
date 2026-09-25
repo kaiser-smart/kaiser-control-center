@@ -21,6 +21,7 @@ Stávající autentizace, role a jejich výchozí oprávnění nejsou upravené.
 - Ochrana neuložených změn používá stávající dialog SO.ai. Frontend neukládá data do lokálních úložišť.
 - Simulované ověření nelze použít jako oprávnění aktivovat schránku v režimu skutečného poskytovatele.
 - Od konektoru 0.2.1 se k neúspěšnému ověření ukládají pouze povolené chybové kódy, fáze a číselné HTTP/SMTP stavy. Text chyb, protokolové odpovědi, adresy a přihlašovací údaje se neukládají. Diagnostika je součástí chráněného administračního readbacku; nezapíná MCP ani odesílání.
+- Od 0.2.2 navazuje SMTP TLS přímo přes pevné `smtp.forpsi.com:465` a předává Nodemaileru již ověřený socket. V lokálním Cloudflare runtime původní DNS předzpracování selhalo před přihlášením; přímé TLS a následné anonymní SMTP VERIFY prošly. Certifikát se nadále ověřuje, minimum je TLS 1.2 a připojení má 15s limit. Anonymní test není důkaz přihlášení ani doručení; je potřeba zopakovat administrační ověření s uloženým heslem.
 
 ## Nasazení administračního pilotu
 
