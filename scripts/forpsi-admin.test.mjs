@@ -4,6 +4,29 @@ import { createSessionCookie } from '../functions/_lib/auth.js';
 import { forwardForpsiAdmin } from '../functions/api/forpsi/admin.js';
 import { createWorker } from '../services/forpsi-connector/src/worker.mjs';
 import { fixture } from '../services/forpsi-connector/test/fixtures.mjs';
+import { mountForpsiAdmin, forpsiDirtyTarget, discardForpsiDraft } from '../src/components/ForpsiAdminPanel.js';
+
+test('panel navigation ignores unrelated forms but still protects its own unsaved draft',async()=>{
+  const listeners={};
+  const root={isConnected:true,innerHTML:'',addEventListener:(name,fn)=>{listeners[name]=fn;},querySelector:()=>null,querySelectorAll:()=>[]};
+  let guarded=0; let pending;
+  const data={mailboxes:[],grants:[],audit:[],queue:[],rules:[],labels:[],truncated:{},capabilities:{modules:[]},connectorEnabled:false,credentialStorageReady:true};
+  mountForpsiAdmin({querySelector:()=>root},{owner:'panel-test-admin',apiJson:async()=>data,guard:action=>{guarded++;pending=action;}});
+  await new Promise(resolve=>setImmediate(resolve));
+  const click=(action,tab)=>listeners.click({target:{closest:()=>({dataset:{forpsiAction:action,tab}})},preventDefault(){},stopPropagation(){}});
+  click('new');
+  assert.equal(guarded,0,'a clean panel must not ask to discard another settings form');
+  assert.match(root.innerHTML,/data-forpsi-form/);
+  listeners.input({target:{name:'displayName',value:'Unsaved draft',form:{matches:()=>true}}});
+  assert.equal(forpsiDirtyTarget()?.type,'forpsi');
+  click('tab','access');
+  assert.equal(guarded,1);
+  assert.match(root.innerHTML,/data-forpsi-form/,'draft stays visible until the user decides');
+  discardForpsiDraft(); await pending();
+  assert.equal(forpsiDirtyTarget(),null);
+  assert.match(root.innerHTML,/<h3>Přístupy kolegů<\/h3>/);
+  root.isConnected=false;
+});
 const admin={id:'test-admin',email:'admin@example.test',name:'TEST správce',role:'admin',active:true,status:'active'};
 const user={...admin,id:'test-reader',email:'reader@example.test',role:'kancelar'};
 function setup(){

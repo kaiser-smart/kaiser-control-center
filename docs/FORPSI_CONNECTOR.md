@@ -1,7 +1,8 @@
 # Forpsi / ChatGPT – administrační pilot v SO.ai
 
-Stav: implementováno a lokálně testováno; nasazení administračního pilotu schváleno 25. 9. 2026.
-Konektor není připojený k ostré schránce. Živé nasazení SO.ai se dokládá aktuálním buildMeta a přihlášeným UI, nikoli samotným sloučením PR.
+Stav: administrační pilot nasazen a ověřen 25. 9. 2026 přes produkční buildMeta, přihlášené UI a zpětné čtení D1.
+Pilotní schránka je uložená jako pozastavená, bez hesla a bez ověření poskytovatele. Konektor není připojený k ostré schránce.
+Živé nasazení SO.ai se dokládá aktuálním buildMeta a přihlášeným UI, nikoli samotným sloučením PR.
 Pilotní účet zadaný uživatelem: `oplustil@kaiserservis.cz`. Tato adresa není automatický grant ani provozní seed.
 
 ## Integrovaná cesta
