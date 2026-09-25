@@ -842,10 +842,14 @@ function snapshotRowStatements(db, batchId, rows) {
   for (let offset = 0; offset < rows.length; offset += 10) {
     const chunk = rows.slice(offset, offset + 10);
     statements.push(db.prepare(`
-      INSERT OR REPLACE INTO receivable_import_rows (
+      INSERT INTO receivable_import_rows (
         id, batch_id, row_number, entity_kind, preview_status, confidence,
         issue_code, issue_message, normalized_json, raw_payload
       ) VALUES ${chunk.map(() => "(?, ?, ?, 'vistos_invoice', ?, ?, ?, ?, ?, ?)").join(", ")}
+      ON CONFLICT(batch_id, row_number) DO UPDATE SET
+        preview_status = excluded.preview_status, confidence = excluded.confidence,
+        issue_code = excluded.issue_code, issue_message = excluded.issue_message,
+        normalized_json = excluded.normalized_json, raw_payload = excluded.raw_payload
     `).bind(...chunk.flatMap(row => [
       `${batchId}-row-${row.rowNumber}`, batchId, row.rowNumber, row.previewStatus,
       row.issues.length ? 0.55 : 0.95, row.issues[0] || null,

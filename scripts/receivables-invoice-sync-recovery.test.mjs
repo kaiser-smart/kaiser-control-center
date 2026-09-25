@@ -11,7 +11,7 @@ function database() {
  sqlite.exec(readFileSync(new URL('../migrations/0028_create_receivable_import_preview.sql',import.meta.url),'utf8'));
  const db = {sqlite, failBatch:false, prepare(sql) {
   let values=[];
-  return {sql, bind(...v){assert.ok(v.length<=100,'D1 bound parameter limit');values=v;return this;},
+  return {sql, bind(...v){assert.ok(v.length<=100,'D1 bound parameter limit');values=v;this.values=v;return this;},
    async first(){return sqlite.prepare(sql).get(...values)||null;},
    async all(){return {results:sqlite.prepare(sql).all(...values)};},
    async run(){const result=sqlite.prepare(sql).run(...values);return {meta:{changes:Number(result.changes)}};}};
@@ -19,7 +19,7 @@ function database() {
   assert.ok(statements.length<1000,'D1 invocation budget');
   sqlite.exec('BEGIN');
   try {const results=[];for (const stmt of statements){results.push(await stmt.run());
-   if(this.failBatch && stmt.sql.includes('INSERT OR REPLACE INTO receivable_import_rows')) {this.failBatch=false;throw Error('injected storage failure');}}
+   if((this.failBatch || this.failBaseId === stmt.values?.[1]) && stmt.sql.includes('INSERT INTO receivable_import_rows')) {this.failBatch=false;this.failBaseId=null;throw Error('injected storage failure');}}
    sqlite.exec('COMMIT');return results;
   }catch(e){sqlite.exec('ROLLBACK');throw e;}
  }};
@@ -70,6 +70,16 @@ try {
  // Replay overlapping window: no duplicates, same full baseline, same current row count.
  await changes(env,{checkpoint,periodTo:now.toISOString(),maxPages:1});
  current=await read(env);assert.equal(current.pagination.totalRows,4);assert.equal(current.snapshot.batch.id,baseId);
+ // Applying a staged page and its checkpoint is atomic too; retry does not re-read Vistos.
+ const stableId=db.sqlite.prepare("SELECT id FROM receivable_import_rows WHERE batch_id=? AND row_number=1").get(baseId).id;
+ const beforeApply=(await read(env)).snapshot.summary.syncedThrough;
+ source[0]=invoice(1,{AmountPaid:90,RemainToPay:10});db.failBaseId=baseId;
+ await assert.rejects(changes(env,{checkpoint,periodTo:now.toISOString()}));
+ assert.equal((await read(env)).snapshot.summary.syncedThrough,beforeApply);
+ assert.equal((await read(env)).rows.find(r=>r.invoice.vistoInvoiceId==='1').invoice.paidAmount,100);
+ const callsBeforeApply=calls.length;await resumeChanges(env);assert.equal(calls.length,callsBeforeApply);
+ assert.equal((await read(env)).rows.find(r=>r.invoice.vistoInvoiceId==='1').invoice.paidAmount,90);
+ assert.equal(db.sqlite.prepare("SELECT id FROM receivable_import_rows WHERE batch_id=? AND row_number=1").get(baseId).id,stableId);
  // Empty verified delta is successful and does not erase source records.
  const future=new Date(now.getTime()+86400000);await changes(env,{checkpoint:future.toISOString(),periodTo:future.toISOString()});assert.equal((await read(env)).pagination.totalRows,4);
  // Failed atomic staging write cannot move checkpoint. Recovery resumes that batch.
