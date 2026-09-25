@@ -1,6 +1,7 @@
 # Forpsi / ChatGPT – administrační pilot v SO.ai
 
-Stav: implementováno a lokálně testováno, nenasazeno. Konektor není připojený k ostré schránce.
+Stav: implementováno a lokálně testováno; nasazení administračního pilotu schváleno 25. 9. 2026.
+Konektor není připojený k ostré schránce. Živé nasazení SO.ai se dokládá aktuálním buildMeta a přihlášeným UI, nikoli samotným sloučením PR.
 Pilotní účet zadaný uživatelem: `oplustil@kaiserservis.cz`. Tato adresa není automatický grant ani provozní seed.
 
 ## Integrovaná cesta
@@ -19,12 +20,22 @@ Stávající autentizace, role a jejich výchozí oprávnění nejsou upravené.
 - Ochrana neuložených změn používá stávající dialog SO.ai. Frontend neukládá data do lokálních úložišť.
 - Simulované ověření nelze použít jako oprávnění aktivovat schránku v režimu skutečného poskytovatele.
 
-## Podmínky nasazení – dosud neprovedeno
+## Nasazení administračního pilotu
+
+Produkční konfigurace Workeru: `services/forpsi-connector/wrangler.production.jsonc`.
+Samostatná D1 `forpsi-company-mail` (`76646cc2-deeb-41af-baeb-92159c9e7e5c`) byla vytvořena
+25. 9. 2026 v WEUR a migrace `0001`–`0003` byly aplikovány. Soukromý Worker
+`forpsi-company-mail` používá tenant `kaiser-servis`. Nemá veřejnou route ani workers.dev,
+preview URL ani cron. `CONNECTOR_ENABLED=false`; administrace funguje odděleně od vypnutého MCP.
+Produkční Pages binding `FORPSI_CONNECTOR` je definovaný v kořenovém `wrangler.toml`.
+Ostatní bindingy a proměnné odpovídaly živé konfiguraci před přidáním tohoto bindingu.
+
+Provozní postup a požadované vazby:
 
 1. Založit samostatnou D1 pro Forpsi, doplnit její skutečné ID do konfigurace Workeru a aplikovat migrace `0001` až `0003`. Nemigrovat DB_CORE/DB_MESSAGES/legacy databáze SO.ai.
 2. Ve Workeru nastavit `FORPSI_TENANT_ID` na stabilní ID firmy. Secrets: `CREDENTIALS_KEY` (náhodných 32 bajtů v base64) a `CONNECTOR_ADMIN_TOKEN` (alespoň 32 náhodných znaků). Zachovat `CONNECTOR_ENABLED=false`.
 3. Nasadit Worker a SO.ai propojit pomocí Service Binding `FORPSI_CONNECTOR`. SO.ai secret `FORPSI_ADMIN_TOKEN` musí odpovídat Worker `CONNECTOR_ADMIN_TOKEN`. Nic z toho nepatří do veřejného runtime configu.
-4. SO.ai publikovat pouze projektovým production guardem podle Příručky. Nasazení a nastavení secrets vyžadují schválený konkrétní rozsah; tento PR je neprovádí.
+4. SO.ai publikovat pouze projektovým production guardem podle Příručky. Pro tento pilot uživatel schválil samostatnou D1, Worker, serverové klíče a nasazení administrace. MCP, cron i odesílání zůstávají vypnuté.
 5. Správce zadá heslo schránky do chráněného formuláře. Codex heslo nepotřebuje v chatu ani přes prohlížeč číst. Následuje skutečný test z Workeru, ověření auditu a dostupných kolekcí.
 
 Samotný administrační pilot nevyžaduje zapnutí MCP ani plánovaného odesílání. Pro administraci nejsou nutné OAuth secrets.
