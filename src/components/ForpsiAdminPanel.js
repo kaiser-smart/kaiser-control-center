@@ -137,7 +137,7 @@ function rules() {
 }
 function settings() {
   const d=state.data;
-  return `<h3>Log událostí</h3><p>${d.connectorEnabled?'Konektor je povolený. Dostupnost jednotlivých služeb ověřte u schránek.':'Konektor je vypnutý. Automatické odesílání neběží.'}</p>
+  return `<h3>Log událostí</h3><p>Pracovní čtení v SO.ai: ${d.soaiMailEnabled?'zapnuté pro účty s přidělenými právy':'vypnuté'}. Připojení ChatGPT: ${d.connectorEnabled?'povolené, přihlášení vyžaduje ověření':'vypnuté'}.</p>
     <p>ChatGPT přihlášení: ${d.oauthConfigured?'konfigurace přítomna, přihlášení zatím neověřeno':'čeká na nastavení'}. Šifrované ukládání hesel: ${d.credentialStorageReady?'nakonfigurováno':'čeká na nastavení'}.</p>
     <div class="forpsi-list">${d.capabilities.modules.map(m=>`<article class="forpsi-card"><h4>${moduleNames[m.id] || escape(m.id)}</h4><p>${m.implementation==='NOT_IMPLEMENTED'?'Napojení zatím není implementováno.':m.implementation==='CONNECTOR_STORAGE'?'Vlastní evidence konektoru; nesynchronizuje nastavení webmailu.':'Adaptér implementován; stav připojení se ověřuje pro každou schránku.'}</p></article>`).join('')}</div>
     ${d.audit.length?`<ul>${d.audit.map(e=>`<li>${date(e.at)} · ${escape(mailboxName(e.mailbox_id))} · ${escape({'admin.save':'Uložení nastavení','admin.verify':'Test připojení','admin.set_active':'Změna dostupnosti','admin.access.save':'Změna přístupů'}[e.action] || e.action)} · ${escape(auditOutcome(e))}</li>`).join('')}</ul>`:'<p>Zatím žádné zaznamenané události.</p>'}
@@ -161,7 +161,7 @@ function paint() {
   if(!state.root?.isConnected) return;
   state.root.innerHTML=`<div class="users-panel__head"><div><h2>Forpsi / ChatGPT</h2><p>Firemní schránky a připojení služeb.</p></div><span>Vývojový pilot</span></div>
     <div class="forpsi-tabs" role="group" aria-label="Nastavení Forpsi">${tabs.map(([id,label])=>button('tab',label,`data-tab="${id}" aria-pressed="${state.tab===id}"`)).join('')}</div>
-    ${state.data?`<p>${state.data.verificationMode==='simulated'?'Izolovaný TEST: Forpsi je nahrazený simulovanými poskytovateli. ':''}${state.data.connectorEnabled?'Konektor je povolený.':'Konektor je vypnutý; automatické odesílání neběží.'}</p>`:''}
+    ${state.data?`<p>${state.data.verificationMode==='simulated'?'Izolovaný TEST: Forpsi je nahrazený simulovanými poskytovateli. ':''}Čtení v SO.ai: ${state.data.soaiMailEnabled?'zapnuté podle přidělených práv':'vypnuté'}. ChatGPT: ${state.data.connectorEnabled?'povolené':'vypnuté'}.</p><a class="secondary-link" href="/dashboard?view=forpsi-mail" data-link>Otevřít poštu</a>`:''}
     <div role="status">${escape(state.notice)}</div>${state.error?`<p role="alert" class="module-feedback__error">${escape(state.error)}</p>`:''}
     ${state.loading?'<p>Načítám stav konektoru…</p>':state.data?({mailboxes,access,rules,settings}[state.tab])():`<p>Stav konektoru není dostupný. Schránky nejsou z této obrazovky připojené.</p>${button('refresh','Obnovit stav')}`}`;
   filterRules();

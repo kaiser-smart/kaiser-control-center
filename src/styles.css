@@ -53103,3 +53103,13 @@ body.collection-driver-blackview-simulator-active #app {
 .forpsi-permissions label { display:flex; align-items:flex-start; gap:.7rem; min-width:0; padding:.7rem; border:1px solid var(--border-color,#d6d6d6); border-radius:var(--card-radius,12px); cursor:pointer; }
 .forpsi-permissions input { width:20px; height:20px; flex:0 0 20px; margin:.15rem 0; accent-color:var(--kaiser-green); }
 .forpsi-permissions small { display:block; font-weight:400; margin-top:.3rem; }
+.forpsi-mail { max-width:100%; }
+.forpsi-mail h1 { margin:0; }
+.forpsi-mail-list { display:grid; gap:.65rem; padding:0; list-style:none; }
+.forpsi-mail-list button { display:grid; gap:.4rem; text-align:left; width:100%; border:1px solid var(--border-color,#d6d6d6); border-radius:var(--card-radius,12px); padding:1rem; font:inherit; color:inherit; background:transparent; cursor:pointer; overflow-wrap:anywhere; }
+.forpsi-mail-list button:hover, .forpsi-mail-list button:focus-visible { outline:2px solid var(--kaiser-green); }
+.forpsi-mail-list span, .forpsi-mail-list small { font-weight:400; }
+.forpsi-mail-check { display:flex; align-items:center; gap:.6rem; padding:.8rem 0; }
+.forpsi-mail-check input { width:20px; height:20px; accent-color:var(--kaiser-green); }
+.forpsi-mail-message { margin-top:1rem; scroll-margin-top:1rem; }
+.forpsi-mail-message pre { font:inherit; font-weight:400; white-space:pre-wrap; overflow-wrap:anywhere; }

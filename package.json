@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.809",
+  "version": "0.1.810",
   "private": true,
   "type": "module",
   "scripts": {
@@ -38,7 +38,7 @@
     "partslink24:vin-pilot": "node scripts/partslink24_vin_pilot.mjs",
     "typecheck": "node scripts/check-syntax.mjs --typecheck",
     "preview": "node scripts/serve.mjs dist",
-    "test:forpsi": "node --test scripts/forpsi-admin.test.mjs services/forpsi-connector/test/*.test.mjs"
+    "test:forpsi": "node --test scripts/forpsi-admin.test.mjs scripts/forpsi-mail.test.mjs services/forpsi-connector/test/*.test.mjs"
   },
   "engines": {
     "node": ">=18"

@@ -18,6 +18,7 @@ Cíl schválený 25. 9. 2026: příjemná a výkonná aplikace s potřebnými fu
 |---|---|---|
 | 1 — připojení a zdroje | Stavy služeb, existující složky a metadata dostupných kolekcí, bezpečná změna uložených údajů | Test UI → API → úložiště; výběr existující složky, odmítnutí nedostupné složky, ochrana rozepsaných změn, souběhu a tenantů, desktop/tablet/mobil |
 | 2 — firemní přístupy | Správa kolegů přímo v SO.ai, stabilní identita, oddělení administrace od obsahu, revokace | UI → API → databáze: uložení a revokace, stabilní ID kolegy, neaktivní účet, souběh a audit; reálná práva přidělovat konkrétním schránkám a lidem |
+| 2b — pracovní čtení | Přihlášený kolega → přiřazená schránka → složky, hledání a text zprávy | Skutečný tok UI/API, revokace i vypnutí uživatele během požadavku, bezpečné zobrazení obsahu a živý pilot bez změny přečtenosti |
 | 3 — identity a podpisy | Skutečně povolený odesílatel, Reply-To, vlastní podpisy a šablony SO.ai, textový náhled | MIME testy bez odeslání, izolace schránek, sanitace HTML, žádné nepodložené aliasy |
 | 4 — štítky a pravidla | Editory, rozsah a původ, preview, ruční aplikace, audit a verze | Před spuštěním shodný náhled zásahů, odstranění štítku nesmaže zprávu, žádné skryté spouštění |
 | 5 — plánované zprávy | Přehled, úprava/zrušení plánu, timezone/DST, oprávnění před vykonáním | Stejná backendová logika se simulovaným SMTP; nejistý výsledek bez duplicit; ostrý cron a odeslání vyžadují vlastní schválení |
@@ -41,10 +42,20 @@ Stav nasazení a živé důkazy jsou vedené v [FORPSI_CONNECTOR.md](FORPSI_CONN
 
 Administrace umí vybrat konkrétní schránku a kolegu, změnit read/write/send/delete/schedule a všechna práva odebrat. Vyžaduje `settings:manage` i `users:view` pro adresář, `users:edit` pro zápis. Role ani globální výchozí oprávnění se nemění. Výběr je z aktuálního sloučeného adresáře SO.ai; při chybě databáze nebo konfigurace se nesmí použít neověřená náhrada. Do UI jdou jen ID, jméno, e-mail a aktivita účtu.
 
-Identita je `issuer=urn:smart-odpady:session`, `subject=SO.ai user.id`, ve stávající tabulce principals. E-mail není identita. Existující OAuth identity se nepřepisují a editor je pouze zobrazuje. Tato etapa neimplementuje propojení OAuth subjektu na účet SO.ai ani pracovní API přihlášeného kolegy; bez něj není možné vydávat uložená práva za dokončené použití ChatGPT nebo pošty v SO.ai.
+Identita je `issuer=urn:smart-odpady:session`, `subject=SO.ai user.id`, ve stávající tabulce principals. E-mail není identita. Existující OAuth identity se nepřepisují a editor je pouze zobrazuje. Navazující etapa 2b níže doplňuje pracovní čtení. Propojení OAuth subjektu na účet SO.ai stále není implementované a uložená práva nelze vydávat za dokončené použití ChatGPT.
 
 Zápis nahrazuje výběr práv jednoho kolegy na jedné schránce. Sdílí revizi schránky s ostatní administrací. CAS, vytvoření identity, nastavení pěti grantů a audit před/po jsou v jedné transakci; selhání auditu vše vrátí. Konflikt nic nepřepíše. Uložení nemění aktivitu schránky ani ověření připojení, nepovoluje MCP, cron a neposílá zprávy. Prázdný výběr znamená revokaci, kterou lze provést i u odstraněného nebo vypnutého kolegy. Neaktivní identita konektoru se neaktivuje jako vedlejší účinek. Plánování vyžaduje odesílání.
 
-Formulář chrání neuložené změny a po chybě je zachová; po úspěchu ukazuje skutečně načtený stav. Práva zatím platí pro celou schránku a všechny jí dostupné kolekce. Běžný runtime vždy kontroluje konkrétní grant; naplánovaná zpráva jej kontroluje znovu před SMTP. Již zahájenou operaci nelze revokací odvolat. Automatická revokace při vypnutí uživatele v SO.ai musí být součástí budoucího propojení runtime identit; před jeho zavedením se nesmí aktivovat pracovní endpoint pro tyto účty.
+Formulář chrání neuložené změny a po chybě je zachová; po úspěchu ukazuje skutečně načtený stav. Práva zatím platí pro celou schránku a všechny jí dostupné kolekce. Běžný runtime vždy kontroluje konkrétní grant; naplánovaná zpráva jej kontroluje znovu před SMTP. Již zahájenou operaci nelze revokací odvolat. Pracovní čtení v etapě 2b kontroluje aktuální aktivitu účtu SO.ai před i po požadavku; trvalé smazání grantů není pro odmítnutí neaktivního účtu potřeba.
 
 Živé ověření této etapy čte adresář a uložené přístupy. Zápis/revokace i čekající fronta se testují se syntetickými účty a SQLite bez vnějších účinků. Reálná práva kolegům se bez konkrétního výběru nepřidělují.
+
+## Etapa 2b — pracovní čtení
+
+Pošta je samostatná pracovní položka dostupná i běžnému přihlášenému kolegovi. Správa nastavení nezakládá právo na obsah. Server povoluje jen `list_mailboxes`, `list_folders`, `search_messages` a `read_message`; nesmí přijmout actorId z prohlížeče ani operaci zápisu/odesílání. Adresář se čte striktně před i po požadavku. Soukromý Worker znovu ověřuje grant a aktivitu schránky po čtení poskytovatele. Revokace nebo vypnutí uživatele během načítání zabrání vydání obsahu. Již zobrazenou zprávu nelze revokací zpětně odvolat.
+
+IMAP používá read-only zámek; čtení nemění `Seen`. Datum od je včetně, datum do v UI také včetně; API `before` znamená následující den výlučně. Jde o datum přijetí na serveru, hlavička zprávy může mít jiné datum. Jedna dávka prohledá nejvýše 5000 UID a vrátí nejvýše 20 výsledků v UI. I prázdná dávka může mít pokračování do starší části. Žádné automatické stahování celé schránky.
+
+Zpráva do 2 MiB se zobrazí jako escapovaný text, nejvýše 100000 znaků, bez vykonatelného HTML a externích obrázků. Přílohy mají pouze metadata. Obsah není ukládaný do localStorage ani IndexedDB; změna účtu nebo opuštění modulu vymaže stav a zneplatní čekající odpovědi. Chyba nezanechá starý obsah zprávy.
+
+Samostatný `SOAI_MAIL_ENABLED=true` zapíná jen tento čtecí endpoint. `CONNECTOR_ENABLED=false`, prázdný cron, SMTP a ChatGPT OAuth se tím nemění. Produkční přiřazení pilotního práva `read` se provádí existující administrací konkrétnímu účtu a ověřuje zpětným čtením; ostatním kolegům se práva automaticky nepřidělují.

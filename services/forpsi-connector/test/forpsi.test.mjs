@@ -31,6 +31,13 @@ test('reading uses read-only IMAP lock, TLS verification and does not mark seen'
   assert.equal(config.tls.rejectUnauthorized, true); assert.equal(config.port, 993);
   assert.equal(config.logger, false);
 });
+test('search passes exact receive-date bounds and paginates empty UID windows without marking seen',async()=>{
+  let query;const f=adapter({mailbox:{uidValidity:3n,uidNext:12000},search:async q=>{query=q;return [];}});
+  const result=await f.provider.search({folder:'INBOX',since:'2026-08-26',before:'2026-09-03',limit:20});
+  assert.equal(query.since.toISOString(),'2026-08-26T00:00:00.000Z');assert.equal(query.before.toISOString(),'2026-09-03T00:00:00.000Z');
+  assert.equal(result.nextBeforeUid,7000);assert.equal(result.messages.length,0);
+  assert.deepEqual(f.calls.find(c=>c[0]==='lock')[2],{readOnly:true});
+});
 test('stale UIDVALIDITY rejects mutation, preventing action on another message', async () => {
   const f = adapter();
   await assert.rejects(f.provider.move({ ...ref, uidValidity: '99' }, 'Archive'), /STALE_MESSAGE_REFERENCE/);

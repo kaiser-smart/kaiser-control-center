@@ -1,4 +1,5 @@
 import { forpsiAdminSection, mountForpsiAdmin, forpsiDirtyTarget, saveForpsiDraft, discardForpsiDraft } from "./components/ForpsiAdminPanel.js";
+import { forpsiMailSection, mountForpsiMail } from "./components/ForpsiMailPanel.js";
 import { receivablesInvoicePage } from "./data/receivablesInvoicePagination.js";
 import { moduleDashboards, modules } from "./data/modules.js";
 import {
@@ -2673,7 +2674,7 @@ const UI_SYSTEM_PILOT_NAV_GROUPS = [
   },
   {
     label: "Hlavní práce",
-    moduleIds: ["quick-absence", "collection-routes", "driver-reports", "vehicle-tracking", "data-box-plus", "rcs-sms-autopilot"]
+    moduleIds: ["quick-absence", "collection-routes", "driver-reports", "vehicle-tracking", "forpsi-mail", "data-box-plus", "rcs-sms-autopilot"]
   },
   {
     label: "Vozidla a servis",
@@ -2722,7 +2723,7 @@ function uiSystemPilotModulesForUser(user) {
     ? [quickAbsenceMenuItem, ...menuModules(user)]
     : menuModules(user);
 
-  return new Map(items.map((moduleItem) => [moduleItem.id, moduleItem]));
+  return new Map([...items,{id:"forpsi-mail",title:"Pošta",route:"/dashboard?view=forpsi-mail",icon:ReportsIcon}].map((moduleItem) => [moduleItem.id, moduleItem]));
 }
 
 function uiSystemPilotModuleHref(moduleItem, user) {
@@ -54892,6 +54893,13 @@ function renderAuthenticatedApp(user) {
     renderAuthenticatedApp(user);
     return;
   }
+  // Mailbox grants govern this workspace. Reuse the dashboard route to retain the monitoring budget.
+  if(path==='/dashboard' && new URLSearchParams(window.location.search).get('view')==='forpsi-mail') {
+    app.innerHTML=`<main class="app-shell module-page module-theme-scope" ${moduleThemeStyleAttribute()}>${userBar(user)}
+      <nav class="topbar" aria-label="Navigace"><a class="back-button" href="${routeHref('/')}" data-link>Zpět na přehled</a>
+      ${hasPermission(user,'settings','manage')?`<a class="secondary-link" href="${routeHref('/nastaveni#forpsi-admin')}" data-link>Nastavení Forpsi</a>`:''}</nav>${forpsiMailSection()}</main>`;
+    document.title=`Pošta | ${APP_NAME}`;return;
+  }
   if (isDriverReportsPath(path) && (aiAssistantState.chatOpen || isAiVoiceSessionActive() || aiAssistantState.isListening)) {
     closeAiAssistant({ renderAfter: false });
   }
@@ -55219,6 +55227,7 @@ function renderApp() {
 
 function uiSystemV2ActiveModuleId(path) {
   const normalizedPath = normalizePath(path);
+  if(normalizedPath==='/dashboard' && new URLSearchParams(window.location.search).get('view')==='forpsi-mail')return 'forpsi-mail';
 
   if (normalizedPath === ABSENCE_QUICK_ROUTE) {
     return "quick-absence";
@@ -55369,6 +55378,7 @@ function render() {
     applyActiveThemeToRoot();
     renderApp();
     mountForpsiAdmin(app, { apiJson, guard: guardedAccessAction, owner: authState.user?.id || null });
+    mountForpsiMail(app, { apiJson, owner: authState.user?.id || null });
     syncCollectionRoutesDriverKioskDocumentState();
     syncCollectionDailyDriverViewportDiagnostics();
     applyUiSystemV2();
