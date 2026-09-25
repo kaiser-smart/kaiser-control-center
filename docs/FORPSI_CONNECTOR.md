@@ -1,7 +1,7 @@
 # Forpsi / ChatGPT – administrační pilot v SO.ai
 
 Stav: administrační pilot nasazen a ověřen 25. 9. 2026 přes produkční buildMeta, přihlášené UI a zpětné čtení D1.
-Pilotní schránka je uložená jako pozastavená, bez hesla a bez ověření poskytovatele. Konektor není připojený k ostré schránce.
+Pilotní schránka je pozastavená. Správce uložil heslo do šifrovaného úložiště; skutečný test 25. 9. 2026 v 21:36 potvrdil IMAP včetně podpory MOVE. SMTP a DAV zatím ověřené nejsou; odeslání nebylo testováno.
 Živé nasazení SO.ai se dokládá aktuálním buildMeta a přihlášeným UI, nikoli samotným sloučením PR.
 Pilotní účet zadaný uživatelem: `oplustil@kaiserservis.cz`. Tato adresa není automatický grant ani provozní seed.
 
@@ -20,6 +20,7 @@ Stávající autentizace, role a jejich výchozí oprávnění nejsou upravené.
 - Globálně vypnutý Worker nic neodesílá, i když je konkrétní schránka povolená. Již rozběhnuté SMTP odesílání nelze odvolat pozastavením.
 - Ochrana neuložených změn používá stávající dialog SO.ai. Frontend neukládá data do lokálních úložišť.
 - Simulované ověření nelze použít jako oprávnění aktivovat schránku v režimu skutečného poskytovatele.
+- Od konektoru 0.2.1 se k neúspěšnému ověření ukládají pouze povolené chybové kódy, fáze a číselné HTTP/SMTP stavy. Text chyb, protokolové odpovědi, adresy a přihlašovací údaje se neukládají. Diagnostika je součástí chráněného administračního readbacku; nezapíná MCP ani odesílání.
 
 ## Nasazení administračního pilotu
 
@@ -49,7 +50,7 @@ Klíč hesel se nesmí prostě přepsat: stávající ciphertext by přestal bý
 
 ## Aktuální hranice
 
-- Pošta, CalDAV a CardDAV mají implementované adaptéry, ale nejsou ověřené proti ostrému účtu ani z nasazeného Cloudflare Workeru.
+- IMAP z nasazeného Workeru úspěšně ověřil přihlášení a výpis složek. SMTP, CalDAV a CardDAV čekají na vyřešení neúspěšné verifikace. Čtení zpráv a všechny zápisy do Forpsi nebyly v produkci testované.
 - Štítky a pravidla jsou vlastní evidence konektoru. Nejsou nativními štítky a filtry Forpsi. Pravidla se zatím spouštějí ručně nad výběrem zpráv.
 - SO.ai zatím neumí přidělovat/editovat granty, pravidla a štítky ani rušit frontu; příslušné MCP operace již existují, administrační ovládání je další fáze.
 - Nativní soubory, úkoly, poznámky a podpisy nemají ověřenou integrační cestu ani implementovaný adaptér. Ve webmailu byly jejich položky nabídky viditelné, to není důkaz dostupného API.
