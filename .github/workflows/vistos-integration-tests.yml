@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - "functions/_lib/vistos-*.js"
+      - "functions/_lib/receivables-*.js"
+      - "scripts/receivables-*.mjs"
+      - "src/data/receivablesInvoicePagination.js"
       - "functions/api/receivables/vistos/**"
       - "workers/vistos-leadhub-*.js"
       - "scripts/vistos-*.mjs"
@@ -31,5 +34,7 @@ jobs:
         run: npm run lint
       - name: Contact selection, shared writer and CSV safety
         run: npm run test:vistos-contacts
+      - name: Invoice synchronization recovery and customer pagination
+        run: npm run test:receivables
       - name: Build
         run: npm run build

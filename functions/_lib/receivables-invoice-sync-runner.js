@@ -1,4 +1,4 @@
-import { getModuleDatabase } from "./databases.js";
+import { getModuleDatabase, getArchiveDatabase } from "./databases.js";
 const DB_BINDING = "DB_ARCHIVE / DB_AUDIT";
 const DATABASE_NAME = "smart-odpady";
 const MODULE_KEY = "receivables";
@@ -30,7 +30,9 @@ function database(env) {
 }
 
 function bulkWritesBlocked(env) {
-  return clean(env?.D1_CAPACITY_BLOCK_BULK_WRITES).toLowerCase() === "true";
+  // Legacy-wide stop remains for other modules. The invoice-only opt-in uses its own live archive capacity check.
+  return clean(env?.D1_CAPACITY_BLOCK_BULK_WRITES).toLowerCase() === "true"
+    && clean(env?.RECEIVABLES_INVOICE_SYNC_ENABLED).toLowerCase() !== "true";
 }
 
 function appBaseUrl(env) {
@@ -59,28 +61,25 @@ export function scheduledReceivablesAction(now) {
   const parts = localTimeParts(now);
   const hour = Number(parts.hour);
   const minute = Number(parts.minute);
-  if (parts.weekday === "Sun" && hour === 2 && minute === 30) return "full";
   if (minute === 30 && DAILY_HOURS.has(hour)) return "incremental";
   return "";
 }
 
 async function pendingAction(db) {
-  const row = await db.prepare(`
-    SELECT import_kind, status
-    FROM receivable_import_batches
-    WHERE source = 'vistos'
-      AND import_kind IN ('vistos_invoice_snapshot', 'vistos_invoice_incremental')
-    ORDER BY created_at DESC
-    LIMIT 1
-  `).first();
-  if (
-    row?.import_kind === "vistos_invoice_snapshot"
-    && ["snapshot_capped", "snapshot_running"].includes(row?.status)
-  ) return "continue_full";
-  if (row?.import_kind === "vistos_invoice_incremental" && row?.status === "incremental_running") {
-    return "continue_incremental";
-  }
-  return "";
+  const full = await db.prepare(`SELECT status, parser_summary_json FROM receivable_import_batches
+    WHERE source = 'vistos' AND import_kind = 'vistos_invoice_snapshot'
+    ORDER BY created_at DESC LIMIT 1`).first();
+  if (!full) return "full";
+  if (["snapshot_capped", "snapshot_running", "snapshot_loading"].includes(full.status)) return "continue_full";
+  const delta = await db.prepare(`SELECT status FROM receivable_import_batches
+    WHERE source = 'vistos' AND import_kind = 'vistos_invoice_incremental'
+      AND status IN ('incremental_loading', 'incremental_running', 'incremental_applying')
+    ORDER BY created_at DESC LIMIT 1`).first();
+  if (delta) return "continue_incremental";
+  // Existing complete imports get one catch-up pass after rollout, then follow the normal schedule.
+  let summary = {};
+  try { summary = JSON.parse(full.parser_summary_json || "{}"); } catch {}
+  return full.status === "snapshot" && !summary.syncedThrough ? "incremental" : "";
 }
 
 function isUniqueDedupeError(error) {
@@ -163,6 +162,13 @@ export async function runReceivablesInvoiceSyncAutomation(env, options = {}) {
     };
   }
   const db = database(env);
+  const archive = getArchiveDatabase(env);
+  const sizeProbe = await archive.prepare("SELECT 1 AS capacity_probe").all();
+  const bytes = Number(sizeProbe?.meta?.size_after || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0 || bytes >= 8_500_000_000) {
+    return { mode: "staging-only", status: "blocked", moduleKey: MODULE_KEY, action: "",
+      capacityGuard: true, message: "Import faktur čeká na ověření volné kapacity archivu." };
+  }
   const action = await pendingAction(db) || scheduledReceivablesAction(now);
   if (!action) {
     return { mode: "staging-only", status: "not_scheduled", moduleKey: MODULE_KEY, action: "" };
@@ -216,7 +222,8 @@ export async function runReceivablesInvoiceSyncAutomation(env, options = {}) {
     const result = pages.payload.result || {};
     const summary = result.summary || result.snapshot?.summary || {};
     const batch = result.batch || result.snapshot?.batch || {};
-    const message = `Staging-only Vistos invoice sync dokončen: ${action}, batch ${batch.id || "-"}, řádků ${summary.loadedRows ?? batch.rowCount ?? 0}/${summary.totalRows ?? batch.rowCount ?? 0}.`;
+    const complete = ["snapshot", "incremental"].includes(batch.status) && !result.syncBusy;
+    const message = `Vistos faktury ${complete ? "synchronizovány" : "rozpracovány"}: ${action}, batch ${batch.id || "-"}, řádků ${summary.loadedRows ?? batch.rowCount ?? 0}/${summary.totalRows ?? batch.rowCount ?? 0}.`;
     await finishRuns(db, run, { finishedAt, status: "dry_run", message, errorCode: "" });
     return {
       mode: "staging-only",

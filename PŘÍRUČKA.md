@@ -2424,3 +2424,14 @@ Proveď:
 Neptej se zadavatele, zda smíš commitnout bezpečně ověřenou dokumentační změnu do pracovní větve, pokud stávající `PŘÍRUČKA.md` takový postup dovoluje.
 
 Na konci uveď pouze skutečnou externí nebo bezpečnostní blokaci. Běžné technické rozhodnutí není blokace.
+
+
+## Vistos vydané faktury – synchronizace od verze 0.1.802
+
+- Počáteční import za 24 měsíců je obnovitelný serverový proces. Otevření stránky ani GET API nezakládá nový import.
+- Dokončený seznam se aktualizuje podle Vistos `Id` a `Modified` v 06:30, 10:30, 14:30 a 18:30 Europe/Prague. Rozpracované dávky pokračují každých 15 minut; první změnový běh naváže i na dřívější dokončený import. Týdenní úplný import je vypnutý.
+- Šestihodinový překryv změnového okna je záměrný. Překryv nevytváří nové kopie faktur; potvrzený čas synchronizace se posouvá až po aplikaci celé dávky. Chyba zdroje ani úložiště nesmí potvrdit neúplný výsledek.
+- Cloudový runner má úzce omezený přepínač `RECEIVABLES_INVOICE_SYNC_ENABLED=true` a samostatnou kontrolu kapacity DB_ARCHIVE z D1 metadata. Globální blokace ostatních bulk zápisů zůstává beze změny.
+- Změny aktualizují importní snapshot/staging. Ostrý ledger, bankovní párování, ratingy a komunikace zákazníkům si zachovávají dosavadní samostatné schvalované postupy. Tvrdé smazání ve Vistosu se bez prokázaného tombstone feedu neodvozuje z nepřítomnosti ve změnové dávce.
+- Detail zákazníka nabízí všechny uložené faktury po 10 řádcích se stránkováním včetně první a poslední stránky.
+- Regresní test `scripts/receivables-invoice-sync-recovery.test.mjs` vyžaduje Node 22.13+ (`node:sqlite`); testuje přerušení, souběh, selhání zdroje/úložiště, opakované změny a všech 320 položek zákazníka.

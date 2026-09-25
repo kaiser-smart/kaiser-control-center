@@ -1,7 +1,6 @@
 import {
   VistosExecuteError,
   cleanVistosValue,
-  getAllVistosPages,
   getVistosPage,
   isVistosExecuteConfigured,
   loginVistosExecute
@@ -16,8 +15,8 @@ const SNAPSHOT_IMPORT_KIND = "vistos_invoice_snapshot";
 const INCREMENTAL_IMPORT_KIND = "vistos_invoice_incremental";
 const SNAPSHOT_SOURCE = "vistos";
 const DEFAULT_PAGE_SIZE = 1000;
-const DEFAULT_MAX_PAGES = 5;
-const MAX_MAX_PAGES = 24;
+const DEFAULT_MAX_PAGES = 1;
+const MAX_MAX_PAGES = 3;
 const DEFAULT_LOOKBACK_MONTHS = 24;
 const DEFAULT_ADVANCE_PAGE_SIZE = 1000;
 const DEFAULT_ADVANCE_PAGES_PER_RUN = 1;
@@ -56,9 +55,6 @@ const INVOICE_COLUMNS = [
 const INVOICE_ATTEMPTS = [
   { key: "kaiser_invoice_columns_customer_manager", entityName: "InvoiceIssued", columns: [...INVOICE_COLUMNS, "CustomerManager_FK"] },
   { key: "kaiser_invoice_columns", entityName: "InvoiceIssued", columns: INVOICE_COLUMNS },
-  { key: "kaiser_invoice_columns", entityName: "Document", columns: INVOICE_COLUMNS },
-  { key: "kaiser_invoice_columns", entityName: "Invoice", columns: INVOICE_COLUMNS },
-  { key: "kaiser_invoice_columns", entityName: "IssuedInvoice", columns: INVOICE_COLUMNS },
   {
     key: "legacy_invoice_issued_standard",
     entityName: "InvoiceIssued",
@@ -179,6 +175,25 @@ function mergeIssueCounts(left = [], right = []) {
     .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
 }
 
+function assertInvoicePageCount(page, offset) {
+  if (!page.countEvidence?.filteredReported || !Number.isInteger(page.filtered) || page.filtered < 0
+      || (page.rows.length === 0 && offset < page.filtered)
+      || (page.rows.length > 0 && offset + page.rows.length > page.filtered)) {
+    throw new ReceivablesVistosInvoiceSnapshotError(
+      "Vistos nevrátil ověřitelný počet faktur. Uložený import a poslední potvrzená změna zůstávají zachované.",
+      502, "receivables_vistos_invoice_count_unverified");
+  }
+}
+
+async function assertUniqueSnapshot(db, batchId) {
+  const counts = await db.prepare(`SELECT COUNT(*) AS total,
+    COUNT(DISTINCT json_extract(normalized_json, '$.vistoInvoiceId')) AS unique_ids
+    FROM receivable_import_rows WHERE batch_id = ?`).bind(batchId).first();
+  if (Number(counts.total) !== Number(counts.unique_ids)) throw new ReceivablesVistosInvoiceSnapshotError(
+    "Import obsahuje duplicitní ID faktur a nebyl označen za dokončený.",
+    409, "receivables_invoice_duplicate_id");
+}
+
 async function loadFirstWorkingInvoiceEntity(env, session, options = {}) {
   const diagnostics = [];
   let firstSuccessful = null;
@@ -193,10 +208,16 @@ async function loadFirstWorkingInvoiceEntity(env, session, options = {}) {
   for (const attempt of INVOICE_ATTEMPTS) {
     const entityName = clean(options.entityName) || attempt.entityName;
     try {
-      const page = await getAllVistosPages(env, session, entityName, attempt.columns, filter, {
-        pageSize,
-        maxPages
-      });
+      const page = { rows: [], total: 0, filtered: 0, capped: false };
+      for (let index = 0; index < maxPages; index += 1) {
+        const part = await getVistosPage(env, session, entityName, attempt.columns, filter, page.rows.length, pageSize);
+        assertInvoicePageCount(part, page.rows.length);
+        page.rows.push(...part.rows);
+        page.total = part.total;
+        page.filtered = part.filtered;
+        page.capped = page.rows.length < page.filtered;
+        if (!page.capped || part.rows.length < pageSize) break;
+      }
       diagnostics.push({
         key: attempt.key,
         entityName,
@@ -237,15 +258,10 @@ async function loadFirstWorkingInvoiceEntity(env, session, options = {}) {
     return { ...firstSuccessful, diagnostics };
   }
 
-  return {
-    entityName: clean(options.entityName),
-    columns: [],
-    page: { rows: [], total: 0, filtered: 0, capped: false },
-    diagnostics,
-    invoiceLookback,
-    pageSize,
-    maxPages
-  };
+  throw new ReceivablesVistosInvoiceSnapshotError(
+    "Vistos nevydal seznam faktur. Poslední uložené faktury zůstávají zachované.",
+    502, diagnostics.at(-1)?.code || "receivables_vistos_invoice_read_failed"
+  );
 }
 
 async function loadInvoicePage(env, session, options = {}) {
@@ -258,11 +274,13 @@ async function loadInvoicePage(env, session, options = {}) {
   const start = Math.max(0, Math.floor(Number(options.start) || 0));
   const diagnostics = [];
 
-  for (const attempt of INVOICE_ATTEMPTS) {
+  const attempts = clean(options.entityName) && options.columns?.length ? [INVOICE_ATTEMPTS[0]] : INVOICE_ATTEMPTS;
+  for (const attempt of attempts) {
     const entityName = clean(options.entityName) || attempt.entityName;
     const columns = Array.isArray(options.columns) && options.columns.length ? options.columns : attempt.columns;
     try {
       const page = await getVistosPage(env, session, entityName, columns, filter, start, pageSize);
+      assertInvoicePageCount(page, start);
       diagnostics.push({
         key: attempt.key,
         entityName,
@@ -292,16 +310,10 @@ async function loadInvoicePage(env, session, options = {}) {
     }
   }
 
-  return {
-    entityName: clean(options.entityName),
-    columns: Array.isArray(options.columns) ? options.columns : [],
-    page: { rows: [], total: 0, filtered: 0 },
-    diagnostics,
-    invoiceLookback,
-    filter,
-    pageSize,
-    start
-  };
+  throw new ReceivablesVistosInvoiceSnapshotError(
+    "Další dávku faktur se nepodařilo načíst. Import bude pokračovat od poslední uložené dávky.",
+    502, diagnostics.at(-1)?.code || "receivables_vistos_invoice_read_failed"
+  );
 }
 
 function rowToBatch(row = {}) {
@@ -344,6 +356,8 @@ function snapshotSummaryFromBatch(batch = {}, rowCount = 0) {
   const rawPayload = batch.rawPayload || {};
   return {
     ...parserSummary,
+    acceptedCount: batch.acceptedCount,
+    reviewCount: batch.reviewCount,
     readOnly: true,
     writesLedger: false,
     createsReceivableRecords: false,
@@ -351,7 +365,7 @@ function snapshotSummaryFromBatch(batch = {}, rowCount = 0) {
     startsAutomation: false,
     calculatesRealRating: false,
     importsKbPayments: false,
-    loadedRows: parserSummary.loadedRows ?? batch.rowCount ?? rowCount,
+    loadedRows: batch.rowCount ?? parserSummary.loadedRows ?? rowCount,
     totalRows: parserSummary.totalRows ?? rawPayload.totalRows ?? batch.rowCount ?? rowCount,
     capped: Boolean(parserSummary.capped ?? rawPayload.capped),
     invoiceLookback: parserSummary.invoiceLookback || rawPayload.invoiceLookback || null
@@ -373,14 +387,15 @@ async function latestIncrementalBatch(db, onlyRunning = false) {
     SELECT *
     FROM receivable_import_batches
     WHERE source = ? AND import_kind = ?
-      ${onlyRunning ? "AND status = 'incremental_running'" : ""}
+      ${onlyRunning ? "AND status IN ('incremental_running', 'incremental_loading', 'incremental_applying')" : ""}
     ORDER BY created_at DESC
     LIMIT 1
   `).bind(SNAPSHOT_SOURCE, INCREMENTAL_IMPORT_KIND).first();
 }
 
 function validDate(value) {
-  const date = new Date(value);
+  const text = clean(value);
+  const date = new Date(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text) ? `${text.replace(" ", "T")}Z` : value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
@@ -461,26 +476,13 @@ function incrementalControlWindow(periodTo) {
 }
 
 async function incrementalCheckpoint(db) {
-  const incremental = await db.prepare(`
-    SELECT parser_summary_json, updated_at
-    FROM receivable_import_batches
-    WHERE source = ? AND import_kind = ? AND status = 'incremental'
-    ORDER BY created_at DESC
-    LIMIT 1
-  `).bind(SNAPSHOT_SOURCE, INCREMENTAL_IMPORT_KIND).first();
-  const incrementalSummary = parseJson(incremental?.parser_summary_json, {});
-  if (validDate(incrementalSummary?.periodTo || incremental?.updated_at)) {
-    return incrementalSummary.periodTo || incremental.updated_at;
-  }
-
-  const snapshot = await db.prepare(`
-    SELECT updated_at
-    FROM receivable_import_batches
+  const row = await db.prepare(`SELECT * FROM receivable_import_batches
     WHERE source = ? AND import_kind = ? AND status = 'snapshot'
-    ORDER BY created_at DESC
-    LIMIT 1
-  `).bind(SNAPSHOT_SOURCE, SNAPSHOT_IMPORT_KIND).first();
-  return validDate(snapshot?.updated_at) ? snapshot.updated_at : null;
+    ORDER BY created_at DESC LIMIT 1`).bind(SNAPSHOT_SOURCE, SNAPSHOT_IMPORT_KIND).first();
+  if (!row) return null;
+  const summary = parseJson(row.parser_summary_json, {});
+  // Start of the full scan, not its completion: changes during the scan must be read again.
+  return summary.syncedThrough || summary.scanStartedAt || row.created_at;
 }
 
 export async function getLatestReceivablesVistosInvoiceSnapshot(env, options = {}) {
@@ -494,7 +496,14 @@ export async function getLatestReceivablesVistosInvoiceSnapshot(env, options = {
   const offset = (page - 1) * pageSize;
 
   try {
-    const batchRow = await latestSnapshotBatch(db);
+    const latestRow = await latestSnapshotBatch(db);
+    const pendingDelta = await latestIncrementalBatch(db, true);
+    const syncRow = pendingDelta || latestRow;
+    const batchRow = options.batchId
+      ? await db.prepare("SELECT * FROM receivable_import_batches WHERE id = ? AND source = ? AND import_kind = ?")
+        .bind(clean(options.batchId), SNAPSHOT_SOURCE, SNAPSHOT_IMPORT_KIND).first()
+      : await db.prepare("SELECT * FROM receivable_import_batches WHERE source = ? AND import_kind = ? AND status = 'snapshot' ORDER BY created_at DESC LIMIT 1")
+        .bind(SNAPSHOT_SOURCE, SNAPSHOT_IMPORT_KIND).first() || latestRow;
 
     if (!batchRow) {
       return { snapshot: null, rows: [], pagination: { page, pageSize, totalRows: 0 }, apiStatus: "empty" };
@@ -513,6 +522,7 @@ export async function getLatestReceivablesVistosInvoiceSnapshot(env, options = {
     const batch = rowToBatch(batchRow);
     const totalRows = numberValue(countRow?.count, batch.rowCount);
     return {
+      sync: syncRow ? { batch: rowToBatch(syncRow), summary: snapshotSummaryFromBatch(rowToBatch(syncRow)) } : null,
       snapshot: {
         batch,
         summary: snapshotSummaryFromBatch(batch, totalRows)
@@ -538,26 +548,8 @@ async function storeIncrementalRows(db, batchId, rows, rowOffset = 0) {
       previewStatus: issues.length ? "review" : "ready"
     };
   });
-  const statements = normalizedRows.map((row) => db.prepare(`
-    INSERT OR REPLACE INTO receivable_import_rows (
-      id, batch_id, row_number, entity_kind, preview_status, confidence,
-      issue_code, issue_message, normalized_json, raw_payload
-    )
-    VALUES (?, ?, ?, 'vistos_invoice', ?, ?, ?, ?, ?, ?)
-  `).bind(
-    randomId("receivable-vistos-invoice-incremental-row"),
-    batchId,
-    row.rowNumber,
-    row.previewStatus,
-    row.issues.length ? 0.55 : 0.95,
-    row.issues[0] || null,
-    row.issues.join(", ") || null,
-    safeJson(row.invoice),
-    safeJson(row.raw)
-  ));
-  for (let index = 0; index < statements.length; index += 100) {
-    await db.batch(statements.slice(index, index + 100));
-  }
+  const statements = snapshotRowStatements(db, batchId, normalizedRows);
+  if (statements.length) await db.batch(statements);
   return normalizedRows;
 }
 
@@ -585,7 +577,7 @@ function incrementalResult(batch, summary) {
   };
 }
 
-export async function createReceivablesVistosInvoiceIncrementalSnapshot(env, options = {}) {
+async function createReceivablesVistosInvoiceIncrementalSnapshotUnlocked(env, options = {}) {
   const db = database(env, true);
   if (!isVistosExecuteConfigured(env)) {
     throw new ReceivablesVistosInvoiceSnapshotError(
@@ -596,6 +588,7 @@ export async function createReceivablesVistosInvoiceIncrementalSnapshot(env, opt
   }
 
   try {
+    if (await latestIncrementalBatch(db, true)) return advanceReceivablesVistosInvoiceIncrementalSnapshotUnlocked(env, options);
     const checkpoint = options.checkpoint || await incrementalCheckpoint(db);
     if (!checkpoint) {
       throw new ReceivablesVistosInvoiceSnapshotError(
@@ -715,7 +708,7 @@ export async function createReceivablesVistosInvoiceIncrementalSnapshot(env, opt
       batchId,
       SNAPSHOT_SOURCE,
       INCREMENTAL_IMPORT_KIND,
-      capped ? "incremental_running" : "incremental",
+      "incremental_loading",
       `vistos-invoices-modified-${window.periodFrom.slice(0, 10)}`,
       normalizedRows.length,
       acceptedCount,
@@ -725,6 +718,9 @@ export async function createReceivablesVistosInvoiceIncrementalSnapshot(env, opt
       safeJson(rawPayload)
     ).run();
     await storeIncrementalRows(db, batchId, invoiceResult.page.rows, 0);
+    await db.prepare("UPDATE receivable_import_batches SET status = ? WHERE id = ?")
+      .bind(capped ? "incremental_running" : "incremental_applying", batchId).run();
+    if (!capped) return applyInvoiceChanges(db, { id: batchId, parserSummary: summary });
 
     return incrementalResult({
       id: batchId,
@@ -735,15 +731,16 @@ export async function createReceivablesVistosInvoiceIncrementalSnapshot(env, opt
   }
 }
 
-export async function advanceReceivablesVistosInvoiceIncrementalSnapshot(env, options = {}) {
+async function advanceReceivablesVistosInvoiceIncrementalSnapshotUnlocked(env, options = {}) {
   const db = database(env, true);
   const batchRow = await latestIncrementalBatch(db, true);
   if (!batchRow) {
-    return createReceivablesVistosInvoiceIncrementalSnapshot(env, options);
+    return createReceivablesVistosInvoiceIncrementalSnapshotUnlocked(env, options);
   }
 
   try {
     const batch = rowToBatch(batchRow);
+    if (batch.status === "incremental_applying") return applyInvoiceChanges(db, batch);
     const summary = batch.parserSummary || {};
     const window = summary.modifiedWindow || batch.rawPayload?.modifiedWindow;
     if (!window?.filter || !window?.periodFrom || !window?.periodTo) {
@@ -753,7 +750,7 @@ export async function advanceReceivablesVistosInvoiceIncrementalSnapshot(env, op
         "receivables_incremental_window_missing"
       );
     }
-    const countRow = await db.prepare("SELECT COUNT(*) AS count FROM receivable_import_rows WHERE batch_id = ?")
+    const countRow = await db.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(preview_status = 'ready'), 0) AS accepted, COALESCE(SUM(preview_status = 'review'), 0) AS review FROM receivable_import_rows WHERE batch_id = ?")
       .bind(batch.id)
       .first();
     const loadedBefore = numberValue(countRow?.count, summary.loadedRows);
@@ -763,8 +760,8 @@ export async function advanceReceivablesVistosInvoiceIncrementalSnapshot(env, op
     const pagesPerRun = boundedInteger(options.pagesPerRun, DEFAULT_ADVANCE_PAGES_PER_RUN, MAX_ADVANCE_PAGES_PER_RUN);
     let loadedRows = loadedBefore;
     let totalRows = knownTotal;
-    let acceptedCount = numberValue(summary.acceptedCount);
-    let reviewCount = numberValue(summary.reviewCount);
+    let acceptedCount = numberValue(countRow?.accepted);
+    let reviewCount = numberValue(countRow?.review);
     let issueCounts = Array.isArray(summary.issueCounts) ? summary.issueCounts : [];
     const diagnostics = [];
 
@@ -791,7 +788,7 @@ export async function advanceReceivablesVistosInvoiceIncrementalSnapshot(env, op
     }
 
     const capped = Boolean(totalRows && loadedRows < totalRows);
-    const status = capped ? "incremental_running" : "incremental";
+    const status = capped ? "incremental_running" : "incremental_applying";
     const updatedSummary = {
       ...summary,
       loadedRows,
@@ -831,26 +828,48 @@ export async function advanceReceivablesVistosInvoiceIncrementalSnapshot(env, op
       }),
       batch.id
     ).run();
+    if (!capped) return applyInvoiceChanges(db, { ...batch, parserSummary: updatedSummary });
     return incrementalResult({ id: batch.id, status }, updatedSummary);
   } catch (error) {
     throw snapshotError(error);
   }
 }
 
-export async function createReceivablesVistosInvoiceSnapshot(env, options = {}) {
+function snapshotRowStatements(db, batchId, rows) {
+  if (rows.some(row => !clean(row.invoice.vistoInvoiceId))) throw new ReceivablesVistosInvoiceSnapshotError(
+    "Vistos vrátil fakturu bez stabilního ID.", 502, "receivables_invoice_id_missing");
+  const statements = [];
+  for (let offset = 0; offset < rows.length; offset += 10) {
+    const chunk = rows.slice(offset, offset + 10);
+    statements.push(db.prepare(`
+      INSERT OR REPLACE INTO receivable_import_rows (
+        id, batch_id, row_number, entity_kind, preview_status, confidence,
+        issue_code, issue_message, normalized_json, raw_payload
+      ) VALUES ${chunk.map(() => "(?, ?, ?, 'vistos_invoice', ?, ?, ?, ?, ?, ?)").join(", ")}
+    `).bind(...chunk.flatMap(row => [
+      `${batchId}-row-${row.rowNumber}`, batchId, row.rowNumber, row.previewStatus,
+      row.issues.length ? 0.55 : 0.95, row.issues[0] || null,
+      row.issues.join(", ") || null, safeJson(row.invoice), safeJson(row.raw)
+    ])));
+  }
+  return statements;
+}
+
+async function createReceivablesVistosInvoiceSnapshotUnlocked(env, options = {}) {
   const db = database(env, true);
   if (!isVistosExecuteConfigured(env)) {
-    return {
-      snapshot: null,
-      rows: [],
-      pagination: { page: 1, pageSize: 100, totalRows: 0 },
-      apiStatus: "not_configured",
-      message: "Vistos API není nakonfigurováno.",
-      readOnly: true
-    };
+    throw new ReceivablesVistosInvoiceSnapshotError("Vistos API není nakonfigurováno.", 503, "vistos_api_not_configured");
   }
 
   try {
+    const scanStartedAt = new Date().toISOString();
+    const existing = await latestSnapshotBatch(db);
+    if (existing && ["snapshot_running", "snapshot_capped", "snapshot_loading"].includes(existing.status)) {
+      return advanceReceivablesVistosInvoiceSnapshotUnlocked(env, options);
+    }
+    if (existing?.status === "snapshot") {
+      return createReceivablesVistosInvoiceIncrementalSnapshotUnlocked(env, options);
+    }
     const session = await loginVistosExecute(env);
     const invoiceResult = await loadFirstWorkingInvoiceEntity(env, session, {
       ...options,
@@ -871,11 +890,12 @@ export async function createReceivablesVistosInvoiceSnapshot(env, options = {}) 
     const issueCounts = countIssues(normalizedRows);
     const acceptedCount = normalizedRows.filter((row) => row.previewStatus === "ready").length;
     const reviewCount = normalizedRows.length - acceptedCount;
-    const totalRows = invoiceResult.page.filtered || invoiceResult.page.total || normalizedRows.length;
+    const totalRows = invoiceResult.page.filtered ?? normalizedRows.length;
     const capped = Boolean(invoiceResult.page.capped || (totalRows && normalizedRows.length < totalRows));
     const batchId = randomId("receivable-vistos-invoice-snapshot");
     const summary = {
       mode: "vistos-invoice-snapshot",
+      scanStartedAt,
       source: SNAPSHOT_SOURCE,
       sourceMode: "read_only_vistos_execute",
       invoiceEntity: invoiceResult.entityName,
@@ -929,7 +949,7 @@ export async function createReceivablesVistosInvoiceSnapshot(env, options = {}) 
         batchId,
         SNAPSHOT_SOURCE,
         SNAPSHOT_IMPORT_KIND,
-        capped ? "snapshot_capped" : "snapshot",
+        "snapshot_loading",
         `vistos-invoices-${summary.invoiceLookback?.months || DEFAULT_LOOKBACK_MONTHS}m`,
         normalizedRows.length,
         acceptedCount,
@@ -941,54 +961,29 @@ export async function createReceivablesVistosInvoiceSnapshot(env, options = {}) 
       )
     ]);
 
-    const rowStatements = normalizedRows.map((row) => db.prepare(`
-      INSERT INTO receivable_import_rows (
-        id, batch_id, row_number, entity_kind, preview_status, confidence,
-        issue_code, issue_message, normalized_json, raw_payload
-      )
-      VALUES (?, ?, ?, 'vistos_invoice', ?, ?, ?, ?, ?, ?)
-    `).bind(
-      randomId("receivable-vistos-invoice-row"),
-      batchId,
-      row.rowNumber,
-      row.previewStatus,
-      row.issues.length ? 0.55 : 0.95,
-      row.issues[0] || null,
-      row.issues.join(", ") || null,
-      safeJson(row.invoice),
-      safeJson(row.raw)
-    ));
+    const rowStatements = snapshotRowStatements(db, batchId, normalizedRows);
 
-    for (let index = 0; index < rowStatements.length; index += 100) {
-      await db.batch(rowStatements.slice(index, index + 100));
-    }
+    if (rowStatements.length) await db.batch(rowStatements);
 
-    return getLatestReceivablesVistosInvoiceSnapshot(env, {
-      page: options.page,
-      pageSize: options.pageSize
-    });
+    if (!capped) await assertUniqueSnapshot(db, batchId);
+    await db.prepare("UPDATE receivable_import_batches SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(capped ? "snapshot_capped" : "snapshot", batchId).run();
+    return getLatestReceivablesVistosInvoiceSnapshot(env, options);
   } catch (error) {
     throw snapshotError(error);
   }
 }
 
-export async function advanceReceivablesVistosInvoiceSnapshot(env, options = {}) {
+async function advanceReceivablesVistosInvoiceSnapshotUnlocked(env, options = {}) {
   const db = database(env, true);
   if (!isVistosExecuteConfigured(env)) {
-    return {
-      snapshot: null,
-      rows: [],
-      pagination: { page: 1, pageSize: 100, totalRows: 0 },
-      apiStatus: "not_configured",
-      message: "Vistos API není nakonfigurováno.",
-      readOnly: true
-    };
+    throw new ReceivablesVistosInvoiceSnapshotError("Vistos API není nakonfigurováno.", 503, "vistos_api_not_configured");
   }
 
   try {
     const batchRow = await latestSnapshotBatch(db);
     if (!batchRow) {
-      return createReceivablesVistosInvoiceSnapshot(env, {
+      return createReceivablesVistosInvoiceSnapshotUnlocked(env, {
         ...options,
         triggeredBy: clean(options.triggeredBy) || "ui-auto-batch-first-open"
       });
@@ -996,18 +991,23 @@ export async function advanceReceivablesVistosInvoiceSnapshot(env, options = {})
 
     const batch = rowToBatch(batchRow);
     const summary = snapshotSummaryFromBatch(batch, batch.rowCount);
-    const currentRowCount = await db.prepare("SELECT COUNT(*) AS count FROM receivable_import_rows WHERE batch_id = ?")
+    const currentRowCount = await db.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(preview_status = 'ready'), 0) AS accepted, COALESCE(SUM(preview_status = 'review'), 0) AS review FROM receivable_import_rows WHERE batch_id = ?")
       .bind(batch.id)
       .first();
     const loadedBefore = numberValue(currentRowCount?.count, summary.loadedRows || batch.rowCount);
     const knownTotal = numberValue(summary.totalRows);
 
     if (knownTotal > 0 && loadedBefore >= knownTotal) {
+      await assertUniqueSnapshot(db, batch.id);
       await db.prepare(`
         UPDATE receivable_import_batches
-        SET status = 'snapshot', updated_at = CURRENT_TIMESTAMP
+        SET status = 'snapshot', row_count = ?, accepted_count = ?, review_count = ?,
+            parser_summary_json = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).bind(batch.id).run();
+      `).bind(loadedBefore, currentRowCount.accepted, currentRowCount.review,
+        safeJson({ ...summary, loadedRows: loadedBefore, totalRows: knownTotal, capped: false,
+          acceptedCount: currentRowCount.accepted, reviewCount: currentRowCount.review,
+          recommendedNextStep: "Načtení faktur bylo dokončeno." }), batch.id).run();
       return getLatestReceivablesVistosInvoiceSnapshot(env, options);
     }
 
@@ -1027,8 +1027,8 @@ export async function advanceReceivablesVistosInvoiceSnapshot(env, options = {})
 
     let loadedRows = loadedBefore;
     let totalRows = knownTotal;
-    let acceptedCount = numberValue(summary.acceptedCount);
-    let reviewCount = numberValue(summary.reviewCount);
+    let acceptedCount = numberValue(currentRowCount?.accepted);
+    let reviewCount = numberValue(currentRowCount?.review);
     let ignoredCount = numberValue(summary.ignoredCount);
     let issueCounts = Array.isArray(summary.issueCounts) ? summary.issueCounts : [];
     let latestEntity = baseEntity;
@@ -1050,9 +1050,13 @@ export async function advanceReceivablesVistosInvoiceSnapshot(env, options = {})
       diagnostics.push(...pageResult.diagnostics);
       const rows = pageResult.page.rows || [];
       lastPageRows = rows.length;
-      totalRows = pageResult.page.filtered || pageResult.page.total || totalRows || loadedRows + rows.length;
+      totalRows = pageResult.page.countEvidence?.filteredReported ? pageResult.page.filtered : (pageResult.page.filtered || totalRows || loadedRows + rows.length);
 
       if (!rows.length) {
+        if (loadedRows < totalRows) throw new ReceivablesVistosInvoiceSnapshotError(
+          "Vistos vrátil prázdnou dávku před koncem seznamu. Import zůstává nedokončený a bude opakován.",
+          502, "receivables_vistos_invoice_page_empty"
+        );
         break;
       }
 
@@ -1072,27 +1076,9 @@ export async function advanceReceivablesVistosInvoiceSnapshot(env, options = {})
       acceptedCount += normalizedRows.filter((row) => row.previewStatus === "ready").length;
       reviewCount += normalizedRows.filter((row) => row.previewStatus === "review").length;
 
-      const rowStatements = normalizedRows.map((row) => db.prepare(`
-        INSERT OR REPLACE INTO receivable_import_rows (
-          id, batch_id, row_number, entity_kind, preview_status, confidence,
-          issue_code, issue_message, normalized_json, raw_payload
-        )
-        VALUES (?, ?, ?, 'vistos_invoice', ?, ?, ?, ?, ?, ?)
-      `).bind(
-        randomId("receivable-vistos-invoice-row"),
-        batch.id,
-        row.rowNumber,
-        row.previewStatus,
-        row.issues.length ? 0.55 : 0.95,
-        row.issues[0] || null,
-        row.issues.join(", ") || null,
-        safeJson(row.invoice),
-        safeJson(row.raw)
-      ));
+      const rowStatements = snapshotRowStatements(db, batch.id, normalizedRows);
 
-      for (let index = 0; index < rowStatements.length; index += 100) {
-        await db.batch(rowStatements.slice(index, index + 100));
-      }
+      if (rowStatements.length) await db.batch(rowStatements);
       loadedRows += normalizedRows.length;
 
       if ((totalRows > 0 && loadedRows >= totalRows) || rows.length < pageSize) {
@@ -1102,6 +1088,7 @@ export async function advanceReceivablesVistosInvoiceSnapshot(env, options = {})
 
     const capped = Boolean(totalRows && loadedRows < totalRows);
     const status = capped ? "snapshot_running" : "snapshot";
+    if (!capped) await assertUniqueSnapshot(db, batch.id);
     const updatedSummary = {
       ...summary,
       mode: "vistos-invoice-snapshot",
@@ -1181,6 +1168,112 @@ export async function advanceReceivablesVistosInvoiceSnapshot(env, options = {})
   } catch (error) {
     throw snapshotError(error);
   }
+}
+
+
+const SNAPSHOT_LEASE_ID = "receivables-vistos-full-sync-lease";
+async function withSnapshotLease(env, options, action) {
+  const db = database(env, true);
+  const owner = randomId("invoice-sync-owner");
+  const now = new Date().toISOString();
+  const expires = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  const claim = await db.prepare(`
+    INSERT INTO receivable_import_batches (id, source, import_kind, status, raw_payload, updated_at)
+    VALUES (?, 'vistos', 'vistos_invoice_sync_lease', 'locked', ?, ?)
+    ON CONFLICT(id) DO UPDATE SET raw_payload = excluded.raw_payload, updated_at = excluded.updated_at
+    WHERE receivable_import_batches.updated_at < ?
+  `).bind(SNAPSHOT_LEASE_ID, owner, expires, now).run();
+  if (!claim.meta?.changes) {
+    return { ...await getLatestReceivablesVistosInvoiceSnapshot(env, options), syncBusy: true,
+      message: "Načítání už běží. Zobrazuji poslední uložené faktury." };
+  }
+  try { return await action(env, options); }
+  finally {
+    await db.prepare("UPDATE receivable_import_batches SET updated_at = '1970-01-01' WHERE id = ? AND raw_payload = ?")
+      .bind(SNAPSHOT_LEASE_ID, owner).run();
+  }
+}
+
+export async function createReceivablesVistosInvoiceSnapshot(env, options = {}) {
+  return withSnapshotLease(env, options, createReceivablesVistosInvoiceSnapshotUnlocked);
+}
+
+export async function advanceReceivablesVistosInvoiceSnapshot(env, options = {}) {
+  return withSnapshotLease(env, options, advanceReceivablesVistosInvoiceSnapshotUnlocked);
+}
+
+export async function createReceivablesVistosInvoiceIncrementalSnapshot(env, options = {}) {
+  return withSnapshotLease(env, options, createReceivablesVistosInvoiceIncrementalSnapshotUnlocked);
+}
+export async function advanceReceivablesVistosInvoiceIncrementalSnapshot(env, options = {}) {
+  return withSnapshotLease(env, options, advanceReceivablesVistosInvoiceIncrementalSnapshotUnlocked);
+}
+
+// Changes are staged first. Each application page and its cursor commit together.
+// Repeating a failed invocation cannot append a second copy or advance the watermark early.
+async function applyInvoiceChanges(db, delta) {
+  const baseRow = await db.prepare(`SELECT * FROM receivable_import_batches
+    WHERE source = ? AND import_kind = ? AND status = 'snapshot'
+    ORDER BY created_at DESC LIMIT 1`).bind(SNAPSHOT_SOURCE, SNAPSHOT_IMPORT_KIND).first();
+  if (!baseRow) throw new ReceivablesVistosInvoiceSnapshotError(
+    "Chybí dokončený počáteční import faktur.", 409, "receivables_incremental_checkpoint_missing");
+  const base = rowToBatch(baseRow);
+  const summary = delta.parserSummary || {};
+  if (summary.appliedToSnapshotId && summary.appliedToSnapshotId !== base.id) {
+    throw new ReceivablesVistosInvoiceSnapshotError("Základ importu se změnil během aktualizace.", 409, "receivables_snapshot_changed");
+  }
+  const offset = numberValue(summary.appliedRows);
+  const page = await db.prepare(`SELECT * FROM receivable_import_rows
+    WHERE batch_id = ? ORDER BY row_number ASC LIMIT 1000 OFFSET ?`).bind(delta.id, offset).all();
+  const rows = (page.results || []).map(rowToSnapshotRow);
+  const current = await db.prepare(`SELECT id, row_number,
+    json_extract(normalized_json, '$.vistoInvoiceId') AS invoice_id,
+    json_extract(raw_payload, '$.Modified') AS modified
+    FROM receivable_import_rows WHERE batch_id = ?`).bind(base.id).all();
+  const byId = new Map();
+  let lastNumber = 0;
+  for (const row of current.results || []) {
+    if (byId.has(clean(row.invoice_id))) throw new ReceivablesVistosInvoiceSnapshotError(
+      "Počáteční import obsahuje duplicitní ID faktury.", 409, "receivables_invoice_duplicate_id");
+    byId.set(clean(row.invoice_id), row);
+    lastNumber = Math.max(lastNumber, numberValue(row.row_number));
+  }
+  const updates = new Map();
+  for (const row of rows) {
+    const id = clean(row.invoice.vistoInvoiceId);
+    if (!id) throw new ReceivablesVistosInvoiceSnapshotError(
+      "Změněná faktura nemá stabilní ID. Aktualizace byla zastavena.", 502, "receivables_invoice_id_missing");
+    const existing = byId.get(id);
+    const modified = rawModifiedDate(row.rawPayload);
+    if (existing?.modified && modified && validDate(existing.modified) > modified) continue;
+    if (!existing && row.invoice.issueDate && row.invoice.issueDate < base.parserSummary.invoiceLookback?.fromDate) continue;
+    const rowNumber = existing?.row_number || ++lastNumber;
+    byId.set(id, { row_number: rowNumber, modified: row.rawPayload.Modified });
+    const issues = invoiceIssues(row.invoice);
+    updates.set(id, { rowNumber, invoice: row.invoice, raw: row.rawPayload, issues,
+      previewStatus: issues.length ? "review" : "ready" });
+  }
+  const appliedRows = offset + rows.length;
+  const done = appliedRows >= numberValue(summary.loadedRows);
+  if (!rows.length && !done) throw new ReceivablesVistosInvoiceSnapshotError(
+    "Ve změnové dávce chybí uložené řádky.", 409, "receivables_incremental_rows_missing");
+  const updated = { ...summary, appliedRows, appliedToSnapshotId: base.id, changesApplied: done };
+  const statements = snapshotRowStatements(db, base.id, [...updates.values()]);
+  statements.push(db.prepare(`UPDATE receivable_import_batches
+    SET status = ?, parser_summary_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+    .bind(done ? "incremental" : "incremental_applying", safeJson(updated), delta.id));
+  const baseSummary = { ...base.parserSummary, loadedRows: lastNumber, totalRows: lastNumber, capped: false,
+    ...(done ? { syncedThrough: validDate(base.parserSummary.syncedThrough) > validDate(summary.periodTo) ? base.parserSummary.syncedThrough : summary.periodTo, lastIncrementalBatchId: delta.id,
+      recommendedNextStep: "Seznam je aktualizovaný změnami z Vistosu." } : {}) };
+  statements.push(db.prepare(`UPDATE receivable_import_batches SET row_count = ?, parser_summary_json = ?,
+    updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(lastNumber, safeJson(baseSummary), base.id));
+  // Quality counters derive from the committed rows, including changed (not just appended) invoices.
+  statements.push(db.prepare(`UPDATE receivable_import_batches SET
+    accepted_count = (SELECT COUNT(*) FROM receivable_import_rows WHERE batch_id = ? AND preview_status = 'ready'),
+    review_count = (SELECT COUNT(*) FROM receivable_import_rows WHERE batch_id = ? AND preview_status = 'review')
+    WHERE id = ?`).bind(base.id, base.id, base.id));
+  await db.batch(statements);
+  return incrementalResult({ id: delta.id, status: done ? "incremental" : "incremental_applying" }, updated);
 }
 
 export function snapshotError(error) {
