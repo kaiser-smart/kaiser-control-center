@@ -15,8 +15,8 @@ export const DATA_BOX_PLUS_OPERATIONAL_CONTRACT = Object.freeze({
     browserStorageAllowed: false
   }),
   sync: Object.freeze({
-    intervalMinutes: 60,
-    schedule: "0 * * * *",
+    intervalMinutes: 30,
+    schedule: "*/30 * * * *",
     runner: "cloudflare-worker",
     requiresOpenBrowser: false,
     auditRequired: true,

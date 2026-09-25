@@ -1,3 +1,4 @@
+import { canReuseSyncedMessage, loadSyncMessageRows, syncMessageKey } from "./data-box-plus-sync-policy.js";
 import { getModuleDatabase } from "./databases.js";
 import {
   DataBoxIsdsError,
@@ -1321,17 +1322,20 @@ async function upsertRecommendation(db, messageId, classification, facts) {
     .run();
 }
 
-async function upsertMessage(db, env, account, mailbox, message) {
+async function upsertMessage(db, env, account, mailbox, message, options = {}) {
   const mailboxId = mailbox.id;
   const direction = normalizeDirection(message.direction);
   const isdsMessageId = cleanString(message.isdsMessageId);
   if (!isdsMessageId) return { state: "skipped", attachmentsDownloaded: 0 };
 
   const messageId = messageRecordId(mailboxId, direction, isdsMessageId);
-  const existing = await db
-    .prepare("SELECT id FROM data_box_plus_messages WHERE mailbox_id = ? AND isds_message_id = ? AND direction = ? LIMIT 1")
+  const existing = Object.hasOwn(options, "existing") ? options.existing : await db
+    .prepare("SELECT * FROM data_box_plus_messages WHERE mailbox_id = ? AND isds_message_id = ? AND direction = ? LIMIT 1")
     .bind(mailboxId, isdsMessageId, direction)
     .first();
+  if (canReuseSyncedMessage(existing, { ...message, direction })) {
+    return { state: "skipped", attachmentsDownloaded: 0 };
+  }
   const targetMessageId = existing?.id || messageId;
 
   const sentHistoryOnly = direction === "sent";
@@ -2073,9 +2077,9 @@ export async function getDataBoxPlusStatus(env) {
         text: dataBoxPlusSystemPrompt()
       },
       background: {
-        intervalMinutes: 60,
+        intervalMinutes: 30,
         enabled: cleanString(env.DATA_BOX_PLUS_BACKGROUND_ENABLED || "true") !== "false",
-        note: "Automatické načítání běží serverově každou celou hodinu."
+        note: "Automatické načítání běží serverově každých 30 minut."
       }
     };
   } catch (error) {
@@ -2109,8 +2113,11 @@ export async function runDataBoxPlusSync(env, currentUser = null, options = {}) 
       try {
         const metadata = await fetchDataBoxMessageMetadata(env, account);
         messagesFound += numberValue(metadata.messages?.length);
+        const storedMessages = await loadSyncMessageRows(db, mailbox.id, metadata.messages || []);
         for (const message of metadata.messages || []) {
-          const result = await upsertMessage(db, env, account, mailbox, message);
+          const result = await upsertMessage(db, env, account, mailbox, message, {
+            existing: storedMessages.get(syncMessageKey(message.isdsMessageId, normalizeDirection(message.direction))) || null
+          });
           if (result.state === "created" || result.state === "updated") messagesDownloaded += 1;
           attachmentsDownloaded += numberValue(result.attachmentsDownloaded);
         }
@@ -2149,7 +2156,7 @@ export async function runDataBoxPlusSync(env, currentUser = null, options = {}) 
       }
     }
 
-    const status = errors.length && !messagesDownloaded ? "failed" : (errors.length ? "partial" : "success");
+    const status = errors.length && errors.length >= mailboxCount ? "failed" : (errors.length ? "partial" : "success");
     await finishSyncRun(db, syncRunId, {
       finishedAt: new Date().toISOString(),
       status,

@@ -387,18 +387,20 @@ async function withTimeout(task, timeoutMs = ISDS_TIMEOUT_MS) {
 
 async function soapRequest(config, operation, innerXml, endpointUrl = config.infoEndpointUrl, fetchImpl = fetch) {
   const body = soapEnvelope(operation, innerXml);
-  const response = await withTimeout((signal) => fetchImpl(endpointUrl, {
-    method: "POST",
-    headers: {
-      Authorization: authHeader(config),
-      "Content-Type": "text/xml; charset=utf-8",
-      SOAPAction: "\"\""
-    },
-    body,
-    signal
-  }));
-  const text = await response.text();
-  assertIsdsStatus(text, response.status);
+  const { text, status } = await withTimeout(async (signal) => {
+    const response = await fetchImpl(endpointUrl, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader(config),
+        "Content-Type": "text/xml; charset=utf-8",
+        SOAPAction: "\"\""
+      },
+      body,
+      signal
+    });
+    return { text: await response.text(), status: response.status };
+  });
+  assertIsdsStatus(text, status);
   return text;
 }
 

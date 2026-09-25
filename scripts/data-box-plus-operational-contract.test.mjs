@@ -13,7 +13,7 @@ const connectionTestSource = storeSource.slice(
 
 assert.equal(DATA_BOX_PLUS_MANTRA.status, "Ostrý pracovní modul");
 assert.equal(DATA_BOX_PLUS_OPERATIONAL_CONTRACT.route, "/datove-schranky-plus");
-assert.equal(DATA_BOX_PLUS_OPERATIONAL_CONTRACT.sync.intervalMinutes, 60);
+assert.equal(DATA_BOX_PLUS_OPERATIONAL_CONTRACT.sync.intervalMinutes, 30);
 assert.equal(DATA_BOX_PLUS_OPERATIONAL_CONTRACT.sync.requiresOpenBrowser, false);
 assert.equal(DATA_BOX_PLUS_OPERATIONAL_CONTRACT.mailboxCount, null);
 assert.equal(DATA_BOX_PLUS_OPERATIONAL_CONTRACT.archive.newMailboxAutoEnrollment, true);

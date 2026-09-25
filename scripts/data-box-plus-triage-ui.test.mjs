@@ -64,7 +64,7 @@ assert.match(triageRenderSource, /Archiv/);
 assert.doesNotMatch(triageRenderSource, /Blokováno|blokováno/);
 assert.doesNotMatch(triageRenderSource, /Testovací režim|pilot/);
 assert.match(triageRenderSource, /Automatické načítání/);
-assert.match(triageRenderSource, /automaticky každou celou hodinu/);
+assert.match(triageRenderSource, /automaticky každých 30 minut/);
 assert.match(triageRenderSource, /max\. 150 zpráv/);
 assert.match(triageRenderSource, /data-ds-plus-triage-mailbox=/);
 assert.match(triageRenderSource, /data-ds-plus-triage-mailbox-select/);

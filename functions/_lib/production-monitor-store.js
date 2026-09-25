@@ -253,7 +253,7 @@ async function latestCronHealth(env) {
         })
       ),
       cronItem("data-box-plus-sync", "Datové schránky Plus – synchronizace", dataBoxPlus, {
-        schedule: "každou celou hodinu"
+        schedule: "každých 30 minut"
       }),
       cronItem("vehicle-tracking-history", "GPS historie vozidel", history, { schedule: "* * * * *" }),
       cronItem("vehicle-tracking-analytics", "GPS analytika", analytics, { schedule: "*/5 * * * *" }),
