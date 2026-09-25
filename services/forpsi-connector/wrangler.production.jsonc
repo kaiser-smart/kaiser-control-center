@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "forpsi-company-mail",
+  "account_id": "3b25838c1e15dbfe5f3ac0c273826576",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-09-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    "CONNECTOR_ENABLED": "false",
+    "FORPSI_TENANT_ID": "kaiser-servis"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "forpsi-company-mail",
+    "database_id": "76646cc2-deeb-41af-baeb-92159c9e7e5c",
+    "migrations_dir": "migrations"
+  }],
+  "triggers": {"crons": []},
+  "observability": {"enabled": false}
+}

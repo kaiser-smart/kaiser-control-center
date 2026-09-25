@@ -3,6 +3,10 @@ name = "kaiser-control-center-legacy"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-06-22"
 
+[[env.production.services]]
+binding = "FORPSI_CONNECTOR"
+service = "forpsi-company-mail"
+
 [env.production.vars]
 ALLOWED_EMAIL_DOMAIN = "kaiserservis.cz"
 APP_ENV = "production"
