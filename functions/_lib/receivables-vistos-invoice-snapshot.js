@@ -1180,7 +1180,8 @@ async function withSnapshotLease(env, options, action) {
   const db = database(env, true);
   const owner = randomId("invoice-sync-owner");
   const now = new Date().toISOString();
-  const expires = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  // Cover the bounded worst-case source retries (3 column sets × 3 pages × 45s).
+  const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
   const claim = await db.prepare(`
     INSERT INTO receivable_import_batches (id, source, import_kind, status, raw_payload, updated_at)
     VALUES (?, 'vistos', 'vistos_invoice_sync_lease', 'locked', ?, ?)
