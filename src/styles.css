@@ -53098,3 +53098,8 @@ body.collection-driver-blackview-simulator-active #app {
 .forpsi-service-status dd { margin:.3rem 0 0; font-weight:600; }
 .forpsi-resource-list { max-height:16rem; overflow:auto; padding-left:1.25rem; overflow-wrap:anywhere; }
 .forpsi-resources section { min-width:0; }
+.forpsi-permissions { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:.7rem; min-width:0; border:0; padding:1rem 0; margin:0; }
+.forpsi-permissions legend { padding-top:1rem; }
+.forpsi-permissions label { display:flex; align-items:flex-start; gap:.7rem; min-width:0; padding:.7rem; border:1px solid var(--border-color,#d6d6d6); border-radius:var(--card-radius,12px); cursor:pointer; }
+.forpsi-permissions input { width:20px; height:20px; flex:0 0 20px; margin:.15rem 0; accent-color:var(--kaiser-green); }
+.forpsi-permissions small { display:block; font-weight:400; margin-top:.3rem; }

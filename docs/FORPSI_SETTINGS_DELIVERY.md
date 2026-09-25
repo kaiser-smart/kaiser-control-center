@@ -17,7 +17,7 @@ Cíl schválený 25. 9. 2026: příjemná a výkonná aplikace s potřebnými fu
 | Etapa | Funkční celek | Přijetí |
 |---|---|---|
 | 1 — připojení a zdroje | Stavy služeb, existující složky a metadata dostupných kolekcí, bezpečná změna uložených údajů | Test UI → API → úložiště; výběr existující složky, odmítnutí nedostupné složky, ochrana rozepsaných změn, souběhu a tenantů, desktop/tablet/mobil |
-| 2 — firemní přístupy | Správa kolegů přímo v SO.ai, stabilní identita, oddělení administrace od obsahu, revokace | Lokální end-to-end testy bez reálných grantů; před produkčním zpřístupněním ověřit firemní vazby a konkrétní rozsah práv |
+| 2 — firemní přístupy | Správa kolegů přímo v SO.ai, stabilní identita, oddělení administrace od obsahu, revokace | UI → API → databáze: uložení a revokace, stabilní ID kolegy, neaktivní účet, souběh a audit; reálná práva přidělovat konkrétním schránkám a lidem |
 | 3 — identity a podpisy | Skutečně povolený odesílatel, Reply-To, vlastní podpisy a šablony SO.ai, textový náhled | MIME testy bez odeslání, izolace schránek, sanitace HTML, žádné nepodložené aliasy |
 | 4 — štítky a pravidla | Editory, rozsah a původ, preview, ruční aplikace, audit a verze | Před spuštěním shodný náhled zásahů, odstranění štítku nesmaže zprávu, žádné skryté spouštění |
 | 5 — plánované zprávy | Přehled, úprava/zrušení plánu, timezone/DST, oprávnění před vykonáním | Stejná backendová logika se simulovaným SMTP; nejistý výsledek bez duplicit; ostrý cron a odeslání vyžadují vlastní schválení |
@@ -33,6 +33,18 @@ Složky Koncepty/Odeslané/Koš se vybírají z načtených existujících slož
 
 Kalendáře a adresáře jsou v této etapě pouze přehled dostupnosti. Neexistuje ještě ukládání výchozí kolekce ani omezení přístupu na kolekci. Jednotlivé chyby se zobrazí odděleně, bez surových protokolových výpisů. Čtení zdrojů nevymaže rozepsaný formulář.
 
-Přijetí etapy vyžaduje izolovaný test skutečného frontend/backend toku a read-only produkční ověření. Zápis mapování se v produkci bez konkrétní potřeby neprovádí. Schválené dosavadní hranice platí: pilot pozastavený, MCP/cron/odesílání vypnuté, žádné reálné granty; CalDAV pouze Vlastní, Společný vypnutý.
+Přijetí etapy vyžaduje izolovaný test skutečného frontend/backend toku a read-only produkční ověření. Zápis mapování se v produkci bez konkrétní potřeby neprovádí. Historické přijetí etapy 1 proběhlo s pozastavenou schránkou. Na následný výslovný pokyn uživatele k zapnutí byla pilotní schránka po novém úspěšném ověření 25. 9. 2026 v 23:26:12 povolena. MCP/cron/odesílání zatím neběží a neexistují reálné granty; CalDAV pouze Vlastní, Společný vypnutý.
 
 Stav nasazení a živé důkazy jsou vedené v [FORPSI_CONNECTOR.md](FORPSI_CONNECTOR.md). Tento plán nepovoluje provozní aktivaci uvedených etap.
+
+## Etapa 2 — ruční správa přístupů
+
+Administrace umí vybrat konkrétní schránku a kolegu, změnit read/write/send/delete/schedule a všechna práva odebrat. Vyžaduje `settings:manage` i `users:view` pro adresář, `users:edit` pro zápis. Role ani globální výchozí oprávnění se nemění. Výběr je z aktuálního sloučeného adresáře SO.ai; při chybě databáze nebo konfigurace se nesmí použít neověřená náhrada. Do UI jdou jen ID, jméno, e-mail a aktivita účtu.
+
+Identita je `issuer=urn:smart-odpady:session`, `subject=SO.ai user.id`, ve stávající tabulce principals. E-mail není identita. Existující OAuth identity se nepřepisují a editor je pouze zobrazuje. Tato etapa neimplementuje propojení OAuth subjektu na účet SO.ai ani pracovní API přihlášeného kolegy; bez něj není možné vydávat uložená práva za dokončené použití ChatGPT nebo pošty v SO.ai.
+
+Zápis nahrazuje výběr práv jednoho kolegy na jedné schránce. Sdílí revizi schránky s ostatní administrací. CAS, vytvoření identity, nastavení pěti grantů a audit před/po jsou v jedné transakci; selhání auditu vše vrátí. Konflikt nic nepřepíše. Uložení nemění aktivitu schránky ani ověření připojení, nepovoluje MCP, cron a neposílá zprávy. Prázdný výběr znamená revokaci, kterou lze provést i u odstraněného nebo vypnutého kolegy. Neaktivní identita konektoru se neaktivuje jako vedlejší účinek. Plánování vyžaduje odesílání.
+
+Formulář chrání neuložené změny a po chybě je zachová; po úspěchu ukazuje skutečně načtený stav. Práva zatím platí pro celou schránku a všechny jí dostupné kolekce. Běžný runtime vždy kontroluje konkrétní grant; naplánovaná zpráva jej kontroluje znovu před SMTP. Již zahájenou operaci nelze revokací odvolat. Automatická revokace při vypnutí uživatele v SO.ai musí být součástí budoucího propojení runtime identit; před jeho zavedením se nesmí aktivovat pracovní endpoint pro tyto účty.
+
+Živé ověření této etapy čte adresář a uložené přístupy. Zápis/revokace i čekající fronta se testují se syntetickými účty a SQLite bez vnějších účinků. Reálná práva kolegům se bez konkrétního výběru nepřidělují.

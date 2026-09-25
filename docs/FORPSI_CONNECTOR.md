@@ -2,14 +2,18 @@
 
 Cílový směr ručního nastavení: [uživatelem dodaná analýza](FORPSI_SETTINGS_TARGET.md) a [ověřované etapy realizace](FORPSI_SETTINGS_DELIVERY.md). Finální užší výběr voleb následuje až po ověření funkčního API; rozsah není požadavkem splnit každou položku katalogu.
 
-Etapa 1 (0.2.4 / SO.ai 0.1.808) je nasazená a ověřená. Čtecí API metadat zdrojů a výběr existujících složek mají opětovnou serverovou validaci před uložením. Přihlášené produkční UI dne 25. 9. 2026 v 22:46:50 Europe/Prague načetlo 16 složek, 1 kalendář (DAV jej pojmenovává `personal`) a 1 adresář. Nabídka správně našla automatické cíle `INBOX.Drafts`, `INBOX.Sent Items` a `INBOX.Trash`. Produkční mapování se neukládalo. D1 readback před a po testu byl shodný: revize 8, `active=0`, outbox 0, identity kolegů 0. Dostupnost kalendářů/adresářů není volbou oprávnění ani synchronizací obsahu.
+Etapa 2 (0.2.5 / SO.ai 0.1.809) doplňuje ruční správu přístupů: konkrétní kolega a schránka, pět jednotlivých práv, odebrání, serverová kontrola aktuálního adresáře, revize a atomický audit. Kontrakt a hranice jsou v [plánu etap](FORPSI_SETTINGS_DELIVERY.md#etapa-2--ruční-správa-přístupů). Zápis v izolovaném UI/API/SQLite prošel; produkční přiřazení práv nebylo provedeno. Nové identity SO.ai ještě nemají pracovní endpoint ani vazbu na ChatGPT OAuth.
 
-Aktuální nasazení: commit `c21d6fe3f9957998e2d321bd5f940989a3e6a1a8`, Pages `b7a85c2f`, Worker version `1bc379c1-1b7b-45e5-90a1-e75a15ca32c6` (100 %). Produkční buildMeta uvádí `0.1.808 / main / c21d6fe`; aktuální asset byl ověřen i v přihlášeném prohlížeči. PR #197 je sloučený, obě CI sady prošly. Celkem 63 testů, syntax 672 JS/MJS, build 49 rout, Worker dry-run a produkční deploy guard prošly. Formulář ověřen od 320 do 1440 px. Zápis a následné načtení mapování byly testované v izolovaném UI/API/SQL toku, nikoli změnou ostrých dat. Bez migrací, změn secrets/bindingů/práv nebo aktivace provozu.
+Na explicitní pokyn uživatele k zapnutí byla 25. 9. 2026 pilotní schránka po novém ověření všech čtyř služeb (23:26:12 Europe/Prague) povolena; stav „Povolená v konektoru“ byl načten z produkčního UI. To není zapnutí dosud nenakonfigurovaného ChatGPT přihlášení. MCP, cron a odesílání neběží. Výběr prioritních e-mailů nebyl dokončen; uživatel následně vrátil práci k nastavení.
+
+Historicky dokončená etapa 1 (0.2.4 / SO.ai 0.1.808) je nasazená a ověřená. Čtecí API metadat zdrojů a výběr existujících složek mají opětovnou serverovou validaci před uložením. Přihlášené produkční UI dne 25. 9. 2026 v 22:46:50 Europe/Prague načetlo 16 složek, 1 kalendář (DAV jej pojmenovává `personal`) a 1 adresář. Nabídka správně našla automatické cíle `INBOX.Drafts`, `INBOX.Sent Items` a `INBOX.Trash`. Produkční mapování se neukládalo. D1 readback před a po testu byl shodný: revize 8, `active=0`, outbox 0, identity kolegů 0. Dostupnost kalendářů/adresářů není volbou oprávnění ani synchronizací obsahu.
+
+Nasazení etapy 1: commit `c21d6fe3f9957998e2d321bd5f940989a3e6a1a8`, Pages `b7a85c2f`, Worker version `1bc379c1-1b7b-45e5-90a1-e75a15ca32c6` (100 %). Produkční buildMeta uvádí `0.1.808 / main / c21d6fe`; aktuální asset byl ověřen i v přihlášeném prohlížeči. PR #197 je sloučený, obě CI sady prošly. Celkem 63 testů, syntax 672 JS/MJS, build 49 rout, Worker dry-run a produkční deploy guard prošly. Formulář ověřen od 320 do 1440 px. Zápis a následné načtení mapování byly testované v izolovaném UI/API/SQL toku, nikoli změnou ostrých dat. Bez migrací, změn secrets/bindingů/práv nebo aktivace provozu.
 
 Následuje předchozí ověření samotného přihlášení poskytovatele; nezastupuje stav nasazení výše.
 
 Stav: administrační pilot nasazen a ověřen 25. 9. 2026 přes produkční buildMeta, přihlášené UI a zpětné čtení D1.
-Pilotní schránka je pozastavená. Skutečný test z nasazeného Workeru 0.2.3 dne 25. 9. 2026 v 22:19:24 Europe/Prague potvrdil IMAP včetně podpory MOVE, přihlášení SMTP, dostupný kalendář CalDAV i adresáře CardDAV. Na výslovné schválení uživatele „Jen Vlastní“ byla ve webmailu povolena synchronizace pouze kalendáře Vlastní; Společný zůstal vypnutý. Oba přepínače byly zpětně ověřeny v UI. Následný test zjišťoval pouze dostupnost kolekcí, bez čtení nebo změny událostí. Odeslání ani čtení obsahu nebylo testováno.
+Tehdy byla pilotní schránka pozastavená. Skutečný test z nasazeného Workeru 0.2.3 dne 25. 9. 2026 v 22:19:24 Europe/Prague potvrdil IMAP včetně podpory MOVE, přihlášení SMTP, dostupný kalendář CalDAV i adresáře CardDAV. Na výslovné schválení uživatele „Jen Vlastní“ byla ve webmailu povolena synchronizace pouze kalendáře Vlastní; Společný zůstal vypnutý. Oba přepínače byly zpětně ověřeny v UI. Následný test zjišťoval pouze dostupnost kolekcí, bez čtení nebo změny událostí. Odeslání ani čtení obsahu nebylo testováno.
 Živé nasazení SO.ai se dokládá aktuálním buildMeta a přihlášeným UI, nikoli samotným sloučením PR.
 Pilotní účet zadaný uživatelem: `oplustil@kaiserservis.cz`. Tato adresa není automatický grant ani provozní seed.
 
@@ -24,7 +28,7 @@ Stávající autentizace, role a jejich výchozí oprávnění nejsou upravené.
 - Test příjmu pouze vypisuje složky; SMTP používá VERIFY, žádnou zprávu neodesílá. Kalendář/adresář zjišťují dostupné kolekce.
 - Nové heslo se šifruje AES-GCM s vazbou na firmu, schránku i adresu. Do prohlížeče se nikdy nevrací.
 - Uložení konfigurace, hesla a auditu je jedna D1 transakce. Konflikt verze nesmí přepsat novější heslo.
-- Oprávnění, štítky, pravidla, fronta a audit jsou v administraci zatím čtecí přehledy.
+- Přístupy kolegů mají samostatný editor pro SO.ai identity. Štítky, pravidla, fronta a audit jsou zatím čtecí přehledy.
 - Globálně vypnutý Worker nic neodesílá, i když je konkrétní schránka povolená. Již rozběhnuté SMTP odesílání nelze odvolat pozastavením.
 - Ochrana neuložených změn používá stávající dialog SO.ai. Frontend neukládá data do lokálních úložišť.
 - Simulované ověření nelze použít jako oprávnění aktivovat schránku v režimu skutečného poskytovatele.
@@ -64,7 +68,7 @@ Klíč hesel se nesmí prostě přepsat: stávající ciphertext by přestal bý
 
 - IMAP z nasazeného Workeru ověřil přihlášení a výpis složek, SMTP přihlášení bez odeslání, CardDAV dostupné adresáře a CalDAV vlastní kalendář. Čtení obsahu zpráv/kontaktů/událostí a zápisové operace konektoru nebyly v produkci testované. Jedinou změnou ve webmailu bylo schválené povolení CalDAV u kalendáře Vlastní.
 - Štítky a pravidla jsou vlastní evidence konektoru. Nejsou nativními štítky a filtry Forpsi. Pravidla se zatím spouštějí ručně nad výběrem zpráv.
-- SO.ai zatím neumí přidělovat/editovat granty, pravidla a štítky ani rušit frontu; příslušné MCP operace již existují, administrační ovládání je další fáze.
+- SO.ai umí spravovat granty pro stabilní firemní identity; pracovní endpoint a propojení s OAuth ještě zbývají. Editace pravidel, štítků a rušení fronty v administraci jsou další fáze.
 - Nativní soubory, úkoly, poznámky a podpisy nemají ověřenou integrační cestu ani implementovaný adaptér. Ve webmailu byly jejich položky nabídky viditelné, to není důkaz dostupného API.
 - CardDAV přístup je potvrzený skutečným výpisem adresářů. CalDAV discovery po povolení kalendáře Vlastní vrací dostupnou kolekci; Společný zůstává vypnutý. Konkrétní obchodní tarif nebyl ověřován a samotný úspěšný test jej nedokládá.
 - Odesílání zatím neumí přílohy ani editaci existujících konceptů. U kalendáře jsou zápisy omezené na jednoduché události bez účastníků/pozvánek/opakování.

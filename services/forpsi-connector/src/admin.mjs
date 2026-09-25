@@ -7,6 +7,8 @@ import { capabilities } from './capabilities.mjs';
 import { requireValue, ConnectorError } from './errors.mjs';
 import { providerDiagnostic } from './diagnostics.mjs';
 import { readResources, validateFolderChange } from './admin-resources.mjs';
+import { listAccess, saveAccess } from './admin-access.mjs';
+import { ACTIONS } from './access-policy.mjs';
 
 const id = z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/);
 const revision = z.number().int().positive();
@@ -17,6 +19,9 @@ const save = z.object({ id: id.optional(), requestId: z.string().uuid(), revisio
   password: z.string().min(1).max(1024).optional() }).strict();
 const selection = z.object({ id, revision }).strict();
 const schemas = { overview: z.object({}).strict(), save,
+  access_list: z.object({id}).strict(),
+  access_save: selection.extend({userId:id,actions:z.array(z.enum(ACTIONS)).max(5)
+    .refine(a=>new Set(a).size===a.length && (!a.includes('schedule') || a.includes('send')))}).strict(),
   verify: selection, resources: selection, set_active: selection.extend({ active: z.boolean() }) };
 const publicColumns = `m.id,m.address,m.display_name,m.active,m.revision,m.drafts_folder,m.sent_folder,m.trash_folder,
   m.updated_at,m.updated_by,m.verified_at,m.verification_json`;
@@ -94,7 +99,9 @@ export async function executeAdmin(operation, raw, ctx) {
     return mutate(store,m,statements,actorId,'admin.save',changeId);
   }
   const m = await mailbox(store, tenant, p.id);
+  if (operation === 'access_list') return {access:await listAccess(m,ctx)};
   requireValue(m.revision === p.revision, 'VERSION_CONFLICT');
+  if (operation === 'access_save') return saveAccess(m,p,ctx);
   if (operation === 'resources') {
     const resources = await readResources(m,ctx);
     requireValue((await mailbox(store,tenant,m.id)).revision === m.revision, 'VERSION_CONFLICT');
@@ -144,6 +151,6 @@ export async function handleAdmin(request, env, factories) {
       actorId:body.actorId,tenant:env.FORPSI_TENANT_ID}));
   } catch(error) {
     const code=error instanceof ConnectorError?error.code:error instanceof z.ZodError || error instanceof SyntaxError?'INVALID_INPUT':'ADMIN_UNAVAILABLE';
-    return json({error:code},code==='INVALID_INPUT'?400:code==='MAILBOX_NOT_FOUND'?404:['VERSION_CONFLICT','MAILBOX_EXISTS'].includes(code)?409:503);
+    return json({error:code},code==='INVALID_INPUT'?400:code==='ACCESS_DENIED'?403:['MAILBOX_NOT_FOUND','PRINCIPAL_NOT_FOUND'].includes(code)?404:['VERSION_CONFLICT','MAILBOX_EXISTS','PRINCIPAL_DISABLED'].includes(code)?409:503);
   }
 }

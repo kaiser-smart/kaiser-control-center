@@ -4,6 +4,8 @@ on:
     paths:
       - 'services/forpsi-connector/**'
       - 'functions/api/forpsi/**'
+      - 'functions/_lib/auth.js'
+      - 'functions/_lib/users-store.js'
       - 'src/components/ForpsiAdminPanel.js'
       - 'src/app.js'
       - 'scripts/forpsi-admin.test.mjs'

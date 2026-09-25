@@ -176,7 +176,7 @@ function mergeConfiguredUsers(configuredUsers) {
   return [...mergedUsers.values()];
 }
 
-export async function getUsers(env) {
+export async function getUsers(env, options = {}) {
   const configuredUsers = [];
 
   if (env.AUTH_USERS_JSON) {
@@ -184,13 +184,14 @@ export async function getUsers(env) {
       const users = JSON.parse(env.AUTH_USERS_JSON);
       if (Array.isArray(users)) {
         configuredUsers.push(...users);
-      }
+      } else if(options.strict) throw new Error("Invalid configured user directory");
     } catch (error) {
+      if(options.strict) throw error;
       console.error("auth.users_json_invalid", { message: error.message });
     }
   }
 
-  const storedUsers = await listStoredUsers(env);
+  const storedUsers = await listStoredUsers(env, options);
   return mergeConfiguredUsers([...configuredUsers, ...storedUsers]);
 }
 
