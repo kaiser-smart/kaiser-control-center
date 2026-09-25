@@ -58,3 +58,13 @@ test('SMTP acceptance stays successful when saving Sent copy fails', async () =>
   assert.equal(sent.sentCopy, 'failed'); assert.equal(sent.accepted, 1);
   assert.equal(f.calls.filter(c => c[0] === 'smtp').length, 1);
 });
+test('folder discovery reports non-selectable parents and ambiguous special folders require explicit choice',async()=>{
+  const f=adapter({list:async()=>[{path:'Parent',flags:new Set(['\\Noselect'])},{path:'Drafts',specialUse:'\\Drafts'},
+    {path:'Other drafts',specialUse:'\\Drafts'}]});
+  assert.equal((await f.provider.listFolders()).folders[0].selectable,false);
+  await assert.rejects(f.provider.saveDraft(mail),/SPECIAL_FOLDER_NOT_CONFIGURED/);
+  assert.equal(f.calls.some(c=>c[0]==='append'),false);
+  f.provider.mailbox.drafts_folder='Drafts';
+  await f.provider.saveDraft(mail);
+  assert.equal(f.calls.find(c=>c[0]==='append')[1],'Drafts');
+});

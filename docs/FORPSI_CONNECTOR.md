@@ -1,5 +1,9 @@
 # Forpsi / ChatGPT – administrační pilot v SO.ai
 
+Cílový směr ručního nastavení: [uživatelem dodaná analýza](FORPSI_SETTINGS_TARGET.md) a [ověřované etapy realizace](FORPSI_SETTINGS_DELIVERY.md). Finální užší výběr voleb následuje až po ověření funkčního API; rozsah není požadavkem splnit každou položku katalogu.
+
+Etapa 1 (0.2.4 / SO.ai 0.1.808): doplněno čtecí API metadat zdrojů a výběr existujících složek, s opětovnou serverovou validací před uložením. Dostupnost kalendářů/adresářů není volbou oprávnění ani synchronizací obsahu. Produkční výsledek této etapy bude doložen po nasazení; níže zůstává předchozí ověřený stav 0.2.3.
+
 Stav: administrační pilot nasazen a ověřen 25. 9. 2026 přes produkční buildMeta, přihlášené UI a zpětné čtení D1.
 Pilotní schránka je pozastavená. Skutečný test z nasazeného Workeru 0.2.3 dne 25. 9. 2026 v 22:19:24 Europe/Prague potvrdil IMAP včetně podpory MOVE, přihlášení SMTP, dostupný kalendář CalDAV i adresáře CardDAV. Na výslovné schválení uživatele „Jen Vlastní“ byla ve webmailu povolena synchronizace pouze kalendáře Vlastní; Společný zůstal vypnutý. Oba přepínače byly zpětně ověřeny v UI. Následný test zjišťoval pouze dostupnost kolekcí, bez čtení nebo změny událostí. Odeslání ani čtení obsahu nebylo testováno.
 Živé nasazení SO.ai se dokládá aktuálním buildMeta a přihlášeným UI, nikoli samotným sloučením PR.

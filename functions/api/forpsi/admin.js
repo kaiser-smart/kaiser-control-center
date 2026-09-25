@@ -7,6 +7,8 @@ const messages = {
   VERSION_CONFLICT:'Nastavení mezitím někdo změnil. Obnovte přehled a úpravu opakujte.',
   MAILBOX_EXISTS:'Schránka je již uložená. Obnovte přehled a otevřete její nastavení.',
   MAILBOX_NOT_FOUND:'Schránka nebyla nalezena.',
+  FOLDER_RELOAD_REQUIRED:'Nejprve uložte přihlašovací údaje. Potom načtěte skutečné složky a vyberte jejich použití.',
+  FOLDER_NOT_AVAILABLE:'Vybraná složka již není dostupná pro zprávy. Načtěte složky znovu a upravte výběr.',
   INVALID_INPUT:'Zkontrolujte vyplněné údaje.',
   VERIFICATION_REQUIRED:'Před zapnutím ověřte přihlášení k příchozí a odchozí poště.',
   ADMIN_LIMIT_EXCEEDED:'Přehled překročil limit. Je potřeba doplnit stránkování.'
@@ -33,7 +35,7 @@ export async function forwardForpsiAdmin({request,env}) {
       const bytes=new Uint8Array(size); let offset=0; for(const part of parts) { bytes.set(part,offset); offset+=part.byteLength; }
       command=JSON.parse(new TextDecoder().decode(bytes));
       if(!command || Object.keys(command).some(k=>!['operation','payload'].includes(k)) ||
-        !['save','verify','set_active'].includes(command.operation) || !command.payload || typeof command.payload!=='object') throw new Error();
+        !['save','verify','resources','set_active'].includes(command.operation) || !command.payload || typeof command.payload!=='object') throw new Error();
     } catch { return json({error:messages.INVALID_INPUT},400); }
   }
   try {

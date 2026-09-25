@@ -41,13 +41,14 @@ export class Forpsi {
     const configured = this.mailbox[`${type}_folder`];
     const folders = await client.list();
     const flag = { drafts: '\\Drafts', sent: '\\Sent', trash: '\\Trash' }[type];
-    const match = configured ? folders.find(f => f.path === configured) : folders.find(f => f.specialUse === flag);
-    requireValue(match && !match.flags?.has('\\Noselect'), 'SPECIAL_FOLDER_NOT_CONFIGURED');
-    return match.path;
+    const matches = folders.filter(f => (configured ? f.path === configured : f.specialUse === flag) && !f.flags?.has('\\Noselect'));
+    requireValue(matches.length === 1, 'SPECIAL_FOLDER_NOT_CONFIGURED');
+    return matches[0].path;
   }
   listFolders() {
     return this.imap(async client => ({ folders: (await client.list()).map(f => ({
       path: f.path, name: f.name, delimiter: f.delimiter, specialUse: f.specialUse ?? null,
+      selectable: !f.flags?.has('\\Noselect'),
     })), supportsMove: client.capabilities.has('MOVE') }));
   }
   search(args) {
