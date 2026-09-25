@@ -1,7 +1,7 @@
 # Forpsi / ChatGPT – administrační pilot v SO.ai
 
 Stav: administrační pilot nasazen a ověřen 25. 9. 2026 přes produkční buildMeta, přihlášené UI a zpětné čtení D1.
-Pilotní schránka je pozastavená. Správce uložil heslo do šifrovaného úložiště; skutečný test 25. 9. 2026 v 22:00 potvrdil IMAP včetně podpory MOVE i přihlášení SMTP. DAV zatím ověřené není; odeslání nebylo testováno.
+Pilotní schránka je pozastavená. Skutečný test z nasazeného Workeru 0.2.3 dne 25. 9. 2026 v 22:08:10 Europe/Prague potvrdil IMAP včetně podpory MOVE, přihlášení SMTP i dostupné adresáře CardDAV. CalDAV úspěšně prošel discovery, ale nenabízí žádné kalendáře. Ve webmailu bylo následně čtením ověřeno, že kalendáře Vlastní a Společný mají oba CalDAV vypnutý. Jejich povolení čeká na výběr uživatele. Odeslání ani čtení obsahu nebylo testováno.
 Živé nasazení SO.ai se dokládá aktuálním buildMeta a přihlášeným UI, nikoli samotným sloučením PR.
 Pilotní účet zadaný uživatelem: `oplustil@kaiserservis.cz`. Tato adresa není automatický grant ani provozní seed.
 
@@ -22,7 +22,9 @@ Stávající autentizace, role a jejich výchozí oprávnění nejsou upravené.
 - Simulované ověření nelze použít jako oprávnění aktivovat schránku v režimu skutečného poskytovatele.
 - Od konektoru 0.2.1 se k neúspěšnému ověření ukládají pouze povolené chybové kódy, fáze a číselné HTTP/SMTP stavy. Text chyb, protokolové odpovědi, adresy a přihlašovací údaje se neukládají. Diagnostika je součástí chráněného administračního readbacku; nezapíná MCP ani odesílání.
 - Od 0.2.2 navazuje SMTP TLS přímo přes pevné `smtp.forpsi.com:465` a předává Nodemaileru již ověřený socket. V lokálním Cloudflare runtime původní DNS předzpracování selhalo před přihlášením; přímé TLS a následné anonymní SMTP VERIFY prošly. Certifikát se nadále ověřuje, minimum je TLS 1.2 a připojení má 15s limit. Následné produkční SMTP VERIFY s uloženým heslem prošlo 25. 9. 2026 v 22:00; doručení nebylo testováno.
-- Oprava 0.2.3 volá nativní `fetch` bez vazby `this` na instanci DAV. Původní volání vyvolalo v Cloudflare runtime `Illegal invocation` před první HTTP odpovědí. Další nekompatibilita je nepodporované `redirect:error`: nahrazeno `manual` s explicitním odmítnutím všech stavů 3xx, bez následování Location a bez předání hesla jinému serveru. Obě chyby reprodukovány anonymně a pokryty regresními testy; po opravě požadavek dojde k Forpsi. Stejná oprava platí pro CalDAV i CardDAV. Skutečné kolekce je potřeba ověřit po nasazení.
+- Oprava 0.2.3 volá nativní `fetch` bez vazby `this` na instanci DAV. Původní volání vyvolalo v Cloudflare runtime `Illegal invocation` před první HTTP odpovědí. Další nekompatibilita je nepodporované `redirect:error`: nahrazeno `manual` s explicitním odmítnutím všech stavů 3xx, bez následování Location a bez předání hesla jinému serveru. Obě chyby reprodukovány anonymně a pokryty regresními testy. Následně v produkci ověřeno CardDAV a úspěšná CalDAV discovery bez kolekcí.
+
+Ověřená serverová verze: commit `6ef47e44fb232e72731b4137e87dfdfe56441e77`, Cloudflare version `f25d8685-7119-4fdb-a19c-a3294f6e21f4` (100 %). Výsledek potvrzen přihlášeným UI i D1 readbackem, revize schránky 6. Outbox a seznam identit kolegů jsou prázdné. Celkem 56 testů, syntax/build a CI prošly. PR #192–194 jsou sloučené. SO.ai frontend zůstává 0.1.807; serverové opravy nevyžadovaly nový Pages deploy.
 
 ## Nasazení administračního pilotu
 
@@ -52,11 +54,11 @@ Klíč hesel se nesmí prostě přepsat: stávající ciphertext by přestal bý
 
 ## Aktuální hranice
 
-- IMAP z nasazeného Workeru úspěšně ověřil přihlášení a výpis složek, SMTP ověřilo přihlášení bez odeslání. CalDAV a CardDAV čekají na produkční ověření opravy. Čtení zpráv a všechny zápisy do Forpsi nebyly v produkci testované.
+- IMAP z nasazeného Workeru ověřil přihlášení a výpis složek, SMTP přihlášení bez odeslání, CardDAV dostupné adresáře. CalDAV zatím nemá povolený kalendář. Čtení obsahu zpráv/kontaktů/událostí a všechny zápisy do Forpsi nebyly v produkci testované.
 - Štítky a pravidla jsou vlastní evidence konektoru. Nejsou nativními štítky a filtry Forpsi. Pravidla se zatím spouštějí ručně nad výběrem zpráv.
 - SO.ai zatím neumí přidělovat/editovat granty, pravidla a štítky ani rušit frontu; příslušné MCP operace již existují, administrační ovládání je další fáze.
 - Nativní soubory, úkoly, poznámky a podpisy nemají ověřenou integrační cestu ani implementovaný adaptér. Ve webmailu byly jejich položky nabídky viditelné, to není důkaz dostupného API.
-- Obchodní tarif a oprávnění CalDAV/CardDAV na pilotním účtu nejsou potvrzené.
+- CardDAV přístup je potvrzený skutečným výpisem adresářů. CalDAV discovery funguje; prázdný výpis odpovídá vypnuté synchronizaci obou kalendářů v UI. Konkrétní obchodní tarif nebyl ověřován a samotný úspěšný test jej nedokládá.
 - Odesílání zatím neumí přílohy ani editaci existujících konceptů. U kalendáře jsou zápisy omezené na jednoduché události bez účastníků/pozvánek/opakování.
 - Přehled administrace má pevné limity (200 schránek; 500 grantů; 200 pravidel/štítků; 50 událostí a položek fronty). Překročení limitu schránek je explicitní chyba, ostatní přehledy oznamují omezení.
 - Provozní ochrany pro veřejné nasazení (kvóty/rate limiting, rotace klíčů, revokace podle KSO a koncové OAuth testy) zůstávají otevřené.
