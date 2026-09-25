@@ -1,5 +1,5 @@
 import { json } from "../../_lib/auth.js";
-import { dataBoxPlusStoreErrorResponse, runDataBoxPlusSync } from "../../_lib/data-box-plus-store.js";
+import { dataBoxPlusStoreErrorResponse, runDataBoxPlusSync, planDataBoxPlusSync, completeDataBoxPlusSync } from "../../_lib/data-box-plus-store.js";
 
 function requestToken(request) {
   const authorization = request.headers.get("Authorization") || "";
@@ -29,11 +29,13 @@ export async function onRequestPost({ request, env }) {
   }
 
   try {
-    return json(await runDataBoxPlusSync(env, {
-      id: "cloudflare-scheduler",
-      name: "Autopilot"
-    }, {
-      triggerType: "cloud-scheduler"
+    const body = await request.json().catch(() => ({}));
+    const actor = { id: "cloudflare-scheduler", name: "Autopilot" };
+    if (body.mode === "plan") return json(await planDataBoxPlusSync(env));
+    if (body.mode === "complete") return json(await completeDataBoxPlusSync(env, actor, body.results));
+    return json(await runDataBoxPlusSync(env, actor, {
+      triggerType: body.mailboxId ? "cloud-scheduler-mailbox" : "cloud-scheduler",
+      mailboxId: body.mailboxId
     }));
   } catch (error) {
     const result = dataBoxPlusStoreErrorResponse(error);

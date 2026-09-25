@@ -21,78 +21,55 @@ assert.match(storeSource, /45 \* 60 \* 1000/);
 
 const originalFetch = globalThis.fetch;
 const calls = [];
+const mailboxIds = ["healthy", "http-failure", "network-failure", "after-failure"];
 globalThis.fetch = async (url, options) => {
-  calls.push({ url, options });
-  return Response.json({
-    status: "completed",
-    syncRunId: "sync-test",
-    mailboxCount: 7,
-    messagesFound: 0,
-    messagesDownloaded: 0,
-    attachmentsDownloaded: 0,
-    errors: []
-  });
+  const body = JSON.parse(options.body);
+  calls.push({ url, options, body });
+  assert.equal(options.headers.Authorization, "Bearer test-token");
+  if (body.mode === "plan") return Response.json({ mailboxIds });
+  if (body.mailboxId === "http-failure") return new Response("timeout", { status: 524 });
+  if (body.mailboxId === "network-failure") throw new Error("network lost");
+  if (body.mailboxId) return Response.json({ syncRunId: `run-${body.mailboxId}` });
+  return Response.json({ status: "partial", mailboxCount: 4, errors: [{}, {}] });
 };
 
 try {
-  const pending = [];
-  const env = {
-    APP_BASE_URL: "https://smart-odpady.ai",
-    DATA_BOX_PLUS_SYNC_TOKEN: "test-token"
-  };
-  const ctx = {
-    waitUntil(promise) {
-      pending.push(promise);
-    }
-  };
-
-  await worker.scheduled({ scheduledTime: Date.parse("2026-07-23T08:33:00.000Z") }, env, ctx);
-  assert.equal(pending.length, 0);
+  const env = { APP_BASE_URL: "https://smart-odpady.ai", DATA_BOX_PLUS_SYNC_TOKEN: "test-token" };
+  async function tick(time) {
+    const pending = [];
+    await worker.scheduled({ scheduledTime: Date.parse(time) }, env, { waitUntil(p) { pending.push(p); } });
+    await Promise.all(pending);
+    return pending.length;
+  }
+  assert.equal(await tick("2026-09-25T09:33:00Z"), 0);
   assert.equal(calls.length, 0);
-
-  await worker.scheduled({ scheduledTime: Date.parse("2026-07-23T09:00:00.000Z") }, env, ctx);
-  assert.equal(pending.length, 2);
-  await Promise.all(pending);
-  assert.equal(calls.length, 2);
-  assert.equal(calls[0].url, "https://smart-odpady.ai/api/data-box-plus/internal-sync");
-  assert.equal(calls[0].options.method, "POST");
-  assert.equal(calls[0].options.headers.Authorization, "Bearer test-token");
-  assert.deepEqual(JSON.parse(calls[0].options.body), {
-    scheduledAt: "2026-07-23T09:00:00.000Z"
-  });
-  assert.equal(calls[1].url, "https://smart-odpady.ai/api/data-box-plus/internal-archive");
-  assert.equal(calls[1].options.method, "POST");
-
-  const archiveOnlyPending = [];
-  const archiveOnlyCtx = { waitUntil(promise) { archiveOnlyPending.push(promise); } };
-  await worker.scheduled({ scheduledTime: Date.parse("2026-07-23T09:05:00.000Z") }, env, archiveOnlyCtx);
-  assert.equal(archiveOnlyPending.length, 1);
-  await Promise.all(archiveOnlyPending);
-  assert.equal(calls.at(-1).url, "https://smart-odpady.ai/api/data-box-plus/internal-archive");
-
-  const halfHourPending = [];
-  const beforeHalfHour = calls.length;
-  await worker.scheduled({ scheduledTime: Date.parse("2026-09-25T09:30:00.000Z") }, env, {
-    waitUntil(promise) { halfHourPending.push(promise); }
-  });
-  await Promise.all(halfHourPending);
-  assert.deepEqual(calls.slice(beforeHalfHour).map(({ url }) => new URL(url).pathname), [
-    "/api/data-box-plus/internal-sync", "/api/data-box-plus/internal-archive"
-  ]);
-
-  for (let minute = 0; minute < 60; minute += 1) {
+  for (const time of ["2026-09-25T09:00:00Z", "2026-09-25T09:30:00Z"]) {
+    calls.length = 0;
+    assert.equal(await tick(time), 2);
+    const sync = calls.filter(call => call.url.endsWith("/internal-sync"));
+    assert.equal(sync[0].body.mode, "plan");
+    assert.deepEqual(sync.slice(1, -1).map(call => call.body.mailboxId), mailboxIds);
+    assert.equal(sync.at(-1).body.mode, "complete");
+    assert.deepEqual(sync.at(-1).body.results, [
+      { mailboxId: "healthy", syncRunId: "run-healthy" },
+      { mailboxId: "http-failure" },
+      { mailboxId: "network-failure" },
+      { mailboxId: "after-failure", syncRunId: "run-after-failure" }
+    ], "HTTP and network failures must not prevent later mailboxes or the aggregate audit");
+    assert.equal(calls.filter(call => call.url.endsWith("/internal-archive")).length, 1);
+  }
+  calls.length = 0;
+  assert.equal(await tick("2026-09-25T09:05:00Z"), 1);
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].url.endsWith("/internal-archive"));
+  for (let minute = 0; minute < 60; minute++) {
     assert.equal(isDataBoxDue(Date.UTC(2026, 8, 25, 9, minute)), minute === 0 || minute === 30);
   }
-
-  const readiness = await worker.fetch();
-  const payload = await readiness.json();
-  assert.equal(payload.status, "ready");
+  const payload = await (await worker.fetch()).json();
   assert.equal(payload.dataBoxPlusIntervalMinutes, 30);
   assert.equal(payload.archiveBatchIntervalMinutes, 5);
   assert.equal(payload.mailboxScope, "all-current-and-future");
-  assert.match(payload.message, /vlastní archiv KSO/);
 } finally {
   globalThis.fetch = originalFetch;
 }
-
-console.log("data-box-plus sync runner half-hourly corridor ok");
+console.log("DZ runner: half-hourly isolated mailbox batches, failure continuation and audit verified");

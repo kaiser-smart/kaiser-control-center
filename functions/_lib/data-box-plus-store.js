@@ -2088,6 +2088,47 @@ export async function getDataBoxPlusStatus(env) {
   }
 }
 
+export async function planDataBoxPlusSync(env) {
+  const accounts = await dataBoxPlusAccountConfigs(env);
+  return { mailboxIds: accounts.map(plusMailboxId) };
+}
+
+// The scheduler sends only child run IDs. Totals and errors come from the audit
+// database, never from client-provided counters.
+export async function completeDataBoxPlusSync(env, currentUser, results = []) {
+  if (!Array.isArray(results) || results.length > MAX_MAILBOX_SLOT) {
+    throw new DataBoxPlusStoreError("Neplatný souhrn načítání schránek.", 400, "data_box_plus_sync_invalid");
+  }
+  const db = dataBoxPlusDatabase(env, true);
+  const summary = { mailboxCount: 0, messagesFound: 0, messagesDownloaded: 0, attachmentsDownloaded: 0, errors: [] };
+  const seen = new Set();
+  for (const result of results) {
+    const mailboxId = cleanString(result?.mailboxId);
+    if (!mailboxId || seen.has(mailboxId)) continue;
+    seen.add(mailboxId);
+    summary.mailboxCount += 1;
+    const row = result.syncRunId ? await db.prepare("SELECT * FROM data_box_plus_sync_runs WHERE id = ? LIMIT 1")
+      .bind(cleanString(result.syncRunId)).first() : null;
+    if (!row?.finished_at || numberValue(row.mailbox_count) !== 1) {
+      summary.errors.push({ mailboxId, code: "data_box_plus_sync_incomplete", message: "Dávka této schránky se nedokončila; ostatní schránky pokračovaly." });
+      continue;
+    }
+    const run = rowToSyncRun(row);
+    summary.messagesFound += run.messagesFound;
+    summary.messagesDownloaded += run.messagesDownloaded;
+    summary.attachmentsDownloaded += run.attachmentsDownloaded;
+    if (run.status !== "success") {
+      summary.errors.push({ mailboxId, code: "data_box_plus_sync_failed", message: run.errors?.[0]?.message || "Načítání této schránky selhalo." });
+    }
+  }
+  if (!summary.mailboxCount) summary.errors.push({ code: "data_box_plus_isds_missing", message: "Chybí přístup k datovým schránkám." });
+  summary.status = summary.errors.length >= summary.mailboxCount ? "failed" : summary.errors.length ? "partial" : "success";
+  const finishedAt = new Date().toISOString();
+  const syncRunId = await createSyncRun(db, finishedAt, "cloud-scheduler-summary", currentUser);
+  await finishSyncRun(db, syncRunId, { ...summary, finishedAt });
+  return { apiStatus: "ready", syncRunId, ...summary };
+}
+
 export async function runDataBoxPlusSync(env, currentUser = null, options = {}) {
   const db = dataBoxPlusDatabase(env, true);
   const startedAt = new Date().toISOString();
@@ -2101,7 +2142,10 @@ export async function runDataBoxPlusSync(env, currentUser = null, options = {}) 
   let attachmentsDownloaded = 0;
 
   try {
-    const accounts = await dataBoxPlusAccountConfigs(env);
+    const configuredAccounts = await dataBoxPlusAccountConfigs(env);
+    const accounts = options.mailboxId
+      ? configuredAccounts.filter((account) => plusMailboxId(account) === cleanString(options.mailboxId))
+      : configuredAccounts;
     if (!accounts.length) {
       errors.push({ message: "Chybí přístup k datovým schránkám.", code: "data_box_plus_isds_missing" });
     }

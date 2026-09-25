@@ -90,6 +90,7 @@ const sync = new Function(`
  const createSyncRun = async () => "run";
  const dataBoxPlusAccountConfigs = async env => env.accounts;
  const ensureDataBoxPlusMailboxes = async () => {};
+ const plusMailboxId = account => account.id;
  const ensureMailbox = async (_, account) => ({id: account.id});
  const fetchDataBoxMessageMetadata = async (_, account) => {
    if (account.fail) throw new Error("ISDS unavailable");
@@ -105,3 +106,43 @@ assert.equal((await sync({accounts:[{id:"one"},{id:"two",fail:true}]})).status,"
 assert.equal((await sync({accounts:[{id:"one",fail:true}]})).status,"failed");
 assert.equal((await sync({accounts:[{id:"one"}]})).status,"success");
 console.log("Sync audit distinguishes partial mailbox failures from no-change success");
+
+const isolated = await sync({accounts:[{id:"one"},{id:"two",fail:true}]}, null, {mailboxId:"one"});
+assert.equal(isolated.mailboxCount, 1);
+assert.equal(isolated.status, "success", "Scoped batch must not contact another mailbox");
+
+const aggregateSource = source.slice(source.indexOf("export async function completeDataBoxPlusSync("), source.indexOf("export async function runDataBoxPlusSync("));
+const aggregate = new Function(`
+ const MAX_MAILBOX_SLOT = 9999;
+ const cleanString = v => String(v ?? "").trim();
+ const numberValue = v => Number(v || 0);
+ class DataBoxPlusStoreError extends Error {}
+ const dataBoxPlusDatabase = env => env;
+ const createSyncRun = async () => "aggregate";
+ const finishSyncRun = async (db, id, patch) => { db.saved = patch; };
+ const rowToSyncRun = row => ({status:row.status,messagesFound:row.messages_found,messagesDownloaded:row.messages_downloaded,attachmentsDownloaded:row.attachments_downloaded,errors:JSON.parse(row.errors || "[]")});
+ ${aggregateSource.replace("export async function", "async function")}
+ return completeDataBoxPlusSync;
+`)();
+const auditRows = {
+ good: {finished_at:"finished",mailbox_count:1,status:"success",messages_found:5,messages_downloaded:2,attachments_downloaded:1},
+ bad: {finished_at:"finished",mailbox_count:1,status:"failed",messages_found:0,messages_downloaded:0,attachments_downloaded:0,errors:'[{"message":"ISDS login rejected"}]'},
+ incomplete: {finished_at:null,mailbox_count:1,status:"running"}
+};
+const auditDb = {prepare() {return {bind(id) {return {first:async () => auditRows[id]};}};}};
+const result = await aggregate(auditDb, {}, [
+ {mailboxId:"one",syncRunId:"good",messagesFound:999},
+ {mailboxId:"one",syncRunId:"good"},
+ {mailboxId:"two",syncRunId:"bad"},
+ {mailboxId:"three",syncRunId:"incomplete"},
+ {mailboxId:"four"}
+]);
+assert.equal(result.status,"partial");
+assert.equal(result.mailboxCount,4);
+assert.equal(result.messagesFound,5,"Totals are read from the server audit, not the scheduler payload");
+assert.equal(result.errors.length,3);
+assert.equal(auditDb.saved.finishedAt.length > 0,true);
+assert.equal((await aggregate(auditDb, {}, [{mailboxId:"one",syncRunId:"good"}])).status,"success");
+assert.equal((await aggregate(auditDb, {}, [{mailboxId:"one",syncRunId:"bad"}])).status,"failed");
+assert.equal((await aggregate(auditDb, {}, [])).status,"failed");
+console.log("Mailbox aggregate audit: server totals, deduplication, missing/failed batches and final status verified");

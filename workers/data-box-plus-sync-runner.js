@@ -22,7 +22,26 @@ async function postInternal(env, path, token, body = undefined) {
 }
 
 async function syncDataBoxPlus(env, token, scheduledAt) {
-  const response = await postInternal(env, "/api/data-box-plus/internal-sync", token, { scheduledAt });
+  const path = "/api/data-box-plus/internal-sync";
+  const planResponse = await postInternal(env, path, token, { mode: "plan", scheduledAt });
+  const plan = await planResponse.json().catch(() => ({}));
+  if (!planResponse.ok || !Array.isArray(plan.mailboxIds)) {
+    console.error("data_box_plus_sync.plan_failed", { status: planResponse.status });
+    return;
+  }
+  const results = [];
+  // One HTTP request per mailbox keeps independent ISDS/attachment work out of
+  // the shared request deadline. A failed box must not block the remaining ones.
+  for (const mailboxId of [...new Set(plan.mailboxIds)]) {
+    try {
+      const batchResponse = await postInternal(env, path, token, { mailboxId, scheduledAt });
+      const batch = await batchResponse.json().catch(() => ({}));
+      results.push({ mailboxId, syncRunId: batchResponse.ok ? batch.syncRunId : undefined });
+    } catch {
+      results.push({ mailboxId });
+    }
+  }
+  const response = await postInternal(env, path, token, { mode: "complete", scheduledAt, results });
   const summary = await response.json().catch(() => ({}));
   if (!response.ok) {
     console.error("data_box_plus_sync.failed", {
