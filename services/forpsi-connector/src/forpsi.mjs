@@ -63,6 +63,7 @@ export class Forpsi {
       if (args.subject) query.subject = args.subject;
       if (args.unread !== undefined) query.seen = !args.unread;
       if (args.since) query.since = new Date(`${args.since}T00:00:00Z`);
+      if (args.before) query.before = new Date(`${args.before}T00:00:00Z`);
       const all = (await client.search(query, { uid: true }) || []).sort((a, b) => b - a);
       const uids = all.slice(0, args.limit);
       const messages = [];

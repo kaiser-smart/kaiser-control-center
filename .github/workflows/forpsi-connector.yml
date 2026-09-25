@@ -7,8 +7,10 @@ on:
       - 'functions/_lib/auth.js'
       - 'functions/_lib/users-store.js'
       - 'src/components/ForpsiAdminPanel.js'
+      - 'src/components/ForpsiMailPanel.js'
       - 'src/app.js'
       - 'scripts/forpsi-admin.test.mjs'
+      - 'scripts/forpsi-mail.test.mjs'
       - '.github/workflows/forpsi-connector.yml'
   workflow_dispatch:
 permissions:
@@ -25,7 +27,7 @@ jobs:
         with:
           version: 11.19.0
       - run: pnpm --dir services/forpsi-connector install --frozen-lockfile --ignore-scripts
-      - run: node --test scripts/forpsi-admin.test.mjs services/forpsi-connector/test/*.test.mjs
+      - run: node --test scripts/forpsi-admin.test.mjs scripts/forpsi-mail.test.mjs services/forpsi-connector/test/*.test.mjs
       - run: node scripts/check-syntax.mjs
       - run: node scripts/build.mjs
       - run: pnpm --dir services/forpsi-connector build

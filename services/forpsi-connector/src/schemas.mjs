@@ -15,9 +15,10 @@ export const selectors = {
   mailbox: z.object({ mailboxId: id }).strict(),
   search: z.object({ mailboxId: id, folder: folder.default('INBOX'),
     text: z.string().max(500).optional(), from: header.optional(), subject: header.optional(),
-    unread: z.boolean().optional(), since: z.string().date().optional(),
+    unread: z.boolean().optional(), since: z.string().date().optional(), before: z.string().date().optional(),
     beforeUid: z.number().int().min(2).max(4294967295).optional(),
-    limit: z.number().int().min(1).max(50).default(20) }).strict(),
+    limit: z.number().int().min(1).max(50).default(20) }).strict()
+    .refine(p=>!p.since || !p.before || p.since<p.before,'End date must be after start date'),
   read: z.object({ mailboxId: id, message: reference }).strict(),
   draft: z.object({ mailboxId: id, message }).strict(),
   move: z.object({ mailboxId: id, message: reference, destination: folder }).strict(),

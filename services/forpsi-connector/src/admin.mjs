@@ -66,6 +66,7 @@ export async function executeAdmin(operation, raw, ctx) {
       rules: rules.slice(0,200), labels: labels.slice(0,200),
       truncated: { grants:grants.length>500, rules:rules.length>200, labels:labels.length>200 },
       capabilities: capabilities(), connectorEnabled: env.CONNECTOR_ENABLED === 'true',
+      soaiMailEnabled: env.SOAI_MAIL_ENABLED === 'true',
       credentialStorageReady: Boolean(env.CREDENTIALS_KEY), oauthConfigured: Boolean(env.OAUTH_ISSUER && env.OAUTH_JWKS_URL && env.MCP_RESOURCE),
       verificationMode: ctx.verificationMode ?? 'provider', checkedAt: Date.now() };
   }

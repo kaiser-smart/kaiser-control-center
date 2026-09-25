@@ -314,13 +314,13 @@ export async function verifySession(env, request) {
   return payload;
 }
 
-export async function currentUser(env, request) {
+export async function currentUser(env, request, options = {}) {
   const session = await verifySession(env, request);
   if (!session) {
     return null;
   }
 
-  const users = await getUsers(env);
+  const users = await getUsers(env, options);
   const user = users.find((item) => item.id === session.sub);
 
   if (!isUserActive(user)) {

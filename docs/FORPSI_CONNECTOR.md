@@ -2,7 +2,9 @@
 
 Cílový směr ručního nastavení: [uživatelem dodaná analýza](FORPSI_SETTINGS_TARGET.md) a [ověřované etapy realizace](FORPSI_SETTINGS_DELIVERY.md). Finální užší výběr voleb následuje až po ověření funkčního API; rozsah není požadavkem splnit každou položku katalogu.
 
-Etapa 2 (0.2.5 / SO.ai 0.1.809) doplňuje ruční správu přístupů: konkrétní kolega a schránka, pět jednotlivých práv, odebrání, serverová kontrola aktuálního adresáře, revize a atomický audit. Kontrakt a hranice jsou v [plánu etap](FORPSI_SETTINGS_DELIVERY.md#etapa-2--ruční-správa-přístupů). Zápis v izolovaném UI/API/SQLite prošel; produkční přiřazení práv nebylo provedeno. Nové identity SO.ai ještě nemají pracovní endpoint ani vazbu na ChatGPT OAuth.
+Etapa 2 (0.2.5 / SO.ai 0.1.809) doplnila ruční správu přístupů: konkrétní kolega a schránka, pět jednotlivých práv, odebrání, serverová kontrola aktuálního adresáře, revize a atomický audit. Kontrakt a hranice jsou v [plánu etap](FORPSI_SETTINGS_DELIVERY.md#etapa-2--ruční-správa-přístupů). Zápis v izolovaném UI/API/SQLite prošel; v této historické etapě nebylo provedeno produkční přiřazení práv ani pracovní endpoint.
+
+Navazující čtení (0.2.6 / SO.ai 0.1.810) přidává Poštu na `/dashboard?view=forpsi-mail`: výběr přístupné schránky a složky, hledání podle odesílatele, předmětu, nepřečtenosti a obou mezí data, stránkování a bezpečné textové čtení. `/api/forpsi/mail` odvozuje identitu pouze ze session a aktuálního firemního adresáře. Soukromý `/internal/mail` vynucuje grant `read`, aktivitu schránky, identity a firmu; oprávnění znovu ověřuje po odpovědi poskytovatele. Vypnutí uživatele v SO.ai blokuje také rozběhnutý požadavek před vydáním obsahu. Samostatný přepínač `SOAI_MAIL_ENABLED` zpřístupňuje pouze čtení. ChatGPT OAuth, MCP a odesílání zůstávají samostatné nedokončené kroky. Produkční důkaz je veden v dodacím protokolu; lokální test není důkaz nasazení.
 
 Na explicitní pokyn uživatele k zapnutí byla 25. 9. 2026 pilotní schránka po novém ověření všech čtyř služeb (23:26:12 Europe/Prague) povolena; stav „Povolená v konektoru“ byl načten z produkčního UI. To není zapnutí dosud nenakonfigurovaného ChatGPT přihlášení. MCP, cron a odesílání neběží. Výběr prioritních e-mailů nebyl dokončen; uživatel následně vrátil práci k nastavení.
 
@@ -66,9 +68,9 @@ Klíč hesel se nesmí prostě přepsat: stávající ciphertext by přestal bý
 
 ## Aktuální hranice
 
-- IMAP z nasazeného Workeru ověřil přihlášení a výpis složek, SMTP přihlášení bez odeslání, CardDAV dostupné adresáře a CalDAV vlastní kalendář. Čtení obsahu zpráv/kontaktů/událostí a zápisové operace konektoru nebyly v produkci testované. Jedinou změnou ve webmailu bylo schválené povolení CalDAV u kalendáře Vlastní.
+- IMAP z nasazeného Workeru ověřil přihlášení a výpis složek, SMTP přihlášení bez odeslání, CardDAV dostupné adresáře a CalDAV vlastní kalendář. Navazující etapa přidává pracovní čtení zpráv. Obsah kontaktů/událostí a zápisové operace zůstávají bez produkčního testu. Jedinou změnou ve webmailu bylo schválené povolení CalDAV u kalendáře Vlastní.
 - Štítky a pravidla jsou vlastní evidence konektoru. Nejsou nativními štítky a filtry Forpsi. Pravidla se zatím spouštějí ručně nad výběrem zpráv.
-- SO.ai umí spravovat granty pro stabilní firemní identity; pracovní endpoint a propojení s OAuth ještě zbývají. Editace pravidel, štítků a rušení fronty v administraci jsou další fáze.
+- SO.ai umí spravovat granty pro stabilní firemní identity; pracovní endpoint má pouze čtení pošty. Propojení s OAuth ještě zbývá. Editace pravidel, štítků a rušení fronty v administraci jsou další fáze.
 - Nativní soubory, úkoly, poznámky a podpisy nemají ověřenou integrační cestu ani implementovaný adaptér. Ve webmailu byly jejich položky nabídky viditelné, to není důkaz dostupného API.
 - CardDAV přístup je potvrzený skutečným výpisem adresářů. CalDAV discovery po povolení kalendáře Vlastní vrací dostupnou kolekci; Společný zůstává vypnutý. Konkrétní obchodní tarif nebyl ověřován a samotný úspěšný test jej nedokládá.
 - Odesílání zatím neumí přílohy ani editaci existujících konceptů. U kalendáře jsou zápisy omezené na jednoduché události bez účastníků/pozvánek/opakování.
@@ -79,7 +81,7 @@ Klíč hesel se nesmí prostě přepsat: stávající ciphertext by přestal bý
 
 `pnpm --dir services/forpsi-connector install --frozen-lockfile --ignore-scripts`
 
-`node --test scripts/forpsi-admin.test.mjs services/forpsi-connector/test/*.test.mjs`
+`node --test scripts/forpsi-admin.test.mjs scripts/forpsi-mail.test.mjs scripts/auth-session.test.mjs services/forpsi-connector/test/*.test.mjs`
 
 `node scripts/check-syntax.mjs` · `node scripts/build.mjs` · `pnpm --dir services/forpsi-connector build`
 
