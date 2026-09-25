@@ -12,7 +12,7 @@ import {
 } from "../../_lib/auth.js";
 
 export async function onRequestPost({ request, env }) {
-  const { identifier, code } = await readJson(request);
+  const { identifier, code, rememberMe } = await readJson(request);
   const normalized = normalizeIdentifier(identifier);
   const otp = String(code || "").trim();
 
@@ -49,7 +49,7 @@ export async function onRequestPost({ request, env }) {
     return json({ error: "Přihlášení se nepodařilo." }, 401);
   }
 
-  const sessionCookie = await createSessionCookie(env, user);
+  const sessionCookie = await createSessionCookie(env, user, rememberMe);
   console.log("auth.verify.success", { userId: user.id, role: user.role });
 
   return json(

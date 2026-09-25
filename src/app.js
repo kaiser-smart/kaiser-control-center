@@ -6795,6 +6795,11 @@ function loginPage() {
               : ""
           }
 
+          <label class="login-remember">
+            <input type="checkbox" name="rememberMe" ${authState.rememberMe ? "checked" : ""} ${busy ? "disabled" : ""} />
+            <span>Pamatuj si mě na 30 dní</span>
+          </label>
+
           <button class="primary-action" type="submit" ${busy ? "disabled" : ""}>
             ${busy ? "Pracuji..." : codeStep ? "Přihlásit" : "Poslat ověřovací kód"}
           </button>
@@ -54548,6 +54553,7 @@ async function importAppearanceSettings(input) {
 }
 
 async function startLogin(form) {
+  authState.rememberMe = form.elements.rememberMe.checked;
   const identifier = form.elements.identifier.value.trim();
 
   if (!identifier) {
@@ -54593,6 +54599,8 @@ async function startLogin(form) {
 }
 
 async function verifyLogin(form) {
+  const rememberMe = form.elements.rememberMe.checked;
+  authState.rememberMe = rememberMe;
   const identifier = authState.pendingIdentifier || form.elements.identifier.value.trim();
   const code = form.elements.code.value.trim();
 
@@ -54613,7 +54621,7 @@ async function verifyLogin(form) {
   try {
     const result = await apiJson("/api/auth/verify", {
       method: "POST",
-      body: JSON.stringify({ identifier, code })
+      body: JSON.stringify({ identifier, code, rememberMe })
     });
 
     authState = {
