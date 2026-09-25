@@ -30185,7 +30185,7 @@ function dataBoxPlusTriageStatusNotice() {
   return `
     <div class="ds-plus-status-note ds-plus-triage-mode-note ${details.length ? "ds-plus-status-note--warning" : ""}" role="status">
       <strong>Automatické načítání</strong>
-      <span>Zprávy se z ISDS načítají automaticky každou celou hodinu.${details.length ? ` ${escapeHtml(details.join(" "))}` : ""}</span>
+      <span>Zprávy se z ISDS načítají automaticky každých 30 minut.${details.length ? ` ${escapeHtml(details.join(" "))}` : ""}</span>
     </div>
   `;
 }
@@ -30413,9 +30413,9 @@ function dataBoxPlusTriageInbox() {
             ${mailboxes.map((mailbox) => `<option value="${escapeHtml(mailbox.id)}" ${mailbox.id === selectedMailbox.id ? "selected" : ""}>${escapeHtml(mailbox.name || mailbox.company || "Datová schránka")}</option>`).join("")}
           </select>
           <h2 class="sr-only" id="ds-plus-triage-inbox-title">${escapeHtml(selectedMailbox.name || selectedMailbox.company || "Datová schránka")}</h2>
-          <p>${escapeHtml(dataBoxPlusTriageSyncLabel(selectedMailbox))} · ${escapeHtml(connection.label)} · Automaticky každou hodinu</p>
+          <p>${escapeHtml(dataBoxPlusTriageSyncLabel(selectedMailbox))} · ${escapeHtml(connection.label)} · Automaticky každých 30 minut</p>
         </div>
-        <span class="ds-plus-state-pill">Automaticky každou hodinu</span>
+        <span class="ds-plus-state-pill">Automaticky každých 30 minut</span>
       </div>
       ${dataBoxPlusTriageFolderNav(dataBoxPlusMessages(), selectedMailbox.id)}
       ${receivedFolder ? dataBoxPlusTriageQueueNav(counts) : ""}
@@ -31033,7 +31033,7 @@ function dataBoxPlusEventLogBlock() {
       "Automatizace v cloudu",
       cloudSync.isRunning ? "běží" : (cloudSync.latestCloud ? "částečně ověřeno" : "čeká na ověření"),
       cloudSync.isRunning
-        ? `Poslední cloudové načtení: ${cloudSync.lastLabel}. Další běh je v následující celou hodinu.`
+        ? `Poslední cloudové načtení: ${cloudSync.lastLabel}. Další běh je v následující celou nebo půl hodinu.`
         : (cloudSync.latestCloud
           ? `Poslední cloudové načtení: ${cloudSync.lastLabel}. Čekám na čerstvý úspěšný běh.`
           : "Zatím není doložený cloudový běh načítání.")
@@ -31197,7 +31197,7 @@ function dataBoxPlusSettingsPanel() {
         <summary>Zobrazit diagnostiku</summary>
         <div>
           <p>Poslední načtení: ${escapeHtml(dataBoxPlusState.syncRuns?.[0]?.startedAt ? formatDateTime(dataBoxPlusState.syncRuns[0].startedAt) : "zatím neproběhlo")}.</p>
-          <p>Zprávy se načítají automaticky každou celou hodinu. Ruční načítání není v aplikaci dostupné.</p>
+          <p>Zprávy se načítají automaticky každých 30 minut. Ruční načítání není v aplikaci dostupné.</p>
         </div>
       </details>
     </section>
@@ -32302,7 +32302,7 @@ function dataBoxAutoSyncInfo() {
   return `
     <section class="data-box-side-card data-box-side-card--sync">
       <span>Automatické načítání</span>
-      <strong>Cloudové načítání každou celou hodinu</strong>
+      <strong>Cloudové načítání každých 30 minut</strong>
       <small>Stav vychází z logu synchronizace. Načítání běží bez otevřené aplikace a tato obrazovka nespouští žádné odesílání.</small>
     </section>
   `;
@@ -32341,7 +32341,7 @@ function dataBoxStatusAndSyncCard(connection, selectedAccount, context, directio
       ${dataBoxErrorNotice(connection)}
       <dl class="data-box-side-status">
         <div><dt>Poslední synchronizace</dt><dd>${escapeHtml(dataBoxLastSyncLabel())}</dd></div>
-        <div><dt>Plán načítání</dt><dd>Automaticky každou celou hodinu</dd></div>
+        <div><dt>Plán načítání</dt><dd>Automaticky každých 30 minut</dd></div>
         <div><dt>Schránka</dt><dd>${escapeHtml(selectedAccount ? selectedAccount.label : context.title)}</dd></div>
         ${dataBoxAiSortingInfo(direction)}
         ${dataBoxVaultInfo(metrics)}
@@ -35391,7 +35391,7 @@ function dataBoxRulesAutomation(user) {
     moduleName: "Datová schránka",
     user,
     description: "Pravidla pro třídění, upozornění a práci se zprávami.",
-    cloudNote: "DS pravidla jsou v cloud DB. Cloud runner načítá zprávy každou celou hodinu; e-maily vyžadují ruční potvrzení."
+    cloudNote: "DS pravidla jsou v cloud DB. Cloud runner načítá zprávy každých 30 minut; e-maily vyžadují ruční potvrzení."
   });
 }
 

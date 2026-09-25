@@ -3,7 +3,7 @@ function appBaseUrl(env) {
 }
 
 export function isDataBoxDue(scheduledTime) {
-  return new Date(scheduledTime).getUTCMinutes() === 0;
+  return new Date(scheduledTime).getUTCMinutes() % 30 === 0;
 }
 
 export function isArchiveDue(scheduledTime) {
@@ -81,10 +81,10 @@ export default {
   async fetch() {
     return Response.json({
       status: "ready",
-      dataBoxPlusIntervalMinutes: 60,
+      dataBoxPlusIntervalMinutes: 30,
       archiveBatchIntervalMinutes: 5,
       mailboxScope: "all-current-and-future",
-      message: "Nové zprávy se načítají každou hodinu a vlastní archiv KSO doplňuje obnovitelné dávky každých pět minut pro všechny současné i budoucí schránky."
+      message: "Nové zprávy se načítají každých 30 minut a vlastní archiv KSO doplňuje obnovitelné dávky každých pět minut pro všechny současné i budoucí schránky."
     });
   }
 };

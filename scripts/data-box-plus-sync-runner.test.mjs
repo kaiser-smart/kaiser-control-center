@@ -6,14 +6,14 @@ const wranglerSource = readFileSync(new URL("../wrangler.data-box-plus-sync-runn
 const storeSource = readFileSync(new URL("../functions/_lib/data-box-plus-store.js", import.meta.url), "utf8");
 
 assert.equal(isDataBoxDue(Date.parse("2026-07-23T08:00:00.000Z")), true);
-assert.equal(isDataBoxDue(Date.parse("2026-07-23T08:30:00.000Z")), false);
+assert.equal(isDataBoxDue(Date.parse("2026-07-23T08:30:00.000Z")), true);
 assert.equal(isDataBoxDue(Date.parse("2026-07-23T08:59:59.000Z")), false);
 assert.equal(isArchiveDue(Date.parse("2026-07-23T08:00:00.000Z")), true);
 assert.equal(isArchiveDue(Date.parse("2026-07-23T08:05:00.000Z")), true);
 assert.equal(isArchiveDue(Date.parse("2026-07-23T08:03:00.000Z")), false);
 assert.match(wranglerSource, /crons = \["\*\/5 \* \* \* \*"\]/);
-assert.match(storeSource, /intervalMinutes: 60/);
-assert.match(storeSource, /Automatické načítání běží serverově každou celou hodinu/);
+assert.match(storeSource, /intervalMinutes: 30/);
+assert.match(storeSource, /Automatické načítání běží serverově každých 30 minut/);
 assert.match(storeSource, /const fullyStored = storedAttachments\.length > 0/);
 assert.match(storeSource, /cleanString\(attachment\.storage_key\)/);
 assert.match(storeSource, /data_box_plus_sync_stale/);
@@ -70,10 +70,24 @@ try {
   await Promise.all(archiveOnlyPending);
   assert.equal(calls.at(-1).url, "https://smart-odpady.ai/api/data-box-plus/internal-archive");
 
+  const halfHourPending = [];
+  const beforeHalfHour = calls.length;
+  await worker.scheduled({ scheduledTime: Date.parse("2026-09-25T09:30:00.000Z") }, env, {
+    waitUntil(promise) { halfHourPending.push(promise); }
+  });
+  await Promise.all(halfHourPending);
+  assert.deepEqual(calls.slice(beforeHalfHour).map(({ url }) => new URL(url).pathname), [
+    "/api/data-box-plus/internal-sync", "/api/data-box-plus/internal-archive"
+  ]);
+
+  for (let minute = 0; minute < 60; minute += 1) {
+    assert.equal(isDataBoxDue(Date.UTC(2026, 8, 25, 9, minute)), minute === 0 || minute === 30);
+  }
+
   const readiness = await worker.fetch();
   const payload = await readiness.json();
   assert.equal(payload.status, "ready");
-  assert.equal(payload.dataBoxPlusIntervalMinutes, 60);
+  assert.equal(payload.dataBoxPlusIntervalMinutes, 30);
   assert.equal(payload.archiveBatchIntervalMinutes, 5);
   assert.equal(payload.mailboxScope, "all-current-and-future");
   assert.match(payload.message, /vlastní archiv KSO/);
@@ -81,4 +95,4 @@ try {
   globalThis.fetch = originalFetch;
 }
 
-console.log("data-box-plus sync runner hourly corridor ok");
+console.log("data-box-plus sync runner half-hourly corridor ok");

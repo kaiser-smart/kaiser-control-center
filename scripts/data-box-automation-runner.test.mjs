@@ -72,7 +72,7 @@ assert.doesNotMatch(runnerSource, /sendDataBoxReply/);
 assert.match(actionStoreSource, /wasCreated: false/);
 assert.match(actionStoreSource, /wasCreated: true/);
 assert.match(appSource, /Automatické odeslání e-mailu bez ručního potvrzení/);
-assert.match(appSource, /Další běh je v následující celou hodinu/);
+assert.match(appSource, /Další běh je v následující celou nebo půl hodinu/);
 
 const response = await worker.fetch();
 const readiness = await response.json();
