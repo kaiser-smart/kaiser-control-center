@@ -5,6 +5,8 @@ on:
     paths:
       - "functions/_lib/vistos-*.js"
       - "functions/_lib/receivables-*.js"
+      - "workers/receivables-invoice-sync-runner.js"
+      - "wrangler.receivables-invoice-sync-runner.toml"
       - "scripts/receivables-*.mjs"
       - "src/data/receivablesInvoicePagination.js"
       - "functions/api/receivables/vistos/**"

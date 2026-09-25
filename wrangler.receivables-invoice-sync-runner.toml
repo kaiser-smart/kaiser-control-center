@@ -1,0 +1,22 @@
+name = "kaiser-receivables-invoice-sync-runner"
+main = "workers/receivables-invoice-sync-runner.js"
+compatibility_date = "2026-06-26"
+workers_dev = false
+
+[vars]
+APP_BASE_URL = "https://smart-odpady.ai"
+D1_CAPACITY_BLOCK_BULK_WRITES = "true"
+RECEIVABLES_INVOICE_SYNC_ENABLED = "true"
+
+[[d1_databases]]
+binding = "DB_ARCHIVE"
+database_name = "SMART_ODPADY_ARCHIVE"
+database_id = "b10566be-ebb1-414c-beab-eac03f1a909b"
+
+[[d1_databases]]
+binding = "DB_AUDIT"
+database_name = "SMART_ODPADY_AUDIT"
+database_id = "5abc8fa4-c155-4bf0-9c46-2db73d6d98e0"
+
+[triggers]
+crons = ["*/15 * * * *"]

@@ -9,7 +9,6 @@ MODULE_AUTOMATION_TIME_ZONE = "Europe/Prague"
 MODULE_AUTOMATION_MODE = "dry-run"
 APP_BASE_URL = "https://smart-odpady.ai"
 D1_CAPACITY_BLOCK_BULK_WRITES = "true"
-RECEIVABLES_INVOICE_SYNC_ENABLED = "true"
 
 [[d1_databases]]
 binding = "DB_CORE"
