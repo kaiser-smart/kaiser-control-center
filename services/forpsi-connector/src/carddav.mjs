@@ -54,13 +54,13 @@ function patchCard(card, patch) {
 
 export class CardDav extends CalDav {
   async addressBooks() {
-    const root = await this.propfind('https://syncdav.forpsi.com/', '<d:current-user-principal/>');
+    const root = await this.propfind('https://syncdav.forpsi.com/', '<d:current-user-principal/>', '0', 'root');
     const principal = root.find(r => r.props['current-user-principal']?.href)?.props['current-user-principal'].href;
     requireValue(principal, 'CARDDAV_DISCOVERY_UNAVAILABLE');
-    const user = await this.propfind(safeDavUrl(principal), '<a:addressbook-home-set/>');
+    const user = await this.propfind(safeDavUrl(principal), '<a:addressbook-home-set/>', '0', 'principal');
     const home = user.find(r => r.props['addressbook-home-set']?.href)?.props['addressbook-home-set'].href;
     requireValue(home, 'CARDDAV_DISCOVERY_UNAVAILABLE');
-    const collections = await this.propfind(safeDavUrl(home), '<d:displayname/><d:resourcetype/>', '1');
+    const collections = await this.propfind(safeDavUrl(home), '<d:displayname/><d:resourcetype/>', '1', 'collections');
     return { addressBooks: collections.filter(r => Object.hasOwn(r.props.resourcetype ?? {}, 'addressbook')).map(r => ({
       id: opaque(safeDavUrl(r.href)), name: r.props.displayname ?? '' })) };
   }

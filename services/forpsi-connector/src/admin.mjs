@@ -5,6 +5,7 @@ import { seal } from './crypto.mjs';
 import { credentialContext } from './credentials.mjs';
 import { capabilities } from './capabilities.mjs';
 import { requireValue, ConnectorError } from './errors.mjs';
+import { providerDiagnostic } from './diagnostics.mjs';
 
 const id = z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/);
 const revision = z.number().int().positive();
@@ -103,7 +104,10 @@ export async function executeAdmin(operation, raw, ctx) {
   }
   // Read-only provider diagnostics. SMTP VERIFY never sends a message.
   const outcome = { mode:ctx.verificationMode ?? 'provider', imap:'failed',smtp:'failed',calendar:'failed',contacts:'failed' };
-  const check = async (key, fn) => { try { const result=await fn(); outcome[key]=result==='empty'?'empty':'verified'; } catch { /* Never expose provider errors/secrets. */ } };
+  const check = async (key, fn) => {
+    try { const result=await fn(); outcome[key]=result==='empty'?'empty':'verified'; }
+    catch (error) { (outcome.diagnostics ??= {})[key] = providerDiagnostic(error); }
+  };
   await Promise.all([
     check('imap', async () => { const result = await providerFactory(env,m).listFolders(); outcome.supportsMove = result.supportsMove === true; }),
     check('smtp', async () => requireValue(await providerFactory(env,m).verifySmtp() === true, 'SMTP_VERIFY_FAILED')),

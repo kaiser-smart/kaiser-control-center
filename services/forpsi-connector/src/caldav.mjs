@@ -3,7 +3,7 @@ import { XMLParser } from 'fast-xml-parser';
 import ICAL from 'ical.js';
 import { z } from 'zod';
 import { id } from './schemas.mjs';
-import { requireValue } from './errors.mjs';
+import { requireValue, ConnectorError } from './errors.mjs';
 
 const ORIGIN = 'https://syncdav.forpsi.com';
 const array = value => value === undefined ? [] : Array.isArray(value) ? value : [value];
@@ -84,26 +84,31 @@ export class CalDav {
     const response = await this.fetcher(safeDavUrl(url), { method, redirect: 'error',
       signal: AbortSignal.timeout(20000), headers: { authorization,
         'content-type': 'application/xml; charset=utf-8', ...headers }, ...(body === undefined ? {} : { body }) });
-    requireValue(response.status !== 412, 'CALENDAR_VERSION_CONFLICT');
-    requireValue(response.status !== 401 && response.status !== 403, 'CALDAV_ACCESS_DENIED');
-    requireValue(response.ok, 'CALDAV_UNAVAILABLE');
+    if (!response.ok) {
+      const error = new ConnectorError(response.status === 412 ? 'CALENDAR_VERSION_CONFLICT' :
+        [401,403].includes(response.status) ? 'CALDAV_ACCESS_DENIED' : 'CALDAV_UNAVAILABLE');
+      error.httpStatus = response.status;
+      await response.body?.cancel();
+      throw error;
+    }
     const chunks = []; let length = 0;
     if (response.body) for await (const chunk of response.body) {
       length += chunk.length; requireValue(length <= 2 * 1024 * 1024, 'DAV_RESPONSE_TOO_LARGE'); chunks.push(chunk);
     }
     return { text: Buffer.concat(chunks).toString('utf8'), etag: response.headers.get('etag') };
   }
-  async propfind(url, properties, depth = '0') {
-    return multistatus((await this.request(url, 'PROPFIND', xml(properties), { depth })).text);
+  async propfind(url, properties, depth = '0', stage) {
+    try { return multistatus((await this.request(url, 'PROPFIND', xml(properties), { depth })).text); }
+    catch (error) { error.davStage = stage; throw error; }
   }
   async calendars() {
-    const root = await this.propfind(`${ORIGIN}/`, '<d:current-user-principal/>');
+    const root = await this.propfind(`${ORIGIN}/`, '<d:current-user-principal/>', '0', 'root');
     const principal = root.find(r => r.props['current-user-principal']?.href)?.props['current-user-principal'].href;
     requireValue(principal, 'CALDAV_DISCOVERY_UNAVAILABLE');
-    const user = await this.propfind(safeDavUrl(principal), '<c:calendar-home-set/>');
+    const user = await this.propfind(safeDavUrl(principal), '<c:calendar-home-set/>', '0', 'principal');
     const home = user.find(r => r.props['calendar-home-set']?.href)?.props['calendar-home-set'].href;
     requireValue(home, 'CALDAV_DISCOVERY_UNAVAILABLE');
-    const collections = await this.propfind(safeDavUrl(home), '<d:displayname/><d:resourcetype/><c:supported-calendar-component-set/>', '1');
+    const collections = await this.propfind(safeDavUrl(home), '<d:displayname/><d:resourcetype/><c:supported-calendar-component-set/>', '1', 'collections');
     return { calendars: collections.filter(r => Object.hasOwn(r.props.resourcetype ?? {}, 'calendar')).map(r => ({
       id: opaque(safeDavUrl(r.href)), name: r.props.displayname ?? '',
       components: array(r.props['supported-calendar-component-set']?.comp).map(c => c['@_name']),
