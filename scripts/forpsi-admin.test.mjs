@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSessionCookie } from '../functions/_lib/auth.js';
+import { createSessionCookie, getUsers } from '../functions/_lib/auth.js';
 import { forwardForpsiAdmin } from '../functions/api/forpsi/admin.js';
 import { createWorker } from '../services/forpsi-connector/src/worker.mjs';
 import { fixture } from '../services/forpsi-connector/test/fixtures.mjs';
@@ -134,6 +134,8 @@ test('access administration requires user permissions as well as settings and fa
   env.DB_CORE={prepare:()=>({all:async()=>{throw new Error('synthetic outage');}})};
   const result=await forwardForpsiAdmin({env,request:signed});assert.equal(result.status,503);
   assert.equal((await result.json()).code,'DIRECTORY_UNAVAILABLE');assert.equal(calls,0);
+  await assert.rejects(getUsers({APP_ENV:'production'},{strict:true}),/Databáze uživatelů/);
+  await assert.rejects(getUsers({AUTH_USERS_JSON:'not json'},{strict:true}));
 });
 test('access form uses isolated API and SQL; guards changes, preserves failed save, clears rights and reads back',async()=>{
   const {env}=setup();

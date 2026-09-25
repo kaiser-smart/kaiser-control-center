@@ -99,9 +99,10 @@ export async function executeAdmin(operation, raw, ctx) {
     return mutate(store,m,statements,actorId,'admin.save',changeId);
   }
   const m = await mailbox(store, tenant, p.id);
-  if (operation === 'access_list') return {access:await listAccess(m,ctx)};
+  const publicView=async()=>publicMailbox(await store.first(`SELECT ${publicColumns} FROM mailboxes m WHERE m.id=? AND m.tenant_id=?`,m.id,tenant));
+  if (operation === 'access_list') return {access:await listAccess(m,ctx),mailbox:await publicView()};
   requireValue(m.revision === p.revision, 'VERSION_CONFLICT');
-  if (operation === 'access_save') return saveAccess(m,p,ctx);
+  if (operation === 'access_save') return {...await saveAccess(m,p,ctx),mailbox:await publicView()};
   if (operation === 'resources') {
     const resources = await readResources(m,ctx);
     requireValue((await mailbox(store,tenant,m.id)).revision === m.revision, 'VERSION_CONFLICT');

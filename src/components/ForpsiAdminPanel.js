@@ -111,7 +111,7 @@ async function loadAccess(id) {
   const epoch=state.epoch; state.busy=true; state.error=''; paint();
   try { const result=await command('access_list',{id}); if(epoch!==state.epoch) return;
     state.accessData=result; state.accessDraft=null; state.dirty=false;
-    state.data.mailboxes=state.data.mailboxes.map(m=>m.id===id?{...m,revision:result.access.revision}:m);
+    state.data.mailboxes=state.data.mailboxes.map(m=>m.id===id?result.mailbox:m);
   } catch(e) { if(epoch===state.epoch) {state.accessData=null;state.accessDraft=null;state.error=e.message;} }
   finally { if(epoch===state.epoch) {state.busy=false;paint();} }
 }
@@ -121,7 +121,7 @@ async function saveAccessDraft() {
   const epoch=state.epoch; state.busy=true; state.error=''; paint();
   try { const result=await command('access_save',payload); if(epoch!==state.epoch) return false;
     state.accessData=result; state.accessDraft=null; state.dirty=false;
-    state.data.mailboxes=state.data.mailboxes.map(m=>m.id===payload.id?{...m,revision:result.access.revision}:m);
+    state.data.mailboxes=state.data.mailboxes.map(m=>m.id===payload.id?result.mailbox:m);
     state.notice='Oprávnění jsou uložená a znovu načtená ze serveru.';return true;
   } catch(e) {if(epoch===state.epoch) state.error=e.message;return false;}
   finally {if(epoch===state.epoch) {state.busy=false;paint();}}

@@ -218,6 +218,9 @@ export async function listStoredUsers(env, { strict = false } = {}) {
   const db = userDatabase(env);
 
   if (!db) {
+    if (strict && (env.APP_ENV === "production" || env.CF_PAGES_BRANCH === "main")) {
+      throw new UserStoreError("Databáze uživatelů není dostupná.", 503, "users_database_missing");
+    }
     return [];
   }
 

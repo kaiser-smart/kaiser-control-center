@@ -46,6 +46,12 @@ test('a competing change between validation and transaction leaves no new identi
   assert.equal(await f.store.identity(SOAI_ISSUER,'so-colleague'),null);
   assert.equal((await f.store.rows("SELECT * FROM audit WHERE action='admin.access.save'")).length,0);
 });
+test('access refresh includes all current public mailbox fields, never a fresh revision with stale settings',async()=>{
+  const f=context();f.sqlite.exec("UPDATE mailboxes SET revision=2,active=0,display_name='New name',sent_folder='New sent' WHERE id='mail-a'");
+  const {mailbox:m}=await executeAdmin('access_list',{id:'mail-a'},f);
+  assert.equal(m.revision,2);assert.equal(m.active,0);assert.equal(m.display_name,'New name');assert.equal(m.sent_folder,'New sent');
+  assert.equal(Object.hasOwn(m,'credential_key'),false);
+});
 test('grant validation denies foreign mailbox, tenant identity collision, disabled identities and invalid selections',async()=>{
   const f=context();
   await assert.rejects(executeAdmin('access_save',{...change(1),id:'mail-b'},f),/MAILBOX_NOT_FOUND/);
