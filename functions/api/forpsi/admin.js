@@ -1,4 +1,5 @@
-import { requireUserPermission, json } from '../../_lib/auth.js';
+import { requireUserPermission, getUsers, json } from '../../_lib/auth.js';
+import { hasPermission, isUserActive } from '../../../src/permissions.js';
 
 const messages = {
   ADMIN_NOT_CONFIGURED:'Propojení s konektorem ještě není nastavené.',
@@ -7,6 +8,9 @@ const messages = {
   VERSION_CONFLICT:'Nastavení mezitím někdo změnil. Obnovte přehled a úpravu opakujte.',
   MAILBOX_EXISTS:'Schránka je již uložená. Obnovte přehled a otevřete její nastavení.',
   MAILBOX_NOT_FOUND:'Schránka nebyla nalezena.',
+  ACCESS_DENIED:'K této schránce nebo identitě nelze přidělit přístup.',
+  PRINCIPAL_DISABLED:'Identita konektoru je vypnutá. Lze jí pouze odebrat oprávnění.',
+  PRINCIPAL_NOT_FOUND:'Tento účet nemá uložená oprávnění. Obnovte přehled.',
   FOLDER_RELOAD_REQUIRED:'Nejprve uložte přihlašovací údaje. Potom načtěte skutečné složky a vyberte jejich použití.',
   FOLDER_NOT_AVAILABLE:'Vybraná složka již není dostupná pro zprávy. Načtěte složky znovu a upravte výběr.',
   INVALID_INPUT:'Zkontrolujte vyplněné údaje.',
@@ -35,8 +39,26 @@ export async function forwardForpsiAdmin({request,env}) {
       const bytes=new Uint8Array(size); let offset=0; for(const part of parts) { bytes.set(part,offset); offset+=part.byteLength; }
       command=JSON.parse(new TextDecoder().decode(bytes));
       if(!command || Object.keys(command).some(k=>!['operation','payload'].includes(k)) ||
-        !['save','verify','resources','set_active'].includes(command.operation) || !command.payload || typeof command.payload!=='object') throw new Error();
+        !['save','verify','resources','set_active','access_list','access_save'].includes(command.operation) || !command.payload || typeof command.payload!=='object') throw new Error();
     } catch { return json({error:messages.INVALID_INPUT},400); }
+  }
+  let directory;
+  if (['access_list','access_save'].includes(command.operation)) {
+    // Stable SO.ai IDs only. Re-read the canonical directory, including disabled users.
+    // Fail closed if the configured user database is unavailable instead of using fallback defaults.
+    try { directory=await getUsers(env,{strict:true}); }
+    catch { return json({error:'Adresář kolegů není dostupný. Žádná oprávnění se nezměnila.',code:'DIRECTORY_UNAVAILABLE'},503); }
+    const actor=directory.find(item=>item.id===user.id);
+    const action=command.operation==='access_save'?'edit':'view';
+    if(!hasPermission(actor,'settings','manage') || !hasPermission(actor,'users',action)) return json({error:'Ke správě přístupů potřebujete také oprávnění správy uživatelů.'},403);
+    if(directory.length>1000) return json({error:'Adresář přesáhl limit pro výběr kolegů.',code:'ADMIN_LIMIT_EXCEEDED'},503);
+    if(command.operation==='access_save') {
+      const p=command.payload;
+      if(!Array.isArray(p.actions) || typeof p.userId!=='string') return json({error:messages.INVALID_INPUT},400);
+      const target=directory.find(item=>item.id===p.userId);
+      // Revocation remains possible for a disabled or removed user; it cannot create new access.
+      if(p.actions.length && !isUserActive(target)) return json({error:'Vybraný kolega není aktivní uživatel SO.ai.',code:'USER_NOT_ACTIVE'},409);
+    }
   }
   try {
     const result=await env.FORPSI_CONNECTOR.fetch(new Request('https://forpsi.internal/internal/admin',{
@@ -45,6 +67,10 @@ export async function forwardForpsiAdmin({request,env}) {
     }));
     const body=await result.json();
     if(!result.ok) return json({error:messages[body.error] || 'Konektor není dostupný. Změnu nepovažujte za uloženou.',code:Object.hasOwn(messages,body.error)?body.error:'ADMIN_UNAVAILABLE'},result.status>=400?result.status:503);
+    if(directory) {
+      body.users=directory.map(item=>({id:item.id,name:item.name || '',email:item.email || '',active:isUserActive(item)}));
+      body.canManageAccess=hasPermission(directory.find(item=>item.id===user.id),'users','edit');
+    }
     return json(body);
   } catch { return json({error:'Konektor neodpověděl. Obnovte stav před opakováním změny.',code:'ADMIN_UNAVAILABLE'},503); }
 }

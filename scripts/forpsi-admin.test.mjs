@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSessionCookie } from '../functions/_lib/auth.js';
+import { createSessionCookie, getUsers } from '../functions/_lib/auth.js';
 import { forwardForpsiAdmin } from '../functions/api/forpsi/admin.js';
 import { createWorker } from '../services/forpsi-connector/src/worker.mjs';
 import { fixture } from '../services/forpsi-connector/test/fixtures.mjs';
-import { mountForpsiAdmin, forpsiDirtyTarget, discardForpsiDraft } from '../src/components/ForpsiAdminPanel.js';
+import { mountForpsiAdmin, forpsiDirtyTarget, discardForpsiDraft, saveForpsiDraft } from '../src/components/ForpsiAdminPanel.js';
 
 test('panel navigation ignores unrelated forms but still protects its own unsaved draft',async()=>{
   const listeners={};
@@ -105,5 +105,62 @@ test('loading resources preserves the dirty form, excludes parent folders and is
   oldPending({resources:{mailboxId:'ui-mail',revision:1,folders:{items:[{path:'private-leak'}]}}});
   await new Promise(resolve=>setImmediate(resolve));
   assert.ok(!root.innerHTML.includes('private-leak'));assert.ok(!root.innerHTML.includes('Unsaved'));assert.equal(forpsiDirtyTarget(),null);
+  root.isConnected=false;
+});
+
+test('access administration validates canonical active users and never trusts email or target permissions from browser',async()=>{
+  const {env,f}=setup();
+  const send=async body=>forwardForpsiAdmin({env,request:await req(env,admin,body)});
+  const body={operation:'access_save',payload:{id:'mail-a',revision:1,userId:user.id,actions:['read','write']}};
+  let r=await send(body);assert.equal(r.status,200);let result=await r.json();
+  assert.equal(result.access.revision,2);assert.equal(result.canManageAccess,true);
+  assert.ok(result.users.some(u=>u.id===user.id));assert.ok(result.users.every(u=>!Object.hasOwn(u,'phone')&&!Object.hasOwn(u,'permissions')));
+  const actor=await f.store.identity('urn:smart-odpady:session',user.id);assert.ok(actor);
+  assert.equal((await send({...body,payload:{...body.payload,revision:2,userId:'nonexistent'}})).status,409);
+  assert.equal((await send({...body,payload:{...body.payload,revision:2,email:admin.email}})).status,400);
+  env.AUTH_USERS_JSON=JSON.stringify([admin,{...user,active:false,status:'disabled'}]);
+  assert.equal((await send({...body,payload:{...body.payload,revision:2}})).status,409);
+  r=await send({...body,payload:{...body.payload,revision:2,actions:[]}});assert.equal(r.status,200);
+  await assert.rejects(f.store.access({id:actor.id,scopes:['forpsi:read']},'mail-a','read'),/ACCESS_DENIED/);
+  assert.equal(f.calls.length,0);
+});
+test('access administration requires user permissions as well as settings and fails closed on directory outage',async()=>{
+  const {env}=setup();const restricted={...user,permissions:['settings:manage'],role:'readonly'};
+  env.AUTH_USERS_JSON=JSON.stringify([admin,restricted]);
+  const body={operation:'access_list',payload:{id:'mail-a'}};
+  assert.equal((await forwardForpsiAdmin({env,request:await req(env,restricted,body)})).status,403);
+  const signed=await req(env,admin,body);let calls=0;
+  env.FORPSI_CONNECTOR.fetch=()=>{calls++;throw new Error();};
+  env.DB_CORE={prepare:()=>({all:async()=>{throw new Error('synthetic outage');}})};
+  const result=await forwardForpsiAdmin({env,request:signed});assert.equal(result.status,503);
+  assert.equal((await result.json()).code,'DIRECTORY_UNAVAILABLE');assert.equal(calls,0);
+  await assert.rejects(getUsers({APP_ENV:'production'},{strict:true}),/Databáze uživatelů/);
+  await assert.rejects(getUsers({AUTH_USERS_JSON:'not json'},{strict:true}));
+});
+test('access form uses isolated API and SQL; guards changes, preserves failed save, clears rights and reads back',async()=>{
+  const {env}=setup();
+  const listeners={};let pendingGuard;
+  const root={isConnected:true,innerHTML:'',addEventListener:(name,fn)=>{listeners[name]=fn;},querySelector:()=>null,querySelectorAll:()=>[]};
+  let failSave=false;
+  const apiJson=async(_url,options)=>{
+    const body=options?JSON.parse(options.body):undefined;
+    if(failSave && body?.operation==='access_save') throw new Error('TEST unavailable');
+    const r=await forwardForpsiAdmin({env,request:await req(env,admin,body)});const data=await r.json();
+    if(!r.ok)throw new Error(data.error);return data;
+  };
+  const waitForText=async text=>{const end=Date.now()+3000;while(!root.innerHTML.includes(text) && Date.now()<end) await new Promise(resolve=>setTimeout(resolve,10));assert.ok(root.innerHTML.includes(text));};
+  mountForpsiAdmin({querySelector:()=>root},{owner:'access-ui-owner',apiJson,guard:action=>{pendingGuard=action;}});
+  await waitForText('Přidat schránku');
+  const click=(action,more={})=>listeners.click({target:{closest:()=>({dataset:{forpsiAction:action,...more}})},preventDefault(){},stopPropagation(){}});
+  click('tab',{tab:'access'});click('access-load',{id:'mail-a'});await waitForText('Vyberte kolegu');
+  assert.match(root.innerHTML,/Vyberte kolegu/);
+  listeners.change({target:{matches:()=>true,value:user.id}});
+  const change=action=>listeners.change({target:{matches:()=>false,dataset:{forpsiPermission:action},checked:true}});
+  change('read');assert.equal(forpsiDirtyTarget()?.type,'forpsi');
+  click('tab',{tab:'mailboxes'});assert.ok(pendingGuard);assert.match(root.innerHTML,/Práva pro vybranou schránku/);
+  failSave=true;assert.equal(await saveForpsiDraft(),false);assert.match(root.innerHTML,/TEST unavailable/);assert.equal(forpsiDirtyTarget()?.type,'forpsi');
+  failSave=false;assert.equal(await saveForpsiDraft(),true);assert.equal(forpsiDirtyTarget(),null);assert.match(root.innerHTML,/uložená a znovu načtená/);
+  click('access-edit',{userId:user.id});click('access-clear');assert.equal(await saveForpsiDraft(),true);
+  assert.match(root.innerHTML,/Všechna oprávnění odebrána/);
   root.isConnected=false;
 });

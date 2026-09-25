@@ -214,10 +214,13 @@ export function normalizeUserInput(input, options = {}) {
   };
 }
 
-export async function listStoredUsers(env) {
+export async function listStoredUsers(env, { strict = false } = {}) {
   const db = userDatabase(env);
 
   if (!db) {
+    if (strict && (env.APP_ENV === "production" || env.CF_PAGES_BRANCH === "main")) {
+      throw new UserStoreError("Databáze uživatelů není dostupná.", 503, "users_database_missing");
+    }
     return [];
   }
 
@@ -250,6 +253,8 @@ export async function listStoredUsers(env) {
 
     return (result.results || []).map(userFromRow).filter(Boolean);
   } catch (error) {
+    // Access administration must not substitute configured defaults for an unavailable directory.
+    if (strict) throw new UserStoreError("Adresář uživatelů není dostupný.", 503, "users_unavailable");
     console.error("users.d1_list_failed", { message: error.message });
     return [];
   }
