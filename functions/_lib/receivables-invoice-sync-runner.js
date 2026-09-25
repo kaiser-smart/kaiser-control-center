@@ -169,7 +169,15 @@ export async function runReceivablesInvoiceSyncAutomation(env, options = {}) {
     return { mode: "staging-only", status: "blocked", moduleKey: MODULE_KEY, action: "",
       capacityGuard: true, message: "Import faktur čeká na ověření volné kapacity archivu." };
   }
-  const action = await pendingAction(db) || scheduledReceivablesAction(now);
+  let action = await pendingAction(db) || scheduledReceivablesAction(now);
+  if (!action && options.ensureInitialSync === true) {
+    const previousSuccess = await db.prepare(`SELECT id FROM module_automation_runner_runs
+      WHERE runner_name = ? AND triggered_by = ? AND status = 'dry_run'
+      LIMIT 1`).bind(RUNNER_NAME, clean(options.triggeredBy) || "cloudflare-cron").first();
+    // Activating the dedicated runner must catch up an existing snapshot immediately.
+    // Failed calls do not satisfy this condition; an unfinished batch is resumed above.
+    if (!previousSuccess) action = "incremental";
+  }
   if (!action) {
     return { mode: "staging-only", status: "not_scheduled", moduleKey: MODULE_KEY, action: "" };
   }

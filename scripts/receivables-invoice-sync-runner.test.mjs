@@ -103,3 +103,46 @@ for (const size of [0, 8_600_000_000, 2_300_000_000]) {
   const result = await runReceivablesInvoiceSyncAutomation({DB_ARCHIVE: archive, DB_AUDIT: archive, D1_CAPACITY_BLOCK_BULK_WRITES: "true", RECEIVABLES_INVOICE_SYNC_ENABLED: "true"}, {scheduledTime: Date.parse("2026-09-25T09:15:00Z")});
   assert.equal(result.status, size > 0 && size < 8_500_000_000 ? "not_scheduled" : "blocked");
 }
+
+// A newly activated scheduled runner catches up existing data without a page visit.
+// A failed first call is retried, and a successful catch-up returns to the normal schedule.
+{
+  let successfulRun = false;
+  let requests = 0;
+  const db = {
+    prepare(sql) { return {
+      sql, values: [],
+      bind(...values) { this.values = values; return this; },
+      async all() { assert.equal(sql, "SELECT 1 AS capacity_probe"); return {results: [], meta: {size_after: 2_300_000_000}}; },
+      async first() {
+        if (sql.includes("vistos_invoice_snapshot")) return {status: "snapshot", parser_summary_json: '{"syncedThrough":"2026-09-25T00:00:00Z"}'};
+        if (sql.includes("module_automation_runner_runs")) return successfulRun ? {id: "successful-run"} : null;
+        return null;
+      }
+    }; },
+    async batch(statements) {
+      for (const statement of statements) {
+        if (statement.sql.includes("UPDATE module_automation_runner_runs") && statement.values[1] === "dry_run") successfulRun = true;
+      }
+      return statements.map(() => ({success: true}));
+    }
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, request) => {
+    requests++;
+    assert.equal(url, "https://example.test/api/receivables/vistos/invoice-sync-internal");
+    assert.equal(JSON.parse(request.body).action, "incremental");
+    if (requests === 1) return Response.json({error: "Temporary failure"}, {status: 503});
+    return Response.json({result: {batch: {id: "delta-1", status: "incremental", rowCount: 12}, summary: {loadedRows: 12, totalRows: 12}}});
+  };
+  try {
+    const env = {DB_ARCHIVE: db, DB_AUDIT: db, APP_BASE_URL: "https://example.test", RECEIVABLES_RUNNER_TOKEN: "test-only-token"};
+    const options = {ensureInitialSync: true, triggeredBy: "invoice-cloudflare-cron"};
+    assert.equal((await runReceivablesInvoiceSyncAutomation(env, {...options, scheduledTime: Date.parse("2026-09-25T09:00:00Z")})).status, "error");
+    assert.equal(successfulRun, false);
+    assert.equal((await runReceivablesInvoiceSyncAutomation(env, {...options, scheduledTime: Date.parse("2026-09-25T09:15:00Z")})).status, "dry_run");
+    assert.equal((await runReceivablesInvoiceSyncAutomation(env, {...options, scheduledTime: Date.parse("2026-09-25T09:45:00Z")})).status, "not_scheduled");
+    assert.equal(requests, 2);
+  } finally { globalThis.fetch = originalFetch; }
+}
+console.log("Scheduled first-run catch-up, retry and normal schedule verified");

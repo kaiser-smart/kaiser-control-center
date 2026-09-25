@@ -5,6 +5,7 @@ export default {
     ctx.waitUntil(runReceivablesInvoiceSyncAutomation(env, {
       scheduledTime: controller.scheduledTime,
       cron: controller.cron,
+      ensureInitialSync: true,
       triggeredBy: "invoice-cloudflare-cron"
     }).then(result => {
       console.log("receivables_invoice_sync.completed", {
