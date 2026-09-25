@@ -53076,3 +53076,19 @@ body.collection-driver-blackview-simulator-active #app {
   flex-shrink: 0;
   accent-color: var(--kaiser-green);
 }
+
+/* Forpsi administration uses the shared application theme. */
+.forpsi-admin { min-width: 0; scroll-margin-top: 2rem; }
+.forpsi-admin p { font-weight: 400; overflow-wrap: anywhere; }
+.forpsi-admin h3, .forpsi-admin h4 { margin: 0; }
+.forpsi-tabs, .forpsi-actions { display: flex; flex-wrap: wrap; gap: .65rem; margin: 1rem 0; }
+.forpsi-admin button { min-height: 44px; max-width: 100%; white-space: normal; }
+.forpsi-tabs [aria-pressed="true"] { outline: 2px solid var(--primary-color, currentColor); outline-offset: 2px; }
+.forpsi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 1rem; }
+.forpsi-grid label { display: grid; gap: .4rem; min-width: 0; }
+.forpsi-grid input, .forpsi-grid select { width: 100%; min-width: 0; box-sizing: border-box; font: inherit; padding: .7rem; }
+.forpsi-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; padding: 0; list-style: none; }
+.forpsi-card, .forpsi-form, .forpsi-list > li { border: 1px solid var(--border-color, #d6d6d6); border-radius: var(--card-radius, 12px); padding: 1rem; min-width: 0; overflow-wrap: anywhere; }
+.forpsi-admin details { margin: .8rem 0; }
+.forpsi-admin summary { cursor: pointer; min-height: 32px; }
+.forpsi-admin [hidden] { display: none; }

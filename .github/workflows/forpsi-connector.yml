@@ -1,0 +1,31 @@
+name: Forpsi connector and SO.ai administration
+on:
+  pull_request:
+    paths:
+      - 'services/forpsi-connector/**'
+      - 'functions/api/forpsi/**'
+      - 'src/components/ForpsiAdminPanel.js'
+      - 'src/app.js'
+      - 'scripts/forpsi-admin.test.mjs'
+      - '.github/workflows/forpsi-connector.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - run: pnpm --dir services/forpsi-connector install --frozen-lockfile --ignore-scripts
+      - run: node --test scripts/forpsi-admin.test.mjs services/forpsi-connector/test/*.test.mjs
+      - run: node scripts/check-syntax.mjs
+      - run: node scripts/build.mjs
+      - run: pnpm --dir services/forpsi-connector build
+        env:
+          WRANGLER_SEND_METRICS: 'false'
