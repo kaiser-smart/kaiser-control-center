@@ -100,7 +100,10 @@ export function forpsiAdminSection(owner) { return `<section id="forpsi-admin" c
 export function mountForpsiAdmin(app,{apiJson,guard,owner}) {
   if(state.owner!==owner) { Object.assign(state,{epoch:state.epoch+1,owner,data:null,draft:null,dirty:false,error:'',notice:'',tab:'mailboxes',loading:false,busy:false}); }
   const root=app.querySelector('[data-forpsi-root]'); if(!root) { state.root=null; return; }
-  state.root=root; state.api=apiJson; state.guard=guard;
+  state.root=root; state.api=apiJson;
+  // Panel actions only repaint this panel; other settings forms stay mounted.
+  // The application's navigation guard still protects all forms when leaving the page.
+  state.guard=action=>state.dirty?guard(action):action();
   root.addEventListener('input',event=>{ if(event.target.form?.matches('[data-forpsi-form]')) { state.draft[event.target.name]=event.target.value; state.dirty=true; } else filterRules(); });
   root.addEventListener('change',filterRules);
   root.addEventListener('submit',event=>{ if(event.target.matches('[data-forpsi-form]')) { event.preventDefault(); event.stopPropagation(); void saveForpsiDraft(); } });
