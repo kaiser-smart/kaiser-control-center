@@ -22,7 +22,7 @@ Stávající autentizace, role a jejich výchozí oprávnění nejsou upravené.
 - Simulované ověření nelze použít jako oprávnění aktivovat schránku v režimu skutečného poskytovatele.
 - Od konektoru 0.2.1 se k neúspěšnému ověření ukládají pouze povolené chybové kódy, fáze a číselné HTTP/SMTP stavy. Text chyb, protokolové odpovědi, adresy a přihlašovací údaje se neukládají. Diagnostika je součástí chráněného administračního readbacku; nezapíná MCP ani odesílání.
 - Od 0.2.2 navazuje SMTP TLS přímo přes pevné `smtp.forpsi.com:465` a předává Nodemaileru již ověřený socket. V lokálním Cloudflare runtime původní DNS předzpracování selhalo před přihlášením; přímé TLS a následné anonymní SMTP VERIFY prošly. Certifikát se nadále ověřuje, minimum je TLS 1.2 a připojení má 15s limit. Následné produkční SMTP VERIFY s uloženým heslem prošlo 25. 9. 2026 v 22:00; doručení nebylo testováno.
-- Oprava 0.2.3 volá nativní `fetch` bez vazby `this` na instanci DAV. Původní volání vyvolalo v Cloudflare runtime `Illegal invocation` před první HTTP odpovědí; reprodukováno anonymně a pokryto regresním testem. Stejná oprava platí pro CalDAV i CardDAV. Skutečné kolekce je potřeba ověřit po nasazení.
+- Oprava 0.2.3 volá nativní `fetch` bez vazby `this` na instanci DAV. Původní volání vyvolalo v Cloudflare runtime `Illegal invocation` před první HTTP odpovědí. Další nekompatibilita je nepodporované `redirect:error`: nahrazeno `manual` s explicitním odmítnutím všech stavů 3xx, bez následování Location a bez předání hesla jinému serveru. Obě chyby reprodukovány anonymně a pokryty regresními testy; po opravě požadavek dojde k Forpsi. Stejná oprava platí pro CalDAV i CardDAV. Skutečné kolekce je potřeba ověřit po nasazení.
 
 ## Nasazení administračního pilotu
 
