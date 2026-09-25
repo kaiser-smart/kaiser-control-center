@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.798"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.799"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,10 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  {
+    title: "Přihlášení na 30 dní",
+    text: "Volba Pamatuj si mě na 30 dní prodlouží nové přihlášení na 30 dní. Bez zaškrtnutí zůstává platnost 12 hodin."
+  },
   {
     title: "Datové schránky: jasný výsledek testu připojení",
     text: "Výsledek zůstává přímo u schránky s časem testu. Chybné ID, odmítnutý login nebo heslo, oprávnění a výpadek služby mají vlastní vysvětlení. Test rozlišuje ověřené přihlášení od neověřené shody ID."

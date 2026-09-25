@@ -266,13 +266,13 @@ async function hmac(env, value) {
   return bytesToBase64Url(new Uint8Array(signature));
 }
 
-export async function createSessionCookie(env, user) {
+export async function createSessionCookie(env, user, rememberMe = false) {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     sub: user.id,
     role: user.role,
     iat: now,
-    exp: now + Number(env.AUTH_SESSION_TTL_SECONDS || SESSION_TTL_SECONDS)
+    exp: now + (rememberMe === true ? 30 * 24 * 60 * 60 : Number(env.AUTH_SESSION_TTL_SECONDS || SESSION_TTL_SECONDS))
   };
   const encodedPayload = base64UrlEncodeText(JSON.stringify(payload));
   const signature = await hmac(env, encodedPayload);

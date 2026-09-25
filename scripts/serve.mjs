@@ -5282,7 +5282,7 @@ async function handleApi(request, response) {
   }
 
   if (url.pathname === "/api/auth/verify" && request.method === "POST") {
-    const { identifier, code } = await readJsonBody(request);
+    const { identifier, code, rememberMe } = await readJsonBody(request);
     const normalized = normalizeIdentifier(identifier);
     const user = mockUsers.find((item) => {
       return normalizeIdentifier(item.email) === normalized || normalizeIdentifier(item.phone) === normalized;
@@ -5294,9 +5294,10 @@ async function handleApi(request, response) {
     }
 
     const token = randomUUID();
+    const sessionTtl = rememberMe === true ? 30 * 24 * 60 * 60 : 12 * 60 * 60;
     devSessions.set(token, {
       userId: user.id,
-      expiresAt: Date.now() + 12 * 60 * 60 * 1000
+      expiresAt: Date.now() + sessionTtl * 1000
     });
     sendJson(
       response,
@@ -5306,7 +5307,7 @@ async function handleApi(request, response) {
         user: publicUser({ ...user, lastLoginAt: new Date().toISOString() })
       },
       {
-        "Set-Cookie": `${devCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200`
+        "Set-Cookie": `${devCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${sessionTtl}`
       }
     );
     return true;
