@@ -81,7 +81,9 @@ export class CalDav {
   async request(url, method, body, headers = {}) {
     const password = await mailboxPassword(this.env, this.mailbox);
     const authorization = `Basic ${Buffer.from(`${this.mailbox.address}:${password}`).toString('base64')}`;
-    const response = await this.fetcher(safeDavUrl(url), { method, redirect: 'error',
+    // Native Workers fetch must not receive the DAV instance as its `this` value.
+    const fetcher = this.fetcher;
+    const response = await fetcher(safeDavUrl(url), { method, redirect: 'error',
       signal: AbortSignal.timeout(20000), headers: { authorization,
         'content-type': 'application/xml; charset=utf-8', ...headers }, ...(body === undefined ? {} : { body }) });
     if (!response.ok) {

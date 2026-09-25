@@ -121,3 +121,19 @@ test('unsupported groupware modules are reported honestly', () => {
   }
   assert.equal(status.modules.find(m => m.id === 'labels').implementation, 'CONNECTOR_STORAGE');
 });
+
+test('DAV invokes a native-style fetch without binding the provider as its receiver', async () => {
+  let requests=0;
+  for(const Provider of [CalDav, CardDav]) {
+    const provider=new Provider({MAILBOX_CREDENTIALS:'{"test":"synthetic-password"}'},
+      {address:'pilot@example.test',credential_key:'test'}, function(url,request) {
+        assert.equal(this,undefined, 'Workers fetch rejects an arbitrary receiver');
+        assert.equal(url,'https://syncdav.forpsi.com/');
+        assert.equal(request.method,'PROPFIND');assert.equal(request.redirect,'error');
+        requests++;
+        return Promise.resolve(new Response('<d:multistatus xmlns:d="DAV:"/>',{status:207}));
+      });
+    assert.deepEqual(await provider.propfind('https://syncdav.forpsi.com/','<d:current-user-principal/>'),[]);
+  }
+  assert.equal(requests,2);
+});
