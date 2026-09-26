@@ -53113,3 +53113,11 @@ body.collection-driver-blackview-simulator-active #app {
 .forpsi-mail-check input { width:20px; height:20px; accent-color:var(--kaiser-green); }
 .forpsi-mail-message { margin-top:1rem; scroll-margin-top:1rem; }
 .forpsi-mail-message pre { font:inherit; font-weight:400; white-space:pre-wrap; overflow-wrap:anywhere; }
+.forpsi-card-heading { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:.75rem; }
+.forpsi-card-heading > div { min-width:0; }
+.forpsi-state { display:inline-block; padding:.4rem .7rem; border:1px solid var(--border-color,#d6d6d6); border-radius:var(--card-radius,12px); font-size:.9rem; }
+.forpsi-connection-summary { line-height:1.6; }
+.forpsi-service-issue { border-left:3px solid currentColor; padding-left:.7rem; }
+.forpsi-admin .forpsi-disclosure { border-top:1px solid var(--border-color,#d6d6d6); padding-top:.65rem; }
+.forpsi-admin .forpsi-disclosure > summary { min-height:44px; padding:.55rem .2rem; box-sizing:border-box; font-weight:600; overflow-wrap:anywhere; }
+.forpsi-admin .forpsi-disclosure > summary:focus-visible { outline:2px solid var(--kaiser-green); outline-offset:2px; border-radius:4px; }

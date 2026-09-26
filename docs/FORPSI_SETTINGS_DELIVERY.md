@@ -59,3 +59,11 @@ IMAP používá read-only zámek; čtení nemění `Seen`. Datum od je včetně,
 Zpráva do 2 MiB se zobrazí jako escapovaný text, nejvýše 100000 znaků, bez vykonatelného HTML a externích obrázků. Přílohy mají pouze metadata. Obsah není ukládaný do localStorage ani IndexedDB; změna účtu nebo opuštění modulu vymaže stav a zneplatní čekající odpovědi. Chyba nezanechá starý obsah zprávy.
 
 Samostatný `SOAI_MAIL_ENABLED=true` zapíná jen tento čtecí endpoint. `CONNECTOR_ENABLED=false`, prázdný cron, SMTP a ChatGPT OAuth se tím nemění. Produkční přiřazení pilotního práva `read` se provádí existující administrací konkrétnímu účtu a ověřuje zpětným čtením; ostatním kolegům se práva automaticky nepřidělují.
+
+## Užší výběr nastavení po živém ověření čtení
+
+SO.ai 0.1.811 zjednodušuje administraci na Schránky, Přístupy kolegů a Rozšířené. V hlavním pohledu jsou adresa/název schránky, povolení či pozastavení, výsledek a čas testu příjmu, případné chyby jednotlivých služeb a akce pro připojení, ověření a přístupy. Otevřít poštu zůstává dostupné v hlavičce. Při pozastavené schránce se nabízí zapnutí se stávající serverovou podmínkou úspěšného ověření.
+
+Detaily služeb, načtení složek/kolekcí a pozastavení jsou v rozbalovací části schránky. Mapování speciálních složek je v rozšířené části formuláře. Samostatná záložka Rozšířené obsahuje dostupné funkce/ChatGPT, čtecí přehled štítků/pravidel/fronty, Log událostí a technickou diagnostiku. Žádná dosavadní funkce ani omezení nejsou odstraněné. Chyby připojení zůstávají viditelné i při zavřených detailech.
+
+Jde o UI nad stejným API, nikoli nové preference, práva nebo automatizace. Rozbalení žije pouze v paměti zobrazení, přežije překreslení při požadavku a změna uživatele je vynuluje. Přechod ze schránky přímo na její přístupy používá stejnou ochranu neuložených změn. Produkční přijetí této úpravy pouze čte stávající data; ověření ukládání probíhá se syntetickými daty v izolovaném testu.
