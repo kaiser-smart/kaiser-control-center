@@ -61,4 +61,21 @@ export function createWorker(dependencies = {}) {
     },
   };
 }
-export default createWorker();
+const legacyWorker=createWorker();
+let oauthPilot;
+export default {
+  async fetch(request,env,ctx){
+    if(env.PERSONAL_PILOT_OAUTH==='true'){
+      if(!env.OAUTH_KV){
+        const path=new URL(request.url).pathname;
+        if((path.startsWith('/internal/')&&path!=='/internal/oauth/access')||path==='/health')
+          return legacyWorker.fetch(request,env,ctx);
+        return Response.json({error:'OAUTH_NOT_CONFIGURED'},{status:503});
+      }
+      oauthPilot??=import('./oauth-pilot.mjs').then(module=>module.createOAuthPilot(legacyWorker));
+      return (await oauthPilot).fetch(request,env,ctx);
+    }
+    return legacyWorker.fetch(request,env,ctx);
+  },
+  scheduled(event,env,ctx){return legacyWorker.scheduled(event,env,ctx);},
+};

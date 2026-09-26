@@ -4,6 +4,12 @@ on:
     paths:
       - 'services/forpsi-connector/**'
       - 'functions/api/forpsi/**'
+      - 'functions/authorize.js'
+      - 'functions/mcp.js'
+      - 'functions/oauth/**'
+      - 'functions/.well-known/oauth-*.js'
+      - 'functions/.well-known/oauth-protected-resource/**'
+      - 'functions/_lib/forpsi-oauth-proxy.js'
       - 'functions/_lib/auth.js'
       - 'functions/_lib/users-store.js'
       - 'src/components/ForpsiAdminPanel.js'
@@ -13,7 +19,9 @@ on:
       - 'scripts/forpsi-admin.test.mjs'
       - 'scripts/forpsi-mail.test.mjs'
       - 'scripts/forpsi-setup.test.mjs'
+      - 'scripts/forpsi-oauth-pages.test.mjs'
       - 'public/forpsi-setup/**'
+      - 'public/forpsi-access/**'
       - '.github/workflows/forpsi-connector.yml'
   workflow_dispatch:
 permissions:
@@ -30,7 +38,7 @@ jobs:
         with:
           version: 11.19.0
       - run: pnpm --dir services/forpsi-connector install --frozen-lockfile --ignore-scripts
-      - run: node --test scripts/forpsi-admin.test.mjs scripts/forpsi-mail.test.mjs scripts/forpsi-setup.test.mjs services/forpsi-connector/test/*.test.mjs
+      - run: node --test scripts/forpsi-admin.test.mjs scripts/forpsi-mail.test.mjs scripts/forpsi-setup.test.mjs scripts/forpsi-oauth-pages.test.mjs services/forpsi-connector/test/*.test.mjs
       - run: node scripts/check-syntax.mjs
       - run: node scripts/build.mjs
       - run: pnpm --dir services/forpsi-connector build
