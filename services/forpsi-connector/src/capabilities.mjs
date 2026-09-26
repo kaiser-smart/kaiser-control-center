@@ -14,7 +14,8 @@ export function capabilities() {
         actions: ['list_address_books','search_contacts','read_contact','create_contact','edit_contact','delete_contact'], requirements: ['Business Mail', 'CardDAV enabled'] },
       { id: 'tasks', implementation: 'NOT_IMPLEMENTED', nativeSync: 'UNAVAILABLE', reason: 'Forpsi task synchronization contract not verified; do not assume CalDAV VTODO support' },
       { id: 'notes', implementation: 'NOT_IMPLEMENTED', nativeSync: 'UNAVAILABLE', reason: 'Supported Forpsi notes API not verified' },
-      { id: 'signatures', implementation: 'NOT_IMPLEMENTED', nativeSync: 'UNAVAILABLE', reason: 'Forpsi signature settings API not verified; native signatures are not automatically applied to SMTP mail' },
+      { id: 'signatures', implementation: 'CONNECTOR_STORAGE', nativeSync: 'UNAVAILABLE', actions: ['read_profile','edit_profile'],
+        reason: 'One plain-text SO.ai signature per mailbox, used only by SO.ai new-draft creation. No synchronization with native webmail signatures or automatic SMTP use.' },
     ],
   };
 }

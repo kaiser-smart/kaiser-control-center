@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.812"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.814"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -23,6 +23,10 @@ export const versionNews = [
   {
     title: "Nastavení: upozornění jen na skutečné změny",
     text: "Pouhé prohlížení nastavení už nevyvolá upozornění na neuložené změny. Rozepsané úpravy zůstávají chráněné."
+  },
+  {
+    title: "Forpsi: podpisy a nové koncepty",
+    text: "Podpis a jméno odesílatele mají vlastní nastavení v SO.ai. Pošta připraví textový náhled a po povolení ukládání a ověření práv vytvoří nový koncept ve Forpsi. Odesílání není součástí této etapy."
   },
   {
     title: "Forpsi: přehlednější nastavení",

@@ -8,6 +8,7 @@ import { requireValue, ConnectorError } from './errors.mjs';
 import { providerDiagnostic } from './diagnostics.mjs';
 import { readResources, validateFolderChange } from './admin-resources.mjs';
 import { listAccess, saveAccess } from './admin-access.mjs';
+import { profileSelection, profileInput, compositionProfile, saveCompositionProfile } from './composition.mjs';
 import { ACTIONS } from './access-policy.mjs';
 
 const id = z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/);
@@ -19,6 +20,7 @@ const save = z.object({ id: id.optional(), requestId: z.string().uuid(), revisio
   password: z.string().min(1).max(1024).optional() }).strict();
 const selection = z.object({ id, revision }).strict();
 const schemas = { overview: z.object({}).strict(), save,
+  composition_get: profileSelection, composition_save: profileInput,
   access_list: z.object({id}).strict(),
   access_save: selection.extend({userId:id,actions:z.array(z.enum(ACTIONS)).max(5)
     .refine(a=>new Set(a).size===a.length && (!a.includes('schedule') || a.includes('send')))}).strict(),
@@ -67,6 +69,7 @@ export async function executeAdmin(operation, raw, ctx) {
       truncated: { grants:grants.length>500, rules:rules.length>200, labels:labels.length>200 },
       capabilities: capabilities(), connectorEnabled: env.CONNECTOR_ENABLED === 'true',
       soaiMailEnabled: env.SOAI_MAIL_ENABLED === 'true',
+      soaiDraftsEnabled: env.SOAI_DRAFTS_ENABLED === 'true',
       credentialStorageReady: Boolean(env.CREDENTIALS_KEY), oauthConfigured: Boolean(env.OAUTH_ISSUER && env.OAUTH_JWKS_URL && env.MCP_RESOURCE),
       verificationMode: ctx.verificationMode ?? 'provider', checkedAt: Date.now() };
   }
@@ -100,6 +103,8 @@ export async function executeAdmin(operation, raw, ctx) {
     return mutate(store,m,statements,actorId,'admin.save',changeId);
   }
   const m = await mailbox(store, tenant, p.id);
+  if(operation==='composition_get')return {profile:await compositionProfile(store,m.id),address:m.address};
+  if(operation==='composition_save')return saveCompositionProfile(p,ctx);
   const publicView=async()=>publicMailbox(await store.first(`SELECT ${publicColumns} FROM mailboxes m WHERE m.id=? AND m.tenant_id=?`,m.id,tenant));
   if (operation === 'access_list') return {access:await listAccess(m,ctx),mailbox:await publicView()};
   requireValue(m.revision === p.revision, 'VERSION_CONFLICT');

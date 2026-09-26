@@ -6,7 +6,7 @@ import { Outbox } from '../src/outbox.mjs';
 
 export function fixture() {
   const sqlite = new DatabaseSync(':memory:');
-  for (const name of ['0001_mail_connector.sql', '0002_labels_rules.sql', '0003_administration.sql']) {
+  for (const name of ['0001_mail_connector.sql', '0002_labels_rules.sql', '0003_administration.sql', '0004_composition.sql']) {
     sqlite.exec(readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'));
   }
   // Execute the real migration SQL and queries using SQLite, exposing the D1 interface.
