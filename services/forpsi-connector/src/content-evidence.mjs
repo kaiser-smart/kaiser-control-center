@@ -25,7 +25,9 @@ export function contentSamples(messages,mailboxAddress,max=12){
 
 function relativeDate(quote,date,timeZone='Europe/Prague'){
   if(!date)return null;
-  const lower=quote.toLocaleLowerCase('cs-CZ'),days=/\bpozítří\b/u.test(lower)?2:/\bzítra\b/u.test(lower)?1:null;
+  const lower=quote.toLocaleLowerCase('cs-CZ');
+  const word=value=>new RegExp(`(?<![\\p{L}\\p{N}])${value}(?![\\p{L}\\p{N}])`,'u').test(lower);
+  const days=word('pozítří')||word('pozítřka')?2:word('zítra')||word('zítřka')?1:null;
   if(days===null)return null;
   const instant=new Date(date);if(Number.isNaN(instant.getTime()))return null;
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'})
@@ -52,7 +54,7 @@ export function validateContentFindings(raw,samples,{timeZone='Europe/Prague'}={
     const relative=relativeDate(quote,source.date,timeZone);
     const dueDate=relative??explicitDate(quote);
     // Ambiguous dates stay unresolved; the model may not silently set them.
-    const ambiguous=/\b(v pondělí|příští týden|za týden|brzy)\b/iu.test(quote);
+    const ambiguous=/(?<![\p{L}\p{N}])(v pondělí|příští týden|za týden|brzy)(?![\p{L}\p{N}])/iu.test(quote);
     out.push({kind:item.kind,summary:String(item.summary??'').slice(0,240),sourceKey:source.key,
       reference:source.reference,quote,evidence:'quoted_source',dueDate:ambiguous?null:dueDate,
       dueDateStatus:ambiguous?'ambiguous':dueDate?'resolved':'unknown',

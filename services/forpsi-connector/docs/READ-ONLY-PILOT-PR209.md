@@ -1,5 +1,7 @@
 # PR #209: ověřitelný čtecí pilot a kontrola A–G
 
+**Změna zadání 26. 9. 2026:** níže uvedený samostatný placený test OpenAI API již není podmínkou osobního pilotu. Aktuální návrh interaktivní cesty, její ověřené hranice a otevřený problém přihlášení jsou v [CHATGPT-INTERACTIVE-PILOT.md](CHATGPT-INTERACTIVE-PILOT.md). Tato stránka uchovává historický rozsah kontroly A–G a původního izolovaného testu.
+
 Stav vývojové větve; žádné produkční nasazení, migrace trvalé databáze ani přístup ke skutečné poště. `SEND_ENABLED=false`, `CONNECTOR_ENABLED=false` a `WORKFLOW_SYNC_ENABLED=false` zůstávají ve vývojové konfiguraci. `0008_sync_progress.sql` je pouze připravený soubor, ne provedená trvalá migrace.
 
 ## Reprodukce a opravy A–G

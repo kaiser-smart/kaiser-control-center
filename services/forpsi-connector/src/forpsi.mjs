@@ -11,6 +11,7 @@ const MAX_MESSAGE = 2 * 1024 * 1024;
 const publicEnvelope = item => ({ uid: item.uid, subject: item.envelope?.subject ?? '',
   from: (item.envelope?.from ?? []).map(a => ({ name: a.name ?? '', address: a.address ?? '' })),
   to: (item.envelope?.to ?? []).map(a => ({ name: a.name ?? '', address: a.address ?? '' })),
+  cc: (item.envelope?.cc ?? []).map(a => ({ name: a.name ?? '', address: a.address ?? '' })),
   date: item.envelope?.date?.toISOString() ?? null, size: item.size ?? null,
   flags: [...(item.flags ?? [])], messageId: item.envelope?.messageId ?? null,
   inReplyTo: item.envelope?.inReplyTo ?? null });

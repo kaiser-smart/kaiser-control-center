@@ -4,15 +4,29 @@ import { requireValue } from './errors.mjs';
 import { messageKey } from './workflow.mjs';
 import { SOAI_ISSUER } from './admin-access.mjs';
 import { interpretSetupAnswer } from './setup-preferences.mjs';
-import { contentSamples, analyzeContent, openAiEvidenceAnalyzer, signatureFromSent } from './content-evidence.mjs';
+import { contentSamples, analyzeContent, openAiEvidenceAnalyzer, signatureFromSent, authoredText,
+  validateContentFindings } from './content-evidence.mjs';
 import { newsletterSeriesKey } from './newsletter-series.mjs';
 
 const uuid=z.string().uuid();
 export const onboardingSchemas={
-  begin:z.object({mailboxId:id,consent:z.boolean(),days:z.number().int().min(1).max(90).default(90),
+  begin:z.object({mailboxId:id,consent:z.boolean(),days:z.number().int().min(1).max(90).optional(),
     folders:z.array(folder).max(8).optional()}).strict(),
   session:z.object({sessionId:uuid}).strict(),
   answer:z.object({sessionId:uuid,questionId:z.string().max(60),answer:z.string().trim().max(500)}).strict(),
+  sample:z.object({sessionId:uuid,offset:z.number().int().min(0).max(49).default(0),
+    limit:z.number().int().min(1).max(5).default(5)}).strict(),
+  submitAnalysis:z.object({sessionId:uuid,proposalVersion:z.number().int().positive(),
+    acknowledgeIncomplete:z.boolean().default(false),
+    findings:z.array(z.object({kind:z.enum(['request','waiting_user','waiting_other','resolved','changed',
+      'cancelled','agenda','signature_style','marketing','newsletter']),sourceKey:z.string().min(1).max(500),
+      quote:z.string().min(4).max(500),summary:z.string().max(240),threadKey:z.string().max(200).nullable().optional()}).strict()).max(30),
+    priorities:z.array(z.object({sourceKey:z.string().min(1).max(500),priority:z.enum(['high','review']),
+      reason:z.string().min(1).max(240),quote:z.string().min(4).max(500)}).strict()).max(50),
+    importantContacts:z.array(z.object({address:z.email(),sourceKey:z.string().min(1).max(500)}).strict()).max(8).default([]),
+    signature:z.object({fullText:z.string().trim().min(1).max(500),shortText:z.string().trim().min(1).max(300),
+      sourceKeys:z.array(z.string().min(1).max(500)).min(1).max(3)}).strict().nullable().optional(),
+  }).strict(),
   approve:z.object({sessionId:uuid,proposalVersion:z.number().int().positive(),confirmed:z.literal(true)}).strict(),
   preferences:z.object({mailboxId:id}).strict(),
   revert:z.object({mailboxId:id,version:z.number().int().positive(),confirmed:z.literal(true)}).strict(),
@@ -44,9 +58,13 @@ function signatureStatements(store,tenantId,principalId,mailbox,profile,now){
 }
 function questions(observations,answers,proposal={}){
   const result=[];
-  if(observations.twoWay.length)result.push({id:'important_contacts',title:
-    `V omezeném vzorku proběhla oboustranná komunikace s ${observations.twoWay.map(x=>x.address).join(', ')}. Které kontakty mají být prioritní?`,
-    options:['žádný',...observations.twoWay.map(x=>x.address),'přeskočit'],evidence:observations.twoWay});
+  const contactCandidates=[...new Set([...(observations.twoWay??[]).map(x=>x.address),
+    ...(observations.modelContactSuggestions??[]).map(x=>x.address)])];
+  if(contactCandidates.length)result.push({id:'important_contacts',title:
+    `Ve vzorku se objevily kontakty ${contactCandidates.join(', ')}. Které mají být prioritní? `+
+    'Návrh modelu není schváleným pravidlem.',
+    options:['žádný',...contactCandidates,'přeskočit'],
+    evidence:[...(observations.twoWay??[]),...(observations.modelContactSuggestions??[])]});
   if(observations.directCount||observations.ccCount)result.push({id:'direct_vs_cc',title:
     `Vzorek obsahuje ${observations.directCount} přímých zpráv a ${observations.ccCount} zpráv v kopii. Mají být kopie běžně méně výrazné?`,
     options:['ano','ne','přeskočit']});
@@ -94,9 +112,12 @@ export class Onboarding {
     const mailbox=await this.access(row.mailbox_id);requireValue(mailbox.tenant_id===row.tenant_id,'ACCESS_DENIED');
     return {row,mailbox};
   }
-  async begin({mailboxId,consent,days=90,folders}){
+  async begin({mailboxId,consent,days,folders}){
     const mailbox=await this.access(mailboxId);
+    days??=this.env.PERSONAL_PILOT_READ_ONLY==='true'?30:90;
     const selected=folders??['INBOX',mailbox.sent_folder].filter(Boolean);
+    if(this.env.PERSONAL_PILOT_READ_ONLY==='true')requireValue(days<=30 && selected.length<=2 &&
+      selected.every(path=>path==='INBOX'||path===mailbox.sent_folder), 'PILOT_SCOPE_EXCEEDED');
     if(consent){
       const listed=await this.providerFactory(this.env,mailbox).listFolders();
       const allowed=new Set(listed.folders.filter(f=>f.selectable!==false && !['\\Trash','\\Junk'].includes(f.specialUse)).map(f=>f.path));
@@ -113,13 +134,20 @@ export class Onboarding {
     requireValue(row.status==='consented' || row.status==='analyzed','ONBOARDING_CONSENT_REQUIRED');
     if(row.status==='analyzed')return this.status({sessionId});
     const scope=JSON.parse(row.scope_json),provider=this.providerFactory(this.env,mailbox),now=this.now();
+    const pilot=this.env.PERSONAL_PILOT_READ_ONLY==='true';
+    if(pilot){
+      requireValue(scope.days<=30 && scope.folders.length<=2 &&
+        scope.folders.every(path=>path==='INBOX'||path===mailbox.sent_folder),'PILOT_SCOPE_EXCEEDED');
+    }
     const samples=[],coverage=[];
     // Three bounded windows avoid a latest-100-only bias. No attachment download.
     for(const path of scope.folders){
       for(let start=0;start<scope.days;start+=30){
+        if(pilot&&samples.length>=50)break;
         const newer=new Date(now-start*86400000+(start===0?86400000:0)).toISOString().slice(0,10);
         const older=new Date(now-Math.min(scope.days,start+30)*86400000).toISOString().slice(0,10);
-        const page=await provider.search({folder:path,since:older,before:newer,limit:20});
+        const page=await provider.search({folder:path,since:older,before:newer,
+          limit:pilot?Math.min(20,50-samples.length):20});
         samples.push(...page.messages.map(m=>({...m,folder:path})));
         coverage.push({folder:path,since:older,before:newer,examined:page.messages.length,
           incomplete:page.nextBeforeUid!=null});
@@ -153,7 +181,7 @@ export class Onboarding {
       sender:m.from?.[0]?.address??'',subject:m.subject??'',receivedAt:m.date??null,
       evidenceKind:sentTo.has(m.from?.[0]?.address?.toLowerCase())?'mailbox_two_way':'unclassified_incoming'}));
     const readTargets=new Map();
-    for(const m of [...candidates.slice(0,8),...sent.sort((a,b)=>String(b.date??'').localeCompare(String(a.date??''))).slice(0,8)])
+    if(!pilot)for(const m of [...candidates.slice(0,8),...sent.sort((a,b)=>String(b.date??'').localeCompare(String(a.date??''))).slice(0,8)])
       if(m.reference)readTargets.set(messageKey(m),m);
     const details=[];
     for(const item of [...readTargets.values()].slice(0,12)){
@@ -163,13 +191,17 @@ export class Onboarding {
     const content=contentSamples(details,mailbox.address),signatureCandidate=signatureFromSent(content);
     const verifiedAliases=await this.store.verifiedAliases(mailbox);
     let semantic;
-    try{semantic=await analyzeContent(content,{perspective:{mailboxAddress:mailbox.address,
+    if(pilot)semantic={status:'awaiting_chatgpt',findings:[],examined:0,requiresUserReview:true};
+    else try{semantic=await analyzeContent(content,{perspective:{mailboxAddress:mailbox.address,
       verifiedAliases,aliasesStatus:verifiedAliases.length?'server_verified':'not_configured'},analyzer:this.semanticAnalyzer??
       (this.env.FORPSI_ANALYSIS_API_KEY&&this.env.FORPSI_ANALYSIS_MODEL?
         input=>openAiEvidenceAnalyzer(input,this.env):null)});}
     catch{semantic={status:'unavailable',reason:'MODEL_ANALYSIS_UNAVAILABLE',findings:[]};}
     const observations={twoWay,directCount,ccCount,sampleCount:new Set(samples.map(messageKey)).size,
       sampledRecords:samples.length,reviewExamples,
+      ...(pilot?{pilotMessages:samples.map(m=>({reference:m.reference,from:m.from,to:m.to,cc:m.cc,
+        subject:m.subject,date:m.date,messageId:m.messageId,inReplyTo:m.inReplyTo,references:m.references})),
+        sampleReadKeys:[],chatgptPriorities:[]}:{}),
       contentCoverage:{attempted:readTargets.size,read:details.length,boundedAt:12},semantic,
       signatureCandidate,signatureLimit:signatureCandidate?'AUTHOR_UNVERIFIED':'REPEATED_SIGNATURE_NOT_FOUND',
       newsletterCandidates:[],unknownSenderCount:[...senderCounts.values()].filter(x=>x.count===1).length};
@@ -192,6 +224,108 @@ export class Onboarding {
     ];await this.store.db.batch(statements);
     return this.status({sessionId});
   }
+  async readSetupSample({sessionId,offset=0,limit=5}){
+    requireValue(this.env.PERSONAL_PILOT_READ_ONLY==='true','PILOT_ONLY');
+    const {row,mailbox}=await this.owned(sessionId);
+    requireValue(['analyzed','questioning','ready','approved'].includes(row.status),'ONBOARDING_NOT_READY');
+    const observed=await this.store.first('SELECT observations_json,coverage_json FROM workflow_observations WHERE onboarding_id=?',sessionId);
+    requireValue(observed,'PILOT_SAMPLE_NOT_FOUND');
+    const facts=JSON.parse(observed.observations_json),summaries=facts.pilotMessages??[];
+    requireValue(summaries.length<=50,'PILOT_SCOPE_EXCEEDED');
+    const provider=this.providerFactory(this.env,mailbox),messages=[],readKeys=new Set(facts.sampleReadKeys??[]);
+    const aliases=await this.store.verifiedAliases(mailbox),own=new Set([mailbox.address.toLowerCase(),...aliases]);
+    for(const summary of summaries.slice(offset,offset+limit)){
+      const sourceKey=messageKey(summary);
+      try{
+        const raw=await provider.read(summary.reference);
+        const content=contentSamples([{...raw,reference:summary.reference,
+          messageId:summary.messageId??raw.messageId,sentFolder:mailbox.sent_folder}],mailbox.address,1)[0];
+        readKeys.add(sourceKey);
+        messages.push({...content,key:sourceKey,
+          senderRole:own.has(content.from.toLowerCase())?'mailbox_owner':'external',
+          recipientRole:content.to.some(x=>own.has(x.toLowerCase()))?'to':
+            content.cc.some(x=>own.has(x.toLowerCase()))?'cc':'other',
+          contentTruncated:raw.truncated===true||authoredText(raw.text).length>=4000,
+          untrustedContent:true});
+      }catch{messages.push({key:sourceKey,reference:summary.reference,status:'unavailable'});}
+    }
+    facts.sampleReadKeys=[...readKeys];
+    await this.store.run('UPDATE workflow_observations SET observations_json=? WHERE onboarding_id=?',
+      JSON.stringify(facts),sessionId);
+    return {sessionId,mailboxAddress:mailbox.address,verifiedAliases:aliases,
+      offset,nextOffset:Math.min(offset+limit,summaries.length),total:summaries.length,
+      deliveredCount:readKeys.size,coverage:JSON.parse(observed.coverage_json),messages,
+      incomplete:readKeys.size<summaries.length||JSON.parse(observed.coverage_json).some(x=>x.incomplete),
+      untrustedContent:true};
+  }
+  async submitAnalysis({sessionId,proposalVersion,acknowledgeIncomplete=false,findings,priorities,
+    importantContacts=[],signature}){
+    requireValue(this.env.PERSONAL_PILOT_READ_ONLY==='true','PILOT_ONLY');
+    const {row,mailbox}=await this.owned(sessionId);
+    requireValue(row.status==='analyzed','ANALYSIS_ALREADY_SUBMITTED');
+    const observed=await this.store.first('SELECT observations_json,coverage_json FROM workflow_observations WHERE onboarding_id=?',sessionId);
+    const proposal=await this.store.first('SELECT * FROM workflow_proposals WHERE onboarding_id=?',sessionId);
+    requireValue(observed&&proposal?.version===proposalVersion,'PROFILE_VERSION_CONFLICT');
+    const facts=JSON.parse(observed.observations_json),summaries=facts.pilotMessages??[];
+    const delivered=new Set(facts.sampleReadKeys??[]),byKey=new Map(summaries.map(m=>[messageKey(m),m]));
+    const coverage=JSON.parse(observed.coverage_json);
+    requireValue(acknowledgeIncomplete||delivered.size===summaries.length&&coverage.every(x=>!x.incomplete),
+      'PILOT_COVERAGE_INCOMPLETE');
+    const needed=new Set([...findings.map(x=>x.sourceKey),...priorities.map(x=>x.sourceKey),
+      ...importantContacts.map(x=>x.sourceKey),...(signature?.sourceKeys??[])]);
+    requireValue([...needed].every(key=>delivered.has(key)&&byKey.has(key)),'ANALYSIS_EVIDENCE_INVALID');
+    requireValue(new Set(priorities.map(x=>x.sourceKey)).size===priorities.length,'ANALYSIS_EVIDENCE_INVALID');
+    const provider=this.providerFactory(this.env,mailbox),samples=[];
+    for(const key of needed){
+      const summary=byKey.get(key),detail=await provider.read(summary.reference);
+      const sample=contentSamples([{...detail,reference:summary.reference,
+        messageId:summary.messageId??detail.messageId,sentFolder:mailbox.sent_folder}],mailbox.address,1)[0];
+      samples.push({...sample,key});
+    }
+    const bySample=new Map(samples.map(x=>[x.key,x]));
+    const validated=validateContentFindings(findings,samples);
+    requireValue(validated.length===findings.length,'ANALYSIS_EVIDENCE_INVALID');
+    for(const item of priorities){
+      const source=bySample.get(item.sourceKey);
+      requireValue(source&&source.reference.folder!==mailbox.sent_folder&&source.text.includes(item.quote),
+        'ANALYSIS_EVIDENCE_INVALID');
+    }
+    for(const item of importantContacts){
+      const source=bySample.get(item.sourceKey);
+      requireValue(source&&source.reference.folder!==mailbox.sent_folder&&
+        source.from.toLowerCase()===item.address.toLowerCase(),'ANALYSIS_EVIDENCE_INVALID');
+    }
+    if(signature){
+      requireValue(signature.shortText.length<=signature.fullText.length&&
+        signature.fullText.includes(signature.shortText)&&signature.sourceKeys.every(key=>{
+          const source=bySample.get(key);
+          return source?.sent&&source.senderIdentity==='mailbox_address'&&
+            source.text.includes(signature.fullText);
+        }),'SIGNATURE_EVIDENCE_INVALID');
+      facts.signatureCandidate={senderAddress:mailbox.address,fullText:signature.fullText,
+        shortText:signature.shortText,sourceKeys:signature.sourceKeys,authorVerified:false,
+        warning:'Autor a kontaktní údaje vyžadují potvrzení uživatele.'};
+    }
+    facts.semantic={status:'chatgpt_proposal',findings:validated,examined:delivered.size,
+      requiresUserReview:true};
+    facts.chatgptPriorities=priorities.map(item=>({sourceKey:item.sourceKey,priority:item.priority,
+      reason:item.reason,quote:item.quote,provenance:'chatgpt_proposal_with_exact_quote'}));
+    facts.modelContactSuggestions=importantContacts;
+    const data=JSON.parse(proposal.proposal_json);
+    data.agendaRecommendations=validated.filter(x=>['agenda','request','waiting_user'].includes(x.kind))
+      .filter((x,index,all)=>all.findIndex(y=>y.summary===x.summary)===index).slice(0,2)
+      .map(x=>({summary:x.summary,quote:x.quote,sourceKey:x.sourceKey,reference:x.reference,
+        provenance:'chatgpt_proposal_with_exact_quote',userMarkedRelevant:null,priorityRuleActive:false}));
+    const results=await this.store.db.batch([
+      this.store.db.prepare(`UPDATE workflow_proposals SET version=version+1,proposal_json=?,updated_at=?
+        WHERE onboarding_id=? AND version=?`).bind(JSON.stringify(data),this.now(),sessionId,proposalVersion),
+      this.store.db.prepare(`UPDATE workflow_observations SET observations_json=? WHERE onboarding_id=?
+        AND EXISTS(SELECT 1 FROM workflow_proposals WHERE onboarding_id=? AND version=?)`)
+        .bind(JSON.stringify(facts),sessionId,sessionId,proposalVersion+1),
+    ]);
+    requireValue(Number(results[0].meta.changes)===1,'PROFILE_VERSION_CONFLICT');
+    return this.status({sessionId});
+  }
   async status({sessionId}){
     const {row,mailbox}=await this.owned(sessionId),observation=await this.store.first('SELECT * FROM workflow_observations WHERE onboarding_id=?',sessionId);
     const proposal=await this.store.first('SELECT * FROM workflow_proposals WHERE onboarding_id=?',sessionId);
@@ -199,7 +333,8 @@ export class Onboarding {
     const approvalAvailable=owner?.issuer===SOAI_ISSUER && !!this.env.SOAI_PUBLIC_URL;
     const answers=JSON.parse(row.answers_json),facts=observation?JSON.parse(observation.observations_json):null;
     const profile=proposal?JSON.parse(proposal.proposal_json):null;
-    const remaining=facts?questions(facts,answers,profile):[];
+    const remaining=facts&&(this.env.PERSONAL_PILOT_READ_ONLY!=='true'||
+      facts.semantic?.status==='chatgpt_proposal')?questions(facts,answers,profile):[];
     const syncRequested=profile?.synchronization?.mode==='interval';
     const syncCursor=syncRequested?await this.store.first(`SELECT last_run,last_outcome,next_due,scan_before_uid FROM workflow_sync_cursors
       WHERE tenant_id=? AND principal_id=? AND mailbox_id=?`,row.tenant_id,this.principal.id,mailbox.id):null;
@@ -213,10 +348,14 @@ export class Onboarding {
     return {sessionId,status:row.status,mailboxAddress:mailbox.address,scope:JSON.parse(row.scope_json),
       questionCount:row.question_count,maxQuestions:20,coverage:observation?JSON.parse(observation.coverage_json):null,
       observations:facts,proposal:proposal?{version:proposal.version,data:profile}:null,services,
+      analysisStatus:facts?.semantic?.status??'not_started',
+      sampleProgress:facts?.pilotMessages?{total:facts.pilotMessages.length,
+        delivered:(facts.sampleReadKeys??[]).length}:null,
       signaturePreview:profile?.signature?.fullText?
         {plain:`Dobrý den,\n\nDěkuji za zprávu.\n\n${profile.signature.fullText}`,
           html:`<p>Dobrý den,</p><p>Děkuji za zprávu.</p><p>${safeHtml(profile.signature.fullText)}</p>`}:null,
-      nextQuestion:remaining[0]??null,readyToApprove:!!proposal && remaining.length===0 && row.question_count<20,
+      nextQuestion:remaining[0]??null,readyToApprove:!!proposal && remaining.length===0 && row.question_count<20 &&
+        (this.env.PERSONAL_PILOT_READ_ONLY!=='true'||facts?.semantic?.status==='chatgpt_proposal'),
       untrustedContent:true,
       approvalAvailable,approvalUrl:approvalAvailable?new URL(`/forpsi-setup/?session=${encodeURIComponent(sessionId)}`,
         this.env.SOAI_PUBLIC_URL).href:null,
@@ -228,6 +367,8 @@ export class Onboarding {
     requireValue(['analyzed','questioning','ready'].includes(row.status),'ONBOARDING_NOT_READY');
     requireValue(row.question_count<19,'QUESTION_LIMIT_REACHED');
     const observed=await this.store.first('SELECT observations_json FROM workflow_observations WHERE onboarding_id=?',sessionId);
+    if(this.env.PERSONAL_PILOT_READ_ONLY==='true')requireValue(
+      JSON.parse(observed.observations_json).semantic?.status==='chatgpt_proposal','ANALYSIS_NOT_SUBMITTED');
     const proposal=await this.store.first('SELECT * FROM workflow_proposals WHERE onboarding_id=?',sessionId);
     const answers=JSON.parse(row.answers_json),remaining=questions(JSON.parse(observed.observations_json),answers,
       JSON.parse(proposal.proposal_json));

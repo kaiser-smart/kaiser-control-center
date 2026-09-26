@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPair, SignJWT } from 'jose';
-import { fixture, mail } from './fixtures.mjs';
+import { fixture, mail, ref } from './fixtures.mjs';
 import { verifyToken } from '../src/auth.mjs';
 import { createWorker } from '../src/worker.mjs';
 import { selectors } from '../src/schemas.mjs';
@@ -55,7 +55,7 @@ test('real MCP transport initializes, lists tools and returns structured results
   assert.equal(init.status, 200);
   assert.equal((await init.json()).result.serverInfo.name, 'forpsi-company-mail');
   const list = await (await worker.fetch(request('tools/list'), f.env)).json();
-  assert.equal(list.result.tools.length, 60);
+  assert.equal(list.result.tools.length, 62);
   const widget = list.result.tools.find(t => t.name === 'render_worklist');
   assert.equal(widget._meta.ui.resourceUri, 'ui://forpsi/worklist-v1.html');
   assert.equal(widget.annotations.readOnlyHint, true);
@@ -106,6 +106,87 @@ test('direct MCP send cannot bypass a concrete preview and approval', async () =
   assert.equal(result.content[0].text,'SEND_CONFIRMATION_REQUIRED');
   assert.equal((await f.store.rows('SELECT COUNT(*) AS n FROM outbox'))[0].n,0);
   assert.equal(f.calls.length,0);
+});
+test('personal pilot rejects another authenticated principal and hides mailbox mutation tools',async()=>{
+  const f=fixture();
+  Object.assign(f.env,{PERSONAL_PILOT_READ_ONLY:'true',PERSONAL_PILOT_PRINCIPAL_ID:'alice',
+    PERSONAL_PILOT_MAILBOX_ID:'mail-a'});
+  const worker=createWorker({authenticate:async request=>request.headers.get('x-test-user')==='bob'?
+    {id:'bob',scopes:['forpsi:read']}:f.principal,providerFactory:f.providerFactory});
+  const other=await worker.fetch(request('tools/list',{}, {'x-test-user':'bob'}),f.env);
+  assert.equal(other.status,403);
+  const allowed=await worker.fetch(request('tools/list'),f.env);
+  const listed=(await allowed.json()).result.tools.map(tool=>tool.name);
+  assert.ok(listed.includes('begin_mail_setup'));
+  assert.ok(listed.includes('render_worklist'));
+  assert.ok(!listed.includes('send_message'));
+  assert.ok(!listed.includes('set_message_flags'));
+  const write=await worker.fetch(request('tools/call',{name:'set_message_flags',arguments:{
+    mailboxId:'mail-a',message:ref,seen:true}}),f.env);
+  assert.equal((await write.json()).result.content[0].text,'PILOT_READ_ONLY');
+  await worker.scheduled(null,f.env);
+  assert.equal(f.calls.length,0);
+});
+test('personal pilot hides another mailbox and refuses its existing setup session',async()=>{
+  const f=fixture();
+  Object.assign(f.env,{PERSONAL_PILOT_READ_ONLY:'true',PERSONAL_PILOT_PRINCIPAL_ID:'alice',
+    PERSONAL_PILOT_MAILBOX_ID:'mail-a'});
+  await f.store.run(`INSERT INTO mailboxes
+    (id,tenant_id,address,credential_key,drafts_folder,sent_folder,trash_folder,active)
+    VALUES ('mail-other','tenant-a','other@example.com','key-other','Drafts','Sent','Trash',1)`);
+  await f.store.run('INSERT INTO grants VALUES (?,?,?,0)','alice','mail-other','read');
+  const sessionId=crypto.randomUUID();
+  await f.store.run('INSERT INTO workflow_onboarding VALUES (?,?,?,?,?,?,?,?,?,?)',sessionId,
+    'tenant-a','alice','mail-other','consented',JSON.stringify({days:30,folders:['INBOX']}),
+    1,'{}',Date.now(),Date.now());
+  const worker=createWorker({authenticate:async()=>f.principal,providerFactory:f.providerFactory});
+  const listed=await worker.fetch(request('tools/call',{name:'list_mailboxes',arguments:{}}),f.env);
+  assert.deepEqual((await listed.json()).result.structuredContent.data.mailboxes.map(m=>m.id),['mail-a']);
+  const foreign=await worker.fetch(request('tools/call',{name:'get_mail_setup',arguments:{sessionId}}),f.env);
+  assert.equal((await foreign.json()).result.content[0].text,'PILOT_ACCESS_DENIED');
+});
+test('personal pilot exposes message text to the MCP model and saves only cited analysis',async()=>{
+  const f=fixture(),calls=[];
+  Object.assign(f.env,{PERSONAL_PILOT_READ_ONLY:'true',PERSONAL_PILOT_PRINCIPAL_ID:'alice',
+    PERSONAL_PILOT_MAILBOX_ID:'mail-a'});
+  const incoming={reference:ref,date:'2026-09-25T09:00:00Z',messageId:'<pilot@example.net>',
+    from:[{address:'client@example.net'}],to:[{address:'alice@example.com'}],cc:[],
+    subject:'Rozhodnutí',text:'Prosím rozhodněte do zítřka.'};
+  const provider={
+    async listFolders(){return {folders:[{path:'INBOX',selectable:true},{path:'Sent',selectable:true}]};},
+    async search({folder}){calls.push('search');return {messages:folder==='INBOX'?[incoming]:[],nextBeforeUid:null};},
+    async read(){calls.push('read');return incoming;},
+  };
+  const worker=createWorker({authenticate:async()=>f.principal,providerFactory:()=>provider});
+  const call=async(name,args)=>{
+    const response=await worker.fetch(request('tools/call',{name,arguments:args}),f.env);
+    assert.equal(response.status,200);
+    const result=(await response.json()).result;
+    assert.equal(result.isError,undefined,name);
+    return result.structuredContent.data;
+  };
+  const begin=await call('begin_mail_setup',{mailboxId:'mail-a',consent:true});
+  assert.equal(begin.scope.days,30);
+  const state=await call('analyze_mail_history',{sessionId:begin.sessionId});
+  assert.equal(state.analysisStatus,'awaiting_chatgpt');
+  const sample=await call('read_setup_sample',{sessionId:begin.sessionId,offset:0,limit:5});
+  assert.equal(sample.messages.length,1);
+  assert.equal(sample.messages[0].text,'Prosím rozhodněte do zítřka.');
+  assert.equal(sample.messages[0].recipientRole,'to');
+  const sourceKey=sample.messages[0].key;
+  const saved=await call('submit_setup_analysis',{sessionId:begin.sessionId,proposalVersion:1,
+    findings:[{kind:'waiting_user',sourceKey,quote:'Prosím rozhodněte do zítřka.',
+      summary:'Žádost o rozhodnutí.'}],priorities:[{sourceKey,priority:'high',
+      reason:'Žádost o rozhodnutí.',quote:'Prosím rozhodněte do zítřka.'}]});
+  assert.equal(saved.analysisStatus,'chatgpt_proposal');
+  assert.equal(saved.observations.semantic.findings[0].dueDate,'2026-09-26');
+  assert.equal(saved.proposal.version,2);
+  const restored=await call('get_mail_setup',{sessionId:begin.sessionId});
+  assert.equal(restored.observations.chatgptPriorities[0].priority,'high');
+  assert.ok(restored.nextQuestion);
+  const mailbox=await call('list_mailboxes',{});
+  assert.equal(mailbox.mailboxes[0].setupSessionId,begin.sessionId);
+  assert.deepEqual(calls.filter(x=>x==='search'),['search','search']);
 });
 test('MCP Apps worklist renders a saved synthetic snapshot without mailbox writes',async()=>{
   const f=fixture(),provider={

@@ -68,6 +68,8 @@ const definitions = [
   ['prepare_shortcut', 'Prepare an unsendable personal reply or forward proposal for an exact numbered message. Invoice PDF format is checked from bytes, but document meaning requires explicit user selection of the exact candidate index and SHA-256.', shortcutSchemas.use, 'read', false],
   ['begin_mail_setup', 'Start or defer personal setup. Consent, time period and folders are explicit; connecting a mailbox alone does not authorize history analysis.', onboardingSchemas.begin, 'read', false],
   ['analyze_mail_history', 'After explicit consent, sample metadata and bounded message bodies across the authorized period and folders without marking mail read. Save coverage and evidence-backed unapproved proposals.', onboardingSchemas.session, 'read', false],
+  ['read_setup_sample', 'Return the authorized 30-day pilot sample in batches of at most five messages as model-visible text data, including relevant Sent context, exact source keys, coverage and untrusted-content markers. No read flag is changed.', onboardingSchemas.sample, 'read', true],
+  ['submit_setup_analysis', 'Save the ChatGPT model’s unapproved evidence-backed findings, exact priority decisions, contact suggestions and signature candidate for the current sample and proposal version. The server re-reads cited messages and rejects invented quotes or references. This never changes native mail or approves a profile.', onboardingSchemas.submitAnalysis, 'read', false],
   ['get_mail_setup', 'Resume the personal setup session, coverage, unapproved proposal and next question in another chat.', onboardingSchemas.session, 'read', true],
   ['answer_mail_setup', 'Answer the next evidence-based setup question in natural Czech. One answer may set several draft preferences; ambiguities are reported. The server enforces a 20-question total including consent and approval.', onboardingSchemas.answer, 'read', false],
   ['approve_mail_setup', 'Approval must happen through the authenticated SO.ai review page. Calling this model-visible tool always fails with APPROVAL_UI_REQUIRED, even with confirmed=true.', onboardingSchemas.approve, 'read', false],
@@ -89,11 +91,45 @@ export const tools = definitions.map(([name, description, schema, action, readOn
     annotations: { readOnlyHint: readOnly, destructiveHint: destructive, openWorldHint: openWorld } };
 });
 
+const PERSONAL_PILOT_TOOLS=new Set(['get_profile','list_mailboxes','list_folders','read_message',
+  'begin_mail_setup','analyze_mail_history','read_setup_sample','submit_setup_analysis',
+  'get_mail_setup','answer_mail_setup',
+  'get_mail_preferences','get_mail_signature','start_worklist','get_worklist',
+  'resume_worklist','render_worklist','review_worklist']);
+
 export async function executeTool(name, args, ctx) {
   const { store, principal, providerFactory, calendarFactory, contactFactory, env, organizer, outbox } = ctx;
   const definition = tools.find(t => t.name === name);
   if (!definition) throw new Error('Unknown tool');
   args = definition.schema.parse(args);
+  if(env.PERSONAL_PILOT_READ_ONLY==='true'){
+    requireValue(principal.id===env.PERSONAL_PILOT_PRINCIPAL_ID &&
+      !!env.PERSONAL_PILOT_MAILBOX_ID,'PILOT_ACCESS_DENIED');
+    requireValue(PERSONAL_PILOT_TOOLS.has(name),'PILOT_READ_ONLY');
+    if(name==='review_worklist')requireValue(['start','next','previous','end'].includes(args.action),
+      'PILOT_READ_ONLY');
+    if(args.mailboxId)requireValue(args.mailboxId===env.PERSONAL_PILOT_MAILBOX_ID,'PILOT_ACCESS_DENIED');
+    if(args.sessionId){
+      const session=await store.first(`SELECT mailbox_id FROM workflow_onboarding
+        WHERE id=? AND principal_id=?`,args.sessionId,principal.id);
+      requireValue(session?.mailbox_id===env.PERSONAL_PILOT_MAILBOX_ID,'PILOT_ACCESS_DENIED');
+    }
+    if(['get_worklist','render_worklist','resume_worklist','review_worklist'].includes(name)){
+      const list=args.listId?await store.first(`SELECT mailbox_id FROM workflow_lists
+        WHERE id=? AND principal_id=?`,args.listId,principal.id):
+        await store.first(`SELECT mailbox_id FROM workflow_lists WHERE principal_id=? AND active=1
+          ORDER BY created_at DESC LIMIT 1`,principal.id);
+      requireValue(!list||list.mailbox_id===env.PERSONAL_PILOT_MAILBOX_ID,'PILOT_ACCESS_DENIED');
+    }
+    if(name==='read_message'){
+      const rows=await store.rows(`SELECT i.reference_json FROM workflow_list_items i
+        JOIN workflow_lists l ON l.id=i.list_id WHERE l.principal_id=? AND l.mailbox_id=?
+        AND l.active=1 AND l.expires_at>? LIMIT 20`,principal.id,env.PERSONAL_PILOT_MAILBOX_ID,Date.now());
+      requireValue(rows.some(row=>{const ref=JSON.parse(row.reference_json);return ref.folder===args.message.folder &&
+        ref.uid===args.message.uid && String(ref.uidValidity)===String(args.message.uidValidity);}),
+      'PILOT_MESSAGE_NOT_SELECTED');
+    }
+  }
   requireValue(definition.securitySchemes[0].scopes.every(scope => principal.scopes.includes(scope)), 'INSUFFICIENT_SCOPE');
   // The older direct MCP send endpoints lack a server-bound final preview.
   // Keep their schemas stable but fail closed while the new approval flow is built.
@@ -114,7 +150,8 @@ export async function executeTool(name, args, ctx) {
     case 'get_capabilities': data = capabilities(); break;
     case 'get_profile': data = { id: principal.id }; break;
     case 'list_mailboxes': {
-      const available=await store.mailboxes(principal);
+      const available=(await store.mailboxes(principal)).filter(m=>
+        env.PERSONAL_PILOT_READ_ONLY!=='true'||m.id===env.PERSONAL_PILOT_MAILBOX_ID);
       data={mailboxes:await Promise.all(available.map(async m=>{
         const profile=await store.first('SELECT version FROM workflow_profile_versions WHERE principal_id=? AND mailbox_id=? AND active=1',principal.id,m.id);
         const session=profile?null:await store.first(`SELECT id,status FROM workflow_onboarding
@@ -180,6 +217,8 @@ export async function executeTool(name, args, ctx) {
     case 'prepare_shortcut': data = await shortcuts().use(args); break;
     case 'begin_mail_setup': data = await onboarding().begin(args); break;
     case 'analyze_mail_history': data = await onboarding().analyze(args); break;
+    case 'read_setup_sample': data = await onboarding().readSetupSample(args); break;
+    case 'submit_setup_analysis': data = await onboarding().submitAnalysis(args); break;
     case 'get_mail_setup': data = await onboarding().status(args); break;
     case 'answer_mail_setup': data = await onboarding().answer(args); break;
     case 'approve_mail_setup': data = await onboarding().approve(args); break;
@@ -198,7 +237,9 @@ export async function executeTool(name, args, ctx) {
 
 export async function handleMcp(request, context) {
   const server = new Server({ name: 'forpsi-company-mail', version: '0.1.0' }, { capabilities: { tools: {}, resources: {} } });
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: tools.map(({ schema, action, ...descriptor }) => descriptor) }));
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: tools
+    .filter(tool=>context.env.PERSONAL_PILOT_READ_ONLY!=='true'||PERSONAL_PILOT_TOOLS.has(tool.name))
+    .map(({ schema, action, ...descriptor }) => descriptor) }));
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [{ uri: WORKLIST_UI_URI,
     name: 'forpsi-worklist', mimeType: 'text/html;profile=mcp-app', description: 'Read-only mail list and detail' }] }));
   server.setRequestHandler(ReadResourceRequestSchema, async req => {

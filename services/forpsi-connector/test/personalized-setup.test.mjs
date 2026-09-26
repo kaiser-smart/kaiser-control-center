@@ -7,6 +7,7 @@ import { interpretSetupAnswer } from '../src/setup-preferences.mjs';
 import { contentSamples, analyzeContent, signatureFromSent, openAiEvidenceAnalyzer } from '../src/content-evidence.mjs';
 import { newsletterSeriesKey } from '../src/newsletter-series.mjs';
 import { runPersonalSync } from '../src/personal-sync.mjs';
+import { executeTool } from '../src/mcp.mjs';
 
 const ref=(folder,uid)=>({folder,uid,uidValidity:folder==='Sent'?'7':'3'});
 const message=(uid,{folder='INBOX',from='client@example.net',to='alice@example.com',subject='Zakázka',
@@ -30,6 +31,7 @@ function scenario({incoming,sent}){
       m.reference.uid===reference.uid);},
   };
   const ctx={store:f.store,principal:f.principal,providerFactory:()=>provider,env:f.env,
+    organizer:f.organizer,outbox:f.outbox,
     now:()=>Date.parse('2026-09-26T12:00:00Z'),
     semanticAnalyzer:async input=>input.messages.flatMap(m=>m.text.includes('Kupte nyní')?[{kind:'marketing',
       sourceKey:m.key,quote:'Kupte nyní',summary:'Obchodní propagace.',dueDate:null,threadKey:null}]:
@@ -92,6 +94,82 @@ test('different custom work days and notification days remain separate',()=>{
   assert.deepEqual(parsed.changes.notificationPreference.window.days,[1,2,3,4]);
   assert.equal(parsed.changes.notificationPreference.window.start,'08:00');
   assert.equal(parsed.changes.workingHours.start,'09:00');
+});
+
+test('personal live pilot refuses broad consent and keeps onboarding plus priority in one bounded 30-day sample',async()=>{
+  const incoming=Array.from({length:65},(_,index)=>message(index+1,{date:'2026-09-20T08:00:00Z'}));
+  const sent=Array.from({length:25},(_,index)=>message(100+index,{folder:'Sent',from:'alice@example.com',
+    to:'client@example.net',date:'2026-09-21T08:00:00Z',text:'Děkuji.\n\nS pozdravem\nAlice'}));
+  const {ctx,calls}=scenario({incoming,sent});
+  Object.assign(ctx.env,{PERSONAL_PILOT_READ_ONLY:'true',PERSONAL_PILOT_PRINCIPAL_ID:'alice',
+    PERSONAL_PILOT_MAILBOX_ID:'mail-a'});
+  const setup=new Onboarding(ctx);
+  await assert.rejects(setup.begin({mailboxId:'mail-a',consent:true,days:31}),/PILOT_SCOPE_EXCEEDED/);
+  await assert.rejects(setup.begin({mailboxId:'mail-a',consent:true,days:30,
+    folders:['INBOX','Sent','Archive']}),/PILOT_SCOPE_EXCEEDED/);
+  const begin=await setup.begin({mailboxId:'mail-a',consent:true,days:30});
+  const analyzed=await setup.analyze({sessionId:begin.sessionId});
+  assert.equal(analyzed.analysisStatus,'awaiting_chatgpt');
+  assert.equal(analyzed.nextQuestion,null);
+  const observed=await ctx.store.first('SELECT observations_json FROM workflow_observations WHERE onboarding_id=?',begin.sessionId);
+  const sample=JSON.parse(observed.observations_json).pilotMessages;
+  assert.ok(sample.length<=50);
+  assert.equal(sample.filter(m=>m.reference.folder==='INBOX').length,20);
+  assert.equal(sample.filter(m=>m.reference.folder==='Sent').length,20);
+  const delivered=[];
+  for(let offset=0;offset<sample.length;offset+=5){
+    const page=await setup.readSetupSample({sessionId:begin.sessionId,offset,limit:5});
+    assert.ok(page.messages.length<=5);
+    delivered.push(...page.messages);
+  }
+  assert.equal(delivered.length,40);
+  assert.equal(delivered.filter(m=>m.sent).length,20);
+  assert.equal(delivered[0].text,'Prosím o rozhodnutí.');
+  assert.equal(delivered[0].untrustedContent,true);
+  const inbound=delivered.filter(m=>!m.sent),sentSample=delivered.find(m=>m.sent);
+  await assert.rejects(setup.submitAnalysis({sessionId:begin.sessionId,proposalVersion:1,
+    acknowledgeIncomplete:true,findings:[],priorities:[{sourceKey:inbound[0].key,
+      priority:'high',reason:'Vymyšlená citace.',quote:'Tento text ve zprávě není.'}]}),
+    /ANALYSIS_EVIDENCE_INVALID/);
+  await assert.rejects(setup.submitAnalysis({sessionId:begin.sessionId,proposalVersion:1,
+    acknowledgeIncomplete:false,findings:[],priorities:[]}),/PILOT_COVERAGE_INCOMPLETE/);
+  const submitted=await setup.submitAnalysis({sessionId:begin.sessionId,proposalVersion:1,
+    acknowledgeIncomplete:true,findings:[{kind:'waiting_user',sourceKey:inbound[1].key,
+      quote:'Prosím o rozhodnutí.',summary:'Čeká se na rozhodnutí.'}],
+    priorities:[{sourceKey:inbound[1].key,priority:'high',reason:'Požadavek na rozhodnutí.',
+      quote:'Prosím o rozhodnutí.'},{sourceKey:inbound[0].key,priority:'review',
+      reason:'K ruční kontrole.',quote:'Prosím o rozhodnutí.'}],
+    importantContacts:[{address:'client@example.net',sourceKey:inbound[1].key}],
+    signature:{fullText:'S pozdravem\nAlice',shortText:'Alice',sourceKeys:[sentSample.key]}});
+  assert.equal(submitted.analysisStatus,'chatgpt_proposal');
+  assert.equal(submitted.proposal.version,2);
+  assert.equal(submitted.observations.signatureCandidate.fullText,'S pozdravem\nAlice');
+  await ctx.store.run(`INSERT INTO workflow_profile_versions
+    (tenant_id,principal_id,mailbox_id,version,profile_json,approved_at,active) VALUES (?,?,?,?,?,?,1)`,
+    'tenant-a','alice','mail-a',1,'{}',Date.now());
+  await ctx.store.run("UPDATE workflow_onboarding SET status='approved' WHERE id=?",begin.sessionId);
+  const searchesBefore=calls.filter(c=>c[0]==='search').length;
+  const list=await new Workflow(ctx).start({mailboxId:'mail-a',view:'priority',limit:10});
+  assert.equal(calls.filter(c=>c[0]==='search').length,searchesBefore);
+  assert.ok(list.items.length<=10);
+  assert.ok(list.scannedCount<=20);
+  assert.deepEqual(list.items[0].reference,inbound[1].reference);
+  assert.equal(list.items[0].priority,'high');
+  assert.equal(list.items[0].semanticEvidence.provenance,'chatgpt_proposal_with_exact_quote');
+  const callsBeforeRepeat=calls.length;
+  const resumed=await new Workflow(ctx).start({mailboxId:'mail-a',view:'priority',limit:10});
+  assert.equal(resumed.listId,list.listId);
+  assert.equal(calls.length,callsBeforeRepeat);
+  const navigation=await executeTool('review_worklist',{listId:list.listId,action:'next'},ctx);
+  assert.equal(navigation.position,2);
+  assert.equal((await executeTool('resume_worklist',{listId:list.listId},ctx)).position,2);
+  await assert.rejects(executeTool('review_worklist',{listId:list.listId,action:'done'},ctx),
+    /PILOT_READ_ONLY/);
+  assert.equal((await executeTool('read_message',{mailboxId:'mail-a',message:list.items[0].reference},ctx)).subject,'Zakázka');
+  await assert.rejects(executeTool('set_message_flags',{mailboxId:'mail-a',message:ref('INBOX',1),seen:true},ctx),
+    /PILOT_READ_ONLY/);
+  await assert.rejects(executeTool('read_message',{mailboxId:'mail-a',message:ref('INBOX',1)},ctx),
+    /PILOT_MESSAGE_NOT_SELECTED/);
 });
 
 test('priority uses all findings independent of their order, including an individual request in marketing',async()=>{

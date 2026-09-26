@@ -107,16 +107,45 @@ export class Workflow {
   async start({ mailboxId, folder: path = 'INBOX', limit = 10, view='recent' }) {
     const mailbox = await this.access(mailboxId);
     const provider = this.providerFactory(this.env, mailbox);
-    const scanLimit=view==='priority'?200:limit,pageSize=view==='priority'?50:limit;
-    const summaries=[];let beforeUid=null,olderUnscanned=false;
-    do{
-      const found=await provider.search({folder:path,limit:Math.min(pageSize,scanLimit-summaries.length),
-        ...(beforeUid?{beforeUid}:{})});
-      requireValue(found.messages.length<=Math.min(pageSize,scanLimit-summaries.length),'MAIL_LIMIT_EXCEEDED');
-      summaries.push(...found.messages);
-      beforeUid=found.nextBeforeUid??null;
-      olderUnscanned=beforeUid!=null;
-    }while(view==='priority'&&beforeUid&&summaries.length<scanLimit);
+    const pilot=this.env.PERSONAL_PILOT_READ_ONLY==='true';
+    let scanLimit=view==='priority'?200:limit,pageSize=view==='priority'?50:limit;
+    const summaries=[];let beforeUid=null,olderUnscanned=false,pilotMessages=[],pilotFacts=null;
+    if(pilot){
+      requireValue(path==='INBOX','PILOT_SCOPE_EXCEEDED');
+      const existing=await this.store.first(`SELECT id FROM workflow_lists WHERE tenant_id=? AND principal_id=?
+        AND mailbox_id=? AND active=1 AND expires_at>? ORDER BY created_at DESC LIMIT 1`,
+      mailbox.tenant_id,this.principal.id,mailbox.id,this.now());
+      if(existing)return this.current({listId:existing.id});
+      const approved=await this.store.first(`SELECT version FROM workflow_profile_versions
+        WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND active=1`,
+      mailbox.tenant_id,this.principal.id,mailbox.id);
+      requireValue(approved,'PROFILE_NOT_APPROVED');
+      const sample=await this.store.first(`SELECT o.observations_json,o.coverage_json,s.scope_json
+        FROM workflow_onboarding s JOIN workflow_observations o ON o.onboarding_id=s.id
+        WHERE s.tenant_id=? AND s.principal_id=? AND s.mailbox_id=? AND s.status='approved'
+        ORDER BY s.updated_at DESC LIMIT 1`,mailbox.tenant_id,this.principal.id,mailbox.id);
+      requireValue(sample,'PILOT_SAMPLE_NOT_FOUND');
+      const scope=JSON.parse(sample.scope_json),observation=JSON.parse(sample.observations_json);
+      requireValue(observation.semantic?.status==='chatgpt_proposal','ANALYSIS_NOT_SUBMITTED');
+      pilotFacts=observation;
+      pilotMessages=observation.pilotMessages??[];
+      requireValue(scope.days<=30 && pilotMessages.length<=50 && pilotMessages.every(m=>
+        m.reference?.folder==='INBOX'||m.reference?.folder===mailbox.sent_folder),'PILOT_SCOPE_EXCEEDED');
+      const earliest=this.now()-30*86400000;
+      summaries.push(...pilotMessages.filter(m=>m.reference.folder==='INBOX' &&
+        Date.parse(m.date)>=earliest && Date.parse(m.date)<=this.now()));
+      scanLimit=summaries.length;
+      olderUnscanned=JSON.parse(sample.coverage_json).some(x=>x.incomplete);
+    }else{
+      do{
+        const found=await provider.search({folder:path,limit:Math.min(pageSize,scanLimit-summaries.length),
+          ...(beforeUid?{beforeUid}:{})});
+        requireValue(found.messages.length<=Math.min(pageSize,scanLimit-summaries.length),'MAIL_LIMIT_EXCEEDED');
+        summaries.push(...found.messages);
+        beforeUid=found.nextBeforeUid??null;
+        olderUnscanned=beforeUid!=null;
+      }while(view==='priority'&&beforeUid&&summaries.length<scanLimit);
+    }
     const profileRow=view==='priority'?await this.store.first(`SELECT profile_json FROM workflow_profile_versions
       WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND active=1`,mailbox.tenant_id,this.principal.id,mailbox.id):null;
     const profile=profileRow?JSON.parse(profileRow.profile_json):null;
@@ -124,11 +153,15 @@ export class Workflow {
     const candidates=view==='priority'?[...summaries].sort((a,b)=>
       String(b.date??'').localeCompare(String(a.date??'')) ||
       Number(b.reference?.uid??0)-Number(a.reference?.uid??0)):summaries;
-    const analyzer=this.semanticAnalyzer??(this.env.FORPSI_ANALYSIS_API_KEY&&this.env.FORPSI_ANALYSIS_MODEL?
+    const analyzer=pilot?null:this.semanticAnalyzer??(this.env.FORPSI_ANALYSIS_API_KEY&&this.env.FORPSI_ANALYSIS_MODEL?
       input=>openAiEvidenceAnalyzer(input,this.env):null);
     const verifiedAliases=view==='priority'?await this.store.verifiedAliases(mailbox):[];
     const detailCache=new Map();let semantic={status:'unavailable',findings:[],examined:0};
     let semanticContextStatus='not_analyzed';
+    if(pilot){
+      semantic=pilotFacts.semantic;
+      semanticContextStatus=olderUnscanned?'chatgpt_partial_sample':'chatgpt_submitted_sample';
+    }
     if(view==='priority'&&analyzer){
       const selected=new Map([...candidates.slice(0,12),...candidates.slice(-4)].map(m=>[messageKey(m),m]));
       for(const summary of selected.values()){
@@ -139,7 +172,8 @@ export class Workflow {
       semanticContextStatus='bounded_inbound_and_sent';
       if(path!==mailbox.sent_folder && mailbox.sent_folder){
         try{
-          const sent=await provider.search({folder:mailbox.sent_folder,limit:50});
+          const sent=pilot?{messages:pilotMessages.filter(m=>m.reference.folder===mailbox.sent_folder),
+            nextBeforeUid:olderUnscanned?1:null}:await provider.search({folder:mailbox.sent_folder,limit:50});
           if(sent.nextBeforeUid!=null)semanticContextStatus='partial_sent_window';
           const roots=new Set([...selected.values(),...detailCache.values()].flatMap(m=>
             [messageKey(m),threadKey(m)].filter(Boolean)));
@@ -192,6 +226,7 @@ export class Workflow {
         x.sender.toLowerCase()===sender.toLowerCase() &&
         (x.subject===message.subject || (x.seriesKey&&x.seriesKey===newsletterSeriesKey(message.subject))));
       const relatedFindings=findings.get(messageKey(detail))??[];
+      const chatgptPriority=pilot?pilotFacts.chatgptPriorities?.find(x=>x.sourceKey===messageKey(detail)):null;
       const threadEvents=threadFindings.get(key)??[];
       let threadDisposition=null,threadEvidence=null;
       for(const event of threadEvents){
@@ -209,8 +244,11 @@ export class Workflow {
         detail.to?.some(x=>x.address?.toLowerCase()===mailbox.address.toLowerCase());
       const semanticHigh=threadDisposition==='open'||(threadDisposition===null&&!!highFinding);
       const semanticLow=threadDisposition==='closed'||(!semanticHigh&&!!lowFinding);
-      const priority=override?.priority??(semanticHigh?'high':newsletter||semanticLow?'review':important?'high':'review');
-      const reason=override?'Výslovná osobní oprava pro tuto zprávu.':semanticHigh?
+      const priority=pilot?override?.priority??chatgptPriority?.priority??'review':
+        override?.priority??(semanticHigh?'high':newsletter||semanticLow?'review':important?'high':'review');
+      const reason=pilot?(override?'Výslovná osobní oprava pro tuto zprávu.':
+        chatgptPriority?.reason??'ChatGPT tento vzorek nevyhodnotil; vyžaduje ruční kontrolu.'):
+        override?'Výslovná osobní oprava pro tuto zprávu.':semanticHigh?
         'Modelový návrh otevřeného požadavku s citací; ověřte před akcí.':newsletter?
         'Uživatelem schválené pravidlo newsletteru; není automaticky prioritní.':semanticLow?
         'Modelový návrh s citací obsahu; ověřte před akcí.':
@@ -218,9 +256,11 @@ export class Workflow {
         'Přímo adresováno; konkrétní požadavek je nutné ověřit.':'Neověřená priorita; zpráva není skrytá.';
       items.push({ reference: message.reference, threadKey: threadKey(detail), messageKey: messageKey(detail),
         sender, subject: message.subject ?? '', receivedAt: message.date ?? null,priority,reason,
-        contentType:newsletter||semanticFinding?.kind==='newsletter'?'newsletter':'unclassified',
-        semanticEvidence:semanticFinding?{...semanticFinding,
-          findings:threadEvents.flatMap(x=>x.entries),contextStatus:semanticContextStatus}:null });
+        contentType:(!pilot&&newsletter)||semanticFinding?.kind==='newsletter'?'newsletter':'unclassified',
+        semanticEvidence:pilot?chatgptPriority?{...chatgptPriority,
+          findings:relatedFindings,contextStatus:semanticContextStatus}:null:
+          semanticFinding?{...semanticFinding,
+            findings:threadEvents.flatMap(x=>x.entries),contextStatus:semanticContextStatus}:null });
     }
     if(view==='priority')items.sort((a,b)=>Number(b.priority==='high')-Number(a.priority==='high') ||
       String(b.receivedAt??'').localeCompare(String(a.receivedAt??'')));

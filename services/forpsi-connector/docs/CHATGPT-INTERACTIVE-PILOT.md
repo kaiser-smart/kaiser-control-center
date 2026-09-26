@@ -1,0 +1,21 @@
+# Interaktivní osobní čtecí pilot Forpsi ↔ ChatGPT
+
+Stav PR #209, 26. 9. 2026. Analýzu obsahu provádí model v aktivním chatu přes MCP. Serverový OpenAI API adaptér zůstává volitelný a v osobním pilotu se nespouští. Lokální testy s připravenými závěry neprokazují porozumění modelem ChatGPT ani skutečné vykreslení karty v ChatGPT.
+
+## Tok a hranice
+
+1. Ověřené OAuth přihlášení se musí přes explicitní vazbu `principal_identity_links` převést na již existující SO.ai principal s osobním grantem ke konkrétní schránce. Shoda e-mailové adresy nestačí. `PERSONAL_PILOT_PRINCIPAL_ID` a `PERSONAL_PILOT_MAILBOX_ID` omezí celý veřejný MCP endpoint na jednu osobu a schránku. Neověřený nebo cizí principal skončí před MCP.
+2. `begin_mail_setup` vyžaduje souhlas a dovolí nejvýše 30 dní, pouze INBOX a konfigurované Odeslané. `analyze_mail_history` uloží maximálně 50 metadatových záznamů celkem; aktuální okno čte nejvýše 20 z každé složky. `read_setup_sample` vrací po nejvýše pěti zprávách přímo do modelově viditelného výsledku autorský text, role účastníků, referenci a stav pokrytí. Nativní IMAP přístup je read-only. Neprozkoumaná pošta zůstává výslovně neprozkoumaná.
+3. Model v chatu posoudí obsah a podá `submit_setup_analysis`: jednotlivé závěry s přesnou citací, priority konkrétních příchozích zpráv, návrhy kontaktů a případný podpis z vlastních Odeslaných. Server před uložením znovu čte citované zprávy, ověřuje přesný text, reference v doručeném vzorku, odesílací identitu podpisu a verzi návrhu. Výsledkem je neschválený návrh. Chybný význam citace může stále odhalit až uživatel při kontrole; samotná citace není důkazem správné interpretace.
+4. `answer_mail_setup` ukládá individuální odpovědi. Aktivace profilu a podpisu je povolena jen přes přihlášenou stránku SO.ai pro přesnou verzi návrhu; parametr modelu `confirmed=true` nestačí. `start_worklist(view=priority)` používá uložené priority od ChatGPT a případné výslovné uživatelské opravy. Ostatní zprávy nechává k ručnímu posouzení. Pevné číslování, navigace `review_worklist` omezená na Další/Předchozí a `resume_worklist` dovolí obnovu pozice v novém chatu; `render_worklist` zobrazuje stejný uložený seznam.
+5. Veřejné nástroje pilotu neobsahují odesílání, koncepty, příznaky, přesun, mazání ani plánované běhy. Přepínač `CONNECTOR_ENABLED=false` okamžitě vypne veřejné MCP bez zásahu do interní SO.ai pošty. `WORKFLOW_SYNC_ENABLED=false` a `SEND_ENABLED=false` se při případném zapnutí pilotu nastaví zvlášť.
+
+## Co zatím brání živému průchodu
+
+Produkční Worker nemá nakonfigurovaný OAuth issuer, JWKS ani veřejné MCP resource URL a `CONNECTOR_ENABLED` je vypnuté. Není doložený OAuth poskytovatel, který podpoří autorizační kód, PKCE a požadované MCP resource/audience, ani explicitní vazba jeho ověřeného subject na existující SO.ai principal. SO.ai session cookie nelze považovat za bearer token ChatGPT ani spojovat účty podle e-mailu. Dokud není cesta přihlášení hotová a černoskříňkově ověřená pro nepřihlášeného i cizího uživatele, skutečná pošta se přes nový pilot nečte a veřejné MCP se nezapíná. Živý ChatGPT model ani karta dosud nebyly ověřeny.
+
+Nejbližší externí vstup: určit firemního OAuth poskytovatele pro spojení ChatGPT (ne OpenAI API klíč) s podporou authorization code + PKCE a schválit vytvoření aplikace pro jediné read-only MCP. Pak lze ověřit issuer/JWKS/audience, provést explicitní vazbu ověřeného subject na SO.ai principal, dokončit migraci po zkoušce na záložní kopii a spustit omezený osobní pilot. Žádné tajné údaje nepatří do chatu, Gitu ani PR.
+
+## Ověření a návrat
+
+Lokální testy používají syntetickou poštu. Testují dávkování, citace, čas relativního termínu podle data zprávy, odmítnutí cizího principala, neexistenci mutačních nástrojů, stálé pořadí dle modelově vložených priorit a pokračování seznamu. Databázové migrace 0005–0008 byly zkusmo aplikovány na oddělený export skutečné D1 se stavem `PRAGMA integrity_check=ok`; produkční databáze zatím změněna nebyla. Kódový Git bundle a soukromý SQL export jsou v adresáři `backups/` mimo Git. Při pilotu se nejdříve vypne `CONNECTOR_ENABLED`, poté se podle potřeby vrátí předchozí Worker a databázová kopie; SO.ai interní cesta zůstává oddělená.

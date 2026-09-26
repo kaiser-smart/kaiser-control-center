@@ -38,6 +38,9 @@ export function createWorker(dependencies = {}) {
       let principal;
       try { principal = await verify(request, env, store); }
       catch { return json({ error: 'AUTH_REQUIRED' }, 401, { 'WWW-Authenticate': challenge(env) }); }
+      if(env.PERSONAL_PILOT_READ_ONLY==='true' &&
+        (!env.PERSONAL_PILOT_PRINCIPAL_ID || !env.PERSONAL_PILOT_MAILBOX_ID ||
+          principal.id!==env.PERSONAL_PILOT_PRINCIPAL_ID))return json({error:'PILOT_ACCESS_DENIED'},403);
       try {
         const response = await handleMcp(request, { store, principal, providerFactory, calendarFactory, contactFactory, env,
           semanticAnalyzer: dependencies.semanticAnalyzer ?? null,
@@ -48,6 +51,7 @@ export function createWorker(dependencies = {}) {
       } catch { return json({ error: 'CONNECTOR_UNAVAILABLE' }, 503); }
     },
     async scheduled(_event, env) {
+      if(env.PERSONAL_PILOT_READ_ONLY==='true')return;
       if (env.CONNECTOR_ENABLED !== 'true' || !env.DB) return;
       const store=new Store(env.DB);
       await new Onboarding({store,principal:{id:'system',scopes:[]},providerFactory,env}).cleanupExpired();
