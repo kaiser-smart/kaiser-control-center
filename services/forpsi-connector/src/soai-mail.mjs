@@ -1,4 +1,4 @@
-import { compositionContext, createSoaiDraft } from './composition.mjs';
+import { compositionContext, createSoaiDraft, openSoaiDraft, replaceSoaiDraft } from './composition.mjs';
 import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { id } from './schemas.mjs';
@@ -8,7 +8,7 @@ import { Organizer } from './organize.mjs';
 import { executeTool } from './mcp.mjs';
 import { requireValue, safeError } from './errors.mjs';
 
-const input=z.object({actorId:id,operation:z.enum(['list_mailboxes','list_folders','search_messages','read_message','composition_context','create_draft']),payload:z.record(z.string(),z.unknown())}).strict();
+const input=z.object({actorId:id,operation:z.enum(['list_mailboxes','list_folders','search_messages','read_message','composition_context','create_draft','open_draft','replace_draft']),payload:z.record(z.string(),z.unknown())}).strict();
 export async function handleSoaiMail(request,env,factories) {
   const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
   const token=env.CONNECTOR_ADMIN_TOKEN, supplied=request.headers.get('authorization')?.replace(/^Bearer /,'') || '';
@@ -27,14 +27,23 @@ export async function handleSoaiMail(request,env,factories) {
     const principal={id:identity.id,scopes:['forpsi:read','forpsi:write']};
     const ctx={...factories,env,store,principal,organizer:new Organizer(store)};
     const data=body.operation==='composition_context'?await compositionContext(body.payload,ctx):
-      body.operation==='create_draft'?await createSoaiDraft(body.payload,ctx):await executeTool(body.operation,body.payload,ctx);
+      body.operation==='create_draft'?await createSoaiDraft(body.payload,ctx):
+      body.operation==='open_draft'?await openSoaiDraft(body.payload,ctx):
+      body.operation==='replace_draft'?await replaceSoaiDraft(body.payload,ctx):await executeTool(body.operation,body.payload,ctx);
+    if(body.operation==='list_folders'){
+      data.draftEditsEnabled=env.SOAI_DRAFT_EDITS_ENABLED==='true';
+      try {await store.access(principal,body.payload.mailboxId,'write');data.draftWriteAllowed=true;}
+      catch(error){if(error?.code!=='ACCESS_DENIED')throw error;data.draftWriteAllowed=false;}
+    }
     requireValue((data.mailboxes?.length ?? 0)<=200 && (data.folders?.length ?? 0)<=500,'MAIL_LIMIT_EXCEEDED');
     // A revoked grant or paused mailbox cannot release in-flight content to the caller.
-    if(body.payload.mailboxId) {await store.access(principal,body.payload.mailboxId,'read');if(body.operation==='create_draft')await store.access(principal,body.payload.mailboxId,'write');}
+    if(body.payload.mailboxId) {await store.access(principal,body.payload.mailboxId,'read');if(['create_draft','replace_draft'].includes(body.operation))await store.access(principal,body.payload.mailboxId,'write');}
     if(body.operation==='list_mailboxes'){data.mailboxes=await store.mailboxes(principal);requireValue(data.mailboxes.length<=200,'MAIL_LIMIT_EXCEEDED');}
     return json({data,mode:factories.verificationMode});
   } catch(error) {
     const code=error instanceof z.ZodError || error instanceof SyntaxError?'INVALID_ARGUMENTS':safeError(error);
-    return json({error:code},code==='INVALID_ARGUMENTS'?400:code==='ACCESS_DENIED'?403:['STALE_MESSAGE_REFERENCE','PROFILE_CHANGED','DRAFT_REQUEST_CONFLICT','DRAFT_UNCERTAIN'].includes(code)?409:code==='MESSAGE_NOT_FOUND'?404:code==='MESSAGE_TOO_LARGE'?413:503);
+    return json({error:code},code==='INVALID_ARGUMENTS'?400:code==='ACCESS_DENIED'?403:
+      ['STALE_MESSAGE_REFERENCE','PROFILE_CHANGED','DRAFT_REQUEST_CONFLICT','DRAFT_UNCERTAIN','DRAFT_CHANGED','SAFE_REPLACE_UNSUPPORTED','NOT_DRAFT_FOLDER','NOT_EDITABLE_DRAFT','DRAFT_FORMAT_UNSUPPORTED','DRAFT_SENDER_UNSUPPORTED'].includes(code)?409:
+      code==='MESSAGE_NOT_FOUND'?404:code==='MESSAGE_TOO_LARGE'?413:503);
   }
 }
