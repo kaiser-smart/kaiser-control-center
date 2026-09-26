@@ -1,13 +1,14 @@
 const escape = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state={epoch:0,owner:null,data:null,resources:{},accessData:null,accessDraft:null,error:'',notice:'',tab:'mailboxes',draft:null,dirty:false,busy:false,loading:false,root:null,api:null,guard:null};
+const state={epoch:0,owner:null,data:null,resources:{},disclosures:{},accessData:null,accessDraft:null,error:'',notice:'',tab:'mailboxes',draft:null,dirty:false,busy:false,loading:false,root:null,api:null,guard:null};
 const date = value => value ? new Date(value).toLocaleString('cs-CZ') : 'Dosud neověřeno';
-const tabs=[['mailboxes','Schránky'],['access','Přístupy kolegů'],['rules','Seznam pravidel a automatizace'],['settings','Nastavení a log událostí']];
+const tabs=[['mailboxes','Schránky'],['access','Přístupy kolegů'],['settings','Rozšířené']];
 const moduleNames={mail:'Pošta',calendar:'Kalendář',contacts:'Adresář',files:'Soubory',tasks:'Úkoly',notes:'Poznámky',signatures:'Podpisy',labels:'Štítky',rules:'Pravidla'};
 const actionNames={read:'Čtení',write:'Úpravy',send:'Odesílání',delete:'Mazání',schedule:'Plánování'};
 const outcomeNames={queued:'Čeká',sending:'Předává se',sent:'Přijato serverem',partial:'Částečně přijato',uncertain:'Výsledek je nejistý',cancelled:'Zrušeno',blocked:'Zablokováno'};
 const findMailbox=id=>state.data?.mailboxes.find(m=>m.id===id);
 const mailboxName=id=>findMailbox(id)?.display_name || findMailbox(id)?.address || 'Neznámá schránka';
 const button=(action,label,extra='')=>`<button type="button" class="secondary-link" data-forpsi-action="${action}" ${extra} ${state.busy?'disabled':''}>${label}</button>`;
+const disclosure=(key,label,content)=>`<details class="forpsi-disclosure" data-forpsi-disclosure="${escape(key)}" ${state.disclosures[key]?'open':''}><summary>${label}</summary>${content}</details>`;
 const resourcesFor = id => { const r=state.resources[id]; return r?.revision===findMailbox(id)?.revision?r:null; };
 function diagnosticHint(d) {
   if(d?.code==='ADMIN_RESOURCE_LIMIT') return 'Seznam přesáhl 500 položek. Úplný výběr vyžaduje doplnění stránkování.';
@@ -32,7 +33,7 @@ function folderFields(d) {
   if(!d.id) return '<p>Výběr složek se zpřístupní po uložení schránky a načtení zdrojů z Forpsi.</p>';
   const r=resourcesFor(d.id), folders=r?.folders;
   const ready=folders?.status==='available';
-  return `<details open><summary>Složky pro zprávy</summary><p>Platí pro tuto schránku v SO.ai a konektoru. Složky ve Forpsi se nepřejmenovávají ani nemažou.</p>
+  return disclosure(`folders-${d.id}`,'Rozšířené: složky pro zprávy',`<p>Platí pro tuto schránku v SO.ai a konektoru. Složky ve Forpsi se nepřejmenovávají ani nemažou.</p>
     ${button('resources','Načíst složky a další zdroje',`data-id="${escape(d.id)}"`)}
     ${folders?.status==='failed'?`<p>${diagnosticHint(folders.diagnostic)}</p>`:''}
     <div class="forpsi-grid">${[['draftsFolder','Koncepty','\\Drafts'],['sentFolder','Odeslané','\\Sent'],['trashFolder','Koš','\\Trash']].map(([key,label,flag])=>{
@@ -43,7 +44,7 @@ function folderFields(d) {
         ${current&&!items.some(f=>f.path===current)?`<option value="${escape(current)}" selected>${escape(current)} · dostupnost neověřena</option>`:''}
         ${items.map(f=>`<option value="${escape(f.path)}" ${f.path===current?'selected':''}>${escape(f.path)}</option>`).join('')}</select>
         ${ready&&automatic.length!==1&&!current?'<small>Jednoznačný cíl nebyl nalezen. Vyberte existující složku před použitím této funkce.</small>':''}</label>`;
-    }).join('')}</div><p>Při změně hesla nejprve uložte připojení a pak načtěte složky znovu.</p></details>`;
+    }).join('')}</div><p>Při změně hesla nejprve uložte připojení a pak načtěte složky znovu.</p>`);
 }
 function editForm() {
   const d=state.draft;
@@ -61,11 +62,15 @@ function mailboxes() {
   return `<div class="forpsi-actions">${button('new','Přidat schránku')}${button('refresh','Obnovit stav')}</div>
     ${state.draft?editForm():''}
     <div class="forpsi-list">${state.data.mailboxes.length?state.data.mailboxes.map(m=>`<article class="forpsi-card">
-      <div><h3>${escape(m.display_name || m.address)}</h3><p>${escape(m.address)}</p></div>
-      <span>${m.active?'Povolená v konektoru':'Pozastavená'}</span>${serviceStatus(m)}<small>Ověření: ${date(m.verified_at)}</small>
-      <div class="forpsi-actions">${button('edit','Upravit nastavení',`data-id="${escape(m.id)}"`)}${button('verify','Ověřit připojení',`data-id="${escape(m.id)}"`)}${button('resources','Dostupné složky, kalendáře a adresáře',`data-id="${escape(m.id)}"`)}${button('toggle',m.active?'Pozastavit':'Zapnout schránku',`data-id="${escape(m.id)}"`)}</div>
-      ${resourceSummary(m)}
-    </article>`).join(''):'<p>Zatím není uložená žádná schránka.</p>'}</div>
+      <div class="forpsi-card-heading"><div><h3>${escape(m.display_name || m.address)}</h3><p>${escape(m.address)}</p></div><span class="forpsi-state">${m.active?'Povolená v konektoru':'Pozastavená'}</span></div>
+      <p>${m.active?'Přístup k obsahu mají pouze přidělené účty.':'Před zapnutím je potřeba úspěšně ověřit připojení.'}</p>
+      <p class="forpsi-connection-summary">Příjem pošty: ${m.verification?.imap==='verified'?(m.verification.mode==='simulated'?'TEST prošel':'ověřený'):m.verification?.imap==='failed'?'ověření selhalo':'dosud neověřený'}<br><small>Poslední test: ${date(m.verified_at)}</small></p>
+      ${Object.entries({imap:'Příjem pošty',smtp:'Připojení k odesílání',calendar:'Kalendář',contacts:'Adresář'}).filter(([key])=>m.verification?.[key]==='failed').map(([key,label])=>`<p class="forpsi-service-issue">${label}: ${diagnosticHint(m.verification?.diagnostics?.[key])}</p>`).join('')}
+      <div class="forpsi-actions">${button('access-open','Přístupy kolegů',`data-id="${escape(m.id)}"`)}${button('edit','Upravit připojení',`data-id="${escape(m.id)}"`)}${button('verify','Ověřit připojení',`data-id="${escape(m.id)}"`)}${m.active?'':button('toggle','Zapnout schránku',`data-id="${escape(m.id)}"`)}</div>
+      ${disclosure(`mailbox-${m.id}`,'Služby, složky a pozastavení',`${serviceStatus(m)}
+        <div class="forpsi-actions">${button('resources','Načíst složky, kalendáře a adresáře',`data-id="${escape(m.id)}"`)}${m.active?button('toggle','Pozastavit schránku',`data-id="${escape(m.id)}"`):''}</div>
+        ${resourceSummary(m)}<p>Pozastavení zablokuje další práci se schránkou. Schránku ani zprávy ve Forpsi nesmaže.</p>`)}
+    </article>`).join(''):'<p>Zatím není uložená žádná schránka. Začněte tlačítkem Přidat schránku; potom připojení ověřte a přidělte přístup konkrétnímu účtu.</p>'}</div>
     <p>Test připojení ověřuje přihlášení ke službám. Neodesílá zprávu a nepotvrzuje její doručení.</p>`;
 }
 function access() {
@@ -137,11 +142,14 @@ function rules() {
 }
 function settings() {
   const d=state.data;
-  return `<h3>Log událostí</h3><p>Pracovní čtení v SO.ai: ${d.soaiMailEnabled?'zapnuté pro účty s přidělenými právy':'vypnuté'}. Připojení ChatGPT: ${d.connectorEnabled?'povolené, přihlášení vyžaduje ověření':'vypnuté'}.</p>
-    <p>ChatGPT přihlášení: ${d.oauthConfigured?'konfigurace přítomna, přihlášení zatím neověřeno':'čeká na nastavení'}. Šifrované ukládání hesel: ${d.credentialStorageReady?'nakonfigurováno':'čeká na nastavení'}.</p>
-    <div class="forpsi-list">${d.capabilities.modules.map(m=>`<article class="forpsi-card"><h4>${moduleNames[m.id] || escape(m.id)}</h4><p>${m.implementation==='NOT_IMPLEMENTED'?'Napojení zatím není implementováno.':m.implementation==='CONNECTOR_STORAGE'?'Vlastní evidence konektoru; nesynchronizuje nastavení webmailu.':'Adaptér implementován; stav připojení se ověřuje pro každou schránku.'}</p></article>`).join('')}</div>
-    ${d.audit.length?`<ul>${d.audit.map(e=>`<li>${date(e.at)} · ${escape(mailboxName(e.mailbox_id))} · ${escape({'admin.save':'Uložení nastavení','admin.verify':'Test připojení','admin.set_active':'Změna dostupnosti','admin.access.save':'Změna přístupů'}[e.action] || e.action)} · ${escape(auditOutcome(e))}</li>`).join('')}</ul>`:'<p>Zatím žádné zaznamenané události.</p>'}
-    <details><summary>Zobrazit diagnostiku</summary><p>Načteno ${date(d.checkedAt)}. Posledních nejvýše 50 událostí. Stav přihlášení v prohlížeči nepotvrzuje serverové připojení. Test IMAP/SMTP nepotvrzuje odeslání, doručení ani uložení kopie do Odeslané.</p></details>`;
+  return `<h3>Rozšířené nastavení</h3><p>Provozní přehledy a méně časté volby. Připojení a práva kolegů najdete v hlavních záložkách.</p>
+    ${disclosure('capabilities','Dostupné funkce a ChatGPT',`<p>V Poště SO.ai je zapojené hledání a čtení zpráv. Další funkce níže uvádějí stav napojení; samotná přítomnost adaptéru nepotvrzuje jejich použitelnost v SO.ai.</p>
+      <p>ChatGPT přihlášení: ${d.oauthConfigured?'konfigurace přítomna, přihlášení zatím neověřeno':'čeká na nastavení'}.</p>
+      <div class="forpsi-list">${d.capabilities.modules.map(m=>`<article class="forpsi-card"><h4>${moduleNames[m.id] || escape(m.id)}</h4><p>${m.implementation==='NOT_IMPLEMENTED'?'Napojení zatím není implementováno.':m.implementation==='CONNECTOR_STORAGE'?'Vlastní evidence konektoru; nesynchronizuje nastavení webmailu.':'Adaptér implementován; stav připojení se ověřuje pro každou schránku.'}</p></article>`).join('')}</div>`)}
+    ${disclosure('rules','Štítky, pravidla a plánované zprávy',rules())}
+    ${disclosure('audit','Log událostí',`<p>Posledních nejvýše 50 událostí.</p>${d.audit.length?`<ul>${d.audit.map(e=>`<li>${date(e.at)} · ${escape(mailboxName(e.mailbox_id))} · ${escape({'admin.save':'Uložení nastavení','admin.verify':'Test připojení','admin.set_active':'Změna dostupnosti','admin.access.save':'Změna přístupů'}[e.action] || e.action)} · ${escape(auditOutcome(e))}</li>`).join('')}</ul>`:'<p>Zatím žádné zaznamenané události.</p>'}`)}
+    ${disclosure('diagnostics','Technická diagnostika',`<p>Pracovní čtení v SO.ai: ${d.soaiMailEnabled?'zapnuté pro účty s přidělenými právy':'vypnuté'}. Připojení ChatGPT: ${d.connectorEnabled?'povolené, přihlášení vyžaduje ověření':'vypnuté'}.</p>
+      <p>Šifrované ukládání hesel: ${d.credentialStorageReady?'nakonfigurováno':'čeká na nastavení'}. Načteno ${date(d.checkedAt)}.</p><p>Stav přihlášení v prohlížeči nepotvrzuje serverové připojení. Test IMAP/SMTP nepotvrzuje odeslání, doručení ani uložení kopie do Odeslané.</p>`)}`;
 }
 function auditOutcome(event) {
   if(event.action!=='admin.access.save') return event.outcome;
@@ -159,11 +167,11 @@ function filterRules() {
 }
 function paint() {
   if(!state.root?.isConnected) return;
-  state.root.innerHTML=`<div class="users-panel__head"><div><h2>Forpsi / ChatGPT</h2><p>Firemní schránky a připojení služeb.</p></div><span>Vývojový pilot</span></div>
+  state.root.innerHTML=`<div class="users-panel__head"><div><h2>Forpsi</h2><p>Schránky a přístupy v SO.ai.</p></div>${state.data?'<a class="secondary-link" href="/dashboard?view=forpsi-mail" data-link>Otevřít poštu</a>':''}</div>
     <div class="forpsi-tabs" role="group" aria-label="Nastavení Forpsi">${tabs.map(([id,label])=>button('tab',label,`data-tab="${id}" aria-pressed="${state.tab===id}"`)).join('')}</div>
-    ${state.data?`<p>${state.data.verificationMode==='simulated'?'Izolovaný TEST: Forpsi je nahrazený simulovanými poskytovateli. ':''}Čtení v SO.ai: ${state.data.soaiMailEnabled?'zapnuté podle přidělených práv':'vypnuté'}. ChatGPT: ${state.data.connectorEnabled?'povolené':'vypnuté'}.</p><a class="secondary-link" href="/dashboard?view=forpsi-mail" data-link>Otevřít poštu</a>`:''}
+    ${state.data?`<p>${state.data.verificationMode==='simulated'?'Izolovaný TEST: Forpsi je nahrazený simulovanými poskytovateli. ':''}Čtení v SO.ai: ${state.data.soaiMailEnabled?'zapnuté podle přidělených práv':'vypnuté'}. ChatGPT: ${state.data.connectorEnabled?'povolené':'vypnuté'}.</p>`:''}
     <div role="status">${escape(state.notice)}</div>${state.error?`<p role="alert" class="module-feedback__error">${escape(state.error)}</p>`:''}
-    ${state.loading?'<p>Načítám stav konektoru…</p>':state.data?({mailboxes,access,rules,settings}[state.tab])():`<p>Stav konektoru není dostupný. Schránky nejsou z této obrazovky připojené.</p>${button('refresh','Obnovit stav')}`}`;
+    ${state.loading?'<p>Načítám stav konektoru…</p>':state.data?({mailboxes,access,settings}[state.tab])():`<p>Stav konektoru není dostupný. Schránky nejsou z této obrazovky připojené.</p>${button('refresh','Obnovit stav')}`}`;
   filterRules();
 }
 async function load() {
@@ -195,12 +203,13 @@ export async function saveForpsiDraft() {
 }
 export function forpsiAdminSection(owner) { return `<section id="forpsi-admin" class="users-panel forpsi-admin" data-forpsi-root data-owner="${escape(owner)}"></section>`; }
 export function mountForpsiAdmin(app,{apiJson,guard,owner}) {
-  if(state.owner!==owner) { Object.assign(state,{epoch:state.epoch+1,owner,data:null,resources:{},accessData:null,accessDraft:null,draft:null,dirty:false,error:'',notice:'',tab:'mailboxes',loading:false,busy:false}); }
+  if(state.owner!==owner) { Object.assign(state,{epoch:state.epoch+1,owner,data:null,resources:{},disclosures:{},accessData:null,accessDraft:null,draft:null,dirty:false,error:'',notice:'',tab:'mailboxes',loading:false,busy:false}); }
   const root=app.querySelector('[data-forpsi-root]'); if(!root) { state.root=null; return; }
   state.root=root; state.api=apiJson;
   // Panel actions only repaint this panel; other settings forms stay mounted.
   // The application's navigation guard still protects all forms when leaving the page.
   state.guard=action=>state.dirty?guard(action):action();
+  root.addEventListener('toggle',event=>{if(event.target.matches?.('details[data-forpsi-disclosure]'))state.disclosures[event.target.dataset.forpsiDisclosure]=event.target.open;},true);
   root.addEventListener('input',event=>{ if(event.target.form?.matches('[data-forpsi-form]')) { state.draft[event.target.name]=event.target.value; state.dirty=true; } else filterRules(); });
   root.addEventListener('change',event=>{
     if(event.target.matches?.('[data-forpsi-person]')) {
@@ -230,7 +239,7 @@ export function mountForpsiAdmin(app,{apiJson,guard,owner}) {
     }
     state.guard(async()=>{
       state.error=''; state.notice='';
-      if(action==='access-load') { await loadAccess(b.dataset.id);return; }
+      if(action==='access-load' || action==='access-open') {state.tab='access';state.draft=null;await loadAccess(b.dataset.id);return;}
       if(action==='access-edit') {selectAccessUser(b.dataset.userId);return;}
       if(action==='access-cancel') {state.accessDraft=null;state.dirty=false;paint();return;}
       if(action==='tab') { state.tab=b.dataset.tab;state.draft=null;state.accessDraft=null;if(state.tab==='settings') await load();else paint();return; }
