@@ -8,6 +8,7 @@ import {forwardForpsiAdmin} from '../../../functions/api/forpsi/admin.js';
 import {createSessionCookie} from '../../../functions/_lib/auth.js';
 import {Forpsi} from '../src/forpsi.mjs';
 import {simpleParser} from 'mailparser';
+import {ConnectorError} from '../src/errors.mjs';
 import {composerPayload,composedText,mountForpsiComposer,openForpsiDraft,saveForpsiComposer,forpsiComposerDirtyTarget} from '../../../src/components/ForpsiComposer.js';
 
 const user={id:'composition-user',role:'admin',name:'TEST admin',email:'admin@example.test',active:true,status:'active'};
@@ -281,4 +282,120 @@ test('editor preserves typed text on stale edit and blocks a second replacement 
   assert.equal(requests.filter(c=>c.operation==='replace_draft').length,1);
   listeners.click({target:{closest:()=>({dataset:{composerAction:'reload'}})},preventDefault(){},stopPropagation(){}});
   assert.equal(guarded,true,'discarding typed work requires the app navigation guard');
+});
+
+test('copy draft works without REPLACE and keeps one audited APPEND attempt',async()=>{
+  const f=await setup();f.env.SOAI_DRAFT_COPIES_ENABLED='true';
+  f.provider.readEditableDraft=async()=>({...editable(),canReplace:false});
+  f.provider.copyDraft=async(ref,etag,message,options)=>{
+    f.calls.push(['copy',ref,etag,message,options]);
+    return {saved:true,folder:'Drafts',reference:{...editableRef,uid:33},verified:true,sourceRetained:true};
+  };
+  const opened=await f.call('open_draft',{mailboxId:'mail-a',reference:editableRef});
+  assert.equal(opened.status,200);assert.equal(opened.body.data.canReplace,false);
+  const p=replacement(),saved=await f.call('copy_draft',p),replay=await f.call('copy_draft',p);
+  assert.equal(saved.status,200);assert.equal(saved.body.data.reference.uid,33);
+  assert.equal(saved.body.data.sourceRetained,true);assert.equal(saved.body.data.verified,true);
+  assert.equal(replay.body.data.replayed,true);
+  const copies=f.calls.filter(c=>c[0]==='copy');assert.equal(copies.length,1);
+  assert.deepEqual(copies[0].slice(1,4),[editableRef,p.expectedEtag,p.message]);
+  assert.equal(copies[0][4].requestId,p.requestId);
+  assert.equal(f.calls.some(c=>['replace','send'].includes(c[0])),false);
+  assert.equal((await f.store.rows('SELECT * FROM outbox')).length,0);
+  assert.equal((await f.store.rows("SELECT * FROM audit WHERE action='soai.copy_draft'")).length,1);
+  const recorded=JSON.stringify(await f.store.rows('SELECT * FROM draft_attempts'));
+  assert.ok(!recorded.includes(p.message.text));assert.ok(!recorded.includes(p.message.to[0]));
+  assert.equal((await f.call('copy_draft',{...p,message:{...mail,text:'forged'}})).status,409);
+});
+test('copy remains off by default and requires read plus write grants',async()=>{
+  const f=await setup(['read']);f.provider.readEditableDraft=async()=>({...editable(),canReplace:false});
+  const p=replacement();
+  assert.equal((await f.call('copy_draft',p)).body.code,'DRAFT_COPIES_DISABLED');
+  assert.equal((await f.call('open_draft',{mailboxId:'mail-a',reference:editableRef})).body.code,'DRAFT_EDITS_DISABLED');
+  f.env.SOAI_DRAFT_COPIES_ENABLED='true';
+  assert.equal((await f.call('open_draft',{mailboxId:'mail-a',reference:editableRef})).status,200);
+  assert.equal((await f.call('copy_draft',p)).status,403);
+  assert.equal((await f.store.rows('SELECT * FROM draft_attempts')).length,0);
+  f.env.SOAI_DRAFTS_ENABLED='false';
+  assert.equal((await f.call('list_folders',{mailboxId:'mail-a'})).body.data.draftCopiesEnabled,false);
+  assert.equal((await f.call('open_draft',{mailboxId:'mail-a',reference:editableRef})).body.code,'DRAFT_EDITS_DISABLED');
+});
+test('stale source refuses copy and uncertain APPEND never runs twice',async()=>{
+  const f=await setup();f.env.SOAI_DRAFT_COPIES_ENABLED='true';
+  let calls=0;f.provider.copyDraft=async()=>{calls++;throw new ConnectorError('DRAFT_CHANGED');};
+  const stale=replacement(),rejected=await f.call('copy_draft',stale);
+  assert.equal(rejected.status,409);assert.equal(rejected.body.code,'DRAFT_CHANGED');
+  assert.equal((await f.call('copy_draft',stale)).body.code,'DRAFT_UNCERTAIN');assert.equal(calls,1);
+  let started,finish;const ready=new Promise(r=>started=r),hold=new Promise(r=>finish=r);
+  f.provider.copyDraft=async()=>{calls++;started();await hold;throw new Error('socket closed after APPEND');};
+  const p=replacement(),pending=f.call('copy_draft',p);await ready;
+  assert.equal((await f.call('copy_draft',p)).body.code,'DRAFT_UNCERTAIN');finish();
+  assert.equal((await pending).body.code,'DRAFT_UNCERTAIN');
+  assert.equal((await f.call('copy_draft',p)).body.code,'DRAFT_UNCERTAIN');assert.equal(calls,2);
+  assert.equal((await f.store.rows('SELECT * FROM outbox')).length,0);
+});
+test('provider copy rechecks exact source, appends a text draft and never alters original',async()=>{
+  const mailbox={address:'alice@example.test',credential_key:'key',drafts_folder:'Drafts'};
+  const saved=new Map();let appends=0,returnUid=true,readbackAvailable=true;
+  const client={on(){},connect:async()=>{},close(){},mailbox:{uidValidity:5n},capabilities:new Map(),
+    list:async()=>[{path:'Drafts',specialUse:'\\Drafts'}],getMailboxLock:async()=>({release(){}}),
+    fetchOne:async uid=>{const raw=saved.get(Number(uid));return raw&&(Number(uid)===32||readbackAvailable)?{uid:Number(uid),size:raw.length,flags:new Set(['\\Draft'])}:null;},
+    download:async uid=>({content:(async function*(){yield saved.get(Number(uid));})()}),
+    append:async(folder,raw,flags)=>{appends++;assert.equal(folder,'Drafts');assert.deepEqual(flags,['\\Draft']);saved.set(32+appends,raw);
+      return returnUid?{uid:32+appends,uidValidity:5n}:{};}};
+  const provider=new Forpsi({MAILBOX_CREDENTIALS:JSON.stringify({key:'synthetic'})},mailbox,{clientFactory:()=>client,
+    transportFactory:()=>{throw Error('SMTP forbidden');}});
+  const original=await provider.compose({...mail,text:'Original body'},crypto.randomUUID(),{senderName:'Alice TEST',keepBcc:true});
+  saved.set(32,original);
+  const opened=await provider.readEditableDraft(editableRef);assert.equal(opened.canReplace,false);
+  await assert.rejects(provider.copyDraft(editableRef,'b'.repeat(64),{...mail,text:'Updated body'}),{code:'DRAFT_CHANGED'});
+  assert.equal(appends,0);
+  const result=await provider.copyDraft(editableRef,opened.etag,{...mail,text:'Updated body'},
+    {requestId:'96f7c303-827b-47bb-93e0-e12c1f534187'});
+  assert.equal(result.verified,true);assert.equal(result.sourceRetained,true);assert.equal(result.reference.uid,33);
+  assert.equal(saved.get(32),original,'original MIME remains identical');
+  const parsed=await simpleParser(saved.get(33));assert.equal(parsed.from.value[0].name,'Alice TEST');
+  assert.equal(parsed.from.value[0].address,mailbox.address);assert.equal(parsed.text.trim(),'Updated body');
+  returnUid=false;
+  const noUid=await provider.copyDraft(editableRef,opened.etag,{...mail,text:'Second copy'});
+  assert.equal(noUid.saved,true);assert.equal(noUid.reference,null);assert.equal(noUid.verified,false);
+  assert.equal(saved.get(32),original);assert.equal(appends,2);
+  returnUid=true;readbackAvailable=false;
+  const unreadable=await provider.copyDraft(editableRef,opened.etag,{...mail,text:'Third copy'});
+  assert.equal(unreadable.saved,true);assert.equal(unreadable.reference.uid,35);assert.equal(unreadable.verified,false);
+  assert.equal(saved.get(32),original);assert.equal(appends,3);
+});
+test('copy editor explains two versions and never calls replace',async()=>{
+  const listeners={},requests=[];
+  const root={isConnected:true,innerHTML:'',addEventListener:(name,fn)=>listeners[name]=fn,
+    querySelector:selector=>selector==='[data-composer-form]'?{reportValidity:()=>true}:null};
+  const api=async(_url,{body})=>{const c=JSON.parse(body);requests.push(c);
+    if(c.operation==='composition_context')return {data:{address:'alice@example.test',profile:{senderName:'',signatureText:'',revision:0},canWrite:true,draftsEnabled:true,draftEditsEnabled:false,draftCopiesEnabled:true}};
+    if(c.operation==='open_draft')return {data:{...editable(),canReplace:false}};
+    if(c.operation==='copy_draft')return {data:{saved:true,folder:'Drafts',reference:{...editableRef,uid:33},verified:true,sourceRetained:true}};
+    throw Error('unexpected operation');
+  };
+  mountForpsiComposer(root,{owner:'copy-owner',mailboxId:'mail-a',apiJson:api,guard:action=>action(),onSaved:()=>{}});
+  assert.equal(await openForpsiDraft(editableRef,{copy:true}),true);
+  assert.match(root.innerHTML,/Upravená kopie konceptu/);
+  assert.match(root.innerHTML,/Původní koncept zůstane ve Forpsi beze změny/);
+  listeners.input({target:{name:'text',value:'Updated body',type:'text',form:{matches:()=>true}}});
+  assert.equal(await saveForpsiComposer(),true);
+  assert.equal(requests.filter(c=>c.operation==='copy_draft').length,1);
+  assert.equal(requests.some(c=>c.operation==='replace_draft'),false);
+  assert.match(root.innerHTML,/Původní koncept zůstal zachovaný/);
+});
+test('revoking access during copy suppresses its result without repeating APPEND',async()=>{
+  for(const revoke of ['grant','user']){
+    const f=await setup();f.env.SOAI_DRAFT_COPIES_ENABLED='true';let calls=0;
+    f.provider.copyDraft=async()=>{calls++;
+      if(revoke==='grant')f.sqlite.exec("UPDATE grants SET revoked=1 WHERE principal_id LIKE 'soai_%' AND action='write'");
+      else f.pagesEnv.AUTH_USERS_JSON=JSON.stringify([{...user,active:false}]);
+      return {saved:true,folder:'Drafts',reference:{...editableRef,uid:33},verified:true,sourceRetained:true};
+    };
+    const p=replacement(),response=await f.call('copy_draft',p);
+    assert.equal(response.status,revoke==='grant'?403:401);assert.equal(response.body.data,undefined);
+    assert.equal((await f.store.first('SELECT state FROM draft_attempts')).state,'saved');
+    assert.equal((await f.call('copy_draft',p)).status,revoke==='grant'?403:401);assert.equal(calls,1);
+  }
 });

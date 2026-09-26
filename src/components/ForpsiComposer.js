@@ -11,11 +11,11 @@ export function discardForpsiComposer(){state.form=null;state.source=null;state.
 const button=(action,label)=>`<button type="button" class="secondary-link" data-composer-action="${action}" ${state.busy?'disabled':''}>${label}</button>`;
 function paint(){
   if(!state.root?.isConnected)return;
-  const c=state.context,d=state.form;
+  const c=state.context,d=state.form,copy=state.source?.kind==='copy';
   state.root.innerHTML=`<div class="forpsi-actions">${!d?button('open','Nový koncept'):''}</div>
     <p role="status">${escape(state.notice || (state.busy?'Načítám…':''))}</p>${state.error?`<p role="alert">${escape(state.error)}</p>`:''}
-    ${d&&c?`<section class="forpsi-card forpsi-composer"><h2>${state.source?'Upravit koncept':'Nový koncept'}</h2><p>Od: <strong>${escape((state.source?.senderName??c.profile.senderName)?`${state.source?.senderName??c.profile.senderName} <${c.address}>`:c.address)}</strong></p>
-      <p>${state.source?'Obsah nahradí původní koncept ve Forpsi. Zpráva se neodešle.':'Uloží se do složky Koncepty ve Forpsi. Příjemcům se nic neodešle.'}</p>
+    ${d&&c?`<section class="forpsi-card forpsi-composer"><h2>${copy?'Upravená kopie konceptu':state.source?'Upravit koncept':'Nový koncept'}</h2><p>Od: <strong>${escape((state.source?.senderName??c.profile.senderName)?`${state.source?.senderName??c.profile.senderName} <${c.address}>`:c.address)}</strong></p>
+      <p>${copy?'Uloží se nová verze do Konceptů. Původní koncept zůstane ve Forpsi beze změny, takže uvidíte dvě verze. Nic se neodešle.':state.source?'Obsah nahradí původní koncept ve Forpsi. Zpráva se neodešle.':'Uloží se do složky Koncepty ve Forpsi. Příjemcům se nic neodešle.'}</p>
       <form data-composer-form><fieldset ${state.busy||state.submitted?'disabled':''}><div class="forpsi-grid">
         <label>Komu<input name="to" value="${escape(d.to)}" required maxlength="13000" placeholder="jmeno@firma.cz"></label>
         <label>Předmět<input name="subject" value="${escape(d.subject)}" maxlength="500"></label>
@@ -25,7 +25,7 @@ function paint(){
       <label>Zpráva<textarea name="text" aria-label="Zpráva" rows="9" required maxlength="96000">${escape(d.text)}</textarea></label>
       ${state.source?'<p>Stávající text včetně podpisu lze upravit přímo ve zprávě.</p>':c.profile.signatureText?`<label class="forpsi-mail-check"><input type="checkbox" name="useSignature" ${d.useSignature?'checked':''}>Připojit podpis schránky</label>`:'<p>Schránka nemá uložený podpis SO.ai. Správce jej může přidat v nastavení Forpsi.</p>'}
       </fieldset><div class="forpsi-actions">${button('preview',state.preview?'Skrýt náhled':'Náhled zprávy')}
-        <button class="primary-action" type="submit" ${state.busy||state.blocked?'disabled':''}>${state.submitted?'Ověřit / dokončit uložení':state.source?'Uložit změny konceptu':'Uložit koncept do Forpsi'}</button>${state.blocked&&state.source?button('reload','Načíst koncept znovu'):''}${button('close','Zavřít koncept')}
+        <button class="primary-action" type="submit" ${state.busy||state.blocked?'disabled':''}>${state.submitted?'Ověřit / dokončit uložení':copy?'Uložit upravenou kopii':state.source?'Uložit změny konceptu':'Uložit koncept do Forpsi'}</button>${state.blocked&&state.source?button('reload','Načíst koncept znovu'):''}${button('close','Zavřít koncept')}
         ${!state.submitted&&!state.source?button('profile','Obnovit podpis'):''}</div>
       <small>Textový koncept bez příloh. Rozpracovaný text se uloží až tlačítkem Uložit.</small></form>
       ${state.submitted?'<p>Pokus už byl zahájen. Ověření použije stejný obsah a stejné označení pokusu. Při nejistém výsledku zkontrolujte Koncepty ve Forpsi před založením nové zprávy.</p>':''}
@@ -43,19 +43,19 @@ async function context(open=false){
   }catch(e){if(epoch===state.epoch){state.error=e.message;if([401,403].includes(e.status)){state.form=null;state.dirty=false;state.submitted=null;}}}
   finally{if(epoch===state.epoch){state.busy=false;paint();if(open&&state.form){state.root?.querySelector('[name="to"]')?.focus?.();state.root?.querySelector('.forpsi-composer')?.scrollIntoView?.({block:'start'});}}}
 }
-export async function openForpsiDraft(reference){
+export async function openForpsiDraft(reference,{copy=false}={}){
   if(state.busy || !state.mailboxId)return false;
   const epoch=state.epoch;state.busy=true;state.error='';state.notice='Načítám koncept…';paint();
   try{
     const contextResult=await state.api('/api/forpsi/mail',{method:'POST',body:JSON.stringify({operation:'composition_context',payload:{mailboxId:state.mailboxId}})});
     if(epoch!==state.epoch)return false;
     state.context=contextResult.data;
-    if(!state.context.canWrite || !state.context.draftEditsEnabled)throw new Error('Úpravy konceptů nejsou pro tuto schránku dostupné.');
+    if(!state.context.canWrite || !(copy?state.context.draftCopiesEnabled&&state.context.draftsEnabled:state.context.draftEditsEnabled))throw new Error(copy?'Vytváření upravených kopií není pro tuto schránku dostupné.':'Úpravy konceptů nejsou pro tuto schránku dostupné.');
     const result=await state.api('/api/forpsi/mail',{method:'POST',body:JSON.stringify({operation:'open_draft',payload:{mailboxId:state.mailboxId,reference}})});
     if(epoch!==state.epoch)return false;
-    if(!result.data.canReplace)throw new Error('Forpsi nepodporuje bezpečné nahrazení konceptu. Upravte jej ve webmailu.');
+    if(!copy && !result.data.canReplace)throw new Error('Forpsi nepodporuje bezpečné nahrazení konceptu. Upravte jej ve webmailu.');
     const m=result.data.message;
-    state.source={reference:result.data.reference,etag:result.data.etag,senderName:result.data.senderName};
+    state.source={reference:result.data.reference,etag:result.data.etag,senderName:result.data.senderName,kind:copy?'copy':'replace'};
     state.form={requestId:crypto.randomUUID(),to:m.to.join(', '),cc:m.cc.join(', '),bcc:m.bcc.join(', '),subject:m.subject,text:m.text,useSignature:false};
     state.dirty=false;state.submitted=null;state.blocked=false;state.preview=false;state.notice='';return true;
   }catch(error){if(epoch===state.epoch){state.error=error.message;state.notice='';if([401,403].includes(error.status)){state.form=null;state.source=null;state.context=null;}}return false;}
@@ -72,14 +72,18 @@ export async function saveForpsiComposer(){
   if(!payload.message.to.length || [...payload.message.to,...payload.message.cc,...payload.message.bcc].some(a=>!/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(a)) || payload.message.to.length+payload.message.cc.length+payload.message.bcc.length>50){state.error='Zadejte platné e-mailové adresy, celkem nejvýše 50.';paint();return false;}
   state.submitted=payload;state.busy=true;state.error='';state.notice='Ukládám koncept…';paint();
   try {
-    const r=await state.api('/api/forpsi/mail',{method:'POST',body:JSON.stringify({operation:state.source?'replace_draft':'create_draft',payload})});
+    const operation=state.source?.kind==='copy'?'copy_draft':state.source?'replace_draft':'create_draft';
+    const r=await state.api('/api/forpsi/mail',{method:'POST',body:JSON.stringify({operation,payload})});
     if(epoch!==state.epoch)return false;
     if(r.data?.saved!==true)throw new Error('Uložení nebylo potvrzené. Ověřte stav stejného pokusu.');
-    state.notice=`Koncept je uložený ve složce ${r.data.folder}. Nic nebylo odesláno.`;const edited=!!state.source;state.form=null;state.source=null;state.dirty=false;state.submitted=null;state.preview=false;if(edited)state.onSaved?.();return true;
+    state.notice=operation==='copy_draft'
+      ?`Upravená kopie je uložená ve složce ${r.data.folder}. Původní koncept zůstal zachovaný. ${r.data.verified?'Novou kopii jsem znovu načetl a ověřil.':r.data.reference?'Zpětné načtení zatím nepotvrdilo obsah kopie; zkontrolujte ji v Konceptech.':'Forpsi nevrátilo přesný odkaz; zkontrolujte ji v Konceptech.'} Nic nebylo odesláno.`
+      :`Koncept je uložený ve složce ${r.data.folder}. Nic nebylo odesláno.`;
+    const edited=!!state.source;state.form=null;state.source=null;state.dirty=false;state.submitted=null;state.preview=false;if(edited)state.onSaved?.();return true;
   }catch(e){if(epoch===state.epoch){state.error=e.message;state.notice='';
     const code=e.code || e.payload?.code;
     const rejected=['DRAFT_CHANGED','SAFE_REPLACE_UNSUPPORTED','NOT_DRAFT_FOLDER','NOT_EDITABLE_DRAFT','DRAFT_FORMAT_UNSUPPORTED','DRAFT_SENDER_UNSUPPORTED','MESSAGE_NOT_FOUND','MESSAGE_TOO_LARGE','STALE_MESSAGE_REFERENCE'].includes(code);
-    if([400,413].includes(e.status) || ['PROFILE_CHANGED','SOAI_DRAFTS_DISABLED'].includes(code) || rejected)state.submitted=null;
+    if([400,413].includes(e.status) || ['PROFILE_CHANGED','SOAI_DRAFTS_DISABLED','DRAFT_COPIES_DISABLED'].includes(code) || rejected)state.submitted=null;
     if(state.source && rejected)state.blocked=true;
     if([401,403].includes(e.status)){state.form=null;state.source=null;state.dirty=false;state.submitted=null;state.context=null;}
   }return false;}
@@ -95,7 +99,7 @@ export function mountForpsiComposer(root,{owner,mailboxId,apiJson,guard,onSaved}
     if(b.dataset.composerAction==='open')void context(true);
     if(b.dataset.composerAction==='profile')void context();
     if(b.dataset.composerAction==='close')state.guard(()=>discardForpsiComposer());
-    if(b.dataset.composerAction==='reload' && state.source){const ref=state.source.reference;state.guard(()=>{void openForpsiDraft(ref);});}
+    if(b.dataset.composerAction==='reload' && state.source){const ref=state.source.reference,copy=state.source.kind==='copy';state.guard(()=>{void openForpsiDraft(ref,{copy});});}
     if(b.dataset.composerAction==='preview'){state.preview=!state.preview;paint();}
   });paint();
 }

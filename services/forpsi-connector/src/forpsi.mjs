@@ -146,6 +146,28 @@ export class Forpsi {
       return {...draft,reference:ref,canReplace:client.capabilities.has('REPLACE')&&client.capabilities.has('UIDPLUS')};
     }));
   }
+  copyDraft(ref,expectedEtag,message,{requestId=crypto.randomUUID()}={}) {
+    return this.imap(client=>this.locked(client,ref,false,async()=>{
+      const source=await this.editableDraft(client,ref);
+      requireValue(source.etag===expectedEtag,'DRAFT_CHANGED');
+      const raw=await this.compose(message,requestId,{keepBcc:true,senderName:source.senderName});
+      const result=await client.append(ref.folder,raw,['\\Draft']);
+      requireValue(result,'DRAFT_SAVE_FAILED');
+      const reference=result.uid && result.uidValidity?{
+        folder:ref.folder,uid:result.uid,uidValidity:String(result.uidValidity)
+      }:null;
+      // APPEND may succeed without UIDPLUS. Never append again merely because
+      // the provider omitted an exact UID or a subsequent readback fails.
+      let verified=false;
+      if(reference){
+        try {
+          const saved=await this.editableDraft(client,reference);
+          verified=saved.etag===createHash('sha256').update(raw).digest('hex');
+        } catch { /* APPEND was confirmed; readback is best effort and must not repeat it. */ }
+      }
+      return {saved:true,folder:ref.folder,reference,verified,sourceRetained:true};
+    }));
+  }
   async replaceDraft(ref,expectedEtag,message,{senderName='',requestId=crypto.randomUUID()}={}) {
     const raw=await this.compose(message,requestId,{keepBcc:true,senderName});
     return this.imap(client=>this.locked(client,ref,false,async()=>{
