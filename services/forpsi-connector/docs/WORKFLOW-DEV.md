@@ -11,20 +11,21 @@ Tato etapa mění pouze vývojovou větev. Produkční Worker, SO.ai, D1, pošta
 - Zkratky se ukládají odděleně podle firmy, uživatele a schránky. Návrh není aktivní; schválení vyžaduje přesnou verzi. Úprava zkratku zase vypne. Faktura vyžaduje potvrzení konkrétního PDF kandidáta: konektor ověřuje formát z bajtů, ale význam dokumentu nedokáže spolehlivě potvrdit z názvu. Vybranou přílohu eviduje jako index a otisk v šifrovaném návrhu; nic neodesílá.
 - MCP Apps karta `ui://forpsi/worklist-v1.html` zobrazuje přehled a seznam–detail. Je pouze pro čtení a při otevření řádku volá stávající `read_message`. Data se získávají samostatnými nástroji a `render_worklist` jen vykresluje. `get_worklist` je textová alternativa. Lokální protokolový test ověřuje zveřejnění HTML zdroje a syntetický průchod `start_worklist → render_worklist → read_message` bez zápisu do pošty.
 - Vstupní proces `begin_mail_setup` vyžaduje zvolený rozsah a souhlas, dovoluje odložení bez čtení historie. Bounded metadata vzorek pokrývá tři časová okna až za 90 dní a zaznamená skutečné pokrytí. Návrh profilu, pozorování, odpovědi a schválené verze jsou uložené odděleně. Otázky nepřekročí 20 včetně rozsahu a finálního schválení. Schválený textový podpis je osobní pro odesílací schránku, má plnou/krátkou podobu a bezpečný jednoduchý HTML náhled; vkládá se jednou do nové části návrhu.
+- Praktická kontrola nyní ukáže až čtyři různé doložené zprávy z povoleného vzorku. Jednorázové označení priority, schválený důležitý odesílatel nebo úzké pravidlo newsletteru (přesná adresa a přesný předmět) se zapíše do **návrhu** profilu. Teprve finální schválení verze změní následný prioritní přehled. Newsletter zůstává dostupný v poště; nikam se nepřesouvá.
 - Odvozená pozorování mají životnost 30 dní a plánovaný handler je poté odstraní spolu s rozpracovanou relací. `delete_derived_mail_profile` na výslovné potvrzení odstraní osobní odvozený profil a jeho podklady dříve; e-maily ani ručně schválený podpis nemaže.
 - Původní přímé MCP `send_message` a `schedule_message` v této vývojové větvi vracejí `SEND_CONFIRMATION_REQUIRED`. Pro nové návrhy zatím neexistuje odesílací krok. Odesílání nelze vyvolat z karty ani krátkým povelem.
 
 ## Omezení, která nesmí být skryta
 
 - MCP/OAuth pro ChatGPT není živě připojený; kartu jsme zatím ověřili protokolově a syntetickými daty, ne v účtu ChatGPT.
-- Priorita zatím používá jen uživatelem schválený kontakt a přímé adresování. Nevyvozuje požadavek, termín ani důsledky z textu bez ověření. Neznámý odesílatel zůstane v přehledu ke kontrole. Starší část mimo 50 kandidátů je označená jako neprohledaná.
+- Priorita zatím používá uživatelem schválený kontakt, výslovné opravy jednotlivých zpráv, úzké označení newsletteru a přímé adresování. Nevyvozuje požadavek, termín ani důsledky z textu bez ověření. Neznámý odesílatel zůstane v přehledu ke kontrole. Starší část mimo 50 kandidátů je označená jako neprohledaná.
 - Úvodní analýza ukládá metadata v omezeném vzorku; neprovádí hlubokou analýzu vláken, newsletterů ani odeslaných podpisů. Proto nenavrhuje podepsaný kontaktní údaj nebo automatická newsletterová pravidla. Chybějící odeslaná pošta se projeví vynecháním otázky na oboustranné kontakty.
 - Poznání vláken závisí na skutečném `Message-ID` / `References` / `In-Reply-To`. Neúplná hlavička může vyžadovat ruční kontrolu. Obnova nové odpovědi zkoumá nejvýše 50 posledních zpráv v INBOX a vrací údaj o neúplném pokrytí.
 - PDF obsah faktury není strojově sémanticky ověřený. Při jednom i více PDF se před přípravou faktury žádá potvrzení konkrétního dokumentu. Současný outbox nepodporuje odeslání příloh, takže návrh zůstává neodeslatelný.
 - Obecné ruční výběry příloh a volná aplikace uživatelského textového stylu u zkratek nejsou hotové. Zkratky přijímají jen podporované pravidlo PDF faktury nebo žádné přílohy; nemají tichou výjimku, která by připojila jiné soubory.
 - Podpisový HTML náhled je jednoduché vykreslení textu, nikoli pixelově věrný náhled skutečného e-mailového klienta. Logo se nevkládá. Zkratka nikdy nepovoluje automatické odesílání.
 - Schválení profilu, zkratky a podpisu je zatím vyjádřené přesnými argumenty nástroje a auditovanou uživatelskou identitou; pro ostrý provoz je potřeba dokončit samostatné uživatelské potvrzení v hostitelském rozhraní. Proto tato etapa zůstává vývojová.
-- Pravidelné přepočítávání priorit, upozornění do ChatGPT, úplné zpracování celé historie a schvalovací odesílací tok jsou navazující etapy. Výchozí profil nastavuje ruční načítání, žádná upozornění, žádné automatické přesuny a žádné automatické odeslání.
+- Pravidelné přepočítávání priorit, upozornění do ChatGPT, úplné zpracování celé historie, pozdější úpravy schváleného profilu a schvalovací odesílací tok jsou navazující etapy. Výchozí profil nastavuje ruční načítání, žádná upozornění, žádné automatické přesuny a žádné automatické odeslání.
 
 ## Dva syntetické průchody
 
@@ -33,7 +34,7 @@ Tato etapa mění pouze vývojovou větev. Produkční Worker, SO.ai, D1, pošta
 
 ## Lokální ověření
 
-Vývojová sada `node --test test/*.test.mjs` prošla se 108/108 testy. Obsahuje pevné číslování, složený povel, návrhy bez odeslání, nový chat a restart, osobní oddělení, novou odpověď i při opakovaném synchronizačním běhu, výběr PDF podle obsahu, průvodce s odlišnými syntetickými historiemi a protokolový test MCP Apps. `wrangler deploy --dry-run` vytvořil balíček s `CONNECTOR_ENABLED=false` a `WORKFLOW_SYNC_ENABLED=false`; příkaz nic nenahrál. Vizuální vykreslení v účtu ChatGPT a chování se skutečnou schránkou ověřené nejsou.
+Vývojová sada `node --test test/*.test.mjs` prošla se 109/109 testy. Obsahuje pevné číslování, složený povel, návrhy bez odeslání, nový chat a restart, osobní oddělení, novou odpověď i při opakovaném synchronizačním běhu, výběr PDF podle obsahu, průvodce s odlišnými syntetickými historiemi, praktické opravy priority a protokolový test MCP Apps. `wrangler deploy --dry-run` vytvořil balíček s `CONNECTOR_ENABLED=false` a `WORKFLOW_SYNC_ENABLED=false`; příkaz nic nenahrál. Vizuální vykreslení v účtu ChatGPT a chování se skutečnou schránkou ověřené nejsou.
 
 ## Migrace a návrat
 

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { id, folder } from './schemas.mjs';
 import { requireValue } from './errors.mjs';
+import { messageKey } from './workflow.mjs';
 
 const uuid=z.string().uuid();
 export const onboardingSchemas={
@@ -18,7 +19,7 @@ export const onboardingSchemas={
 
 const safeHtml=text=>text.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
   .replaceAll('"','&quot;').replaceAll('\n','<br>');
-const profileDefaults=()=>({importantContacts:[],directVsCc:'review',newsletterRules:[],
+const profileDefaults=()=>({importantContacts:[],messageOverrides:[],directVsCc:'review',newsletterRules:[],
   synchronization:'manual',priorityRecalculation:'manual',notifications:'unavailable',
   workingHours:null,timeZone:'Europe/Prague',automaticMoves:false,automaticSend:false});
 function questions(observations,answers){
@@ -33,6 +34,11 @@ function questions(observations,answers){
     options:['Po–Pá 8:00–16:00','jen ruční režim','přeskočit']});
   result.push({id:'signature',title:'U odeslané pošty není bezpečně potvrzené autorství podpisu. Chcete podpis nastavit samostatně před schválením profilu?',
     options:['nastavit samostatně','ponechat bez podpisu','přeskočit']});
+  for(const [index,item] of (observations.reviewExamples??[]).entries())result.push({
+    id:`review_${index+1}`,title:`Zpráva od ${item.sender}: „${(item.subject||'(bez předmětu)').replace(/\s+/g,' ').slice(0,160)}“. Jak ji zařadit? `+
+      'Jde o návrh, který začne platit až po schválení celého profilu.',
+    options:['prioritní jen tato zpráva','běžná jen tato zpráva','prioritní tento odesílatel',
+      'newsletter jen tento odesílatel a přesný předmět','přeskočit'],evidence:item});
   result.push({id:'practical_review',title:'Zkontrolujte vzorek priorit. Má být návrh zatím jen čtecí, bez přesunů a upozornění?',
     options:['ano, jen čtecí','přeskočit']});
   return result.filter(q=>!Object.hasOwn(answers,q.id));
@@ -78,7 +84,7 @@ export class Onboarding {
         const page=await provider.search({folder:path,since:older,before:newer,limit:20});
         samples.push(...page.messages.map(m=>({...m,folder:path})));
         coverage.push({folder:path,since:older,before:newer,examined:page.messages.length,
-          incomplete:page.nextBeforeUid!==null});
+          incomplete:page.nextBeforeUid!=null});
       }
     }
     const incoming=samples.filter(m=>m.folder!==mailbox.sent_folder),sent=samples.filter(m=>m.folder===mailbox.sent_folder);
@@ -90,7 +96,26 @@ export class Onboarding {
     const twoWay=[...senderCounts.values()].filter(x=>sentTo.has(x.address)).slice(0,8);
     const directCount=incoming.filter(m=>(m.to??[]).some(a=>a.address?.toLowerCase()===mailbox.address.toLowerCase())).length;
     const ccCount=incoming.filter(m=>(m.cc??[]).some(a=>a.address?.toLowerCase()===mailbox.address.toLowerCase())).length;
-    const observations={twoWay,directCount,ccCount,sampleCount:samples.length,
+    const unique=new Map();
+    for(const item of incoming){
+      if(!item.reference)continue;
+      const key=messageKey(item);
+      if(!unique.has(key))unique.set(key,item);
+    }
+    const candidates=[...unique.values()].sort((a,b)=>String(b.date??'').localeCompare(String(a.date??'')));
+    const selected=new Map();
+    const include=predicate=>{const item=candidates.find(x=>predicate(x) && !selected.has(messageKey(x)));
+      if(item)selected.set(messageKey(item),item);};
+    include(m=>sentTo.has(m.from?.[0]?.address?.toLowerCase()));
+    include(m=>!sentTo.has(m.from?.[0]?.address?.toLowerCase()));
+    include(m=>(m.cc??[]).some(a=>a.address?.toLowerCase()===mailbox.address.toLowerCase()));
+    include(m=>(m.to??[]).some(a=>a.address?.toLowerCase()===mailbox.address.toLowerCase()));
+    for(const item of candidates){if(selected.size>=4)break;selected.set(messageKey(item),item);}
+    const reviewExamples=[...selected.values()].slice(0,4).map(m=>({messageKey:messageKey(m),reference:m.reference,
+      sender:m.from?.[0]?.address??'',subject:m.subject??'',receivedAt:m.date??null,
+      evidenceKind:sentTo.has(m.from?.[0]?.address?.toLowerCase())?'mailbox_two_way':'unclassified_incoming'}));
+    const observations={twoWay,directCount,ccCount,sampleCount:new Set(samples.map(messageKey)).size,
+      sampledRecords:samples.length,reviewExamples,
       signatureCandidate:null,signatureLimit:'SENT_AUTHOR_NOT_VERIFIED',
       newsletterCandidates:[],unknownSenderCount:[...senderCounts.values()].filter(x=>x.count===1).length};
     const proposal=profileDefaults();
@@ -110,6 +135,7 @@ export class Onboarding {
       questionCount:row.question_count,maxQuestions:20,coverage:observation?JSON.parse(observation.coverage_json):null,
       observations:facts,proposal:proposal?{version:proposal.version,data:JSON.parse(proposal.proposal_json)}:null,
       nextQuestion:remaining[0]??null,readyToApprove:!!proposal && remaining.length===0 && row.question_count<20,
+      untrustedContent:true,
       completeCoverage:observation?JSON.parse(observation.coverage_json).every(x=>!x.incomplete):false};
   }
   async answer({sessionId,questionId,answer}){
@@ -123,9 +149,27 @@ export class Onboarding {
     const q=remaining[0];requireValue(q.options.includes(answer),'ANSWER_UNSUPPORTED');
     answers[questionId]=answer;
     const data=JSON.parse(proposal.proposal_json);
-    if(questionId==='important_contacts' && answer!=='žádný' && answer!=='přeskočit')data.importantContacts=[answer];
+    if(questionId==='important_contacts' && answer!=='žádný' && answer!=='přeskočit')
+      data.importantContacts=[...new Set([...data.importantContacts,answer])];
     if(questionId==='direct_vs_cc' && ['ano','ne'].includes(answer))data.directVsCc=answer==='ano'?'direct_first':'equal';
     if(questionId==='working_hours' && answer==='Po–Pá 8:00–16:00')data.workingHours={days:[1,2,3,4,5],start:'08:00',end:'16:00'};
+    if(questionId.startsWith('review_') && answer!=='přeskočit'){
+      const item=q.evidence;
+      if(answer==='prioritní jen tato zpráva'||answer==='běžná jen tato zpráva'){
+        data.messageOverrides=[...(data.messageOverrides??[]).filter(x=>x.messageKey!==item.messageKey),
+          {messageKey:item.messageKey,priority:answer.startsWith('prioritní')?'high':'review',
+            evidence:item.reference,source:'explicit_setup_answer'}];
+      }
+      if(answer==='prioritní tento odesílatel'){
+        requireValue(item.sender,'SENDER_UNAVAILABLE');
+        data.importantContacts=[...new Set([...data.importantContacts,item.sender])];
+      }
+      if(answer==='newsletter jen tento odesílatel a přesný předmět'){
+        requireValue(item.sender && item.subject,'NEWSLETTER_RULE_TOO_BROAD');
+        data.newsletterRules=[...data.newsletterRules,{sender:item.sender,subject:item.subject,
+          action:'exclude_from_high_priority',evidence:item.reference,source:'explicit_setup_answer'}];
+      }
+    }
     const next=questions(JSON.parse(observed.observations_json),answers)[0];
     await this.store.db.batch([
       this.store.db.prepare('UPDATE workflow_proposals SET version=version+1,proposal_json=?,updated_at=? WHERE onboarding_id=?').bind(JSON.stringify(data),this.now(),sessionId),

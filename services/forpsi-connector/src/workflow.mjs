@@ -127,13 +127,22 @@ export class Workflow {
         (state?.state==='snoozed'&&state.due_date>localDate(this.now(),state.time_zone))))continue;
       const sender=message.from?.[0]?.address??'';
       const important=profile?.importantContacts?.some(x=>x.toLowerCase()===sender.toLowerCase());
+      const override=profile?.messageOverrides?.find(x=>x.messageKey===messageKey(detail) &&
+        x.evidence?.folder===message.reference.folder &&
+        String(x.evidence?.uidValidity)===String(message.reference.uidValidity) &&
+        Number(x.evidence?.uid)===Number(message.reference.uid));
+      const newsletter=profile?.newsletterRules?.some(x=>x.action==='exclude_from_high_priority' &&
+        x.sender.toLowerCase()===sender.toLowerCase() && x.subject===message.subject);
       const direct=profile?.directVsCc==='direct_first' &&
         detail.to?.some(x=>x.address?.toLowerCase()===mailbox.address.toLowerCase());
-      const priority=important?'high':'review';
-      const reason=important?'Uživatelem schválený důležitý kontakt.':direct?
+      const priority=override?.priority??(newsletter?'review':important?'high':'review');
+      const reason=override?'Výslovná osobní oprava pro tuto zprávu.':newsletter?
+        'Uživatelem schválený přesný newsletter; není automaticky prioritní.':important?
+        'Uživatelem schválený důležitý kontakt.':direct?
         'Přímo adresováno; konkrétní požadavek je nutné ověřit.':'Neověřená priorita; zpráva není skrytá.';
       items.push({ reference: message.reference, threadKey: threadKey(detail), messageKey: messageKey(detail),
-        sender, subject: message.subject ?? '', receivedAt: message.date ?? null,priority,reason });
+        sender, subject: message.subject ?? '', receivedAt: message.date ?? null,priority,reason,
+        contentType:newsletter?'newsletter':'unclassified' });
     }
     if(view==='priority')items.sort((a,b)=>Number(b.priority==='high')-Number(a.priority==='high') ||
       String(b.receivedAt??'').localeCompare(String(a.receivedAt??'')));
@@ -145,9 +154,9 @@ export class Workflow {
       this.store.db.prepare('INSERT INTO workflow_lists VALUES (?,?,?,?,?,?,?,?,1,1,?,?)').bind(
         listId,mailbox.tenant_id,this.principal.id,mailbox.id,path,view,knownRemainingPriority,found.nextBeforeUid?1:0,
         now,now+30*86400000),
-      ...visible.map((item,index)=>this.store.db.prepare('INSERT INTO workflow_list_items VALUES (?,?,?,?,?,?,?,?,?,?)').bind(
+      ...visible.map((item,index)=>this.store.db.prepare('INSERT INTO workflow_list_items VALUES (?,?,?,?,?,?,?,?,?,?,?)').bind(
         listId,index+1,JSON.stringify(item.reference),item.threadKey,item.messageKey,item.sender,item.subject,item.receivedAt,
-        item.priority,item.reason)),
+        item.priority,item.reason,item.contentType)),
     ];
     await this.store.db.batch(statements);
     return this.current({ listId });
@@ -160,7 +169,7 @@ export class Workflow {
       WHERE i.list_id=? ORDER BY i.number`,row.tenant_id,this.principal.id,row.mailbox_id,row.id);
     const items = raw.map(item => ({ number:item.number, reference:JSON.parse(item.reference_json),
       from:item.sender, subject:item.subject, receivedAt:item.received_at,
-      priority:item.priority,priorityReason:item.priority_reason,
+      priority:item.priority,priorityReason:item.priority_reason,contentType:item.content_type,
       state:item.state==='snoozed' && item.due_date<=localDate(this.now(),item.time_zone) ? 'todo' : item.state??'todo',
       dueDate:item.due_date, note:item.note??'',
       newerReply:item.latest_inbound_key!=null && item.latest_inbound_key!==item.message_key,

@@ -60,7 +60,8 @@ export const worklistWidget = `<!doctype html>
       const content=document.createElement('span'),sender=document.createElement('span'),subject=document.createElement('span'),meta=document.createElement('span'),badge=document.createElement('span'),date=document.createElement('span');
       sender.className='sender';sender.textContent=item.from||'Neznámý odesílatel';
       subject.className='subject';subject.textContent=item.subject||'(bez předmětu)';
-      meta.className='meta';badge.className='badge';badge.textContent=(item.priority==='high'?'Priorita · ':'K posouzení · ')+label(item.state)+
+      meta.className='meta';badge.className='badge';badge.textContent=(item.contentType==='newsletter'?'Newsletter · ':
+        item.priority==='high'?'Priorita · ':'K posouzení · ')+label(item.state)+
         (item.newerReply?' · nová odpověď':'');
       date.className='muted';date.textContent=item.receivedAt?new Date(item.receivedAt).toLocaleDateString('cs-CZ'):'';
       meta.append(badge,date);content.append(sender,subject,meta);button.append(n,content);li.append(button);el('items').append(li);

@@ -25,6 +25,7 @@ CREATE TABLE workflow_list_items (
   received_at TEXT,
   priority TEXT NOT NULL DEFAULT 'review' CHECK(priority IN ('high','review')),
   priority_reason TEXT NOT NULL DEFAULT '',
+  content_type TEXT NOT NULL DEFAULT 'unclassified' CHECK(content_type IN ('unclassified','newsletter')),
   PRIMARY KEY(list_id,number)
 );
 CREATE TABLE workflow_states (

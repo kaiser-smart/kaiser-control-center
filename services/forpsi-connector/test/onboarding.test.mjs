@@ -4,7 +4,7 @@ import { fixture } from './fixtures.mjs';
 import { Onboarding } from '../src/onboarding.mjs';
 import { Workflow } from '../src/workflow.mjs';
 
-function setup(sent=true){
+function setup(sent=true,extraIncoming=[]){
   const f=fixture(),calls=[];
   const incoming={reference:{folder:'INBOX',uid:10,uidValidity:'3'},subject:'Zakázka',
     from:[{address:'client@example.net'}],to:[{address:'alice@example.com'}],cc:[],
@@ -17,8 +17,9 @@ function setup(sent=true){
       {path:'Trash',specialUse:'\\Trash',selectable:true}]};},
     async search(args){calls.push(['search',args.folder,args.since,args.before]);
       if(args.folder==='Sent')return {messages:sent?[outgoing]:[],nextBeforeUid:null};
-      return {messages:[incoming],nextBeforeUid:null};},
-    async read(ref){calls.push(['read',ref.folder]);return ref.folder==='Sent'?outgoing:incoming;},
+      return {messages:[incoming,...extraIncoming],nextBeforeUid:null};},
+    async read(ref){calls.push(['read',ref.folder]);return ref.folder==='Sent'?outgoing:
+      [incoming,...extraIncoming].find(x=>x.reference.uid===ref.uid);},
   };
   const ctx={store:f.store,principal:f.principal,providerFactory:()=>provider,env:f.env,
     now:()=>Date.parse('2026-09-26T12:00:00Z')};
@@ -38,6 +39,8 @@ test('90-day bounded metadata sampling records limits and adapts questions to th
   const analyzed=await a.onboarding.analyze({sessionId:started.sessionId});
   assert.equal(analyzed.coverage.length,6);
   assert.equal(analyzed.completeCoverage,true);
+  assert.equal(analyzed.observations.sampleCount,2);
+  assert.equal(analyzed.observations.sampledRecords,6);
   assert.equal(analyzed.nextQuestion.id,'important_contacts');
   assert.deepEqual(analyzed.observations.twoWay.map(x=>x.address),['client@example.net']);
   assert.ok(a.calls.every(x=>Array.isArray(x)?x[0]!=='read':true));
@@ -103,4 +106,47 @@ test('derived profile can be removed without touching mail or personal signature
   assert.equal((await onboarding.getSignature({mailboxId:'mail-a'})).configured,true);
   assert.equal(calls.length,beforeCalls);
   assert.equal((await f.store.rows('SELECT COUNT(*) AS n FROM workflow_observations'))[0].n,0);
+});
+
+test('approved practical corrections rank an unknown request above known marketing without hiding an invoice',async()=>{
+  const extra=[
+    {reference:{folder:'INBOX',uid:12,uidValidity:'3'},subject:'Newsletter: Akce',
+      from:[{address:'client@example.net'}],to:[{address:'alice@example.com'}],cc:[],
+      date:'2026-09-24T08:00:00.000Z',messageId:'<marketing@example.net>',text:'Akční nabídka'},
+    {reference:{folder:'INBOX',uid:13,uidValidity:'3'},subject:'Nová poptávka',
+      from:[{address:'new@example.net'}],to:[{address:'alice@example.com'}],cc:[],
+      date:'2026-09-25T08:00:00.000Z',messageId:'<request@example.net>',text:'Prosím o nabídku'},
+    {reference:{folder:'INBOX',uid:14,uidValidity:'3'},subject:'Faktura',
+      from:[{address:'client@example.net'}],to:[{address:'alice@example.com'}],cc:[],
+      date:'2026-09-23T08:00:00.000Z',messageId:'<bill@example.net>',text:'Faktura'},
+  ];
+  const {ctx,onboarding,calls}=setup(true,extra);
+  const started=await onboarding.begin({mailboxId:'mail-a',consent:true});
+  let state=await onboarding.analyze({sessionId:started.sessionId});
+  assert.equal(state.observations.reviewExamples.length,4);
+  while(state.nextQuestion){
+    const question=state.nextQuestion;
+    let answer='přeskočit';
+    if(question.id==='important_contacts')answer='client@example.net';
+    if(question.evidence?.subject==='Newsletter: Akce')answer='newsletter jen tento odesílatel a přesný předmět';
+    if(question.evidence?.subject==='Nová poptávka')answer='prioritní jen tato zpráva';
+    state=await new Onboarding(ctx).answer({sessionId:started.sessionId,questionId:question.id,answer});
+  }
+  assert.ok(state.questionCount<20);
+  const inactive=await new Workflow(ctx).start({mailboxId:'mail-a',limit:4,view:'priority'});
+  assert.equal(inactive.items.find(x=>x.subject==='Newsletter: Akce').contentType,'unclassified');
+  assert.equal(inactive.items.find(x=>x.subject==='Nová poptávka').priority,'review');
+  await onboarding.approve({sessionId:started.sessionId,proposalVersion:state.proposal.version,confirmed:true});
+  const stored=await new Onboarding(ctx).preferences({mailboxId:'mail-a'});
+  assert.equal(stored.profile.newsletterRules.length,1);
+  assert.equal(stored.profile.messageOverrides.length,1);
+  const list=await new Workflow(ctx).start({mailboxId:'mail-a',limit:4,view:'priority'});
+  const bySubject=Object.fromEntries(list.items.map(item=>[item.subject,item]));
+  assert.equal(bySubject['Nová poptávka'].priority,'high');
+  assert.equal(bySubject['Newsletter: Akce'].priority,'review');
+  assert.equal(bySubject['Newsletter: Akce'].contentType,'newsletter');
+  assert.equal(bySubject.Faktura.priority,'high');
+  assert.ok(list.items.findIndex(x=>x.subject==='Nová poptávka')<
+    list.items.findIndex(x=>x.subject==='Newsletter: Akce'));
+  assert.equal(calls.some(x=>Array.isArray(x)&&['flags','move','send'].includes(x[0])),false);
 });
