@@ -6,7 +6,7 @@ Cíl schválený 25. 9. 2026: příjemná a výkonná aplikace s potřebnými fu
 
 Navazující etapa 3a (podpisy, jméno odesílatele a nové koncepty) je popsaná v [kontraktu a produkčním přijetí](FORPSI_COMPOSITION.md). SO.ai 0.1.812 / Worker 0.2.7 jsou nasazené. Výslovně schválený pilot má read + write pouze pro vlastníka jedné schránky; jediný skutečný neodeslaný koncept byl uložen a přečten zpět. Neprázdný podpis je zatím ověřený izolovaně. Nová oprávnění kolegů, odesílání ani automatizace se nezapínají.
 
-Etapa 3b, [úprava existujícího konceptu](FORPSI_DRAFT_EDITS.md), je připravená k revizi a v produkci vypnutá. Vyžaduje ještě ověření schopností přihlášeného serveru Forpsi a samostatné schválení nasazení.
+Etapa 3b, [úprava existujícího konceptu](FORPSI_DRAFT_EDITS.md), má nasazený kód se stále vypnutou editací. Produkční čtecí test přihlášené pilotní schránky prokázal `supportsReplace=false`; tlačítko pro atomickou úpravu se správně nezobrazuje. Navazující bezpečný návrh je vytvoření upravené kopie při zachování originálu, zatím bez implementace a bez změny konceptů.
 
 - Oddělit osobní předvolby, nastavení schránky/kolekce a správu firmy. Přihlášený uživatel SO.ai je zdrojem identity; vlastníkem obsahu se nestává tím, že spravuje připojení.
 - Každá volba má rozsah, vlastníka/správce, zdroj pravdy, dopad, stav uložení a stav ověření. Označit firemní výchozí hodnotu odděleně od závazné hodnoty. Stávající UI připojení je zatím dostupné přes `settings:manage`, nikoli osobní samoobsluhu.

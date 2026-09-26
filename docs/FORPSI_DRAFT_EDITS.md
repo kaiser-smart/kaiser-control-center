@@ -1,6 +1,6 @@
 # Úprava existujícího konceptu Forpsi — připravená etapa 3b
 
-Stav 26. 9. 2026: pouze izolovaná implementace. Produkční přepínač `SOAI_DRAFT_EDITS_ENABLED` není nastavený, a proto zůstává vypnutý. Schopnost `REPLACE` a `UIDPLUS` konkrétní schránky Forpsi po přihlášení ještě není ověřená. Žádný existující koncept nebyl nahrazen.
+Stav 26. 9. 2026: implementace je nasazená v SO.ai 0.1.813 a Workeru 0.2.8, ale produkční přepínač `SOAI_DRAFT_EDITS_ENABLED` není nastavený, a proto zůstává editace vypnutá. Přihlášený čtecí test pilotní schránky `oplustil@kaiserservis.cz` v produkční Poště vrátil `supportsReplace=false`: server neohlásil současně `REPLACE` a `UIDPLUS`. Tento výsledek sám neurčuje, která jednotlivá schopnost chybí. Tlačítko **Upravit koncept** se správně nezobrazilo a žádný existující koncept nebyl nahrazen.
 
 ## Uživatelský tok
 
@@ -12,12 +12,16 @@ Při souběžné změně obsahu, zmizení původní zprávy nebo změně složky
 
 `open_draft {mailboxId,reference}` vrací textová pole, zdrojový odkaz, otisk celé původní MIME zprávy a možnost bezpečného nahrazení. `replace_draft {mailboxId,requestId,reference,expectedEtag,message}` kontroluje schránku, aktivitu uživatele, read+write grant, skutečnou složku Koncepty, `\\Draft`, From a nezměněný otisk před jedním IMAP `UID REPLACE`. Návratový odkaz musí obsahovat nové UID z `APPENDUID` (označená i neoznačená odpověď). Chybějící schopnost nebo potvrzení se neobchází APPEND+EXPUNGE. Existující `draft_attempts` eviduje nejvýše jedno volání poskytovatele pro klíč bez uložení obsahu, předmětu či adresátů; nová migrace není potřeba.
 
-Samostatný přepínač není v produkční ani vývojové konfiguraci nastavený, což znamená vypnutou editaci. Stávající nové koncepty zůstávají povolené jen podle `SOAI_DRAFTS_ENABLED` a grantů. MCP, send/delete/schedule, cron, SMTP, podpisy webmailu, CalDAV a CardDAV se nemění. Pro první produkční ověření je třeba nejprve získat po přihlášení pouze seznam IMAP schopností Forpsi a až potom rozhodnout, zda je bezpečné tlačítko zpřístupnit. Veřejná nepřihlášená CAPABILITY odpověď sama o sobě rozhodnutí neumožňuje.
+Samostatný přepínač není v produkční ani vývojové konfiguraci nastavený, což znamená vypnutou editaci. Stávající nové koncepty zůstávají povolené jen podle `SOAI_DRAFTS_ENABLED` a grantů. MCP, send/delete/schedule, cron, SMTP, podpisy webmailu, CalDAV a CardDAV se nemění. Produkční čtecí diagnostika po přihlášení rozhodla, že bezpečné tlačítko pro tuto schránku zpřístupnit nelze. Veřejná nepřihlášená CAPABILITY odpověď sama o sobě toto rozhodnutí neumožňovala.
 
 ## Izolovaný TEST a přijetí
 
 TEST používá stejné Pages API, session, Worker, SQL a validaci jako provozní cesta. SQLite běží výhradně v paměti, poskytovatel IMAP je simulovaný; skutečný Nodemailer skládá MIME. Pozitivní test ověřuje otevření, jediné `UID REPLACE`, nové UID, audit a opakování výsledku bez druhého volání. Negativní test ověřuje zastaralý otisk, nepodporovaný server, HTML/přílohy/cizí From, špatnou složku či příznak, souběžné volání, nejistý výsledek a revokaci během operace. Produkční SMTP/outbox zůstává nedotčený.
 
-Neověřeno: schopnosti po přihlášení do konkrétní Forpsi schránky, skutečné `UID REPLACE`, uživatelský tok v produkčním prohlížeči a výsledek na skutečném pilotním konceptu. Bez těchto důkazů není etapa přijatá jako funkční produkční editace.
+Produkční důkaz: PR #204 je sloučený v commitu `05b00d2`; veřejné `https://smart-odpady.ai/src/data/buildMeta.js` vrátilo `0.1.813 / main / 05b00d2` a nasazený Worker má verzi `a56ee460-4f44-49cf-b95c-71e51dc365b3` na 100 %. Přihlášené UI načetlo pilotní schránku, zobrazilo hlášení „server bezpečné nahrazení nehlásí“ a nenabídlo editaci. Nový koncept zůstává samostatně dostupný podle dosavadních práv. Neověřeno: skutečné `UID REPLACE` a úprava skutečného konceptu; při zjištěné nepodpoře se ani neprováděly.
 
-Možné nasazení vyžaduje konkrétní schválení Worker/API verze a případného nahrazení testovacího konceptu. Nejdřív se může nasadit verze se stále vypnutou editací a provést jen čtecí diagnostika schopností. Zapnutí přepínače a změna produkční zprávy jsou další samostatně doložené kroky. Rollback vypne přepínač; tabulka pokusů ani obsah schránky se nečistí.
+## Návrh navazující cesty pro Forpsi
+
+Připravit samostatný, srozumitelně označený tok **Uložit upravenou kopii**: načíst podporovaný textový koncept a jeho otisk, před uložením znovu ověřit nezměněný zdroj, vytvořit nový koncept dosavadní bezpečnou cestou a přečíst jej zpět. Původní koncept automaticky nemazat ani nepřesouvat. Uživatel musí před potvrzením vědět, že ve Forpsi uvidí dvě verze, a po ověření nové může starou odstranit ve webmailu. Při nejistém výsledku zachovat identifikátor pokusu a zabránit automatickému opakování vytvoření. Návrh zatím není implementovaný ani aktivovaný; neznamená povolení odesílání nebo mazání.
+
+Případná změna produkční zprávy vyžaduje nový konkrétní pilotní krok. Přepínač `SOAI_DRAFT_EDITS_ENABLED` se pro tuto schránku nezapíná; ani jeho zapnutí by nepřekonalo chybějící podporu serveru. Rollback kódu editace není pro aktuální bezpečný stav nutný, protože nepodporovaná operace zůstává nedostupná. Tabulka pokusů ani obsah schránky se nečistí.
