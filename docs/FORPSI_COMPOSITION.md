@@ -1,6 +1,6 @@
 # Podpisy a nové koncepty SO.ai — etapa 3a
 
-Stav 26. 9. 2026: implementace a izolované ověření pro SO.ai 0.1.812 / Worker 0.2.7. **Nenasazeno.** Produkční hranice se tímto dokumentem ani PR nemění. První rozsah má jeden společný textový podpis pro každou schránku a jméno odesílatele. Alternativní adresy, Reply-To, HTML, přílohy, odpovědi/přeposlání, editace existujících konceptů a odesílání nejsou součástí této etapy.
+Stav 26. 9. 2026: implementace a izolované ověření pro SO.ai 0.1.812 / Worker 0.2.7. **Nasazení výslovně schválené; živé přijetí zatím neověřené.** Radimovo „ano“ potvrdilo nové úložiště, povolení Úprav pouze pro vlastní pilotní schránku a jeden neodeslaný kontrolní koncept. První rozsah má jeden společný textový podpis pro každou schránku a jméno odesílatele. Alternativní adresy, Reply-To, HTML, přílohy, odpovědi/přeposlání, editace existujících konceptů a odesílání nejsou součástí této etapy.
 
 ## Zdroj pravdy a ovládání
 
@@ -16,7 +16,7 @@ Stav 26. 9. 2026: implementace a izolované ověření pro SO.ai 0.1.812 / Worke
 
 - `/api/forpsi/admin`: `composition_get {id}`, `composition_save {id,revision,senderName,signatureText}`. Aktuální firemní adresář musí potvrdit správce; výpadek zdroje se nesmí nahradit výchozím administrátorem.
 - `/api/forpsi/mail`: `composition_context {mailboxId}` a `create_draft {mailboxId,requestId,profileRevision,useSignature,message}`. Identitu odvozuje pouze session, nikoli argumenty klienta. Vyžaduje vlastní origin a JSON.
-- Soukromý Worker zachovává autentizaci, aktivní tenant/identitu/schránku. Koncept vyžaduje **read i write**, nikoli send. `SOAI_MAIL_ENABLED=true` a nový **`SOAI_DRAFTS_ENABLED=true`** jsou nutné současně. Nový přepínač je v obou konfiguracích **false**.
+- Soukromý Worker zachovává autentizaci, aktivní tenant/identitu/schránku. Koncept vyžaduje **read i write**, nikoli send. `SOAI_MAIL_ENABLED=true` a nový **`SOAI_DRAFTS_ENABLED=true`** jsou nutné současně. Po výslovném schválení je nový přepínač v produkční konfiguraci **true**, výchozí vývojová konfigurace zůstává **false**.
 - Stávající `write` je širší grant „Úpravy“, používaný také jinými adaptéry. Tato SO.ai cesta zpřístupňuje jen nový koncept. Samostatné jemné právo pouze ke konceptům se nezavádí. MCP zůstává vypnuté.
 - Změna revize podpisu vyžádá jeho nové načtení a kontrolu náhledu; text ve formuláři zůstane zachovaný.
 - Nová `draft_attempts` ukládá pouze vazbu na uživatele/schránku, náhodné ID pokusu, otisk vstupu, stav, čas a výsledný odkaz na koncept. Neukládá adresáty, předmět ani tělo. Otisk zahrnuje náhodné ID pokusu.
@@ -33,7 +33,7 @@ Pokryto: uložení/načtení profilu, tenantová izolace, souběh editace, sprá
 
 V místním prohlížeči prošel tok podpis → náhled → uložení konceptu → SQL/audit readback. Také „Zůstat na stránce“, změna podpisu ve druhé kartě, obnovení profilu při zachování textu a „Uložit a odejít“. Testovací výstupy jsou v paměti izolovaného serveru, syntetické důkazy mimo repo. Ostatní služby místního SO.ai jsou explicitně nedostupné; jejich diagnostické chyby nejsou důkaz chyby ani ověření produkce těchto modulů.
 
-## Navržené nasazení — čeká na konkrétní schválení
+## Schválené nasazení — 26. 9. 2026
 
 1. Ověřit aktuální produkční stav a aplikované migrace. Po schválení aplikovat **jen migraci 0004** do již existující samostatné Forpsi D1 `forpsi-company-mail`. Vzniknou dvě tabulky, existující provozní data se nepřepisují.
 2. Nasadit Worker 0.2.7 s MCP/cron/odesíláním stále vypnutými. Poté publikovat SO.ai pouze projektovým Pages guardem. Potvrdit přesnou živou verzi a UI/API readback.
