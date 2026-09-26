@@ -52,6 +52,30 @@ test('SO.ai authorization rejects cross-origin approval before service binding',
   assert.equal(calls.length,0);
 });
 
+test('SO.ai authorization relays the OAuth callback and consent cookie',async()=>{
+  const {env,cookie}=await setup();
+  env.FORPSI_CONNECTOR={async fetch(){
+    return new Response(null,{status:302,headers:{location:'https://chatgpt.com/connector/oauth/callback?code=synthetic',
+      'set-cookie':'__Host-oauth-consent-synthetic=; Path=/; Max-Age=0; Secure; HttpOnly'}});
+  }};
+  const response=await authorize({env,request:new Request(`${origin}/authorize`,{
+    method:'POST',headers:{origin,cookie,'content-type':'application/x-www-form-urlencoded'},
+    body:'handle=synthetic&decision=approve'})});
+  assert.equal(response.status,302);
+  assert.equal(response.headers.get('location'),'https://chatgpt.com/connector/oauth/callback?code=synthetic');
+  assert.match(response.headers.get('set-cookie'),/^__Host-oauth-consent-synthetic=/);
+});
+
+test('SO.ai authorization reports service binding failure without leaking the OAuth request',async()=>{
+  const {env,cookie}=await setup();
+  env.FORPSI_CONNECTOR={async fetch(){throw new Error('private OAuth data must never reach the user');}};
+  const response=await authorize({env,request:new Request(`${origin}/authorize`,{
+    method:'POST',headers:{origin,cookie,'content-type':'application/x-www-form-urlencoded'},
+    body:'handle=synthetic&decision=approve'})});
+  assert.equal(response.status,503);
+  assert.deepEqual(await response.json(),{error:'Připojení Forpsi není dostupné.'});
+});
+
 test('public MCP proxy forwards only OAuth bearer and protocol headers, never SO.ai cookie or asserted user ID',async()=>{
   const {calls,env,cookie}=await setup();
   const response=await mcp({env,request:new Request(`${origin}/mcp`,{

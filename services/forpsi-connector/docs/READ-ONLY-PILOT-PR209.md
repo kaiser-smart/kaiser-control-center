@@ -2,7 +2,7 @@
 
 **Změna zadání 26. 9. 2026:** níže uvedený samostatný placený test OpenAI API již není podmínkou osobního pilotu. Aktuální návrh interaktivní cesty, její ověřené hranice a otevřený problém přihlášení jsou v [CHATGPT-INTERACTIVE-PILOT.md](CHATGPT-INTERACTIVE-PILOT.md). Tato stránka uchovává historický rozsah kontroly A–G a původního izolovaného testu.
 
-Stav vývojové větve; žádné produkční nasazení, migrace trvalé databáze ani přístup ke skutečné poště. `SEND_ENABLED=false`, `CONNECTOR_ENABLED=false` a `WORKFLOW_SYNC_ENABLED=false` zůstávají ve vývojové konfiguraci. `0008_sync_progress.sql` je pouze připravený soubor, ne provedená trvalá migrace.
+**Historický stav před osobním nasazením:** tato stránka zachycuje původní kontrolu A–G a tehdejší izolovaný test. Aktuální stav produkčního osobního pilotu včetně provedených aditivních migrací a otevřené chyby OAuth je v [CHATGPT-INTERACTIVE-PILOT.md](CHATGPT-INTERACTIVE-PILOT.md). Vývojová konfigurace nadále ponechává `SEND_ENABLED=false`, `CONNECTOR_ENABLED=false` a `WORKFLOW_SYNC_ENABLED=false`.
 
 ## Reprodukce a opravy A–G
 

@@ -22,11 +22,21 @@ export async function proxyForpsiOAuth(request,env,{userId=null,consentCookie=fa
   }
   const url=new URL(request.url);
   if(url.origin!=='https://smart-odpady.ai')return json({error:'Nepovolený původ.'},403);
-  const forwarded=new Request(url.href,{method:request.method,headers,
-    ...(request.method==='GET'||request.method==='HEAD'?{}:{body:request.body,duplex:'half'})});
-  const response=await env.FORPSI_CONNECTOR.fetch(forwarded);
-  const responseHeaders=new Headers(response.headers);
-  responseHeaders.set('Cache-Control','no-store');
-  responseHeaders.set('X-Content-Type-Options','nosniff');
-  return new Response(response.body,{status:response.status,headers:responseHeaders});
+  let stage='forward_request';
+  try{
+    const forwarded=new Request(url.href,{method:request.method,headers,
+      ...(request.method==='GET'||request.method==='HEAD'?{}:{body:request.body,duplex:'half'})});
+    stage='service_binding';
+    const response=await env.FORPSI_CONNECTOR.fetch(forwarded);
+    stage='upstream_response';
+    const responseHeaders=new Headers(response.headers);
+    responseHeaders.set('Cache-Control','no-store');
+    responseHeaders.set('X-Content-Type-Options','nosniff');
+    return new Response(response.body,{status:response.status,headers:responseHeaders});
+  }catch{
+    // A fixed stage is sufficient for diagnosis; OAuth URLs, tokens and mailbox
+    // contents must never be written to regular application logs.
+    console.error('forpsi.oauth_proxy_failure',{stage});
+    return json({error:'Připojení Forpsi není dostupné.'},503);
+  }
 }
