@@ -1,5 +1,6 @@
 import { forpsiAdminSection, mountForpsiAdmin, forpsiDirtyTarget, saveForpsiDraft, discardForpsiDraft } from "./components/ForpsiAdminPanel.js";
 import { forpsiMailSection, mountForpsiMail } from "./components/ForpsiMailPanel.js";
+import { forpsiComposerDirtyTarget, saveForpsiComposer, discardForpsiComposer } from "./components/ForpsiComposer.js";
 import { receivablesInvoicePage } from "./data/receivablesInvoicePagination.js";
 import { moduleDashboards, modules } from "./data/modules.js";
 import {
@@ -6192,6 +6193,7 @@ function currentDriverReportDirtyTarget() {
 }
 
 function currentDirtyTarget() {
+  if (forpsiComposerDirtyTarget()) return forpsiComposerDirtyTarget();
   if (forpsiDirtyTarget()) return forpsiDirtyTarget();
   const accessTarget = currentAccessDirtyTarget();
 
@@ -55378,7 +55380,7 @@ function render() {
     applyActiveThemeToRoot();
     renderApp();
     mountForpsiAdmin(app, { apiJson, guard: guardedAccessAction, owner: authState.user?.id || null });
-    mountForpsiMail(app, { apiJson, owner: authState.user?.id || null });
+    mountForpsiMail(app, { apiJson, guard: guardedAccessAction, owner: authState.user?.id || null });
     syncCollectionRoutesDriverKioskDocumentState();
     syncCollectionDailyDriverViewportDiagnostics();
     applyUiSystemV2();
@@ -57856,6 +57858,7 @@ async function saveTyresDirtyChanges() {
 }
 
 async function saveDirtyChanges() {
+  if (forpsiComposerDirtyTarget()) return saveForpsiComposer();
   if (forpsiDirtyTarget()) return saveForpsiDraft();
   const accessTarget = currentAccessDirtyTarget();
 
@@ -57926,6 +57929,7 @@ async function saveDirtyChanges() {
 }
 
 function discardDirtyChanges() {
+  if (forpsiComposerDirtyTarget()) return discardForpsiComposer();
   if (forpsiDirtyTarget()) return discardForpsiDraft();
   const accessTarget = currentAccessDirtyTarget();
 

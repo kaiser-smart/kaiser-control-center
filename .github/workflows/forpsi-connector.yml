@@ -8,6 +8,7 @@ on:
       - 'functions/_lib/users-store.js'
       - 'src/components/ForpsiAdminPanel.js'
       - 'src/components/ForpsiMailPanel.js'
+      - 'src/components/ForpsiComposer.js'
       - 'src/app.js'
       - 'scripts/forpsi-admin.test.mjs'
       - 'scripts/forpsi-mail.test.mjs'

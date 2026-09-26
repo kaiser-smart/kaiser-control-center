@@ -17,7 +17,7 @@ test('panel navigation ignores unrelated forms but still protects its own unsave
   click('new');
   assert.equal(guarded,0,'a clean panel must not ask to discard another settings form');
   assert.match(root.innerHTML,/data-forpsi-form/);
-  listeners.input({target:{name:'displayName',value:'Unsaved draft',form:{matches:()=>true}}});
+  listeners.input({target:{name:'displayName',value:'Unsaved draft',form:{matches:selector=>selector==='[data-forpsi-form]'}}});
   assert.equal(forpsiDirtyTarget()?.type,'forpsi');
   click('tab','access');
   assert.equal(guarded,1);
@@ -94,7 +94,7 @@ test('loading resources preserves the dirty form, excludes parent folders and is
   mountForpsiAdmin({querySelector:()=>root},{owner:'resources-ui-owner',apiJson,guard:()=>guarded++});
   await new Promise(resolve=>setImmediate(resolve));
   const click=action=>listeners.click({target:{closest:()=>({dataset:{forpsiAction:action,id:'ui-mail'}})},preventDefault(){},stopPropagation(){}});
-  click('edit');listeners.input({target:{name:'displayName',value:'Unsaved <name>',form:{matches:()=>true}}});click('resources');
+  click('edit');listeners.input({target:{name:'displayName',value:'Unsaved <name>',form:{matches:selector=>selector==='[data-forpsi-form]'}}});click('resources');
   assert.equal(guarded,0);
   pending({resources:{mailboxId:'ui-mail',revision:1,folders:{status:'available',items:[{path:'Parent',selectable:false},{path:'<Safe>',selectable:true}]},calendars:{status:'empty',items:[]},addressBooks:{status:'empty',items:[]}}});
   await new Promise(resolve=>setImmediate(resolve));

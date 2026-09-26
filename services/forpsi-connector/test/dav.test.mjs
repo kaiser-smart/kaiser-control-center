@@ -116,7 +116,9 @@ test('CardDAV contacts support creation, search, patch and deletion while preser
 test('unsupported groupware modules are reported honestly', () => {
   const status = capabilities();
   assert.equal(status.liveAccountVerified, false);
-  for (const id of ['files','tasks','notes','signatures']) {
+  assert.equal(status.modules.find(m=>m.id==='signatures').implementation,'CONNECTOR_STORAGE');
+  assert.equal(status.modules.find(m=>m.id==='signatures').nativeSync,'UNAVAILABLE');
+  for (const id of ['files','tasks','notes']) {
     assert.equal(status.modules.find(m => m.id === id).implementation, 'NOT_IMPLEMENTED');
   }
   assert.equal(status.modules.find(m => m.id === 'labels').implementation, 'CONNECTOR_STORAGE');
