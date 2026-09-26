@@ -8,8 +8,9 @@ import { Outbox } from './outbox.mjs';
 import { handleMcp } from './mcp.mjs';
 import { CalDav } from './caldav.mjs';
 import { CardDav } from './carddav.mjs';
-import { Workflow } from './workflow.mjs';
 import { Onboarding } from './onboarding.mjs';
+import { handleSoaiSetup } from './soai-setup.mjs';
+import { runPersonalSync } from './personal-sync.mjs';
 
 export function createWorker(dependencies = {}) {
   const providerFactory = dependencies.providerFactory ?? ((env, mailbox) => new Forpsi(env, mailbox));
@@ -23,6 +24,7 @@ export function createWorker(dependencies = {}) {
         headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...extra } });
       if (url.pathname === '/internal/admin') return handleAdmin(request,env,{providerFactory,calendarFactory,contactFactory,verificationMode:dependencies.verificationMode ?? 'provider'});
       if (url.pathname === '/internal/mail') return handleSoaiMail(request,env,{providerFactory,verificationMode:dependencies.verificationMode ?? 'provider'});
+      if (url.pathname === '/internal/setup') return handleSoaiSetup(request,env,{providerFactory});
       if (url.pathname === '/health' && request.method === 'GET') return json({ service: 'forpsi-company-mail', version: '0.3.0-dev.1', enabled: env.CONNECTOR_ENABLED === 'true' });
       if (env.CONNECTOR_ENABLED !== 'true') return json({ error: 'CONNECTOR_DISABLED' }, 503);
       try { authConfig(env); } catch { return json({ error: 'AUTH_NOT_CONFIGURED' }, 503); }
@@ -48,19 +50,7 @@ export function createWorker(dependencies = {}) {
       if (env.CONNECTOR_ENABLED !== 'true' || !env.DB) return;
       const store=new Store(env.DB);
       await new Onboarding({store,principal:{id:'system',scopes:[]},providerFactory,env}).cleanupExpired();
-      if(env.WORKFLOW_SYNC_ENABLED==='true'){
-        const owners=await store.rows(`SELECT DISTINCT s.tenant_id,s.principal_id,s.mailbox_id FROM workflow_states s
-          JOIN principals p ON p.id=s.principal_id AND p.active=1 AND p.tenant_id=s.tenant_id
-          JOIN mailboxes m ON m.id=s.mailbox_id AND m.active=1 AND m.tenant_id=s.tenant_id
-          JOIN grants g ON g.principal_id=p.id AND g.mailbox_id=m.id AND g.action='read' AND g.revoked=0
-          LIMIT 20`);
-        for(const owner of owners){
-          try {await new Workflow({store,principal:{id:owner.principal_id,scopes:['forpsi:read']},
-            providerFactory,env}).refresh({mailboxId:owner.mailbox_id,limit:50});
-            await store.audit({id:owner.principal_id},owner.mailbox_id,'workflow.sync','completed');}
-          catch {await store.audit({id:owner.principal_id},owner.mailbox_id,'workflow.sync','failed');}
-        }
-      }
+      await runPersonalSync({store,providerFactory,env});
       await new Outbox(store, env, providerFactory).tick();
     },
   };

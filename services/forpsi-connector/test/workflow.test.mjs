@@ -183,6 +183,8 @@ test('priority view exposes a new inbound reply to a completed thread on first o
 
 test('server scheduler reopens new inbound work without an open chat and sends nothing',async()=>{
   const {f,workflow,messages,provider}=setup();
+  await f.store.run('INSERT INTO workflow_profile_versions VALUES (?,?,?,?,?,?,1)',
+    'tenant-a','alice','mail-a',1,JSON.stringify({synchronization:{mode:'interval',minutes:15}}),f.now());
   const list=await workflow.start({mailboxId:'mail-a',limit:1});
   await workflow.command({listId:list.listId,command:'1 vyřízeno'});
   messages.unshift({reference:reference(16),messageId:'<scheduled-reply@example.net>',references:['<root@example.net>'],

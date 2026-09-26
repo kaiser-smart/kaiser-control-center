@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { folder, id } from './schemas.mjs';
 import { requireValue } from './errors.mjs';
 import { seal, unseal } from './crypto.mjs';
+import { newsletterSeriesKey } from './newsletter-series.mjs';
+import { contentSamples, analyzeContent, openAiEvidenceAnalyzer } from './content-evidence.mjs';
 
 const uuid = z.string().uuid();
 const timeZone = z.string().min(1).max(80).default('Europe/Prague');
@@ -73,9 +75,9 @@ export function parseCommands(text) {
 }
 
 export class Workflow {
-  constructor({ store, principal, providerFactory, env, now = Date.now }) {
+  constructor({ store, principal, providerFactory, env, now = Date.now, semanticAnalyzer=null }) {
     this.store = store; this.principal = principal; this.providerFactory = providerFactory;
-    this.env = env; this.now = now;
+    this.env = env; this.now = now; this.semanticAnalyzer=semanticAnalyzer;
   }
   async access(mailboxId) {
     requireValue(this.principal.scopes.includes('forpsi:read'), 'INSUFFICIENT_SCOPE');
@@ -105,17 +107,40 @@ export class Workflow {
   async start({ mailboxId, folder: path = 'INBOX', limit = 10, view='recent' }) {
     const mailbox = await this.access(mailboxId);
     const provider = this.providerFactory(this.env, mailbox);
-    const found = await provider.search({ folder: path, limit:view==='priority'?50:limit });
-    requireValue(found.messages.length <= (view==='priority'?50:limit), 'MAIL_LIMIT_EXCEEDED');
+    const scanLimit=view==='priority'?200:limit,pageSize=view==='priority'?50:limit;
+    const summaries=[];let beforeUid=null,olderUnscanned=false;
+    do{
+      const found=await provider.search({folder:path,limit:Math.min(pageSize,scanLimit-summaries.length),
+        ...(beforeUid?{beforeUid}:{})});
+      requireValue(found.messages.length<=Math.min(pageSize,scanLimit-summaries.length),'MAIL_LIMIT_EXCEEDED');
+      summaries.push(...found.messages);
+      beforeUid=found.nextBeforeUid??null;
+      olderUnscanned=beforeUid!=null;
+    }while(view==='priority'&&beforeUid&&summaries.length<scanLimit);
     const profileRow=view==='priority'?await this.store.first(`SELECT profile_json FROM workflow_profile_versions
       WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND active=1`,mailbox.tenant_id,this.principal.id,mailbox.id):null;
     const profile=profileRow?JSON.parse(profileRow.profile_json):null;
     const items = [], seenThreads=new Set();
-    const candidates=view==='priority'?[...found.messages].sort((a,b)=>
+    const candidates=view==='priority'?[...summaries].sort((a,b)=>
       String(b.date??'').localeCompare(String(a.date??'')) ||
-      Number(b.reference?.uid??0)-Number(a.reference?.uid??0)):found.messages;
+      Number(b.reference?.uid??0)-Number(a.reference?.uid??0)):summaries;
+    const analyzer=this.semanticAnalyzer??(this.env.FORPSI_ANALYSIS_API_KEY&&this.env.FORPSI_ANALYSIS_MODEL?
+      input=>openAiEvidenceAnalyzer(input,this.env):null);
+    const detailCache=new Map();let semantic={status:'unavailable',findings:[],examined:0};
+    if(view==='priority'&&analyzer){
+      const selected=new Map([...candidates.slice(0,16),...candidates.slice(-8)].map(m=>[messageKey(m),m]));
+      for(const summary of selected.values()){
+        try{detailCache.set(messageKey(summary),await provider.read(summary.reference));}catch{/* Per-message failure is reported by coverage. */}
+      }
+      const samples=contentSamples([...detailCache.values()].map(x=>({...x,sentFolder:mailbox.sent_folder})),mailbox.address,24);
+      try{semantic=await analyzeContent(samples,{analyzer});}catch{semantic={status:'unavailable',findings:[],examined:samples.length};}
+      semantic.examined=samples.length;
+    }
+    const findings=new Map();
+    for(const finding of semantic.findings)if(['request','waiting_user','resolved','cancelled','marketing','newsletter'].includes(finding.kind))
+      findings.set(finding.sourceKey,finding);
     for (const message of candidates) {
-      const detail = await provider.read(message.reference);
+      const detail = detailCache.get(messageKey(message))??await provider.read(message.reference);
       const key=threadKey(detail);
       if(view==='priority' && seenThreads.has(key))continue;
       seenThreads.add(key);
@@ -132,17 +157,24 @@ export class Workflow {
         String(x.evidence?.uidValidity)===String(message.reference.uidValidity) &&
         Number(x.evidence?.uid)===Number(message.reference.uid));
       const newsletter=profile?.newsletterRules?.some(x=>x.action==='exclude_from_high_priority' &&
-        x.sender.toLowerCase()===sender.toLowerCase() && x.subject===message.subject);
+        x.sender.toLowerCase()===sender.toLowerCase() &&
+        (x.subject===message.subject || (x.seriesKey&&x.seriesKey===newsletterSeriesKey(message.subject))));
+      const semanticFinding=findings.get(messageKey(detail));
       const direct=profile?.directVsCc==='direct_first' &&
         detail.to?.some(x=>x.address?.toLowerCase()===mailbox.address.toLowerCase());
-      const priority=override?.priority??(newsletter?'review':important?'high':'review');
+      const semanticHigh=['request','waiting_user'].includes(semanticFinding?.kind);
+      const semanticLow=['resolved','cancelled','marketing','newsletter'].includes(semanticFinding?.kind);
+      const priority=override?.priority??(newsletter||semanticLow?'review':semanticHigh||important?'high':'review');
       const reason=override?'Výslovná osobní oprava pro tuto zprávu.':newsletter?
-        'Uživatelem schválený přesný newsletter; není automaticky prioritní.':important?
-        'Uživatelem schválený důležitý kontakt.':direct?
+        'Uživatelem schválené pravidlo newsletteru; není automaticky prioritní.':semanticLow?
+        'Modelový návrh s citací obsahu; ověřte před akcí.':semanticHigh?
+        'Modelový návrh požadavku s citací obsahu; ověřte před akcí.':
+        important?'Uživatelem schválený důležitý kontakt.':direct?
         'Přímo adresováno; konkrétní požadavek je nutné ověřit.':'Neověřená priorita; zpráva není skrytá.';
       items.push({ reference: message.reference, threadKey: threadKey(detail), messageKey: messageKey(detail),
         sender, subject: message.subject ?? '', receivedAt: message.date ?? null,priority,reason,
-        contentType:newsletter?'newsletter':'unclassified' });
+        contentType:newsletter||semanticFinding?.kind==='newsletter'?'newsletter':'unclassified',
+        semanticEvidence:semanticFinding??null });
     }
     if(view==='priority')items.sort((a,b)=>Number(b.priority==='high')-Number(a.priority==='high') ||
       String(b.receivedAt??'').localeCompare(String(a.receivedAt??'')));
@@ -151,12 +183,17 @@ export class Workflow {
     const listId = crypto.randomUUID(), now = this.now();
     const statements = [
       this.store.db.prepare('UPDATE workflow_lists SET active=0 WHERE tenant_id=? AND principal_id=? AND active=1').bind(mailbox.tenant_id,this.principal.id),
-      this.store.db.prepare('INSERT INTO workflow_lists VALUES (?,?,?,?,?,?,?,?,1,1,?,?)').bind(
-        listId,mailbox.tenant_id,this.principal.id,mailbox.id,path,view,knownRemainingPriority,found.nextBeforeUid?1:0,
-        now,now+30*86400000),
-      ...visible.map((item,index)=>this.store.db.prepare('INSERT INTO workflow_list_items VALUES (?,?,?,?,?,?,?,?,?,?,?)').bind(
+      this.store.db.prepare(`INSERT INTO workflow_lists
+        (id,tenant_id,principal_id,mailbox_id,folder,view,known_remaining_priority,older_unscanned,
+        position,active,created_at,expires_at,scanned_count,scan_limit,semantic_examined_count,semantic_status)
+        VALUES (?,?,?,?,?,?,?,?,1,1,?,?,?,?,?,?)`).bind(
+        listId,mailbox.tenant_id,this.principal.id,mailbox.id,path,view,knownRemainingPriority,
+        olderUnscanned?1:0,now,now+30*86400000,summaries.length,scanLimit,semantic.examined??0,semantic.status),
+      ...visible.map((item,index)=>this.store.db.prepare(`INSERT INTO workflow_list_items
+        (list_id,number,reference_json,thread_key,message_key,sender,subject,received_at,priority,priority_reason,content_type,semantic_evidence_json)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
         listId,index+1,JSON.stringify(item.reference),item.threadKey,item.messageKey,item.sender,item.subject,item.receivedAt,
-        item.priority,item.reason,item.contentType)),
+        item.priority,item.reason,item.contentType,item.semanticEvidence?JSON.stringify(item.semanticEvidence):null)),
     ];
     await this.store.db.batch(statements);
     return this.current({ listId });
@@ -170,13 +207,17 @@ export class Workflow {
     const items = raw.map(item => ({ number:item.number, reference:JSON.parse(item.reference_json),
       from:item.sender, subject:item.subject, receivedAt:item.received_at,
       priority:item.priority,priorityReason:item.priority_reason,contentType:item.content_type,
+      semanticEvidence:item.semantic_evidence_json?JSON.parse(item.semantic_evidence_json):null,
       state:item.state==='snoozed' && item.due_date<=localDate(this.now(),item.time_zone) ? 'todo' : item.state??'todo',
       dueDate:item.due_date, note:item.note??'',
       newerReply:item.latest_inbound_key!=null && item.latest_inbound_key!==item.message_key,
       newerReplyReference:item.latest_inbound_key!=null && item.latest_inbound_key!==item.message_key &&
         item.latest_inbound_reference_json?JSON.parse(item.latest_inbound_reference_json):null }));
     return { listId:row.id, mailboxId:row.mailbox_id, folder:row.folder, view:row.view,
-      knownRemainingPriority:row.known_remaining_priority,olderUnscanned:row.older_unscanned===1,position:row.position,
+      knownRemainingPriority:row.known_remaining_priority,olderUnscanned:row.older_unscanned===1,
+      scannedCount:row.scanned_count,scanLimit:row.scan_limit,displayedCount:items.length,
+      semanticExaminedCount:row.semantic_examined_count,semanticStatus:row.semantic_status,
+      position:row.position,
       active:row.active===1, expiresAt:row.expires_at, items, pending:items.filter(i=>i.state==='todo').length,
       untrustedContent:true };
   }

@@ -33,7 +33,7 @@ test('declined analysis stores deferral without accessing provider history',asyn
   await assert.rejects(onboarding.analyze({sessionId:result.sessionId}),/ONBOARDING_CONSENT_REQUIRED/);
 });
 
-test('90-day bounded metadata sampling records limits and adapts questions to the history',async()=>{
+test('90-day bounded metadata and consented content sampling records limits and adapts questions',async()=>{
   const a=setup(true),b=setup(false);
   const started=await a.onboarding.begin({mailboxId:'mail-a',consent:true,days:90});
   const analyzed=await a.onboarding.analyze({sessionId:started.sessionId});
@@ -43,7 +43,9 @@ test('90-day bounded metadata sampling records limits and adapts questions to th
   assert.equal(analyzed.observations.sampledRecords,6);
   assert.equal(analyzed.nextQuestion.id,'important_contacts');
   assert.deepEqual(analyzed.observations.twoWay.map(x=>x.address),['client@example.net']);
-  assert.ok(a.calls.every(x=>Array.isArray(x)?x[0]!=='read':true));
+  assert.equal(analyzed.observations.contentCoverage.read,2);
+  assert.equal(analyzed.observations.semantic.status,'unavailable');
+  assert.equal(a.calls.filter(x=>Array.isArray(x)&&x[0]==='read').length,2);
   const bStarted=await b.onboarding.begin({mailboxId:'mail-a',consent:true,days:90});
   const bAnalyzed=await b.onboarding.analyze({sessionId:bStarted.sessionId});
   assert.equal(bAnalyzed.nextQuestion.id,'direct_vs_cc');
@@ -61,19 +63,23 @@ test('questions persist across restart, cannot exceed 20, and approve exact pers
       answer:q.id==='important_contacts'?'client@example.net':q.options[0]});
   }
   assert.ok(state.questionCount<=19);assert.equal(state.readyToApprove,true);
-  const approved=await onboarding.approve({sessionId:started.sessionId,proposalVersion:state.proposal.version,confirmed:true});
+  await assert.rejects(onboarding.approve({sessionId:started.sessionId,proposalVersion:state.proposal.version,confirmed:true}),
+    /APPROVAL_UI_REQUIRED/);
+  const approved=await new Onboarding({...ctx,approvalSource:'soai_session'}).approve({
+    sessionId:started.sessionId,proposalVersion:state.proposal.version,confirmed:true});
   assert.equal(approved.profile.importantContacts[0],'client@example.net');
   assert.equal((await new Onboarding(ctx).preferences({mailboxId:'mail-a'})).version,1);
   const bob=new Onboarding({...ctx,principal:{id:'bob',scopes:['forpsi:read']}});
   assert.equal((await bob.preferences({mailboxId:'mail-a'})).status,'not_configured');
   await assert.rejects(bob.status({sessionId:started.sessionId}),/ONBOARDING_NOT_FOUND/);
-  const restored=await onboarding.revert({mailboxId:'mail-a',version:1,confirmed:true});
+  const restored=await new Onboarding({...ctx,approvalSource:'soai_session'}).revert({
+    mailboxId:'mail-a',version:1,confirmed:true});
   assert.equal(restored.version,2);
 });
 
 test('approved personal signature has plain and escaped HTML preview and is inserted once into a proposal',async()=>{
   const {f,ctx,onboarding,provider}=setup();
-  const signature=await onboarding.signature({mailboxId:'mail-a',fullText:'Alice <Kaiser>\nTelefon 123',
+  const signature=await new Onboarding({...ctx,approvalSource:'soai_session'}).signature({mailboxId:'mail-a',fullText:'Alice <Kaiser>\nTelefon 123',
     shortText:'Alice',expectedRevision:0,confirmed:true});
   assert.equal(signature.sample.html.includes('&lt;Kaiser&gt;'),true);
   assert.equal(signature.sample.html.includes('<Kaiser>'),false);
@@ -95,12 +101,13 @@ test('approved personal signature has plain and escaped HTML preview and is inse
 });
 
 test('derived profile can be removed without touching mail or personal signature',async()=>{
-  const {f,onboarding,calls}=setup();
-  await onboarding.signature({mailboxId:'mail-a',fullText:'Alice',shortText:'A',expectedRevision:0,confirmed:true});
+  const {f,ctx,onboarding,calls}=setup();
+  await new Onboarding({...ctx,approvalSource:'soai_session'}).signature({mailboxId:'mail-a',fullText:'Alice',shortText:'A',expectedRevision:0,confirmed:true});
   const session=await onboarding.begin({mailboxId:'mail-a',consent:true});
   await onboarding.analyze({sessionId:session.sessionId});
   const beforeCalls=calls.length;
-  const removed=await onboarding.remove({mailboxId:'mail-a',confirmed:true});
+  await assert.rejects(onboarding.remove({mailboxId:'mail-a',confirmed:true}),/APPROVAL_UI_REQUIRED/);
+  const removed=await new Onboarding({...ctx,approvalSource:'soai_session'}).remove({mailboxId:'mail-a',confirmed:true});
   assert.equal(removed.mailMessagesUnchanged,true);
   assert.equal((await onboarding.preferences({mailboxId:'mail-a'})).status,'not_configured');
   assert.equal((await onboarding.getSignature({mailboxId:'mail-a'})).configured,true);
@@ -136,7 +143,8 @@ test('approved practical corrections rank an unknown request above known marketi
   const inactive=await new Workflow(ctx).start({mailboxId:'mail-a',limit:4,view:'priority'});
   assert.equal(inactive.items.find(x=>x.subject==='Newsletter: Akce').contentType,'unclassified');
   assert.equal(inactive.items.find(x=>x.subject==='Nová poptávka').priority,'review');
-  await onboarding.approve({sessionId:started.sessionId,proposalVersion:state.proposal.version,confirmed:true});
+  await new Onboarding({...ctx,approvalSource:'soai_session'}).approve({
+    sessionId:started.sessionId,proposalVersion:state.proposal.version,confirmed:true});
   const stored=await new Onboarding(ctx).preferences({mailboxId:'mail-a'});
   assert.equal(stored.profile.newsletterRules.length,1);
   assert.equal(stored.profile.messageOverrides.length,1);

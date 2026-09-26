@@ -1,5 +1,7 @@
 # Forpsi pracovní pošta — vývojová etapa 0.3.0-dev.1
 
+**Historický stav před další etapou PR #209.** Aktuální implementaci, nové testy a trvající omezení popisuje [PERSONALIZED-SETUP-DEV.md](PERSONALIZED-SETUP-DEV.md). Níže uvedené počty, 50zprávový limit a způsob schvalování se vztahují k předchozímu commitu, nikoli k současné větvi.
+
 Tato etapa mění pouze vývojovou větev. Produkční Worker, SO.ai, D1, pošta a napojení ChatGPT se neměnily. Testy používají SQLite v paměti a simulovaného poskytovatele. Nové MCP nástroje jsou součástí stávajícího `/mcp`; nevzniká druhý konektor.
 
 ## Co funguje
