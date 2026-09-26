@@ -4,7 +4,7 @@ Stav 26. 9. 2026: pouze izolovaná implementace. Produkční přepínač `SOAI_D
 
 ## Uživatelský tok
 
-V Poště SO.ai lze po otevření zprávy ve skutečně nakonfigurované složce Koncepty zvolit **Upravit koncept**, pouze pokud má uživatel práva Čtení i Úpravy, je zapnutý samostatný přepínač a přihlášený server podporuje bezpečné nahrazení. Editor načte pouze textový koncept bez HTML a příloh, se skutečnou adresou schránky v poli From. Jméno odesílatele a dosavadní text včetně podpisu zachová. Změny se uloží ručně; nic se neodešle.
+Po výběru schránky Pošta SO.ai ukáže čtecí stav podpory bezpečného nahrazení podle přihlášeného IMAP serveru. Po otevření zprávy ve skutečně nakonfigurované složce Koncepty lze zvolit **Upravit koncept**, pouze pokud má uživatel práva Čtení i Úpravy, je zapnutý samostatný přepínač a server podporuje bezpečné nahrazení. Editor načte pouze textový koncept bez HTML a příloh, se skutečnou adresou schránky v poli From. Jméno odesílatele a dosavadní text včetně podpisu zachová. Změny se uloží ručně; nic se neodešle.
 
 Při souběžné změně obsahu, zmizení původní zprávy nebo změně složky se uložení zastaví. Rozepsaný text zůstane k dispozici, ale opakování stejného pokusu je blokované. Nové načtení původního konceptu chrání potvrzení odchodu z rozepsaného formuláře. Při nejistém výsledku spojení se stejný klíč pokusu nepředá poskytovateli podruhé; uživatel nejprve ověří složku Koncepty.
 
