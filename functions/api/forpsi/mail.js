@@ -5,6 +5,14 @@ const messages={
   PROFILE_CHANGED:'Podpis nebo jméno odesílatele se změnily. Obnovte podpis a zkontrolujte náhled.',
   DRAFT_REQUEST_CONFLICT:'Tento pokus už patří jiné verzi konceptu. Nejprve ověřte jeho stav.',
   DRAFT_UNCERTAIN:'Uložení není potvrzené. Koncept mohl ve Forpsi vzniknout. Ověřte složku Koncepty; tento pokus se automaticky neopakuje.',
+  DRAFT_EDITS_DISABLED:'Úpravy uložených konceptů ještě nejsou zapnuté.',
+  SAFE_REPLACE_UNSUPPORTED:'Forpsi nepodporuje bezpečné nahrazení konceptu. Původní koncept zůstal zachovaný; upravte jej ve webmailu.',
+  DRAFT_CHANGED:'Koncept se mezitím změnil. Načtěte jej znovu; rozepsané změny zatím zůstanou v editoru.',
+  NOT_DRAFT_FOLDER:'Vybraná zpráva už není ve složce Koncepty.',
+  NOT_EDITABLE_DRAFT:'Vybraná zpráva není upravitelný koncept.',
+  DRAFT_FORMAT_UNSUPPORTED:'Tento koncept obsahuje prvky, které editor SO.ai zatím nepodporuje. Upravte jej ve webmailu.',
+  DRAFT_SENDER_UNSUPPORTED:'Odesílatel konceptu neodpovídá schránce. Upravte jej ve webmailu.',
+  DRAFT_REPLACE_UNCERTAIN:'Výsledek úpravy není jistý. Zkontrolujte Koncepty ve Forpsi.',
   ACCESS_DENIED:'Přístup ke schránce byl odebrán nebo je schránka pozastavená. Obnovte seznam schránek.',
   SOAI_MAIL_DISABLED:'Pracovní pošta SO.ai ještě není zapnutá.',
   MAIL_NOT_CONFIGURED:'Serverové propojení pošty není dostupné.',
@@ -32,8 +40,8 @@ export async function forwardForpsiMail({request,env}) {
     const bytes=new Uint8Array(size);let offset=0;for(const part of parts){bytes.set(part,offset);offset+=part.byteLength;}
     command=JSON.parse(new TextDecoder().decode(bytes));
     if(!command || Object.keys(command).some(k=>!['operation','payload'].includes(k)) ||
-      !['list_mailboxes','list_folders','search_messages','read_message','composition_context','create_draft'].includes(command.operation) || !command.payload || Array.isArray(command.payload) || typeof command.payload!=='object')throw new Error();
-    if(command.operation!=='create_draft' && new TextEncoder().encode(JSON.stringify(command)).length>16384)return json({error:'Příliš velký požadavek.'},413);
+      !['list_mailboxes','list_folders','search_messages','read_message','composition_context','create_draft','open_draft','replace_draft'].includes(command.operation) || !command.payload || Array.isArray(command.payload) || typeof command.payload!=='object')throw new Error();
+    if(!['create_draft','replace_draft'].includes(command.operation) && new TextEncoder().encode(JSON.stringify(command)).length>16384)return json({error:'Příliš velký požadavek.'},413);
   } catch{return json({error:messages.INVALID_ARGUMENTS,code:'INVALID_ARGUMENTS'},400);}
   try {
     const result=await env.FORPSI_CONNECTOR.fetch(new Request('https://forpsi.internal/internal/mail',{
@@ -42,7 +50,7 @@ export async function forwardForpsiMail({request,env}) {
     }));
     // Recheck the authoritative directory after the provider returns, including mid-request disablement.
     const stillActive=await currentUser(env,request,{strict:true});
-    if(stillActive?.id!==user.id) return json({error:command.operation==='create_draft'?'Přístup již není aktivní. Koncept mohl být uložený; po obnovení přístupu ověřte složku Koncepty ve Forpsi.':'Účet již není aktivní nebo přihlášení vypršelo.',code:'AUTH_REQUIRED'},401);
+    if(stillActive?.id!==user.id) return json({error:['create_draft','replace_draft'].includes(command.operation)?'Přístup již není aktivní. Koncept mohl být uložený; po obnovení přístupu ověřte složku Koncepty ve Forpsi.':'Účet již není aktivní nebo přihlášení vypršelo.',code:'AUTH_REQUIRED'},401);
     const body=await result.json();
     if(!result.ok){const code=Object.hasOwn(messages,body.error)?body.error:'PROVIDER_UNAVAILABLE';return json({error:messages[code],code},result.status>=400?result.status:503);}
     return json(body,200,{'X-Content-Type-Options':'nosniff'});

@@ -1,7 +1,7 @@
-import { mountForpsiComposer, forpsiComposerDirtyTarget } from './ForpsiComposer.js';
+import { mountForpsiComposer, openForpsiDraft, forpsiComposerDirtyTarget } from './ForpsiComposer.js';
 const escape=value=>String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const emptyFilters=()=>({folder:'INBOX',from:'',subject:'',since:'',through:'',unread:false});
-let state={owner:null,epoch:0,root:null,api:null,loaded:false,busy:false,mailboxes:[],mailboxId:'',folders:[],filters:emptyFilters(),applied:null,result:null,message:null,error:'',mode:null};
+let state={owner:null,epoch:0,root:null,api:null,loaded:false,busy:false,mailboxes:[],mailboxId:'',folders:[],draftFolder:null,canEditDrafts:false,filters:emptyFilters(),applied:null,result:null,message:null,error:'',mode:null};
 const date=value=>value?new Date(value).toLocaleString('cs-CZ'):'Datum neuvedeno';
 const button=(action,label,extra='')=>`<button type="button" class="secondary-link" data-mail-action="${action}" ${state.busy?'disabled':''} ${extra}>${label}</button>`;
 const changed=()=>state.applied && JSON.stringify(state.applied)!==JSON.stringify(state.filters);
@@ -36,7 +36,7 @@ function paint(){
     <div class="forpsi-actions"><button class="primary-action" type="submit" ${state.busy?'disabled':''}>Hledat zprávy</button></div>
     <small>Datum filtruje přijetí zprávy na serveru. Otevření zprávy nemění označení přečteno. Čtení zatím podporuje zprávy do 2 MiB.</small></form>`:''}`}
     <div class="forpsi-mail-results" aria-live="polite">${results()}</div>`;
-  mountForpsiComposer(root.querySelector('[data-forpsi-composer-root]'),{owner:state.owner,mailboxId:state.mailboxId,apiJson:state.api,guard:state.guard});
+  mountForpsiComposer(root.querySelector('[data-forpsi-composer-root]'),{owner:state.owner,mailboxId:state.mailboxId,apiJson:state.api,guard:state.guard,onSaved:()=>{state.message=null;void search();}});
 }
 function results(){
   const r=state.result;if(!r)return '';
@@ -45,7 +45,7 @@ function results(){
     <p>Výsledky aktuální dávky: ${r.messages.length}. ${r.nextBeforeUid?'Ve složce zbývá starší část k prohledání.':'Prohledávání bylo dokončeno.'}</p>
     ${r.messages.length?`<ol class="forpsi-mail-list">${r.messages.map((item,i)=>`<li><button type="button" data-mail-action="read" data-index="${i}" ${state.busy?'disabled':''}><strong>${escape(item.subject || '(bez předmětu)')}</strong><span>${escape(item.from.map(a=>a.name?`${a.name} <${a.address}>`:a.address).join(', '))}</span><small>${date(item.date)}${item.flags.includes('\\Seen')?'':' · nepřečtené'}${item.flags.includes('\\Flagged')?' · označené hvězdičkou':''}</small></button></li>`).join('')}</ol>`:'<p>V této dávce nejsou odpovídající zprávy.</p>'}
     ${r.nextBeforeUid?button('next','Prohledat starší část',changed()?'disabled':''):''}
-    ${m?`<article class="forpsi-card forpsi-mail-message" data-mail-message><div class="forpsi-actions">${button('close','Zavřít zprávu')}</div><h2>${escape(m.subject || '(bez předmětu)')}</h2><p>${escape(m.from.map(a=>a.address).join(', '))} · ${date(m.date)}</p><pre>${escape(m.text)}</pre>${m.truncated?'<p>Zobrazený text je zkrácený.</p>':''}${m.attachments?.length?`<h3>Přílohy</h3><ul>${m.attachments.map(a=>`<li>${escape(a.filename || 'Bez názvu')} · ${escape(a.contentType)} · ${a.size} B</li>`).join('')}</ul><p>Stahování příloh zatím není zapojené.</p>`:''}</article>`:''}`;
+    ${m?`<article class="forpsi-card forpsi-mail-message" data-mail-message><div class="forpsi-actions">${button('close','Zavřít zprávu')}${state.canEditDrafts&&state.draftFolder===m.reference?.folder&&m.flags.includes('\\Draft')?button('edit-draft','Upravit koncept'):''}</div><h2>${escape(m.subject || '(bez předmětu)')}</h2><p>${escape(m.from.map(a=>a.address).join(', '))} · ${date(m.date)}</p><pre>${escape(m.text)}</pre>${m.truncated?'<p>Zobrazený text je zkrácený.</p>':''}${m.attachments?.length?`<h3>Přílohy</h3><ul>${m.attachments.map(a=>`<li>${escape(a.filename || 'Bez názvu')} · ${escape(a.contentType)} · ${a.size} B</li>`).join('')}</ul><p>Stahování příloh zatím není zapojené.</p>`:''}</article>`:''}`;
 }
 async function request(operation,payload,onSuccess){
   if(state.busy)return;const epoch=state.epoch;state.busy=true;state.error='';paint();
@@ -56,9 +56,9 @@ async function request(operation,payload,onSuccess){
     if([401,403].includes(e.status) || ['AUTH_REQUIRED','ACCESS_DENIED'].includes(e.code || e.payload?.code)){state.mailboxes=[];state.folders=[];state.mailboxId='';}
   }finally{if(epoch===state.epoch){state.busy=false;paint();}}
 }
-async function refresh(){clearContent();state.loaded=false;state.mailboxes=[];state.folders=[];state.mailboxId='';await request('list_mailboxes',{},data=>{state.mailboxes=data.mailboxes;state.loaded=true;});}
-async function chooseMailbox(id){clearContent();state.mailboxId=id;state.folders=[];state.filters=emptyFilters();if(!id){paint();return;}
-  await request('list_folders',{mailboxId:id},data=>{state.folders=data.folders.filter(f=>f.selectable!==false);state.filters.folder=state.folders.some(f=>f.path==='INBOX')?'INBOX':state.folders[0]?.path || '';});}
+async function refresh(){clearContent();state.loaded=false;state.mailboxes=[];state.folders=[];state.draftFolder=null;state.canEditDrafts=false;state.mailboxId='';await request('list_mailboxes',{},data=>{state.mailboxes=data.mailboxes;state.loaded=true;});}
+async function chooseMailbox(id){clearContent();state.mailboxId=id;state.folders=[];state.draftFolder=null;state.canEditDrafts=false;state.filters=emptyFilters();if(!id){paint();return;}
+  await request('list_folders',{mailboxId:id},data=>{state.folders=data.folders.filter(f=>f.selectable!==false);state.draftFolder=data.draftFolder;state.canEditDrafts=data.draftEditsEnabled===true&&data.supportsReplace===true&&data.draftWriteAllowed===true&&!!data.draftFolder;state.filters.folder=state.folders.some(f=>f.path==='INBOX')?'INBOX':state.folders[0]?.path || '';});}
 async function search(next=false){
   const f={...state.filters};
   if(!f.folder || (f.since&&f.through&&f.since>f.through)){state.error='Datum od musí být nejpozději v den data do.';paint();return;}
@@ -68,7 +68,7 @@ async function search(next=false){
 }
 export function mountForpsiMail(app,{apiJson,owner,guard}){
   const root=app.querySelector('[data-forpsi-mail-root]');
-  if(state.owner!==owner || !root){state={owner,epoch:state.epoch+1,root:null,api:apiJson,loaded:false,busy:false,mailboxes:[],mailboxId:'',folders:[],filters:emptyFilters(),applied:null,result:null,message:null,error:'',mode:null};}
+  if(state.owner!==owner || !root){state={owner,epoch:state.epoch+1,root:null,api:apiJson,loaded:false,busy:false,mailboxes:[],mailboxId:'',folders:[],draftFolder:null,canEditDrafts:false,filters:emptyFilters(),applied:null,result:null,message:null,error:'',mode:null};}
   if(!root){mountForpsiComposer(null,{owner,mailboxId:'',apiJson,guard});return;}state.root=root;state.api=apiJson;state.guard=guard;
   root.addEventListener('input',event=>{if(event.target.form?.matches('[data-mail-search]')){
     state.filters[event.target.name]=event.target.type==='checkbox'?event.target.checked:event.target.value;
@@ -81,6 +81,7 @@ export function mountForpsiMail(app,{apiJson,owner,guard}){
     if(b.dataset.mailAction==='refresh'){if(forpsiComposerDirtyTarget())guard(()=>refresh());else void refresh();}
     if(b.dataset.mailAction==='next')void search(true);
     if(b.dataset.mailAction==='close'){state.message=null;paint();}
+    if(b.dataset.mailAction==='edit-draft' && state.message?.reference){const ref=state.message.reference;const action=()=>{void openForpsiDraft(ref);};if(forpsiComposerDirtyTarget())guard(action);else action();}
     if(b.dataset.mailAction==='read'){const ref=state.result?.messages[Number(b.dataset.index)]?.reference;if(ref){state.message=null;void request('read_message',{mailboxId:state.mailboxId,message:ref},data=>{state.message=data;}).then(()=>{root.querySelector('[data-mail-message]')?.scrollIntoView({block:'start'});});}}
   });
   paint();if(!state.loaded&&!state.busy)void refresh();

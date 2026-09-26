@@ -2,6 +2,8 @@ import { mailboxPassword } from './credentials.mjs';
 import { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
 import { simpleParser } from 'mailparser';
+import { createHash } from 'node:crypto';
+import { encodePath } from 'imapflow/lib/tools.js';
 import { requireValue } from './errors.mjs';
 import { smtpSocketFactory } from './smtp-socket.mjs';
 
@@ -46,10 +48,17 @@ export class Forpsi {
     return matches[0].path;
   }
   listFolders() {
-    return this.imap(async client => ({ folders: (await client.list()).map(f => ({
-      path: f.path, name: f.name, delimiter: f.delimiter, specialUse: f.specialUse ?? null,
-      selectable: !f.flags?.has('\\Noselect'),
-    })), supportsMove: client.capabilities.has('MOVE') }));
+    return this.imap(async client => {
+      const folders=await client.list();
+      const drafts=folders.filter(f=>!f.flags?.has('\\Noselect') &&
+        (this.mailbox.drafts_folder?f.path===this.mailbox.drafts_folder:f.specialUse==='\\Drafts'));
+      return {folders:folders.map(f=>({
+        path:f.path,name:f.name,delimiter:f.delimiter,specialUse:f.specialUse??null,
+        selectable:!f.flags?.has('\\Noselect')
+      })),draftFolder:drafts.length===1?drafts[0].path:null,
+        supportsMove:client.capabilities.has('MOVE'),
+        supportsReplace:client.capabilities.has('REPLACE')&&client.capabilities.has('UIDPLUS')};
+    });
   }
   search(args) {
     return this.imap(client => this.locked(client, { folder: args.folder }, true, async () => {
@@ -111,6 +120,59 @@ export class Forpsi {
       return { saved: true, folder, reference: result.uid && result.uidValidity ? {
         folder, uid: result.uid, uidValidity: String(result.uidValidity) } : null };
     });
+  }
+  async editableDraft(client, ref) {
+    requireValue((await this.specialFolder(client, 'drafts'))===ref.folder,'NOT_DRAFT_FOLDER');
+    const item=await client.fetchOne(String(ref.uid),{flags:true,size:true},{uid:true});
+    requireValue(item,'MESSAGE_NOT_FOUND');
+    requireValue(item.flags?.has('\\Draft') && !item.flags.has('\\Deleted'),'NOT_EDITABLE_DRAFT');
+    requireValue(item.size<=MAX_MESSAGE,'MESSAGE_TOO_LARGE');
+    const {content}=await client.download(String(ref.uid),undefined,{uid:true,maxBytes:MAX_MESSAGE+1});
+    const chunks=[];let size=0;
+    for await(const chunk of content){size+=chunk.length;requireValue(size<=MAX_MESSAGE,'MESSAGE_TOO_LARGE');chunks.push(chunk);}
+    const raw=Buffer.concat(chunks);
+    const parsed=await simpleParser(raw,{skipHtmlToText:true,skipTextToHtml:true,skipImageLinks:true});
+    requireValue(!parsed.html && !parsed.attachments.length && typeof parsed.text==='string','DRAFT_FORMAT_UNSUPPORTED');
+    requireValue(parsed.from?.value?.length===1 && parsed.from.value[0].address?.toLowerCase()===this.mailbox.address.toLowerCase(),'DRAFT_SENDER_UNSUPPORTED');
+    const addresses=field=>(field?.value??[]).map(a=>a.address);
+    const message={to:addresses(parsed.to),cc:addresses(parsed.cc),bcc:addresses(parsed.bcc),subject:parsed.subject??'',text:parsed.text};
+    const senderName=parsed.from.value[0].name??'';
+    requireValue(senderName.length<=100 && !/[\x00-\x1f\x7f]/.test(senderName),'DRAFT_SENDER_UNSUPPORTED');
+    return {message,senderName,etag:createHash('sha256').update(raw).digest('hex')};
+  }
+  readEditableDraft(ref) {
+    return this.imap(client=>this.locked(client,ref,true,async()=>{
+      const draft=await this.editableDraft(client,ref);
+      return {...draft,reference:ref,canReplace:client.capabilities.has('REPLACE')&&client.capabilities.has('UIDPLUS')};
+    }));
+  }
+  async replaceDraft(ref,expectedEtag,message,{senderName='',requestId=crypto.randomUUID()}={}) {
+    const raw=await this.compose(message,requestId,{keepBcc:true,senderName});
+    return this.imap(client=>this.locked(client,ref,false,async()=>{
+      requireValue(client.capabilities.has('REPLACE')&&client.capabilities.has('UIDPLUS'),'SAFE_REPLACE_UNSUPPORTED');
+      const current=await this.editableDraft(client,ref);
+      requireValue(current.etag===expectedEtag,'DRAFT_CHANGED');
+      // RFC 8508 UID REPLACE is one atomic provider command. ImapFlow 2.0.6 has
+      // no public wrapper; its pinned command encoder is used only when advertised.
+      let replacement=null;
+      const captureAppendUid=response=>{
+        const section=response.attributes?.[0]?.section;
+        if(section?.[0]?.value?.toUpperCase()!=='APPENDUID')return;
+        if(!/^[1-9][0-9]{0,19}$/.test(section[1]?.value??'') || !/^[1-9][0-9]{0,9}$/.test(section[2]?.value??''))return;
+        const uid=Number(section[2].value);
+        if(uid<=4294967295)replacement={folder:ref.folder,uid,uidValidity:section[1].value};
+      };
+      const reply=await client.exec('UID REPLACE',[
+        {type:'SEQUENCE',value:String(ref.uid)},
+        {type:'ATOM',value:encodePath(client,ref.folder)},
+        [{type:'ATOM',value:'\\Draft'}],
+        {type:'LITERAL',value:raw}
+      ],{untagged:{OK:captureAppendUid}});
+      captureAppendUid(reply.response);
+      reply.next();
+      requireValue(replacement,'DRAFT_REPLACE_UNCERTAIN');
+      return {saved:true,folder:ref.folder,reference:replacement};
+    }));
   }
   move(ref, destination, trash = false) {
     return this.imap(async client => {
