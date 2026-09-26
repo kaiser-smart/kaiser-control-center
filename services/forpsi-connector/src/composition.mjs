@@ -41,7 +41,8 @@ export async function compositionContext(raw,{store,principal,env}) {
   catch(error) {if(!(error instanceof ConnectorError) || error.code!=='ACCESS_DENIED')throw error;}
   return {address:mailbox.address,profile:await compositionProfile(store,p.mailboxId),
     canWrite,draftsEnabled:env.SOAI_DRAFTS_ENABLED==='true',
-    draftEditsEnabled:env.SOAI_DRAFT_EDITS_ENABLED==='true'};
+    draftEditsEnabled:env.SOAI_DRAFT_EDITS_ENABLED==='true',
+    draftCopiesEnabled:env.SOAI_DRAFT_COPIES_ENABLED==='true'};
 }
 export async function createSoaiDraft(raw,ctx) {
   const p=draftInput.parse(raw),{store,principal,env,providerFactory}=ctx;
@@ -90,12 +91,57 @@ export async function createSoaiDraft(raw,ctx) {
 }
 export async function openSoaiDraft(raw,{store,principal,env,providerFactory}) {
   const p=draftReference.parse(raw);
-  requireValue(env.SOAI_DRAFT_EDITS_ENABLED==='true','DRAFT_EDITS_DISABLED');
+  requireValue(env.SOAI_DRAFT_EDITS_ENABLED==='true'||(env.SOAI_DRAFT_COPIES_ENABLED==='true'&&env.SOAI_DRAFTS_ENABLED==='true'),'DRAFT_EDITS_DISABLED');
   const mailbox=await store.access(principal,p.mailboxId,'read');
   const data=await providerFactory(env,mailbox).readEditableDraft(p.reference);
   requireValue(message.safeParse(data.message).success,'DRAFT_FORMAT_UNSUPPORTED');
   await store.access(principal,p.mailboxId,'read');
   return data;
+}
+export async function copySoaiDraft(raw,{store,principal,env,providerFactory}) {
+  const p=replaceInput.parse(raw);
+  requireValue(env.SOAI_DRAFTS_ENABLED==='true','SOAI_DRAFTS_DISABLED');
+  requireValue(env.SOAI_DRAFT_COPIES_ENABLED==='true','DRAFT_COPIES_DISABLED');
+  await store.access(principal,p.mailboxId,'read');
+  const mailbox=await store.access(principal,p.mailboxId,'write');
+  const hash=createHash('sha256').update(JSON.stringify(p)).digest('hex');
+  const previous=()=>store.first('SELECT * FROM draft_attempts WHERE mailbox_id=? AND principal_id=? AND request_id=?',p.mailboxId,principal.id,p.requestId);
+  const replay=row=>{
+    requireValue(row.payload_hash===hash,'DRAFT_REQUEST_CONFLICT');
+    requireValue(row.state==='saved','DRAFT_UNCERTAIN');
+    return {...JSON.parse(row.result_json),replayed:true};
+  };
+  const existing=await previous();if(existing)return replay(existing);
+  const now=Date.now();
+  const claim=await store.run("INSERT INTO draft_attempts VALUES (?,?,?,?,'pending',NULL,?,?) ON CONFLICT(mailbox_id,principal_id,request_id) DO NOTHING",
+    p.mailboxId,principal.id,p.requestId,hash,now,now);
+  if(claim.meta.changes!==1)return replay(await previous());
+  try {
+    await store.access(principal,p.mailboxId,'read');
+    await store.access(principal,p.mailboxId,'write');
+    const result=await providerFactory(env,mailbox).copyDraft(p.reference,p.expectedEtag,p.message,{requestId:p.requestId});
+    requireValue(result?.saved===true && result?.sourceRetained===true,'DRAFT_COPY_UNCERTAIN');
+    const data={saved:true,folder:result.folder,reference:result.reference??null,
+      verified:result.verified===true,sourceRetained:true};
+    await store.db.batch([
+      store.db.prepare("UPDATE draft_attempts SET state='saved',result_json=?,updated_at=? WHERE mailbox_id=? AND principal_id=? AND request_id=?")
+        .bind(JSON.stringify(data),Date.now(),p.mailboxId,principal.id,p.requestId),
+      store.db.prepare('INSERT INTO audit VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(),Date.now(),principal.id,p.mailboxId,'soai.copy_draft','saved')
+    ]);
+    return data;
+  } catch(error) {
+    // A refusal before APPEND can be retried only with a new request after
+    // refreshing the source. An uncertain APPEND is never repeated.
+    const definitive=error instanceof ConnectorError && ['ACCESS_DENIED','DRAFT_CHANGED','NOT_DRAFT_FOLDER','NOT_EDITABLE_DRAFT',
+      'DRAFT_FORMAT_UNSUPPORTED','DRAFT_SENDER_UNSUPPORTED','MESSAGE_NOT_FOUND','MESSAGE_TOO_LARGE','STALE_MESSAGE_REFERENCE'].includes(error.code);
+    await store.db.batch([
+      store.db.prepare("UPDATE draft_attempts SET state='uncertain',updated_at=? WHERE mailbox_id=? AND principal_id=? AND request_id=? AND state='pending'")
+        .bind(Date.now(),p.mailboxId,principal.id,p.requestId),
+      store.db.prepare('INSERT INTO audit VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(),Date.now(),principal.id,p.mailboxId,'soai.copy_draft',definitive?'rejected':'uncertain')
+    ]);
+    if(definitive)throw error;
+    throw new ConnectorError('DRAFT_UNCERTAIN');
+  }
 }
 export async function replaceSoaiDraft(raw,{store,principal,env,providerFactory}) {
   const p=replaceInput.parse(raw);

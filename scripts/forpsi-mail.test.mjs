@@ -80,3 +80,23 @@ test('mail panel escapes content and drops pending results after leaving or swit
   await new Promise(r=>setImmediate(r));assert.ok(!root.innerHTML.includes('private@example.test'));assert.ok(!root.innerHTML.includes('<img src=x'));assert.ok(root.innerHTML.includes('&lt;img'));
   mountForpsiMail({querySelector:()=>null},{apiJson:api,owner:null});
 });
+test('mail panel offers a preserved-original copy when REPLACE is unavailable',async()=>{
+  const listeners={};const root={isConnected:true,innerHTML:'',addEventListener:(n,fn)=>listeners[n]=fn,querySelector:()=>null};
+  const reference={folder:'Drafts',uid:32,uidValidity:'5'};
+  const api=async(_url,{body})=>{const {operation}=JSON.parse(body);
+    if(operation==='list_mailboxes')return {mode:'simulated',data:{mailboxes:[{id:'mail-a',address:'alice@example.test'}]}};
+    if(operation==='list_folders')return {mode:'simulated',data:{folders:[{path:'Drafts',selectable:true}],draftFolder:'Drafts',supportsReplace:false,draftEditsEnabled:false,draftCopiesEnabled:true,draftWriteAllowed:true}};
+    if(operation==='search_messages')return {mode:'simulated',data:{messages:[{reference,subject:'TEST',from:[{address:'alice@example.test'}],date:null,flags:['\\Draft']}],nextBeforeUid:null}};
+    if(operation==='read_message')return {mode:'simulated',data:{reference,subject:'TEST',from:[{address:'alice@example.test'}],date:null,flags:['\\Draft'],text:'Body',attachments:[]}};
+    throw Error('unexpected operation');
+  };
+  const tick=()=>new Promise(r=>setImmediate(r));
+  mountForpsiMail({querySelector:()=>root},{apiJson:api,owner:'copy-ui',guard:action=>action()});await tick();
+  listeners.change({target:{matches:selector=>selector==='[data-mail-mailbox]',value:'mail-a'}});await tick();
+  assert.match(root.innerHTML,/Upravenou kopii textového konceptu lze uložit/);
+  listeners.submit({target:{matches:selector=>selector==='[data-mail-search]'},preventDefault(){},stopPropagation(){}});await tick();
+  listeners.click({target:{closest:()=>({dataset:{mailAction:'read',index:'0'}})},preventDefault(){},stopPropagation(){}});await tick();
+  assert.match(root.innerHTML,/Vytvořit upravenou kopii/);
+  assert.ok(!root.innerHTML.includes('data-mail-action="edit-draft"'));
+  mountForpsiMail({querySelector:()=>null},{apiJson:api,owner:null});
+});
