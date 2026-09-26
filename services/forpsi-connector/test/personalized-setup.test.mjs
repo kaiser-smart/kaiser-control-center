@@ -23,14 +23,15 @@ function scenario({incoming,sent}){
         (!since||m.date.slice(0,10)>=since)&&(!before||m.date.slice(0,10)<before))
         .sort((a,b)=>b.reference.uid-a.reference.uid);
       const selected=all.slice(0,limit);calls.push(['search',folder,limit,beforeUid??null]);
-      return {messages:selected,nextBeforeUid:all.length>limit?selected.at(-1).reference.uid:null};
+      return {messages:selected,nextBeforeUid:all.length>limit?selected.at(-1).reference.uid:null,
+        uidValidity:folder==='Sent'?'7':'3'};
     },
     async read(reference){calls.push(['read',reference.uid]);return messages.find(m=>m.reference.folder===reference.folder&&
       m.reference.uid===reference.uid);},
   };
   const ctx={store:f.store,principal:f.principal,providerFactory:()=>provider,env:f.env,
     now:()=>Date.parse('2026-09-26T12:00:00Z'),
-    semanticAnalyzer:async input=>input.flatMap(m=>m.text.includes('Kupte nyní')?[{kind:'marketing',
+    semanticAnalyzer:async input=>input.messages.flatMap(m=>m.text.includes('Kupte nyní')?[{kind:'marketing',
       sourceKey:m.key,quote:'Kupte nyní',summary:'Obchodní propagace.',dueDate:null,threadKey:null}]:
       m.text.includes('Vyřešeno')?[{kind:'resolved',
       sourceKey:m.key,quote:'Vyřešeno',summary:'Novější odpověď řeší požadavek.',dueDate:null,threadKey:null}]:
@@ -45,9 +46,153 @@ test('free Czech answer extracts independent topics and keeps unresolved newslet
   assert.deepEqual(parsed.changes.importantContacts,['a@example.cz','b@example.cz']);
   assert.deepEqual(parsed.changes.synchronization,{mode:'interval',minutes:15});
   assert.equal(parsed.changes.notificationPreference.window.start,'07:00');
+  assert.equal(parsed.changes.notificationPreference.window.days,null);
   assert.deepEqual(parsed.changes.notificationPreference.window.exceptions,[{day:5,start:'07:00',end:'12:00'}]);
   assert.ok(parsed.ambiguities.includes('NEWSLETTER_SERIE_NEURČENA'));
   assert.equal(parsed.changes.newsletterRules,undefined);
+});
+
+test('negated and removed contacts are never added as important',()=>{
+  for(const answer of ['buyer@example.net nechci mezi prioritními kontakty.',
+    'Odeber buyer@example.net z důležitých.',
+    'buyer@example.net už pro mě není důležitý kontakt.']){
+    const parsed=interpretSetupAnswer(answer,{questionId:'important_contacts',observations:{reviewExamples:[]},
+      proposal:{importantContacts:['buyer@example.net']}});
+    assert.deepEqual(parsed.changes.importantContacts,[],answer);
+  }
+});
+
+test('notification window retains partial answer, extracts stated days and does not set working hours',async()=>{
+  const {ctx}=scenario({incoming:[],sent:[]}),setup=new Onboarding(ctx);
+  const start=await setup.begin({mailboxId:'mail-a',consent:true});
+  let state=await setup.analyze({sessionId:start.sessionId});
+  while(state.nextQuestion?.id!=='notification_window'){
+    state=await setup.answer({sessionId:start.sessionId,questionId:state.nextQuestion.id,answer:'přeskočit'});
+  }
+  state=await setup.answer({sessionId:start.sessionId,questionId:'notification_window',
+    answer:'Upozornění jen od 7 do 16.'});
+  assert.equal(state.proposal.data.notificationPreference.window.start,'07:00');
+  assert.equal(state.nextQuestion.id,'notification_window');
+  const restored=await new Onboarding(ctx).status({sessionId:start.sessionId});
+  assert.equal(restored.proposal.data.notificationPreference.window.end,'16:00');
+  state=await setup.answer({sessionId:start.sessionId,questionId:'notification_window',answer:'Po–Pá'});
+  assert.deepEqual(state.proposal.data.notificationPreference.window.days,[1,2,3,4,5]);
+  assert.equal(state.proposal.data.workingHours,null);
+  const direct=interpretSetupAnswer('Upozornění Po–Pá od 7 do 16.',{questionId:'notification_window',
+    observations:{reviewExamples:[]},proposal:{}});
+  assert.deepEqual(direct.changes.notificationPreference.window.days,[1,2,3,4,5]);
+  assert.equal(direct.changes.workingHours,undefined);
+});
+
+test('different custom work days and notification days remain separate',()=>{
+  const parsed=interpretSetupAnswer('Pracuji Út–So 9–17, v sobotu do 12. Upozornění jen Po–Čt od 8 do 15.',{
+    questionId:'working_hours',observations:{reviewExamples:[]},proposal:{}});
+  assert.deepEqual(parsed.changes.workingHours.days,[2,3,4,5,6]);
+  assert.deepEqual(parsed.changes.workingHours.exceptions,[{day:6,start:'09:00',end:'12:00'}]);
+  assert.deepEqual(parsed.changes.notificationPreference.window.days,[1,2,3,4]);
+  assert.equal(parsed.changes.notificationPreference.window.start,'08:00');
+  assert.equal(parsed.changes.workingHours.start,'09:00');
+});
+
+test('priority uses all findings independent of their order, including an individual request in marketing',async()=>{
+  const one=message(10,{text:'Původní reklamace je vyřešená. Nyní prosím potvrďte cenu nové zakázky.'});
+  const {ctx}=scenario({incoming:[one],sent:[]});
+  const findings=[{kind:'resolved',quote:'Původní reklamace je vyřešená.'},
+    {kind:'waiting_user',quote:'prosím potvrďte cenu nové zakázky.'}];
+  for(const order of [findings,[...findings].reverse()]){
+    ctx.semanticAnalyzer=async input=>order.map(x=>({...x,sourceKey:input.messages[0].key,
+      summary:x.kind,dueDate:null,threadKey:null}));
+    const list=await new Workflow(ctx).start({mailboxId:'mail-a',view:'priority',limit:10});
+    assert.equal(list.items[0].priority,'high');
+  }
+  const marketing=message(11,{text:'Akce pro firmy. Prosím potvrďte individuální termín.'});
+  const other=scenario({incoming:[marketing],sent:[]});
+  other.ctx.semanticAnalyzer=async input=>[
+    {kind:'waiting_user',sourceKey:input.messages[0].key,quote:'Prosím potvrďte individuální termín.',summary:'Termín',dueDate:null,threadKey:null},
+    {kind:'marketing',sourceKey:input.messages[0].key,quote:'Akce pro firmy.',summary:'Marketing',dueDate:null,threadKey:null}];
+  const list=await new Workflow(other.ctx).start({mailboxId:'mail-a',view:'priority',limit:10});
+  assert.equal(list.items[0].priority,'high');
+});
+
+test('same metadata with different supported agenda content produces distinct unapproved setup questions',async()=>{
+  const agendas=[['Prosím o plán svozu.','Plánování svozu'],['Prosím o revizi smlouvy.','Revize smlouvy']];
+  const results=[];
+  for(const [body,summary] of agendas){
+    const {ctx}=scenario({incoming:[message(10,{text:body})],sent:[]});
+    ctx.semanticAnalyzer=async input=>[{kind:'agenda',sourceKey:input.messages[0].key,quote:body,
+      summary,dueDate:null,threadKey:null}];
+    const setup=new Onboarding(ctx),start=await setup.begin({mailboxId:'mail-a',consent:true});
+    let state=await setup.analyze({sessionId:start.sessionId});
+    const questions=[];
+    while(state.nextQuestion){questions.push(state.nextQuestion.title);
+      state=await setup.answer({sessionId:start.sessionId,questionId:state.nextQuestion.id,answer:'přeskočit'});}
+    results.push({questions,proposal:state.proposal.data});
+  }
+  assert.ok(results[0].questions.some(x=>x.includes('Plánování svozu')));
+  assert.ok(results[1].questions.some(x=>x.includes('Revize smlouvy')));
+  assert.notDeepEqual(results[0].proposal.agendaRecommendations,results[1].proposal.agendaRecommendations);
+  assert.equal(results[0].proposal.agendaRecommendations[0].priorityRuleActive,false);
+});
+
+test('model receives verified mailbox perspective, sender roles and explicit Cc role',async()=>{
+  const incoming=message(10,{from:'buyer@example.net',to:'manager@example.net',
+    cc:['alice@example.com'],text:'Alice, prosím rozhodněte.'});
+  const samples=contentSamples([{...incoming,sentFolder:'Sent'}],'alice@example.com');
+  let forAlice,forBuyer;
+  await analyzeContent(samples,{perspective:{mailboxAddress:'alice@example.com',verifiedAliases:[]},
+    analyzer:async input=>{forAlice=input;return [];}});
+  await analyzeContent(samples,{perspective:{mailboxAddress:'buyer@example.net',verifiedAliases:[]},
+    analyzer:async input=>{forBuyer=input;return [];}});
+  assert.equal(forAlice.perspective.mailboxAddress,'alice@example.com');
+  assert.equal(forAlice.messages[0].recipientRole,'cc');
+  assert.equal(forBuyer.messages[0].senderRole,'mailbox_owner');
+  assert.equal(forAlice.messages[0].senderRole,'external');
+});
+
+test('only server-verified alias is passed to the model as the user recipient',async()=>{
+  const alias='sales@example.com';
+  const {f,ctx}=scenario({incoming:[message(10,{to:alias,text:'Prosím o potvrzení.'})],sent:[]});
+  await f.store.run('INSERT INTO mailbox_verified_aliases VALUES (?,?,?,?,?,1)',
+    'tenant-a','mail-a',alias,ctx.now(),'synthetic_test');
+  let received;
+  ctx.semanticAnalyzer=async input=>{received=input;return [];};
+  await new Workflow(ctx).start({mailboxId:'mail-a',view:'priority',limit:1});
+  assert.deepEqual(received.perspective.verifiedAliases,[alias]);
+  assert.equal(received.messages[0].recipientRole,'to');
+  assert.equal(received.perspective.aliasesStatus,'server_verified');
+  await f.store.run("UPDATE mailbox_verified_aliases SET active=0 WHERE mailbox_id='mail-a'");
+  await new Workflow(ctx).start({mailboxId:'mail-a',view:'priority',limit:1});
+  assert.deepEqual(received.perspective.verifiedAliases,[]);
+  assert.equal(received.messages[0].recipientRole,'other');
+});
+
+test('priority checks bounded Sent context and a newer own resolution closes the earlier request',async()=>{
+  const root=message(10,{date:'2026-09-20T08:00:00Z',messageId:'<root@example.net>',
+    text:'Prosím o rozhodnutí.'});
+  const reply=message(21,{folder:'Sent',from:'alice@example.com',to:'buyer@example.net',
+    date:'2026-09-21T08:00:00Z',references:['<root@example.net>'],
+    text:'Vyřešeno, poslal jsem rozhodnutí.'});
+  const {ctx}=scenario({incoming:[root],sent:[reply]});
+  let analyzed;
+  ctx.semanticAnalyzer=async input=>{analyzed=input;return input.messages.map(m=>({
+    kind:m.sent?'resolved':'waiting_user',sourceKey:m.key,
+    quote:m.sent?'Vyřešeno':'Prosím o',summary:m.sent?'Vyřešeno':'Čeká na mě',
+    dueDate:null,threadKey:null}));};
+  const list=await new Workflow(ctx).start({mailboxId:'mail-a',view:'priority',limit:10});
+  assert.equal(analyzed.messages.some(x=>x.sent),true);
+  assert.equal(analyzed.perspective.mailboxAddress,'alice@example.com');
+  assert.equal(list.items[0].priority,'review');
+  assert.equal(list.semanticStatus,'model_proposal');
+});
+
+test('priority explicitly reports unavailable Sent context even when model has no findings',async()=>{
+  const {ctx,provider}=scenario({incoming:[message(10,{text:'Informace.'})],sent:[]});
+  const original=provider.search.bind(provider);
+  provider.search=args=>args.folder==='Sent'?Promise.reject(new Error('unavailable')):original(args);
+  ctx.semanticAnalyzer=async()=>[];
+  const list=await new Workflow(ctx).start({mailboxId:'mail-a',view:'priority',limit:1});
+  assert.equal(list.semanticContextStatus,'sent_unavailable');
+  assert.equal(list.items[0].priority,'review');
 });
 
 test('mock-model findings require exact authored quotes; relative dates use source date; signature excludes quoted text',async()=>{
@@ -82,13 +227,17 @@ test('mock-model findings require exact authored quotes; relative dates use sour
 
 test('model transport is a bounded no-retention structured-output request; response remains simulated',async()=>{
   let sent;
-  const result=await openAiEvidenceAnalyzer([{key:'k1',text:'Prosím o rozhodnutí.'}],
+  const result=await openAiEvidenceAnalyzer({perspective:{mailboxAddress:'alice@example.com'},
+    messages:[{key:'k1',text:'Prosím o rozhodnutí.'}]},
     {FORPSI_ANALYSIS_API_KEY:'synthetic-test-only',FORPSI_ANALYSIS_MODEL:'synthetic-model'},
     {fetcher:async(url,options)=>{sent={url,options,body:JSON.parse(options.body)};
       return Response.json({output:[{content:[{type:'output_text',text:JSON.stringify({findings:[]})}]}]});}});
   assert.deepEqual(result,[]);assert.equal(sent.url,'https://api.openai.com/v1/responses');
   assert.equal(sent.body.store,false);assert.equal(sent.body.text.format.strict,true);
   assert.equal(sent.body.max_output_tokens,1800);
+  await assert.rejects(openAiEvidenceAnalyzer({messages:[{text:'x'.repeat(60001)}]},
+    {FORPSI_ANALYSIS_API_KEY:'synthetic-test-only',FORPSI_ANALYSIS_MODEL:'gpt-5-mini'},
+    {fetcher:async()=>{throw new Error('network must not be called');}}),/MODEL_INPUT_TOO_LARGE/);
 });
 
 test('two distinct synthetic histories go through proposal, natural answers, signature approval and new-chat restore',async()=>{
@@ -205,4 +354,98 @@ test('server timer honors each approved interval and never treats saved notifica
   const third=await runPersonalSync({store:f.store,providerFactory:()=>provider,env,now:()=>ctx.now()+30*60000});
   assert.equal(third.attempted,1);
   assert.equal((await f.store.rows('SELECT COUNT(*) AS n FROM outbox'))[0].n,0);
+});
+
+test('personal sync resumes past 50 after failure, catches older reply and later arrivals, without reopening twice',async()=>{
+  const root=message(1,{messageId:'<sync-root@example.net>',date:'2026-09-20T08:00:00Z'});
+  const {f,ctx,messages,provider,calls}=scenario({incoming:[root],sent:[]});
+  const workflow=new Workflow(ctx),list=await workflow.start({mailboxId:'mail-a',limit:1});
+  await workflow.command({listId:list.listId,command:'1 vyřízeno'});
+  const filler=Array.from({length:120},(_,i)=>message(i+2,{subject:`Nová ${i}`,
+    text:'Informace.',date:'2026-09-25T09:00:00Z'}));
+  filler[38]=message(40,{subject:'Starší důležitá odpověď',references:['<sync-root@example.net>'],
+    text:'Prosím o nové rozhodnutí.',date:'2026-09-25T09:00:00Z'});
+  messages.push(...filler);
+  await f.store.run('INSERT INTO workflow_profile_versions VALUES (?,?,?,?,?,?,1)','tenant-a','alice','mail-a',1,
+    JSON.stringify({synchronization:{mode:'interval',minutes:15}}),ctx.now());
+  const env={...f.env,WORKFLOW_SYNC_ENABLED:'true'};
+  await runPersonalSync({store:f.store,providerFactory:()=>provider,env,now:ctx.now});
+  let row=await f.store.first("SELECT state FROM workflow_states WHERE principal_id='alice'");
+  assert.equal(row.state,'done');
+  let failed=false;
+  const original=provider.search.bind(provider);
+  provider.search=async args=>{if(args.beforeUid && !failed){failed=true;throw new Error('transient');}
+    return original(args);};
+  await runPersonalSync({store:f.store,providerFactory:()=>provider,env,now:()=>ctx.now()+15*60000});
+  let cursor=await f.store.first("SELECT scan_before_uid,last_outcome FROM workflow_sync_cursors WHERE principal_id='alice'");
+  assert.equal(cursor.last_outcome,'failed');assert.ok(cursor.scan_before_uid);
+  await runPersonalSync({store:f.store,providerFactory:()=>provider,env,now:()=>ctx.now()+30*60000});
+  row=await f.store.first("SELECT state,latest_inbound_key FROM workflow_states WHERE principal_id='alice'");
+  assert.equal(row.state,'todo');
+  const once=row.latest_inbound_key;
+  await runPersonalSync({store:f.store,providerFactory:()=>provider,env,now:()=>ctx.now()+45*60000});
+  cursor=await f.store.first("SELECT scan_before_uid,last_outcome FROM workflow_sync_cursors WHERE principal_id='alice'");
+  assert.equal(cursor.scan_before_uid,null);
+  assert.equal(cursor.last_outcome,'completed');
+  messages.push(message(122,{subject:'Přišlo během dohánění',text:'Informace.',
+    date:'2026-09-26T09:00:00Z'}));
+  await runPersonalSync({store:f.store,providerFactory:()=>provider,env,now:()=>ctx.now()+60*60000});
+  row=await f.store.first("SELECT state,latest_inbound_key FROM workflow_states WHERE principal_id='alice'");
+  assert.equal(row.latest_inbound_key,once);
+  cursor=await f.store.first("SELECT scan_before_uid,last_outcome FROM workflow_sync_cursors WHERE principal_id='alice'");
+  assert.ok(cursor.scan_before_uid);
+  assert.equal(cursor.last_outcome,'partial');
+  assert.equal(calls.filter(x=>x[0]==='search').at(-1)[3],null);
+  assert.ok(calls.some(x=>x[0]==='read'&&x[1]===122));
+});
+
+test('sync resets the saved UID page when the provider UIDVALIDITY changes',async()=>{
+  const messages=Array.from({length:80},(_,i)=>message(i+1,{subject:`Zpráva ${i}`}));
+  const {f,ctx,provider,calls}=scenario({incoming:messages,sent:[]});
+  await f.store.run('INSERT INTO workflow_profile_versions VALUES (?,?,?,?,?,?,1)','tenant-a','alice','mail-a',1,
+    JSON.stringify({synchronization:{mode:'interval',minutes:15}}),ctx.now());
+  const env={...f.env,WORKFLOW_SYNC_ENABLED:'true'};
+  await runPersonalSync({store:f.store,providerFactory:()=>provider,env,now:ctx.now});
+  const first=await f.store.first("SELECT scan_before_uid,scan_uid_validity FROM workflow_sync_cursors WHERE principal_id='alice'");
+  assert.ok(first.scan_before_uid);assert.equal(first.scan_uid_validity,'3');
+  const original=provider.search.bind(provider);
+  provider.search=async args=>{const found=await original(args);return {...found,uidValidity:'9',
+    messages:found.messages.map(x=>({...x,reference:{...x.reference,uidValidity:'9'}}))};};
+  const before=calls.length;
+  await runPersonalSync({store:f.store,providerFactory:()=>provider,env,now:()=>ctx.now()+15*60000});
+  const searches=calls.slice(before).filter(x=>x[0]==='search');
+  assert.equal(searches.length,2);
+  assert.equal(searches[0][3],first.scan_before_uid);
+  assert.equal(searches[1][3],null);
+  const reset=await f.store.first("SELECT scan_uid_validity FROM workflow_sync_cursors WHERE principal_id='alice'");
+  assert.equal(reset.scan_uid_validity,'9');
+});
+
+test('approved no-signature removes active signature, revert restores it, skip preserves it',async()=>{
+  const {ctx}=scenario({incoming:[message(10,{text:'Prosím o odpověď.'})],sent:[]});
+  const setup=new Onboarding({...ctx,approvalSource:'soai_session'}),workflow=new Workflow(ctx);
+  async function approveSignature(answer){
+    const start=await setup.begin({mailboxId:'mail-a',consent:true});
+    let state=await setup.analyze({sessionId:start.sessionId});
+    if(answer==='přeskočit')assert.match(state.signaturePreview?.plain??'',/Alice Nová/);
+    while(state.nextQuestion){const q=state.nextQuestion;
+      state=await setup.answer({sessionId:start.sessionId,questionId:q.id,
+        answer:q.id==='signature'?answer:'přeskočit'});}
+    return setup.approve({sessionId:start.sessionId,proposalVersion:state.proposal.version});
+  }
+  const signature='S pozdravem\nAlice Nová';
+  await approveSignature(`Plný podpis: ${signature}\nKaiser servis\nKrátký podpis: ${signature}`);
+  const list=await workflow.start({mailboxId:'mail-a',limit:1});
+  async function draftText(){
+    const review=await workflow.review({listId:list.listId,action:'reply'});
+    return (await workflow.previewDraft({draftId:review.draft.draftId})).message.text;
+  }
+  assert.match(await draftText(),/Alice Nová/);
+  await approveSignature('ponechat bez podpisu');
+  assert.equal((await setup.getSignature({mailboxId:'mail-a'})).configured,false);
+  assert.doesNotMatch(await draftText(),/Alice Nová/);
+  await setup.revert({mailboxId:'mail-a',version:1});
+  assert.match(await draftText(),/Alice Nová/);
+  await approveSignature('přeskočit');
+  assert.match(await draftText(),/Alice Nová/);
 });

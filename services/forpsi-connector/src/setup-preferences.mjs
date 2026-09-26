@@ -2,6 +2,25 @@
 const email=/[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?/giu;
 const weekday=[[/ponděl[íi]/iu,1],[/úter[ýyíi]/iu,2],[/střed[auy]/iu,3],
   [/čtvrt(?:ek|ka)/iu,4],[/pát(?:ek|ku)/iu,5],[/sobot[auu]/iu,6],[/neděl[eiiy]/iu,7]];
+const dayNumber=value=>{
+  const key=value.toLocaleLowerCase('cs-CZ');
+  return {po:1,'út':2,ut:2,st:3,'čt':4,ct:4,'pá':5,pa:5,so:6,ne:7}[key]??
+    weekday.find(([pattern])=>pattern.test(key))?.[1]??null;
+};
+const dayToken='(?:po|út|ut|st|čt|ct|pá|pa|so|ne|pondělí|úterý|středa|středu|čtvrtek|pátek|sobota|sobotu|neděle|neděli)';
+function parsedDays(text){
+  if(/každý\s+den|všechny\s+dny/iu.test(text))return [1,2,3,4,5,6,7];
+  if(/pracovní\s+dny/iu.test(text))return [1,2,3,4,5];
+  const range=text.match(new RegExp(`(?:^|\\s)(${dayToken})\\s*(?:-|–|až)\\s*(${dayToken})(?=\\s|$)`,'iu'));
+  if(range){
+    const first=dayNumber(range[1]),last=dayNumber(range[2]);
+    if(first&&last){const days=[first];while(days.at(-1)!==last&&days.length<7)days.push(days.at(-1)%7+1);
+      return days;}
+  }
+  const singles=[...text.matchAll(new RegExp(`(?:^|\\s)(${dayToken})(?=\\s|$)`,'giu'))]
+    .map(x=>dayNumber(x[1])).filter(Boolean);
+  return [...new Set(singles)];
+}
 const normalized=text=>text.toLocaleLowerCase('cs-CZ').replace(/\s+/g,' ').trim();
 const hhmm=(hour,minute='0')=>{
   const h=Number(hour),m=Number(minute);
@@ -30,7 +49,14 @@ export function interpretSetupAnswer(raw,{questionId,observations,proposal,mailb
   const segments=raw.split(/(?=\bnewsletter\b)|[.;]\s+(?=\p{L})/iu),contactSegments=segments.filter(s=>
     !/newsletter/iu.test(s)&&(questionId==='important_contacts'||/důležit|priorit|kontakt/iu.test(s)));
   const addresses=[...new Set(contactSegments.flatMap(s=>s.match(email)??[]).map(x=>x.toLowerCase()))];
-  if(addresses.length){
+  const removal=/\b(?:nechci|nepatří|vyřaď|odeber|odstraň|neoznačuj|není\s+důležit|už\s+není\s+důležit|nemá\s+být)\b/iu.test(text);
+  if(addresses.length && removal && addresses.length>1){
+    ambiguities.push('KTERÉ_KONTAKTY_ODEBRAT_NEJASNÉ');
+  }else if(addresses.length && removal){
+    changes.importantContacts=(proposal.importantContacts??[]).filter(x=>
+      !addresses.includes(x.toLowerCase()));
+    answers.important_contacts=raw;interpreted.push(`Odebraný prioritní kontakt: ${addresses[0]}.`);
+  }else if(addresses.length){
     changes.importantContacts=[...new Set([...(proposal.importantContacts??[]),...addresses])];
     answers.important_contacts=raw;interpreted.push(`Důležité kontakty: ${addresses.join(', ')}.`);
   }else if(questionId==='important_contacts'&&/^(žádn[ýé]|nikoho)$/iu.test(text)){
@@ -49,11 +75,15 @@ export function interpretSetupAnswer(raw,{questionId,observations,proposal,mailb
   if(alert){
     const start=hhmm(alert[1],alert[2]),end=hhmm(alert[3],alert[4]);
     if(start&&end&&start<end){
-      const exceptions=shorterDays(text,start,ambiguities);
-      changes.notificationPreference={requested:true,window:{start,end,days:null,exceptions},
+      const alertClause=text.match(/(?:upozorněn[íi]|notifikac[eií]).{0,90}/iu)?.[0]??'';
+      const exceptions=shorterDays(alertClause,start,ambiguities);
+      const baseAlert=alertClause.replace(/,?\s*(?:v|ve)\s+(?:pondělí|úterý|středu|čtvrtek|pátek|sobotu|neděli)\s+(?:jen\s+)?do\s+\d{1,2}(?::\d{2})?/giu,'');
+      const days=parsedDays(baseAlert).length?parsedDays(baseAlert):null;
+      changes.notificationPreference={requested:true,window:{start,end,days,exceptions},
         status:'stored_wish_not_implemented'};
       interpreted.push(`Přání upozornění ${start}–${end}${exceptions.length?`; pátek do ${exceptions[0].end}`:''}. Upozornění do ChatGPT nejsou zapnutá.`);
-      ambiguities.push('DNY_UPOZORNĚNÍ_NEURČENY');
+      if(days)answers.notification_window=raw;
+      else ambiguities.push('DNY_UPOZORNĚNÍ_NEURČENY');
     }else ambiguities.push('ČAS_UPOZORNĚNÍ_NEPLATNÝ');
   }else if(questionId==='notification_window'&&/bez upozornění|neupozorňuj|žádné notifikace/iu.test(text)){
     changes.notificationPreference={requested:false,status:'stored_wish_not_implemented'};
@@ -66,10 +96,9 @@ export function interpretSetupAnswer(raw,{questionId,observations,proposal,mailb
         [1,2,3,4,5,6,7]:[1,2,3,4,5]}};
     answers.notification_window=raw;interpreted.push('Dny časového okna upozornění byly doplněny do návrhu.');
   }
-  if(questionId==='working_hours'||/pracovní\s+(?:dny|doba)|pracuji|po[–-]pá|pondělí\s+až\s+pátek/iu.test(text)){
+  if(questionId==='working_hours'||/pracovní\s+doba|pracuji|mám\s+pracovní\s+dobu/iu.test(text)){
     const workClause=text.match(/(?:pracovní\s+(?:dny|doba)|pracuji|po[–-]pá|pondělí\s+až\s+pátek).{0,110}/iu)?.[0]??text;
-    const days=/po[–-]pá|pondělí\s+až\s+pátek/iu.test(workClause)?[1,2,3,4,5]:
-      weekday.filter(([pattern])=>pattern.test(workClause)).map(([,number])=>number);
+    const days=parsedDays(workClause.split(/[,.]/u)[0]);
     const window=bounds(workClause);
     if(days.length&&window){
       const exceptions=shorterDays(workClause,window.start,ambiguities);

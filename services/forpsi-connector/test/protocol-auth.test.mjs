@@ -6,6 +6,23 @@ import { verifyToken } from '../src/auth.mjs';
 import { createWorker } from '../src/worker.mjs';
 import { selectors } from '../src/schemas.mjs';
 import { seal, unseal } from '../src/crypto.mjs';
+import { SOAI_ISSUER } from '../src/admin-access.mjs';
+
+test('verified OAuth subject resolves only through an explicit active SO.ai identity link',async()=>{
+  const f=fixture();
+  await f.store.run('INSERT INTO principals VALUES (?,?,?,?,1)','soai-pilot','tenant-a',SOAI_ISSUER,'soai-user-a');
+  await f.store.run('INSERT INTO principal_identity_links VALUES (?,?,?,?,1)',
+    'https://id.example','oidc-user-a','soai-pilot','tenant-a');
+  const keys=await generateKeyPair('ES256');
+  const token=subject=>new SignJWT({scope:'forpsi:read'}).setProtectedHeader({alg:'ES256'})
+    .setIssuer('https://id.example').setAudience('https://mail.example/mcp')
+    .setSubject(subject).setExpirationTime('1h').sign(keys.privateKey);
+  const config={issuer:'https://id.example',resource:'https://mail.example/mcp'};
+  assert.equal((await verifyToken(await token('oidc-user-a'),config,keys.publicKey,f.store)).id,'soai-pilot');
+  await assert.rejects(verifyToken(await token('oidc-user-b'),config,keys.publicKey,f.store),/AUTH_REQUIRED/);
+  await f.store.run("UPDATE principal_identity_links SET active=0 WHERE subject='oidc-user-a'");
+  await assert.rejects(verifyToken(await token('oidc-user-a'),config,keys.publicKey,f.store),/AUTH_REQUIRED/);
+});
 
 test('OAuth verifies signature, issuer, audience, expiry and enabled employee', async () => {
   const f = fixture();

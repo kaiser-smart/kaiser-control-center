@@ -126,19 +126,51 @@ export class Workflow {
       Number(b.reference?.uid??0)-Number(a.reference?.uid??0)):summaries;
     const analyzer=this.semanticAnalyzer??(this.env.FORPSI_ANALYSIS_API_KEY&&this.env.FORPSI_ANALYSIS_MODEL?
       input=>openAiEvidenceAnalyzer(input,this.env):null);
+    const verifiedAliases=view==='priority'?await this.store.verifiedAliases(mailbox):[];
     const detailCache=new Map();let semantic={status:'unavailable',findings:[],examined:0};
+    let semanticContextStatus='not_analyzed';
     if(view==='priority'&&analyzer){
-      const selected=new Map([...candidates.slice(0,16),...candidates.slice(-8)].map(m=>[messageKey(m),m]));
+      const selected=new Map([...candidates.slice(0,12),...candidates.slice(-4)].map(m=>[messageKey(m),m]));
       for(const summary of selected.values()){
         try{detailCache.set(messageKey(summary),await provider.read(summary.reference));}catch{/* Per-message failure is reported by coverage. */}
       }
+      // A bounded Sent search can show that a later own reply closed an inbound
+      // request. If older Sent mail was not searched, expose that uncertainty.
+      semanticContextStatus='bounded_inbound_and_sent';
+      if(path!==mailbox.sent_folder && mailbox.sent_folder){
+        try{
+          const sent=await provider.search({folder:mailbox.sent_folder,limit:50});
+          if(sent.nextBeforeUid!=null)semanticContextStatus='partial_sent_window';
+          const roots=new Set([...selected.values(),...detailCache.values()].flatMap(m=>
+            [messageKey(m),threadKey(m)].filter(Boolean)));
+          const related=sent.messages.filter(m=>[m.inReplyTo,...(m.references??[])]
+            .some(ref=>roots.has(normId(ref)))).slice(0,8);
+          for(const summary of related){
+            try{detailCache.set(messageKey(summary),await provider.read(summary.reference));}
+            catch{semanticContextStatus='partial_sent_read';}
+          }
+        }catch{semanticContextStatus='sent_unavailable';}
+      }else if(!mailbox.sent_folder)semanticContextStatus='sent_not_configured';
       const samples=contentSamples([...detailCache.values()].map(x=>({...x,sentFolder:mailbox.sent_folder})),mailbox.address,24);
-      try{semantic=await analyzeContent(samples,{analyzer});}catch{semantic={status:'unavailable',findings:[],examined:samples.length};}
+      try{semantic=await analyzeContent(samples,{analyzer,perspective:{mailboxAddress:mailbox.address,
+        verifiedAliases,aliasesStatus:verifiedAliases.length?'server_verified':'not_configured'}});}
+      catch{semantic={status:'unavailable',findings:[],examined:samples.length};}
       semantic.examined=samples.length;
     }
     const findings=new Map();
-    for(const finding of semantic.findings)if(['request','waiting_user','resolved','cancelled','marketing','newsletter'].includes(finding.kind))
-      findings.set(finding.sourceKey,finding);
+    for(const finding of semantic.findings)if(['request','waiting_user','waiting_other','resolved','changed','cancelled','marketing','newsletter'].includes(finding.kind))
+      findings.set(finding.sourceKey,[...(findings.get(finding.sourceKey)??[]),finding]);
+    for(const [key,entries] of findings)findings.set(key,entries.sort((a,b)=>
+      a.kind.localeCompare(b.kind)||a.quote.localeCompare(b.quote)));
+    const threadFindings=new Map();
+    for(const detail of detailCache.values()){
+      const entries=findings.get(messageKey(detail))??[];
+      if(!entries.length)continue;
+      const key=threadKey(detail);
+      threadFindings.set(key,[...(threadFindings.get(key)??[]),{date:detail.date??'',entries}]);
+    }
+    for(const [key,events] of threadFindings)threadFindings.set(key,events.sort((a,b)=>
+      a.date.localeCompare(b.date)));
     for (const message of candidates) {
       const detail = detailCache.get(messageKey(message))??await provider.read(message.reference);
       const key=threadKey(detail);
@@ -159,22 +191,36 @@ export class Workflow {
       const newsletter=profile?.newsletterRules?.some(x=>x.action==='exclude_from_high_priority' &&
         x.sender.toLowerCase()===sender.toLowerCase() &&
         (x.subject===message.subject || (x.seriesKey&&x.seriesKey===newsletterSeriesKey(message.subject))));
-      const semanticFinding=findings.get(messageKey(detail));
+      const relatedFindings=findings.get(messageKey(detail))??[];
+      const threadEvents=threadFindings.get(key)??[];
+      let threadDisposition=null,threadEvidence=null;
+      for(const event of threadEvents){
+        const open=event.entries.find(x=>['request','waiting_user'].includes(x.kind));
+        const closed=event.entries.find(x=>['resolved','cancelled','waiting_other'].includes(x.kind));
+        if(open){threadDisposition='open';threadEvidence=open;}
+        else if(closed){threadDisposition='closed';threadEvidence=closed;}
+      }
+      // An open individual request wins over a resolved older issue or marketing
+      // classification in the same message, regardless of model output order.
+      const highFinding=relatedFindings.find(x=>['request','waiting_user'].includes(x.kind));
+      const lowFinding=relatedFindings.find(x=>['resolved','cancelled','waiting_other','marketing','newsletter'].includes(x.kind));
+      const semanticFinding=threadEvidence??highFinding??lowFinding??relatedFindings[0]??null;
       const direct=profile?.directVsCc==='direct_first' &&
         detail.to?.some(x=>x.address?.toLowerCase()===mailbox.address.toLowerCase());
-      const semanticHigh=['request','waiting_user'].includes(semanticFinding?.kind);
-      const semanticLow=['resolved','cancelled','marketing','newsletter'].includes(semanticFinding?.kind);
-      const priority=override?.priority??(newsletter||semanticLow?'review':semanticHigh||important?'high':'review');
-      const reason=override?'Výslovná osobní oprava pro tuto zprávu.':newsletter?
+      const semanticHigh=threadDisposition==='open'||(threadDisposition===null&&!!highFinding);
+      const semanticLow=threadDisposition==='closed'||(!semanticHigh&&!!lowFinding);
+      const priority=override?.priority??(semanticHigh?'high':newsletter||semanticLow?'review':important?'high':'review');
+      const reason=override?'Výslovná osobní oprava pro tuto zprávu.':semanticHigh?
+        'Modelový návrh otevřeného požadavku s citací; ověřte před akcí.':newsletter?
         'Uživatelem schválené pravidlo newsletteru; není automaticky prioritní.':semanticLow?
-        'Modelový návrh s citací obsahu; ověřte před akcí.':semanticHigh?
-        'Modelový návrh požadavku s citací obsahu; ověřte před akcí.':
+        'Modelový návrh s citací obsahu; ověřte před akcí.':
         important?'Uživatelem schválený důležitý kontakt.':direct?
         'Přímo adresováno; konkrétní požadavek je nutné ověřit.':'Neověřená priorita; zpráva není skrytá.';
       items.push({ reference: message.reference, threadKey: threadKey(detail), messageKey: messageKey(detail),
         sender, subject: message.subject ?? '', receivedAt: message.date ?? null,priority,reason,
         contentType:newsletter||semanticFinding?.kind==='newsletter'?'newsletter':'unclassified',
-        semanticEvidence:semanticFinding??null });
+        semanticEvidence:semanticFinding?{...semanticFinding,
+          findings:threadEvents.flatMap(x=>x.entries),contextStatus:semanticContextStatus}:null });
     }
     if(view==='priority')items.sort((a,b)=>Number(b.priority==='high')-Number(a.priority==='high') ||
       String(b.receivedAt??'').localeCompare(String(a.receivedAt??'')));
@@ -185,10 +231,12 @@ export class Workflow {
       this.store.db.prepare('UPDATE workflow_lists SET active=0 WHERE tenant_id=? AND principal_id=? AND active=1').bind(mailbox.tenant_id,this.principal.id),
       this.store.db.prepare(`INSERT INTO workflow_lists
         (id,tenant_id,principal_id,mailbox_id,folder,view,known_remaining_priority,older_unscanned,
-        position,active,created_at,expires_at,scanned_count,scan_limit,semantic_examined_count,semantic_status)
-        VALUES (?,?,?,?,?,?,?,?,1,1,?,?,?,?,?,?)`).bind(
+        position,active,created_at,expires_at,scanned_count,scan_limit,semantic_examined_count,semantic_status,
+        semantic_context_status)
+        VALUES (?,?,?,?,?,?,?,?,1,1,?,?,?,?,?,?,?)`).bind(
         listId,mailbox.tenant_id,this.principal.id,mailbox.id,path,view,knownRemainingPriority,
-        olderUnscanned?1:0,now,now+30*86400000,summaries.length,scanLimit,semantic.examined??0,semantic.status),
+        olderUnscanned?1:0,now,now+30*86400000,summaries.length,scanLimit,semantic.examined??0,
+        semantic.status,semanticContextStatus),
       ...visible.map((item,index)=>this.store.db.prepare(`INSERT INTO workflow_list_items
         (list_id,number,reference_json,thread_key,message_key,sender,subject,received_at,priority,priority_reason,content_type,semantic_evidence_json)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
@@ -217,6 +265,7 @@ export class Workflow {
       knownRemainingPriority:row.known_remaining_priority,olderUnscanned:row.older_unscanned===1,
       scannedCount:row.scanned_count,scanLimit:row.scan_limit,displayedCount:items.length,
       semanticExaminedCount:row.semantic_examined_count,semanticStatus:row.semantic_status,
+      semanticContextStatus:row.semantic_context_status,
       position:row.position,
       active:row.active===1, expiresAt:row.expires_at, items, pending:items.filter(i=>i.state==='todo').length,
       untrustedContent:true };
@@ -355,9 +404,14 @@ export class Workflow {
     return {draftId,revision:updated.revision,message:next,sendable:false,
       confirmationInvalidated:true};
   }
-  async refresh({mailboxId,limit=50}) {
+  async refresh({mailboxId,limit=50,beforeUid=null,expectedUidValidity=null}) {
     const mailbox=await this.access(mailboxId),provider=this.providerFactory(this.env,mailbox);
-    const found=await provider.search({folder:'INBOX',limit}),reopened=[];
+    let found=await provider.search({folder:'INBOX',limit,...(beforeUid?{beforeUid}:{})});
+    const uidValidity=found.uidValidity??found.messages[0]?.reference?.uidValidity??null;
+    const uidValidityChanged=!!(expectedUidValidity&&uidValidity&&expectedUidValidity!==uidValidity);
+    if(uidValidityChanged)found=await provider.search({folder:'INBOX',limit});
+    const currentUidValidity=found.uidValidity??found.messages[0]?.reference?.uidValidity??null;
+    const reopened=[];
     const candidates=[...found.messages].sort((a,b)=>String(b.date??'').localeCompare(String(a.date??'')) ||
       Number(b.reference?.uid??0)-Number(a.reference?.uid??0));
     const examinedThreads=new Set();
@@ -375,6 +429,7 @@ export class Workflow {
         reopened.push({threadKey:key,reference:summary.reference});
     }
     return {reopened,examined:found.messages.length,nextBeforeUid:found.nextBeforeUid??null,
+      uidValidity:currentUidValidity,uidValidityChanged,
       complete:found.nextBeforeUid==null,untrustedContent:true};
   }
 }

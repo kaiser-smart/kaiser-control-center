@@ -64,7 +64,8 @@ export class Forpsi {
   search(args) {
     return this.imap(client => this.locked(client, { folder: args.folder }, true, async () => {
       const last = Math.min(client.mailbox.uidNext - 1, (args.beforeUid ?? 4294967296) - 1);
-      if (last < 1) return { messages: [], nextBeforeUid: null, untrustedContent: true };
+      if (last < 1) return { messages: [], nextBeforeUid: null,
+        uidValidity:String(client.mailbox.uidValidity),untrustedContent: true };
       // Bound the UID search window instead of returning every UID in a large mailbox.
       const first = Math.max(1, last - 4999);
       const query = { uid: `${first}:${last}` };
@@ -83,7 +84,7 @@ export class Forpsi {
       }
       return { messages: messages.sort((a, b) => b.uid - a.uid),
         nextBeforeUid: all.length > args.limit ? uids.at(-1) : (first > 1 ? first : null),
-        scannedUidRange: { first, last }, untrustedContent: true };
+        scannedUidRange: { first, last },uidValidity:String(client.mailbox.uidValidity),untrustedContent: true };
     }));
   }
   read(ref) {

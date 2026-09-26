@@ -1,5 +1,7 @@
 # Personalizovaný průvodce — vývojový důkaz k PR #209
 
+Navazující ověření nálezů A–G, oddělený čtecí pilot, migrace 0008 a přesné blokace jsou v [READ-ONLY-PILOT-PR209.md](./READ-ONLY-PILOT-PR209.md). Počty testů níže popisují předchozí commit 3ad8f33, nikoli novější stav PR.
+
 Stav 26. 9. 2026. Vše níže běželo proti syntetickým zprávám a SQLite v paměti. Žádná skutečná schránka, produkční databáze, SO.ai ani ChatGPT nebyly změněny. Testy používají **předem připravené odpovědi modelového adaptéru**; skutečné volání modelu se neprovedlo, protože vývojové prostředí nemá nastavený klíč ani zvolený model. To neprokazuje, že model bude skutečným e-mailům rozumět.
 
 ## Průchod A — obchodní schránka

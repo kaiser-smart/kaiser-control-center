@@ -26,18 +26,23 @@ export async function runPersonalSync({store,providerFactory,env,now=Date.now}){
       owner.tenant_id,owner.principal_id,owner.mailbox_id);
     const claimed=await store.first(`UPDATE workflow_sync_cursors SET lease_until=?
       WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND next_due<=? AND lease_until<=?
-      RETURNING next_due`,at+120000,owner.tenant_id,owner.principal_id,owner.mailbox_id,at,at);
+      RETURNING next_due,scan_before_uid,scan_uid_validity`,at+120000,owner.tenant_id,owner.principal_id,owner.mailbox_id,at,at);
     if(!claimed){result.skipped++;continue;}
     result.attempted++;
-    let outcome='completed';
+    let outcome='completed',nextBeforeUid=claimed.scan_before_uid,
+      uidValidity=claimed.scan_uid_validity;
     try{
       const refresh=await new Workflow({store,principal:{id:owner.principal_id,scopes:['forpsi:read']},
-        providerFactory,env,now}).refresh({mailboxId:owner.mailbox_id,limit:50});
+        providerFactory,env,now}).refresh({mailboxId:owner.mailbox_id,limit:50,
+          beforeUid:claimed.scan_before_uid,expectedUidValidity:claimed.scan_uid_validity});
+      nextBeforeUid=refresh.nextBeforeUid;uidValidity=refresh.complete?null:refresh.uidValidity;
       outcome=refresh.complete?'completed':'partial';result.succeeded++;
     }catch{outcome='failed';result.failed++;}
-    await store.run(`UPDATE workflow_sync_cursors SET next_due=?,lease_until=0,last_run=?,last_outcome=?
+    await store.run(`UPDATE workflow_sync_cursors SET next_due=?,lease_until=0,last_run=?,last_outcome=?,
+      scan_before_uid=?,scan_uid_validity=?
       WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND lease_until=?`,
-      at+sync.minutes*60000,at,outcome,owner.tenant_id,owner.principal_id,owner.mailbox_id,at+120000);
+      at+sync.minutes*60000,at,outcome,nextBeforeUid,uidValidity,
+      owner.tenant_id,owner.principal_id,owner.mailbox_id,at+120000);
     await store.audit({id:owner.principal_id},owner.mailbox_id,'workflow.sync',outcome);
   }
   return result;

@@ -40,6 +40,7 @@ export function createWorker(dependencies = {}) {
       catch { return json({ error: 'AUTH_REQUIRED' }, 401, { 'WWW-Authenticate': challenge(env) }); }
       try {
         const response = await handleMcp(request, { store, principal, providerFactory, calendarFactory, contactFactory, env,
+          semanticAnalyzer: dependencies.semanticAnalyzer ?? null,
           organizer: new Organizer(store), outbox: new Outbox(store, env, providerFactory) });
         const headers = new Headers(response.headers);
         headers.set('Cache-Control', 'no-store');
@@ -51,7 +52,8 @@ export function createWorker(dependencies = {}) {
       const store=new Store(env.DB);
       await new Onboarding({store,principal:{id:'system',scopes:[]},providerFactory,env}).cleanupExpired();
       await runPersonalSync({store,providerFactory,env});
-      await new Outbox(store, env, providerFactory).tick();
+      // The read-only pilot must not drain historical queued mail if its cron is enabled.
+      if (env.SEND_ENABLED === 'true') await new Outbox(store, env, providerFactory).tick();
     },
   };
 }

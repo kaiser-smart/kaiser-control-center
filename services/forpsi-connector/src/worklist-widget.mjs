@@ -51,6 +51,8 @@ export const worklistWidget = `<!doctype html>
     el('notice').textContent='Čtecí prototyp. '+(snapshot.knownRemainingPriority?
       snapshot.knownRemainingPriority+' dalších rozpoznaných prioritních zpráv v prohlédnuté části. ':'')+
       (snapshot.olderUnscanned?'Starší část schránky zatím nebyla posouzena. ':'')+
+      (snapshot.semanticContextStatus&&snapshot.semanticContextStatus!=='not_analyzed'?
+        'Obsah vláken a Odeslané jsou posouzené jen v omezeném vzorku; starší kontext může chybět. ':'')+
       'Otevření zprávy nic nemění ani neodesílá.';
     el('items').replaceChildren();
     for(const item of items){

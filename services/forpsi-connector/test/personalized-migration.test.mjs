@@ -14,9 +14,11 @@ test('additive migration preserves an existing numbered list and defaults unknow
     INSERT INTO workflow_lists VALUES ('list','t','p','m','INBOX','priority',0,1,1,1,100,200);`);
   const before=db.prepare('SELECT * FROM workflow_lists WHERE id=?').get('list');
   db.exec(readFileSync(new URL('../migrations/0007_personalized_setup.sql',import.meta.url),'utf8'));
+  db.exec(readFileSync(new URL('../migrations/0008_sync_progress.sql',import.meta.url),'utf8'));
   const after=db.prepare('SELECT * FROM workflow_lists WHERE id=?').get('list');
   assert.equal(after.id,before.id);assert.equal(after.folder,before.folder);
   assert.equal(after.older_unscanned,1);assert.equal(after.scanned_count,0);
   assert.equal(after.semantic_status,'unavailable');
+  assert.equal(after.semantic_context_status,'not_analyzed');
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM workflow_sync_cursors').get().n,0);
 });

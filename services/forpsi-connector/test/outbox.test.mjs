@@ -1,6 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fixture, mail } from './fixtures.mjs';
+import { createWorker } from '../src/worker.mjs';
+
+test('read-only pilot cron never drains a queued send without an explicit send switch', async () => {
+  const f = fixture();
+  const job = await f.outbox.enqueue(f.principal, { mailboxId: 'mail-a', requestId: crypto.randomUUID(),
+    message: mail, sendAt: new Date(f.now() + 60000).toISOString() }, true);
+  await createWorker({ providerFactory: f.providerFactory }).scheduled({},
+    { ...f.env, WORKFLOW_SYNC_ENABLED: 'false', SEND_ENABLED: 'false' });
+  assert.equal((await f.store.first('SELECT state FROM outbox WHERE id=?', job.id)).state, 'queued');
+  assert.equal(f.calls.filter(c => c[0] === 'send').length, 0);
+});
 
 test('send is idempotent and rejects content changes for the same key', async () => {
   const f = fixture(); const request = { mailboxId: 'mail-a', requestId: crypto.randomUUID(), message: mail };
