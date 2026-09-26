@@ -1,6 +1,6 @@
 # Forpsi / ChatGPT – administrační pilot v SO.ai
 
-Připravená etapa 3a (SO.ai 0.1.812 / Worker 0.2.7): vlastní textové podpisy a nové koncepty přes SO.ai. [Kontrakt, limity a postup nasazení](FORPSI_COMPOSITION.md). Tato etapa je zatím ověřená pouze izolovaně, není nasazená a nepřiděluje produkční zapisovací práva.
+Nasazená etapa 3a (SO.ai 0.1.812 / Worker 0.2.7): vlastní textové podpisy a nové koncepty přes SO.ai. [Kontrakt, limity a produkční přijetí](FORPSI_COMPOSITION.md#produkční-přijetí). Po výslovném schválení má pouze vlastník pilotní schránky read + write. Jeden skutečný neodeslaný koncept byl vytvořen a přečten zpět. Prázdný podpis zůstal nedotčený; uložení neprázdného podpisu je zatím ověřené izolovaně. MCP, cron a odesílání zůstávají vypnuté.
 
 Cílový směr ručního nastavení: [uživatelem dodaná analýza](FORPSI_SETTINGS_TARGET.md) a [ověřované etapy realizace](FORPSI_SETTINGS_DELIVERY.md). Finální užší výběr voleb následuje až po ověření funkčního API; rozsah není požadavkem splnit každou položku katalogu.
 
@@ -72,7 +72,7 @@ Klíč hesel se nesmí prostě přepsat: stávající ciphertext by přestal bý
 
 - IMAP z nasazeného Workeru ověřil přihlášení a výpis složek, SMTP přihlášení bez odeslání, CardDAV dostupné adresáře a CalDAV vlastní kalendář. Navazující etapa přidává pracovní čtení zpráv. Obsah kontaktů/událostí a zápisové operace zůstávají bez produkčního testu. Jedinou změnou ve webmailu bylo schválené povolení CalDAV u kalendáře Vlastní.
 - Štítky a pravidla jsou vlastní evidence konektoru. Nejsou nativními štítky a filtry Forpsi. Pravidla se zatím spouštějí ručně nad výběrem zpráv.
-- SO.ai umí spravovat granty pro stabilní firemní identity; pracovní endpoint má pouze čtení pošty. Propojení s OAuth ještě zbývá. Editace pravidel, štítků a rušení fronty v administraci jsou další fáze.
+- SO.ai umí spravovat granty pro stabilní firemní identity; pracovní endpoint umožňuje čtení pošty a při schváleném write grantu tvorbu nového textového konceptu. Propojení s OAuth ještě zbývá. Editace pravidel, štítků a rušení fronty v administraci jsou další fáze.
 - Nativní soubory, úkoly, poznámky a podpisy nemají ověřenou integrační cestu ani implementovaný adaptér. Ve webmailu byly jejich položky nabídky viditelné, to není důkaz dostupného API.
 - CardDAV přístup je potvrzený skutečným výpisem adresářů. CalDAV discovery po povolení kalendáře Vlastní vrací dostupnou kolekci; Společný zůstává vypnutý. Konkrétní obchodní tarif nebyl ověřován a samotný úspěšný test jej nedokládá.
 - Odesílání zatím neumí přílohy ani editaci existujících konceptů. U kalendáře jsou zápisy omezené na jednoduché události bez účastníků/pozvánek/opakování.

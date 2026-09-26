@@ -1,6 +1,6 @@
 # Podpisy a nové koncepty SO.ai — etapa 3a
 
-Stav 26. 9. 2026: implementace a izolované ověření pro SO.ai 0.1.812 / Worker 0.2.7. **Nasazení výslovně schválené; živé přijetí zatím neověřené.** Radimovo „ano“ potvrdilo nové úložiště, povolení Úprav pouze pro vlastní pilotní schránku a jeden neodeslaný kontrolní koncept. První rozsah má jeden společný textový podpis pro každou schránku a jméno odesílatele. Alternativní adresy, Reply-To, HTML, přílohy, odpovědi/přeposlání, editace existujících konceptů a odesílání nejsou součástí této etapy.
+Stav 26. 9. 2026: **nasazeno SO.ai 0.1.812 / Worker 0.2.7; vytvoření a následné přečtení jednoho skutečného konceptu ověřeno.** Radimovo „ano“ potvrdilo nové úložiště, povolení Úprav pouze pro vlastní pilotní schránku a jeden neodeslaný kontrolní koncept. První rozsah má jeden společný textový podpis pro každou schránku a jméno odesílatele. Alternativní adresy, Reply-To, HTML, přílohy, odpovědi/přeposlání, editace existujících konceptů a odesílání nejsou součástí této etapy.
 
 ## Zdroj pravdy a ovládání
 
@@ -39,6 +39,16 @@ V místním prohlížeči prošel tok podpis → náhled → uložení konceptu 
 2. Nasadit Worker 0.2.7 s MCP/cron/odesíláním stále vypnutými. Poté publikovat SO.ai pouze projektovým Pages guardem. Potvrdit přesnou živou verzi a UI/API readback.
 3. Při potvrzeném rozšíření pilotu zapnout `SOAI_DRAFTS_ENABLED` a přidat pouze existující `write` k `read` pro uživatele `radim-oplustil` a schránku `oplustil@kaiserservis.cz`. Žádní kolegové ani další schránky nedostanou nová práva. Send/delete/schedule zůstanou odebrané.
 4. Pokud schválení zahrnuje živý test, vytvořit jediný zřetelný testovací koncept ve vlastní schránce, s předmětem `SO.ai – test konceptu` a příjemcem shodným s vlastní adresou. Přečíst zpět, ověřit MIME, audit a nulové SMTP/outbox; nic neodesílat ani nemazat. Finální podpis uživatele nevymýšlet; prázdný podpis je platný počáteční stav.
+
+### Produkční přijetí
+
+- PR #202 sloučený jako `4020b5d9fb48214969d91bc3a9aea04cbd9f6bcd`. Obě CI kontroly prošly pro schválenou konfiguraci, znovu prošlo 93 lokálních testů. Projektový Pages guard dokončil povinné testy, syntax 676 JS/MJS a build 49 rout.
+- Migrace `0004_composition.sql` aplikovaná pouze do existující Forpsi D1. Před testem žádné profily ani pokusy, outbox prázdný. Jediná změna grantů: `radim-oplustil` na vlastní pilotní schránce z read na read + write, revize schránky 12 → 13. Send/delete/schedule zůstaly odebrané.
+- Worker `5b1dab98-2e4c-46d1-96cd-a83f89dd4a8d`; Pages `b877bb1b.kaiser-control-center.pages.dev`. Veřejný buildMeta potvrdil `0.1.812 / main / 4020b5d`, veřejný ForpsiComposer.js má shodný SHA-256 s vydaným zdrojem.
+- Přihlášené UI uložilo 26. 9. 2026 v 08:38:29 Europe/Prague jediný koncept `SO.ai – test konceptu`, adresovaný vlastníkovi schránky. Forpsi vrátilo `INBOX.Drafts`, UID `20721`, UIDVALIDITY `1381849701`. Následné samostatné hledání a čtení potvrdilo předmět, serverový From a celý český text. Koncept zůstal zachovaný a neodeslaný.
+- Evidence obsahuje právě jeden pokus se stavem `saved` a audit `soai.create_draft=saved`; outbox má stále 0 položek. Tato cesta nepoužívá SMTP. MCP a cron zůstaly vypnuté, kolegové nedostali přístup.
+- Produkční formulář podpisu načetl prázdný profil bez chyby. Finální jméno/podpis nebyly zadavatelem dodané, proto se nevymýšlely ani nezapisovaly. Zápis neprázdného podpisu a jeho MIME byly ověřené izolovaně; tento živý koncept je bez podpisu.
+- Screenshoty a detailní dodací protokol jsou v pracovních výstupech tohoto úkolu. Neuložené změny původních uživatelských karet byly zachované.
 
 Rollback: vypnout nový přepínač a vrátit Pages/Worker na předchozí ověřenou verzi. Tabulky i koncepty zachovat. Záznamy pokusů se nesmí vyprázdnit jako „reset“ — zanikla by ochrana před opakováním.
 
