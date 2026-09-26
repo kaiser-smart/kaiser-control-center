@@ -30,7 +30,7 @@ function request(method, params = {}, extra = {}) {
     'content-type': 'application/json', accept: 'application/json, text/event-stream', ...extra },
   body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
 }
-test('real MCP transport initializes, lists 35 tools and returns structured results', async () => {
+test('real MCP transport initializes, lists tools and returns structured results', async () => {
   const f = fixture();
   const worker = createWorker({ authenticate: async () => f.principal, providerFactory: f.providerFactory });
   const init = await worker.fetch(request('initialize', { protocolVersion: '2025-11-25', capabilities: {},
@@ -38,7 +38,17 @@ test('real MCP transport initializes, lists 35 tools and returns structured resu
   assert.equal(init.status, 200);
   assert.equal((await init.json()).result.serverInfo.name, 'forpsi-company-mail');
   const list = await (await worker.fetch(request('tools/list'), f.env)).json();
-  assert.equal(list.result.tools.length, 35);
+  assert.equal(list.result.tools.length, 60);
+  const widget = list.result.tools.find(t => t.name === 'render_worklist');
+  assert.equal(widget._meta.ui.resourceUri, 'ui://forpsi/worklist-v1.html');
+  assert.equal(widget.annotations.readOnlyHint, true);
+  const resources = await (await worker.fetch(request('resources/list'), f.env)).json();
+  assert.equal(resources.result.resources[0].mimeType, 'text/html;profile=mcp-app');
+  const resource=await (await worker.fetch(request('resources/read',{
+    uri:'ui://forpsi/worklist-v1.html'}),f.env)).json();
+  assert.match(resource.result.contents[0].text,/ui\/notifications\/tool-result/);
+  assert.match(resource.result.contents[0].text,/ui\/notifications\/initialized/);
+  assert.match(resource.result.contents[0].text,/name:'read_message'/);
   const send = list.result.tools.find(t => t.name === 'send_message');
   assert.equal(send.annotations.openWorldHint, true);
   assert.equal(send.annotations.destructiveHint, true);
@@ -68,6 +78,39 @@ test('scope escalation fails inside tool execution and exposes an OAuth challeng
   assert.equal(result.isError, true);
   assert.match(result._meta['mcp/www_authenticate'][0], /insufficient_scope/);
   assert.equal(f.calls.length, 0);
+});
+test('direct MCP send cannot bypass a concrete preview and approval', async () => {
+  const f=fixture();
+  const worker=createWorker({authenticate:async()=>f.principal,providerFactory:f.providerFactory});
+  const response=await worker.fetch(request('tools/call',{name:'send_message',arguments:{
+    mailboxId:'mail-a',message:mail,requestId:crypto.randomUUID()}}),f.env);
+  const result=(await response.json()).result;
+  assert.equal(result.isError,true);
+  assert.equal(result.content[0].text,'SEND_CONFIRMATION_REQUIRED');
+  assert.equal((await f.store.rows('SELECT COUNT(*) AS n FROM outbox'))[0].n,0);
+  assert.equal(f.calls.length,0);
+});
+test('MCP Apps worklist renders a saved synthetic snapshot without mailbox writes',async()=>{
+  const f=fixture(),provider={
+    async search(){f.calls.push('search');return {messages:[{
+      reference:{folder:'INBOX',uid:42,uidValidity:'3'},date:'2026-09-25T09:00:00Z',
+      from:[{address:'client@example.net'}],subject:'Dotaz'}],nextBeforeUid:null};},
+    async read(reference){f.calls.push('read');return {reference,messageId:'<m42@example.net>',references:[],
+      date:'2026-09-25T09:00:00Z',from:[{address:'client@example.net'}],subject:'Dotaz',text:'Prosím o odpověď.'};},
+  };
+  const worker=createWorker({authenticate:async()=>f.principal,providerFactory:()=>provider});
+  const started=(await (await worker.fetch(request('tools/call',{name:'start_worklist',arguments:{
+    mailboxId:'mail-a',limit:1}}),f.env)).json()).result.structuredContent.data;
+  assert.equal(started.items[0].reference.uid,42);
+  const rendered=(await (await worker.fetch(request('tools/call',{name:'render_worklist',arguments:{
+    listId:started.listId}}),f.env)).json()).result.structuredContent.data;
+  assert.equal(rendered.listId,started.listId);
+  assert.equal(rendered.items[0].number,1);
+  const detail=(await (await worker.fetch(request('tools/call',{name:'read_message',arguments:{
+    mailboxId:'mail-a',message:rendered.items[0].reference}}),f.env)).json()).result.structuredContent.data;
+  assert.equal(detail.text,'Prosím o odpověď.');
+  assert.deepEqual(f.calls,['search','read','read']);
+  assert.equal((await f.store.rows('SELECT COUNT(*) AS n FROM outbox'))[0].n,0);
 });
 test('input validation rejects header injection, arbitrary senders, invalid time and UID injection', () => {
   const base = { mailboxId: 'mail-a', message: mail, requestId: crypto.randomUUID() };

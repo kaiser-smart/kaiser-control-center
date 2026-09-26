@@ -10,7 +10,8 @@
   "preview_urls": false,
   "vars": {
     "CONNECTOR_ENABLED": "false",
-    "SOAI_DRAFTS_ENABLED": "false"
+    "SOAI_DRAFTS_ENABLED": "false",
+    "WORKFLOW_SYNC_ENABLED": "false"
   },
   "d1_databases": [
     {
@@ -21,7 +22,7 @@
     }
   ],
   "triggers": {
-    "crons": []
+    "crons": ["*/15 * * * *"]
   },
   "observability": {
     "enabled": false
