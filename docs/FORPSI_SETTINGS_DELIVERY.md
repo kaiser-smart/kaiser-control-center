@@ -4,6 +4,8 @@ Cíl schválený 25. 9. 2026: příjemná a výkonná aplikace s potřebnými fu
 
 ## Společný model pro celý rozsah
 
+Navazující etapa 3a (podpisy, jméno odesílatele a nové koncepty) je popsaná v [kontraktu a postupu nasazení](FORPSI_COMPOSITION.md). Jde o implementaci ověřenou izolovaně, nikoli doklad zapnutí zápisů v produkci.
+
 - Oddělit osobní předvolby, nastavení schránky/kolekce a správu firmy. Přihlášený uživatel SO.ai je zdrojem identity; vlastníkem obsahu se nestává tím, že spravuje připojení.
 - Každá volba má rozsah, vlastníka/správce, zdroj pravdy, dopad, stav uložení a stav ověření. Označit firemní výchozí hodnotu odděleně od závazné hodnoty. Stávající UI připojení je zatím dostupné přes `settings:manage`, nikoli osobní samoobsluhu.
 - Ruční práce v SO.ai musí fungovat bez ChatGPT. Integrace s ChatGPT dostane samostatné přihlášení a odvolatelné granty; e-mailová adresa sama není identita.

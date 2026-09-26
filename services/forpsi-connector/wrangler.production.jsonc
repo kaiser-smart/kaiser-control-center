@@ -10,6 +10,7 @@
   "vars": {
     "CONNECTOR_ENABLED": "false",
     "SOAI_MAIL_ENABLED": "true",
+    "SOAI_DRAFTS_ENABLED": "false",
     "FORPSI_TENANT_ID": "kaiser-servis"
   },
   "d1_databases": [{

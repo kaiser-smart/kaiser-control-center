@@ -1,3 +1,4 @@
+import { mountForpsiComposer, forpsiComposerDirtyTarget } from './ForpsiComposer.js';
 const escape=value=>String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const emptyFilters=()=>({folder:'INBOX',from:'',subject:'',since:'',through:'',unread:false});
 let state={owner:null,epoch:0,root:null,api:null,loaded:false,busy:false,mailboxes:[],mailboxId:'',folders:[],filters:emptyFilters(),applied:null,result:null,message:null,error:'',mode:null};
@@ -23,6 +24,7 @@ function paint(){
     ${state.error?`<p role="alert">${escape(state.error)}</p>`:''}
     ${!state.loaded?'':!state.mailboxes.length?'<p>Nemáte žádnou povolenou schránku s právem čtení. Správce ji může přiřadit v nastavení Forpsi.</p>':`
     <div class="forpsi-grid"><label>Schránka<select aria-label="Schránka" data-mail-mailbox ${state.busy?'disabled':''}><option value="">Vyberte schránku</option>${state.mailboxes.map(m=>`<option value="${escape(m.id)}" ${m.id===state.mailboxId?'selected':''}>${escape(m.address)}</option>`).join('')}</select></label></div>
+    ${state.mailboxId?'<div data-forpsi-composer-root></div>':''}
     ${state.mailboxId&&!state.folders.length&&!state.busy?'<p>Schránka nevrátila žádnou dostupnou složku.</p>':''}
     ${state.mailboxId&&state.folders.length?`<form data-mail-search class="forpsi-form"><div class="forpsi-grid">
       <label>Složka<select aria-label="Složka" name="folder" ${state.busy?'disabled':''}>${state.folders.map(item=>`<option value="${escape(item.path)}" ${f.folder===item.path?'selected':''}>${escape(item.path)}</option>`).join('')}</select></label>
@@ -34,6 +36,7 @@ function paint(){
     <div class="forpsi-actions"><button class="primary-action" type="submit" ${state.busy?'disabled':''}>Hledat zprávy</button></div>
     <small>Datum filtruje přijetí zprávy na serveru. Otevření zprávy nemění označení přečteno. Čtení zatím podporuje zprávy do 2 MiB.</small></form>`:''}`}
     <div class="forpsi-mail-results" aria-live="polite">${results()}</div>`;
+  mountForpsiComposer(root.querySelector('[data-forpsi-composer-root]'),{owner:state.owner,mailboxId:state.mailboxId,apiJson:state.api,guard:state.guard});
 }
 function results(){
   const r=state.result;if(!r)return '';
@@ -63,19 +66,19 @@ async function search(next=false){
   const payload=mailSearchPayload(state.mailboxId,f,next?state.result?.nextBeforeUid:null);
   clearContent();await request('search_messages',payload,data=>{state.result=data;state.applied=f;});
 }
-export function mountForpsiMail(app,{apiJson,owner}){
+export function mountForpsiMail(app,{apiJson,owner,guard}){
   const root=app.querySelector('[data-forpsi-mail-root]');
   if(state.owner!==owner || !root){state={owner,epoch:state.epoch+1,root:null,api:apiJson,loaded:false,busy:false,mailboxes:[],mailboxId:'',folders:[],filters:emptyFilters(),applied:null,result:null,message:null,error:'',mode:null};}
-  if(!root)return;state.root=root;state.api=apiJson;
+  if(!root){mountForpsiComposer(null,{owner,mailboxId:'',apiJson,guard});return;}state.root=root;state.api=apiJson;state.guard=guard;
   root.addEventListener('input',event=>{if(event.target.form?.matches('[data-mail-search]')){
     state.filters[event.target.name]=event.target.type==='checkbox'?event.target.checked:event.target.value;
     const hint=root.querySelector('[data-mail-filter-state]');if(hint)hint.hidden=!changed();
     const next=root.querySelector('[data-mail-action="next"]');if(next)next.disabled=!!changed();
   }});
-  root.addEventListener('change',event=>{if(event.target.matches('[data-mail-mailbox]'))void chooseMailbox(event.target.value);});
+  root.addEventListener('change',event=>{if(event.target.matches('[data-mail-mailbox]')){const id=event.target.value;event.target.value=state.mailboxId;const action=()=>chooseMailbox(id);if(forpsiComposerDirtyTarget())guard(action);else void action();}});
   root.addEventListener('submit',event=>{if(event.target.matches('[data-mail-search]')){event.preventDefault();event.stopPropagation();void search();}});
   root.addEventListener('click',event=>{const b=event.target.closest('[data-mail-action]');if(!b)return;event.preventDefault();event.stopPropagation();if(state.busy)return;
-    if(b.dataset.mailAction==='refresh')void refresh();
+    if(b.dataset.mailAction==='refresh'){if(forpsiComposerDirtyTarget())guard(()=>refresh());else void refresh();}
     if(b.dataset.mailAction==='next')void search(true);
     if(b.dataset.mailAction==='close'){state.message=null;paint();}
     if(b.dataset.mailAction==='read'){const ref=state.result?.messages[Number(b.dataset.index)]?.reference;if(ref){state.message=null;void request('read_message',{mailboxId:state.mailboxId,message:ref},data=>{state.message=data;}).then(()=>{root.querySelector('[data-mail-message]')?.scrollIntoView({block:'start'});});}}

@@ -1,5 +1,7 @@
 # Forpsi / ChatGPT – administrační pilot v SO.ai
 
+Připravená etapa 3a (SO.ai 0.1.812 / Worker 0.2.7): vlastní textové podpisy a nové koncepty přes SO.ai. [Kontrakt, limity a postup nasazení](FORPSI_COMPOSITION.md). Tato etapa je zatím ověřená pouze izolovaně, není nasazená a nepřiděluje produkční zapisovací práva.
+
 Cílový směr ručního nastavení: [uživatelem dodaná analýza](FORPSI_SETTINGS_TARGET.md) a [ověřované etapy realizace](FORPSI_SETTINGS_DELIVERY.md). Finální užší výběr voleb následuje až po ověření funkčního API; rozsah není požadavkem splnit každou položku katalogu.
 
 Etapa 2 (0.2.5 / SO.ai 0.1.809) doplnila ruční správu přístupů: konkrétní kolega a schránka, pět jednotlivých práv, odebrání, serverová kontrola aktuálního adresáře, revize a atomický audit. Kontrakt a hranice jsou v [plánu etap](FORPSI_SETTINGS_DELIVERY.md#etapa-2--ruční-správa-přístupů). Zápis v izolovaném UI/API/SQLite prošel; v této historické etapě nebylo provedeno produkční přiřazení práv ani pracovní endpoint.

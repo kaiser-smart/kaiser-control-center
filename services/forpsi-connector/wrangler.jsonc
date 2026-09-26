@@ -9,7 +9,8 @@
   "workers_dev": false,
   "preview_urls": false,
   "vars": {
-    "CONNECTOR_ENABLED": "false"
+    "CONNECTOR_ENABLED": "false",
+    "SOAI_DRAFTS_ENABLED": "false"
   },
   "d1_databases": [
     {

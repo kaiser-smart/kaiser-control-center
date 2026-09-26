@@ -1,5 +1,5 @@
 const escape = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state={epoch:0,owner:null,data:null,resources:{},disclosures:{},accessData:null,accessDraft:null,error:'',notice:'',tab:'mailboxes',draft:null,dirty:false,busy:false,loading:false,root:null,api:null,guard:null};
+const state={epoch:0,owner:null,data:null,resources:{},disclosures:{},accessData:null,accessDraft:null,compositionDraft:null,error:'',notice:'',tab:'mailboxes',draft:null,dirty:false,busy:false,loading:false,root:null,api:null,guard:null};
 const date = value => value ? new Date(value).toLocaleString('cs-CZ') : 'Dosud neověřeno';
 const tabs=[['mailboxes','Schránky'],['access','Přístupy kolegů'],['settings','Rozšířené']];
 const moduleNames={mail:'Pošta',calendar:'Kalendář',contacts:'Adresář',files:'Soubory',tasks:'Úkoly',notes:'Poznámky',signatures:'Podpisy',labels:'Štítky',rules:'Pravidla'};
@@ -60,18 +60,43 @@ function editForm() {
 }
 function mailboxes() {
   return `<div class="forpsi-actions">${button('new','Přidat schránku')}${button('refresh','Obnovit stav')}</div>
-    ${state.draft?editForm():''}
+    ${state.draft?editForm():''}${state.compositionDraft?compositionForm():''}
     <div class="forpsi-list">${state.data.mailboxes.length?state.data.mailboxes.map(m=>`<article class="forpsi-card">
       <div class="forpsi-card-heading"><div><h3>${escape(m.display_name || m.address)}</h3><p>${escape(m.address)}</p></div><span class="forpsi-state">${m.active?'Povolená v konektoru':'Pozastavená'}</span></div>
       <p>${m.active?'Přístup k obsahu mají pouze přidělené účty.':'Před zapnutím je potřeba úspěšně ověřit připojení.'}</p>
       <p class="forpsi-connection-summary">Příjem pošty: ${m.verification?.imap==='verified'?(m.verification.mode==='simulated'?'TEST prošel':'ověřený'):m.verification?.imap==='failed'?'ověření selhalo':'dosud neověřený'}<br><small>Poslední test: ${date(m.verified_at)}</small></p>
       ${Object.entries({imap:'Příjem pošty',smtp:'Připojení k odesílání',calendar:'Kalendář',contacts:'Adresář'}).filter(([key])=>m.verification?.[key]==='failed').map(([key,label])=>`<p class="forpsi-service-issue">${label}: ${diagnosticHint(m.verification?.diagnostics?.[key])}</p>`).join('')}
-      <div class="forpsi-actions">${button('access-open','Přístupy kolegů',`data-id="${escape(m.id)}"`)}${button('edit','Upravit připojení',`data-id="${escape(m.id)}"`)}${button('verify','Ověřit připojení',`data-id="${escape(m.id)}"`)}${m.active?'':button('toggle','Zapnout schránku',`data-id="${escape(m.id)}"`)}</div>
+      <div class="forpsi-actions">${button('access-open','Přístupy kolegů',`data-id="${escape(m.id)}"`)}${button('composition-open','Podpis a odesílatel',`data-id="${escape(m.id)}"`)}${button('edit','Upravit připojení',`data-id="${escape(m.id)}"`)}${button('verify','Ověřit připojení',`data-id="${escape(m.id)}"`)}${m.active?'':button('toggle','Zapnout schránku',`data-id="${escape(m.id)}"`)}</div>
       ${disclosure(`mailbox-${m.id}`,'Služby, složky a pozastavení',`${serviceStatus(m)}
         <div class="forpsi-actions">${button('resources','Načíst složky, kalendáře a adresáře',`data-id="${escape(m.id)}"`)}${m.active?button('toggle','Pozastavit schránku',`data-id="${escape(m.id)}"`):''}</div>
         ${resourceSummary(m)}<p>Pozastavení zablokuje další práci se schránkou. Schránku ani zprávy ve Forpsi nesmaže.</p>`)}
     </article>`).join(''):'<p>Zatím není uložená žádná schránka. Začněte tlačítkem Přidat schránku; potom připojení ověřte a přidělte přístup konkrétnímu účtu.</p>'}</div>
     <p>Test připojení ověřuje přihlášení ke službám. Neodesílá zprávu a nepotvrzuje její doručení.</p>`;
+}
+function compositionForm() {
+  const d=state.compositionDraft;
+  return `<form data-forpsi-composition-form class="forpsi-form"><h3>Podpis a odesílatel</h3>
+    <p>Schránka: <strong>${escape(d.address)}</strong>. Platí pro nové koncepty vytvořené v SO.ai. Nastavení webmailu Forpsi se nemění.</p>
+    <label>Jméno odesílatele<input name="senderName" maxlength="100" value="${escape(d.senderName)}" ${state.busy?'disabled':''}></label>
+    <small>Prázdné jméno použije jen adresu schránky. Adresu odesílatele zde nelze změnit.</small>
+    <label>Podpis<textarea name="signatureText" aria-label="Podpis" rows="6" maxlength="4000" ${state.busy?'disabled':''}>${escape(d.signatureText)}</textarea></label>
+    <small>Prostý text, například jméno, funkce a kontakty. Prázdné pole znamená bez podpisu. Společné pro tuto schránku.</small>
+    <div class="forpsi-actions"><button class="primary-action" type="submit" ${state.busy?'disabled':''}>Uložit podpis</button>${button('cancel','Zavřít formulář')}</div></form>`;
+}
+async function loadComposition(id) {
+  const epoch=state.epoch;state.busy=true;paint();
+  try {const r=await command('composition_get',{id});if(epoch!==state.epoch)return;
+    state.compositionDraft={id,address:r.address,...r.profile};state.dirty=false;
+  }catch(e){if(epoch===state.epoch)state.error=e.message;}
+  finally{if(epoch===state.epoch){state.busy=false;paint();}}
+}
+async function saveComposition() {
+  const form=state.root?.querySelector('[data-forpsi-composition-form]');if(state.busy || !form?.reportValidity())return false;
+  const epoch=state.epoch,{address,...payload}=state.compositionDraft;state.busy=true;state.error='';paint();
+  try {const r=await command('composition_save',payload);if(epoch!==state.epoch)return false;
+    state.compositionDraft={id:payload.id,address,...r.profile};state.dirty=false;state.notice='Podpis je uložený v SO.ai. Připojení schránky zůstává beze změny.';return true;
+  }catch(e){if(epoch===state.epoch)state.error=e.message;return false;}
+  finally{if(epoch===state.epoch){state.busy=false;paint();}}
 }
 function access() {
   const d=state.accessData, selected=d?.access.mailboxId;
@@ -143,16 +168,16 @@ function rules() {
 function settings() {
   const d=state.data;
   return `<h3>Rozšířené nastavení</h3><p>Provozní přehledy a méně časté volby. Připojení a práva kolegů najdete v hlavních záložkách.</p>
-    ${disclosure('capabilities','Dostupné funkce a ChatGPT',`<p>V Poště SO.ai je zapojené hledání a čtení zpráv. Další funkce níže uvádějí stav napojení; samotná přítomnost adaptéru nepotvrzuje jejich použitelnost v SO.ai.</p>
+    ${disclosure('capabilities','Dostupné funkce a ChatGPT',`<p>V Poště SO.ai je zapojené hledání a čtení zpráv. Nové textové koncepty vyžadují samostatné povolení a právo Úpravy. Další funkce níže uvádějí stav napojení; samotná přítomnost adaptéru nepotvrzuje jejich použitelnost v SO.ai.</p>
       <p>ChatGPT přihlášení: ${d.oauthConfigured?'konfigurace přítomna, přihlášení zatím neověřeno':'čeká na nastavení'}.</p>
       <div class="forpsi-list">${d.capabilities.modules.map(m=>`<article class="forpsi-card"><h4>${moduleNames[m.id] || escape(m.id)}</h4><p>${m.implementation==='NOT_IMPLEMENTED'?'Napojení zatím není implementováno.':m.implementation==='CONNECTOR_STORAGE'?'Vlastní evidence konektoru; nesynchronizuje nastavení webmailu.':'Adaptér implementován; stav připojení se ověřuje pro každou schránku.'}</p></article>`).join('')}</div>`)}
     ${disclosure('rules','Štítky, pravidla a plánované zprávy',rules())}
-    ${disclosure('audit','Log událostí',`<p>Posledních nejvýše 50 událostí.</p>${d.audit.length?`<ul>${d.audit.map(e=>`<li>${date(e.at)} · ${escape(mailboxName(e.mailbox_id))} · ${escape({'admin.save':'Uložení nastavení','admin.verify':'Test připojení','admin.set_active':'Změna dostupnosti','admin.access.save':'Změna přístupů'}[e.action] || e.action)} · ${escape(auditOutcome(e))}</li>`).join('')}</ul>`:'<p>Zatím žádné zaznamenané události.</p>'}`)}
+    ${disclosure('audit','Log událostí',`<p>Posledních nejvýše 50 událostí.</p>${d.audit.length?`<ul>${d.audit.map(e=>`<li>${date(e.at)} · ${escape(mailboxName(e.mailbox_id))} · ${escape({'admin.composition.save':'Uložení podpisu','soai.create_draft':'Uložení konceptu','admin.save':'Uložení nastavení','admin.verify':'Test připojení','admin.set_active':'Změna dostupnosti','admin.access.save':'Změna přístupů'}[e.action] || e.action)} · ${escape(auditOutcome(e))}</li>`).join('')}</ul>`:'<p>Zatím žádné zaznamenané události.</p>'}`)}
     ${disclosure('diagnostics','Technická diagnostika',`<p>Pracovní čtení v SO.ai: ${d.soaiMailEnabled?'zapnuté pro účty s přidělenými právy':'vypnuté'}. Připojení ChatGPT: ${d.connectorEnabled?'povolené, přihlášení vyžaduje ověření':'vypnuté'}.</p>
-      <p>Šifrované ukládání hesel: ${d.credentialStorageReady?'nakonfigurováno':'čeká na nastavení'}. Načteno ${date(d.checkedAt)}.</p><p>Stav přihlášení v prohlížeči nepotvrzuje serverové připojení. Test IMAP/SMTP nepotvrzuje odeslání, doručení ani uložení kopie do Odeslané.</p>`)}`;
+      <p>Ukládání nových konceptů: ${d.soaiDraftsEnabled?'zapnuté pro účty s právem Úpravy':'vypnuté'}. Podpisy platí pro SO.ai, bez synchronizace nastavení webmailu.</p><p>Šifrované ukládání hesel: ${d.credentialStorageReady?'nakonfigurováno':'čeká na nastavení'}. Načteno ${date(d.checkedAt)}.</p><p>Stav přihlášení v prohlížeči nepotvrzuje serverové připojení. Test IMAP/SMTP nepotvrzuje odeslání, doručení ani uložení kopie do Odeslané.</p>`)}`;
 }
 function auditOutcome(event) {
-  if(event.action!=='admin.access.save') return event.outcome;
+  if(event.action!=='admin.access.save') return ({saved:'Uloženo',uncertain:'Výsledek uložení je nejistý'})[event.outcome] || event.outcome;
   try {const detail=JSON.parse(event.outcome);return `${state.accessData?.users.find(u=>u.id===detail.userId)?.name || detail.userId}: ${(detail.before || []).map(a=>actionNames[a] || a).join(', ') || 'bez práv'} → ${detail.actions.map(a=>actionNames[a] || a).join(', ') || 'všechna práva odebrána'}`;}
   catch {return 'Uloženo';}
 }
@@ -184,8 +209,9 @@ function draftFor(m) { return { ...(m?{id:m.id,revision:m.revision}:{}),requestI
   address:m?.address || '',displayName:m?.display_name || '',draftsFolder:m?.drafts_folder || '',sentFolder:m?.sent_folder || '',trashFolder:m?.trash_folder || '',password:'' }; }
 async function command(operation,payload) { return state.api('/api/forpsi/admin',{method:'POST',body:JSON.stringify({operation,payload})}); }
 export function forpsiDirtyTarget() { return state.root?.isConnected && (state.dirty || state.busy)?{isDirty:true,type:'forpsi'}:null; }
-export function discardForpsiDraft() { state.draft=null; state.accessDraft=null; state.dirty=false; paint(); }
+export function discardForpsiDraft() { state.draft=null; state.accessDraft=null; state.compositionDraft=null; state.dirty=false; paint(); }
 export async function saveForpsiDraft() {
+  if(state.compositionDraft) return saveComposition();
   if(state.accessDraft) return saveAccessDraft();
   if(state.busy) return false;
   const form=state.root?.querySelector('[data-forpsi-form]');
@@ -203,14 +229,14 @@ export async function saveForpsiDraft() {
 }
 export function forpsiAdminSection(owner) { return `<section id="forpsi-admin" class="users-panel forpsi-admin" data-forpsi-root data-owner="${escape(owner)}"></section>`; }
 export function mountForpsiAdmin(app,{apiJson,guard,owner}) {
-  if(state.owner!==owner) { Object.assign(state,{epoch:state.epoch+1,owner,data:null,resources:{},disclosures:{},accessData:null,accessDraft:null,draft:null,dirty:false,error:'',notice:'',tab:'mailboxes',loading:false,busy:false}); }
+  if(state.owner!==owner) { Object.assign(state,{epoch:state.epoch+1,owner,data:null,resources:{},disclosures:{},accessData:null,accessDraft:null,compositionDraft:null,draft:null,dirty:false,error:'',notice:'',tab:'mailboxes',loading:false,busy:false}); }
   const root=app.querySelector('[data-forpsi-root]'); if(!root) { state.root=null; return; }
   state.root=root; state.api=apiJson;
   // Panel actions only repaint this panel; other settings forms stay mounted.
   // The application's navigation guard still protects all forms when leaving the page.
   state.guard=action=>state.dirty?guard(action):action();
   root.addEventListener('toggle',event=>{if(event.target.matches?.('details[data-forpsi-disclosure]'))state.disclosures[event.target.dataset.forpsiDisclosure]=event.target.open;},true);
-  root.addEventListener('input',event=>{ if(event.target.form?.matches('[data-forpsi-form]')) { state.draft[event.target.name]=event.target.value; state.dirty=true; } else filterRules(); });
+  root.addEventListener('input',event=>{ if(event.target.form?.matches('[data-forpsi-composition-form]')) {state.compositionDraft[event.target.name]=event.target.value;state.dirty=true;} else if(event.target.form?.matches('[data-forpsi-form]')) { state.draft[event.target.name]=event.target.value; state.dirty=true; } else filterRules(); });
   root.addEventListener('change',event=>{
     if(event.target.matches?.('[data-forpsi-person]')) {
       const userId=event.target.value; paint(); state.guard(()=>selectAccessUser(userId)); return;
@@ -222,7 +248,7 @@ export function mountForpsiAdmin(app,{apiJson,guard,owner}) {
     }
     if(event.target.form?.matches('[data-forpsi-form]')) { state.draft[event.target.name]=event.target.value; state.dirty=true; } else filterRules();
   });
-  root.addEventListener('submit',event=>{ if(event.target.matches('[data-forpsi-form], [data-forpsi-access-form]')) { event.preventDefault(); event.stopPropagation(); void saveForpsiDraft(); } });
+  root.addEventListener('submit',event=>{ if(event.target.matches('[data-forpsi-form], [data-forpsi-access-form], [data-forpsi-composition-form]')) { event.preventDefault(); event.stopPropagation(); void saveForpsiDraft(); } });
   root.addEventListener('click',event=>{
     const b=event.target.closest('[data-forpsi-action]'); if(!b) return; event.preventDefault(); event.stopPropagation(); if(state.busy) return;
     const action=b.dataset.forpsiAction;
@@ -239,6 +265,8 @@ export function mountForpsiAdmin(app,{apiJson,guard,owner}) {
     }
     state.guard(async()=>{
       state.error=''; state.notice='';
+      state.compositionDraft=null;
+      if(action==='composition-open'){state.tab='mailboxes';state.draft=null;state.accessDraft=null;await loadComposition(b.dataset.id);return;}
       if(action==='access-load' || action==='access-open') {state.tab='access';state.draft=null;await loadAccess(b.dataset.id);return;}
       if(action==='access-edit') {selectAccessUser(b.dataset.userId);return;}
       if(action==='access-cancel') {state.accessDraft=null;state.dirty=false;paint();return;}

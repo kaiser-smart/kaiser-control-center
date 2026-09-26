@@ -92,18 +92,18 @@ export class Forpsi {
           contentType: a.contentType, size: a.size })) };
     }));
   }
-  async compose(message, jobId, { keepBcc = false, date = new Date() } = {}) {
+  async compose(message, jobId, { keepBcc = false, date = new Date(), senderName = '' } = {}) {
     const transport = nodemailer.createTransport({ streamTransport: true, buffer: true,
       newline: 'windows', disableFileAccess: true, disableUrlAccess: true });
     // Stream transport always preserves Bcc; remove it before composition for SMTP.
     const { bcc, ...visibleMessage } = message;
-    const info = await transport.sendMail({ ...(keepBcc ? message : visibleMessage), from: this.mailbox.address,
+    const info = await transport.sendMail({ ...(keepBcc ? message : visibleMessage), from: senderName ? {name:senderName,address:this.mailbox.address} : this.mailbox.address,
       messageId: `<${jobId}@${this.mailbox.address.split('@')[1]}>`, date, keepBcc,
       disableFileAccess: true, disableUrlAccess: true });
     return info.message;
   }
-  async saveDraft(message) {
-    const raw = await this.compose(message, crypto.randomUUID(), { keepBcc: true });
+  async saveDraft(message, {senderName='',requestId=crypto.randomUUID()} = {}) {
+    const raw = await this.compose(message, requestId, { keepBcc: true, senderName });
     return this.imap(async client => {
       const folder = await this.specialFolder(client, 'drafts');
       const result = await client.append(folder, raw, ['\\Draft']);
