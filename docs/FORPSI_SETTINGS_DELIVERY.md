@@ -4,7 +4,7 @@ Cíl schválený 25. 9. 2026: příjemná a výkonná aplikace s potřebnými fu
 
 ## Společný model pro celý rozsah
 
-Navazující etapa 3a (podpisy, jméno odesílatele a nové koncepty) je popsaná v [kontraktu a postupu nasazení](FORPSI_COMPOSITION.md). Jde o implementaci ověřenou izolovaně, nikoli doklad zapnutí zápisů v produkci.
+Navazující etapa 3a (podpisy, jméno odesílatele a nové koncepty) je popsaná v [kontraktu a produkčním přijetí](FORPSI_COMPOSITION.md). SO.ai 0.1.812 / Worker 0.2.7 jsou nasazené. Výslovně schválený pilot má read + write pouze pro vlastníka jedné schránky; jediný skutečný neodeslaný koncept byl uložen a přečten zpět. Neprázdný podpis je zatím ověřený izolovaně. Nová oprávnění kolegů, odesílání ani automatizace se nezapínají.
 
 - Oddělit osobní předvolby, nastavení schránky/kolekce a správu firmy. Přihlášený uživatel SO.ai je zdrojem identity; vlastníkem obsahu se nestává tím, že spravuje připojení.
 - Každá volba má rozsah, vlastníka/správce, zdroj pravdy, dopad, stav uložení a stav ověření. Označit firemní výchozí hodnotu odděleně od závazné hodnoty. Stávající UI připojení je zatím dostupné přes `settings:manage`, nikoli osobní samoobsluhu.
