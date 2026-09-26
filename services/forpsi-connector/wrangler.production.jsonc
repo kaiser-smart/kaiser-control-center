@@ -8,7 +8,7 @@
   "workers_dev": false,
   "preview_urls": false,
   "vars": {
-    "CONNECTOR_ENABLED": "false",
+    "CONNECTOR_ENABLED": "true",
     "PERSONAL_PILOT_OAUTH": "true",
     "PERSONAL_PILOT_READ_ONLY": "true",
     "WORKFLOW_SYNC_ENABLED": "false",
