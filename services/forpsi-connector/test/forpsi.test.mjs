@@ -31,6 +31,24 @@ test('reading uses read-only IMAP lock, TLS verification and does not mark seen'
   assert.equal(config.tls.rejectUnauthorized, true); assert.equal(config.port, 993);
   assert.equal(config.logger, false);
 });
+test('PDF inspection uses bytes rather than filename and keeps the mailbox read-only',async()=>{
+  const real=Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF');
+  const fake=Buffer.from('ordinary text, despite a PDF name');
+  const attachment=(name,bytes)=>`--part\r\nContent-Type: application/pdf; name="${name}"\r\n`+
+    `Content-Disposition: attachment; filename="${name}"\r\nContent-Transfer-Encoding: base64\r\n\r\n`+
+    `${bytes.toString('base64')}\r\n`;
+  const raw=Buffer.from('From: sender@example.com\r\nMIME-Version: 1.0\r\n'+
+    'Content-Type: multipart/mixed; boundary="part"\r\n\r\n'+
+    attachment('fake.pdf',fake)+attachment('invoice.bin',real)+'--part--\r\n');
+  const f=adapter({fetchOne:async()=>({uid:10,size:raw.length}),
+    download:async()=>({content:Readable.from([raw])})});
+  const found=await f.provider.inspectPdfAttachments(ref);
+  assert.deepEqual(found.map(x=>x.isPdf),[false,true]);
+  assert.equal(found[1].filename,'invoice.bin');
+  assert.match(found[1].sha256,/^[a-f0-9]{64}$/);
+  assert.deepEqual(f.calls.find(c=>c[0]==='lock')[2],{readOnly:true});
+  assert.equal(f.calls.some(c=>['append','move','smtp'].includes(c[0])),false);
+});
 test('search passes exact receive-date bounds and paginates empty UID windows without marking seen',async()=>{
   let query;const f=adapter({mailbox:{uidValidity:3n,uidNext:12000},search:async q=>{query=q;return [];}});
   const result=await f.provider.search({folder:'INBOX',since:'2026-08-26',before:'2026-09-03',limit:20});

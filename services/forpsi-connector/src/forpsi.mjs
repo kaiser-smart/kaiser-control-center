@@ -12,7 +12,8 @@ const publicEnvelope = item => ({ uid: item.uid, subject: item.envelope?.subject
   from: (item.envelope?.from ?? []).map(a => ({ name: a.name ?? '', address: a.address ?? '' })),
   to: (item.envelope?.to ?? []).map(a => ({ name: a.name ?? '', address: a.address ?? '' })),
   date: item.envelope?.date?.toISOString() ?? null, size: item.size ?? null,
-  flags: [...(item.flags ?? [])] });
+  flags: [...(item.flags ?? [])], messageId: item.envelope?.messageId ?? null,
+  inReplyTo: item.envelope?.inReplyTo ?? null });
 
 export class Forpsi {
   constructor(env, mailbox, dependencies = {}) {
@@ -97,8 +98,29 @@ export class Forpsi {
         skipTextToHtml: true, skipImageLinks: true });
       return { ...publicEnvelope(item), reference: ref, text: (parsed.text ?? '').slice(0, 100000),
         truncated: (parsed.text?.length ?? 0) > 100000, untrustedContent: true,
+        messageId: parsed.messageId ?? item.envelope?.messageId ?? null,
+        inReplyTo: parsed.inReplyTo ?? item.envelope?.inReplyTo ?? null,
+        references: Array.isArray(parsed.references) ? parsed.references : parsed.references ? [parsed.references] : [],
         attachments: parsed.attachments.map(a => ({ filename: a.filename ?? '',
           contentType: a.contentType, size: a.size })) };
+    }));
+  }
+  inspectPdfAttachments(ref) {
+    return this.imap(client => this.locked(client, ref, true, async () => {
+      const item = await client.fetchOne(String(ref.uid), { size: true }, { uid: true });
+      requireValue(item, 'MESSAGE_NOT_FOUND');
+      requireValue(item.size <= MAX_MESSAGE, 'MESSAGE_TOO_LARGE');
+      const { content } = await client.download(String(ref.uid), undefined, { uid: true, maxBytes: MAX_MESSAGE + 1 });
+      const chunks=[]; let size=0;
+      for await (const chunk of content) { size+=chunk.length; requireValue(size<=MAX_MESSAGE,'MESSAGE_TOO_LARGE'); chunks.push(chunk); }
+      const parsed=await simpleParser(Buffer.concat(chunks),{skipHtmlToText:true,skipTextToHtml:true,skipImageLinks:true});
+      return parsed.attachments.map((a,index)=>{
+        const bytes=a.content;
+        const isPdf=Buffer.isBuffer(bytes) && bytes.subarray(0,8).toString('latin1').startsWith('%PDF-') &&
+          bytes.subarray(Math.max(0,bytes.length-1024)).toString('latin1').includes('%%EOF');
+        return {index,filename:a.filename??'',contentType:a.contentType,size:bytes?.length??0,
+          isPdf,sha256:isPdf?createHash('sha256').update(bytes).digest('hex'):null};
+      });
     }));
   }
   async compose(message, jobId, { keepBcc = false, date = new Date(), senderName = '' } = {}) {
