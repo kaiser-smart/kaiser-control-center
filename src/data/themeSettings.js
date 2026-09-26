@@ -198,7 +198,14 @@ export function normalizeThemeSettings(input = {}, options = {}) {
 }
 
 export function sameThemeSettings(left, right) {
-  return JSON.stringify(normalizeThemeSettings(left)) === JSON.stringify(normalizeThemeSettings(right));
+  const comparable = (input) => {
+    const settings = normalizeThemeSettings(input);
+    // Server audit metadata is not editable and is absent from form values.
+    delete settings.updatedAt;
+    delete settings.updatedByUserId;
+    return settings;
+  };
+  return JSON.stringify(comparable(left)) === JSON.stringify(comparable(right));
 }
 
 export function themeFontStack(fontFamily) {

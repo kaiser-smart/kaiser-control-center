@@ -1,9 +1,10 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.813",
+  "version": "0.1.814",
   "private": true,
   "type": "module",
   "scripts": {
+    "test:theme-settings": "node --test scripts/theme-settings.test.mjs",
     "test:auth-session": "node scripts/auth-session.test.mjs",
     "dev": "node scripts/serve.mjs",
     "build": "node scripts/build.mjs",
