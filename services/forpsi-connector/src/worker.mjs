@@ -6,6 +6,7 @@ import { Forpsi } from './forpsi.mjs';
 import { Organizer } from './organize.mjs';
 import { Outbox } from './outbox.mjs';
 import { handleMcp } from './mcp.mjs';
+import { handleSoaiPersonalSettings } from './soai-personal-settings.mjs';
 import { CalDav } from './caldav.mjs';
 import { CardDav } from './carddav.mjs';
 import { Onboarding } from './onboarding.mjs';
@@ -26,6 +27,7 @@ export function createWorker(dependencies = {}) {
       if (url.pathname === '/internal/admin') return handleAdmin(request,env,{providerFactory,calendarFactory,contactFactory,verificationMode:dependencies.verificationMode ?? 'provider'});
       if (url.pathname === '/internal/mail') return handleSoaiMail(request,env,{providerFactory,verificationMode:dependencies.verificationMode ?? 'provider'});
       if (url.pathname === '/internal/setup') return handleSoaiSetup(request,env,{providerFactory});
+      if (url.pathname === '/internal/personal-settings') return handleSoaiPersonalSettings(request,env);
       if (url.pathname === '/internal/send') return handleSoaiSend(request,env,{providerFactory});
       if (url.pathname === '/health' && request.method === 'GET') return json({ service: 'forpsi-company-mail', version: '0.3.0-dev.1', enabled: env.CONNECTOR_ENABLED === 'true' });
       if (env.CONNECTOR_ENABLED !== 'true') return json({ error: 'CONNECTOR_DISABLED' }, 503);

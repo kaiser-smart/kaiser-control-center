@@ -17,7 +17,7 @@ function findButton(root,label){
   for(const child of root.children??[]){const found=findButton(child,label);if(found)return found;}
   return null;
 }
-function mount(respond){
+function mount(respond,openai){
   const ids=new Map(['summary','home-text','notice','items','layout','detail','home','list',
     'draft','settings','tab-home','tab-list','tab-settings','resume','resume-draft','new-mail'].map(id=>{
     const element=new Element(id==='items'?'ol':'div');element.id=id;return [id,element];}));
@@ -34,7 +34,7 @@ function mount(respond){
     onMessage({source:parent,data:{jsonrpc:'2.0',id:message.id,result}});
   }};
   const document={getElementById:id=>ids.get(id),createElement:tag=>new Element(tag)};
-  const window={parent,addEventListener(name,callback){if(name==='message')onMessage=callback;}};
+  const window={parent,openai,addEventListener(name,callback){if(name==='message')onMessage=callback;}};
   const script=mailAppWidget.match(/<script>([\s\S]*?)<\/script>/)?.[1];
   assert.ok(script);vm.runInNewContext(script,{document,window});
   return {ids,calls,notify:data=>onMessage({source:parent,data:{jsonrpc:'2.0',
@@ -147,4 +147,41 @@ test('next message opens a new fixed number without completing the previous one'
   assert.match(content(widget.ids.get('detail')),/Zpráva 2/);
   assert.deepEqual(widget.calls.filter(x=>x.method==='tools/call').map(x=>x.params.name),
     ['review_worklist','get_mail','review_worklist','get_mail']);
+});
+
+test('load new mail starts a fresh ChatGPT analysis list without legacy sender priorities',async()=>{
+  const old={listId:'old-list',mailboxId:'mail-a',items:[],pending:0};
+  const fresh={listId:'new-list',mailboxId:'mail-a',items:[{number:1,
+    from:'new@example.net',subject:'New request',priority:'review',state:'todo'}],pending:1,
+    semanticStatus:'awaiting_chatgpt',olderUnscanned:true};
+  const followUps=[];
+  const widget=mount(message=>{
+    assert.equal(message.params.name,'start_mail_view');
+    assert.equal(message.params.arguments.mailboxId,'mail-a');
+    return {structuredContent:{data:fresh}};
+  },{sendFollowUpMessage:async message=>{followUps.push(message);}});
+  widget.notify(old);
+  await widget.ids.get('new-mail').onclick();
+  assert.equal(widget.calls.filter(x=>x.method==='tools/call').length,1);
+  assert.equal(followUps.length,1,'one click asks ChatGPT to assess the new fixed list');
+  assert.match(followUps[0].prompt,/právě načteném seznamu/);
+  assert.match(content(widget.ids.get('items')),/New request/);
+  assert.match(widget.ids.get('notice').textContent,/čekají na posouzení/i);
+});
+
+test('mail card settings open the authenticated SO.ai signature editor',async()=>{
+  const widget=mount(message=>{
+    if(message.params.name==='get_mail_connection_status')return {structuredContent:{data:{
+      connection:'Připojeno',mailboxes:[{id:'mail-a',address:'alice@example.test',
+        mailboxStatus:'Dostupná',mode:'na vyžádání'}]}}};
+    if(message.params.name==='get_mail_signature')return {structuredContent:{data:{
+      configured:false}}};
+    throw new Error(message.params.name);
+  });
+  widget.notify({listId:'fixed-list',mailboxId:'mail-a',items:[],pending:0});
+  await widget.ids.get('tab-settings').onclick();
+  const link=widget.ids.get('settings').children.find(child=>child.tag==='a');
+  assert.equal(link.textContent,'Upravit podpis a styl v SO.ai');
+  assert.equal(link.href,'https://smart-odpady.ai/forpsi-mail-settings/');
+  assert.equal(link.rel,'noopener noreferrer');
 });

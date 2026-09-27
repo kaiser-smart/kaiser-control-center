@@ -150,7 +150,7 @@ test('frozen onboarding preserves its saved state while daily mail stays availab
   assert.ok(!mailAppWidget.includes('innerHTML'));
   assert.match(mailAppWidget,/process_worklist_command/);
   assert.match(mailAppWidget,/preview_workflow_draft/);
-  assert.match(MAIL_APP_UI_URI,/mail-app-v4/);
+  assert.match(MAIL_APP_UI_URI,/mail-app-v5/);
 });
 
 test('daily mail keeps native mailbox mutations unavailable while personal states work',async()=>{

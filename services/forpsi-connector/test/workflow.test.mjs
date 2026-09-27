@@ -43,6 +43,19 @@ test('snapshot numbers survive new mail and a compound instruction reports parti
   assert.ok(!calls.some(x=>['send','move','flags'].includes(x)));
 });
 
+test('an approved manual reply style is visible when the fixed list is resumed',async()=>{
+  const {f,ctx,workflow}=setup();
+  const list=await workflow.start({mailboxId:'mail-a',limit:3});
+  assert.equal(list.replyStyle,null);
+  await f.store.run(`INSERT INTO workflow_profile_versions
+    (tenant_id,principal_id,mailbox_id,version,profile_json,approved_at,active)
+    VALUES (?,?,?,?,?,?,1)`,'tenant-a',f.principal.id,'mail-a',1,
+  JSON.stringify({replyStyle:{mode:'friendly'},synchronization:{mode:'manual'}}),f.now());
+  const resumed=await new Workflow(ctx).resume({listId:list.listId});
+  assert.equal(resumed.replyStyle,'friendly');
+  assert.deepEqual(resumed.items.map(item=>item.number),[1,2,3]);
+});
+
 test('review next only skips; restart and another chat recover position and encrypted draft',async()=>{
   const {f,ctx,workflow}=setup();
   const list=await workflow.start({mailboxId:'mail-a',limit:3});
@@ -126,7 +139,12 @@ test('shortcuts require explicit approval, stay personal, and invoice ambiguity 
     kind:'invoice_forward',recipient:'faktury@kaiserservis.cz',attachmentRule:'single_verified_invoice_pdf',
     style:'stručný',signatureMode:'short'}});
   await assert.rejects(manager.use({listId:list.listId,number:2,shortcutId:proposal.id}),/SHORTCUT_NOT_APPROVED/);
-  const approved=await manager.approve({mailboxId:'mail-a',shortcutId:proposal.id,version:proposal.version,approved:true});
+  await assert.rejects(manager.approve({mailboxId:'mail-a',shortcutId:proposal.id,
+    version:proposal.version,approved:true}),/APPROVAL_UI_REQUIRED/);
+  await assert.rejects(manager.remove({mailboxId:'mail-a',shortcutId:proposal.id,
+    version:proposal.version}),/APPROVAL_UI_REQUIRED/);
+  const approved=await new Shortcuts({...ctx,approvalSource:'soai_session'}).approve({
+    mailboxId:'mail-a',shortcutId:proposal.id,version:proposal.version,approved:true});
   assert.equal(approved.approved,true);
   assert.equal((await manager.use({listId:list.listId,number:2,shortcutId:proposal.id})).reason,'INVOICE_ATTACHMENT_MISSING');
   setAttachmentProof([{index:0,filename:'one.pdf',size:100,isPdf:true,sha256:'a'.repeat(64)},
@@ -149,6 +167,17 @@ test('shortcuts require explicit approval, stay personal, and invoice ambiguity 
       attachmentRule:'single_verified_invoice_pdf',style:'stručný',signatureMode:'short'}},true);
   assert.equal(edited.approved,false);
   await assert.rejects(manager.use({listId:list.listId,number:2,shortcutId:proposal.id}),/SHORTCUT_NOT_APPROVED/);
+});
+
+test('accountant shortcut suggests only Radim’s requested address, never a colleague default',async()=>{
+  const {f,ctx}=setup();
+  ctx.env.RADIM_PRINCIPAL_ID='alice';
+  const own=await new Shortcuts(ctx).list({mailboxId:'mail-a'});
+  assert.equal(own.proposedDefaults[0].definition.recipient,'fakturu@kaiserservis.cz');
+  await f.store.run("INSERT INTO grants VALUES ('bob','mail-a','read',0)");
+  const colleague=await new Shortcuts({...ctx,principal:{id:'bob',scopes:['forpsi:read']}})
+    .list({mailboxId:'mail-a'});
+  assert.equal(colleague.proposedDefaults[0].definition.recipient,null);
 });
 
 test('priority view uses approved personal evidence, keeps unknown senders visible, and hides done items',async()=>{

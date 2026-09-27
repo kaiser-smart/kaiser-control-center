@@ -60,7 +60,7 @@ test('real MCP transport initializes, lists tools and returns structured results
   assert.ok(list.result.tools.some(t=>t.name==='get_mail_connection_status'));
   assert.ok(list.result.tools.some(t=>t.name==='submit_mail_view_analysis'));
   const widget = list.result.tools.find(t => t.name === 'render_worklist');
-  assert.equal(widget._meta.ui.resourceUri, 'ui://forpsi/mail-app-v4.html');
+  assert.equal(widget._meta.ui.resourceUri, 'ui://forpsi/mail-app-v5.html');
   assert.equal(widget.annotations.readOnlyHint, true);
   const resources = await (await worker.fetch(request('resources/list'), f.env)).json();
   assert.equal(resources.result.resources[0].mimeType, 'text/html;profile=mcp-app');
@@ -69,10 +69,12 @@ test('real MCP transport initializes, lists tools and returns structured results
     uri:SETUP_UI_URI}),f.env)).json();
   assert.match(setupResource.result.contents[0].text,/Souhlasím a pokračovat/);
   const resource=await (await worker.fetch(request('resources/read',{
-    uri:'ui://forpsi/mail-app-v4.html'}),f.env)).json();
+    uri:'ui://forpsi/mail-app-v5.html'}),f.env)).json();
   assert.match(resource.result.contents[0].text,/ui\/notifications\/tool-result/);
   assert.match(resource.result.contents[0].text,/ui\/notifications\/initialized/);
   assert.match(resource.result.contents[0].text,/get_mail/);
+  assert.deepEqual(resource.result.contents[0]._meta['openai/widgetCSP'].redirect_domains,
+    ['https://smart-odpady.ai']);
   const send = list.result.tools.find(t => t.name === 'send_message');
   assert.equal(send.annotations.openWorldHint, true);
   assert.equal(send.annotations.destructiveHint, false);
@@ -93,6 +95,8 @@ test('daily mail exposes only safe tools with frozen setup, while another user c
   assert.ok(!listed.includes('answer_mail_setup'));
   assert.ok(!listed.includes('send_message'));
   assert.ok(!listed.includes('move_message'));
+  assert.ok(!listed.includes('approve_shortcut'));
+  assert.ok(!listed.includes('remove_shortcut'));
   const stranger=createWorker({authenticate:async()=>({id:'bob',scopes:['forpsi:read']}),
     providerFactory:f.providerFactory});
   const status=(await (await stranger.fetch(request('tools/call',{

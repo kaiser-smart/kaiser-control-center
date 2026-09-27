@@ -345,13 +345,17 @@ export class Workflow {
     const savedDraft=await this.store.first(`SELECT id,revision,kind,item_number FROM workflow_drafts
       WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND list_id=?
       ORDER BY updated_at DESC LIMIT 1`,row.tenant_id,this.principal.id,row.mailbox_id,row.id);
+    const savedProfile=await this.store.first(`SELECT profile_json FROM workflow_profile_versions
+      WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND active=1`,
+    row.tenant_id,this.principal.id,row.mailbox_id);
+    const replyStyle=savedProfile?JSON.parse(savedProfile.profile_json).replyStyle?.mode??null:null;
     return { listId:row.id, mailboxId:row.mailbox_id, folder:row.folder, view:row.view,
       knownRemainingPriority:row.known_remaining_priority,olderUnscanned:row.older_unscanned===1,
       scannedCount:row.scanned_count,scanLimit:row.scan_limit,displayedCount:items.length,
       semanticExaminedCount:row.semantic_examined_count,semanticStatus:row.semantic_status,
       semanticContextStatus:row.semantic_context_status,
       position:row.position,analysisRevision:row.analysis_revision??0,
-      active:row.active===1, expiresAt:row.expires_at, items, draft:savedDraft?{
+      active:row.active===1, expiresAt:row.expires_at, replyStyle, items, draft:savedDraft?{
         id:savedDraft.id,revision:savedDraft.revision,kind:savedDraft.kind,
         itemNumber:savedDraft.item_number}:null,pending:items.filter(i=>i.state==='todo').length,
       untrustedContent:true };
