@@ -1,6 +1,6 @@
 // Presentation only: every read and state change uses the authenticated MCP
 // tools. Message text is assigned through textContent, never innerHTML.
-export const MAIL_APP_UI_URI='ui://forpsi/mail-app-v2.html';
+export const MAIL_APP_UI_URI='ui://forpsi/mail-app-v3.html';
 export const mailAppWidget=`<!doctype html><html lang="cs"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><style>
 :root{color-scheme:light dark;font-family:Quicksand,-apple-system,BlinkMacSystemFont,system-ui,sans-serif}
@@ -29,11 +29,12 @@ textarea{min-height:150px}.notice{padding:10px 15px;border-top:1px solid #8884;f
 <p class="notice muted" id="notice">Čtení zprávy nic v poště nemění.</p></section><script>
 (()=>{
  const pending=new Map();let nextId=1,snapshot=null,selected=null,detail=null,draft=null,thread=null,screen='list';
+ const timeZone=Intl.DateTimeFormat().resolvedOptions().timeZone||'Europe/Prague';
  const el=id=>document.getElementById(id);
  const elem=(tag,text,klass)=>{const x=document.createElement(tag);if(text!==undefined)x.textContent=String(text);if(klass)x.className=klass;return x};
  const button=(text,fn)=>{const x=elem('button',text,'btn');x.type='button';x.onclick=fn;return x};
  const request=(method,params)=>new Promise((resolve,reject)=>{const id=nextId++;pending.set(id,{resolve,reject});window.parent.postMessage({jsonrpc:'2.0',id,method,params},'*')});
- async function call(name,args){const r=await request('tools/call',{name,arguments:args});if(r.isError)throw new Error(r.content?.[0]?.text||'Požadavek se nezdařil.');if(!r.structuredContent?.data)throw new Error('Požadavek se nezdařil.');return r.structuredContent.data}
+ async function call(name,args){const r=await request('tools/call',{name,arguments:args});if(r.isError||!r.structuredContent?.data)throw new Error('Požadavek se nezdařil. Zkuste to znovu.');return r.structuredContent.data}
  const stateName=x=>({todo:'K vyřízení',waiting:'Čekám na odpověď',snoozed:'Odloženo',done:'Hotovo'})[x]||'K vyřízení';
  function show(name){screen=name;for(const id of ['home','list','draft','settings'])el(id).hidden=id!==name;for(const id of ['home','list','settings'])el('tab-'+id).setAttribute('aria-current',String(id===name))}
  function note(text,error=false){el('notice').textContent=text;el('notice').className='notice '+(error?'error':'muted')}
@@ -46,8 +47,8 @@ textarea{min-height:150px}.notice{padding:10px 15px;border-top:1px solid #8884;f
      content.append(elem('strong',item.from||'Neznámý odesílatel'),elem('span',item.subject||'(bez předmětu)','subject'),elem('span',item.priorityReason||'','reason'),badge);
      row.append(elem('span',item.number+'.'),content);row.onclick=()=>openItem(item);li.append(row);el('items').append(li)}
    el('layout').classList.toggle('split',!!selected);el('detail').hidden=!selected;if(selected)renderDetail()}
- async function openItem(item){try{note('Načítám zprávu…');await call('review_worklist',{listId:snapshot.listId,action:'open',number:item.number});detail=await call('get_mail',{mailboxId:snapshot.mailboxId,message:item.reference});selected=item;thread=null;show('list');renderList()}catch(e){note('Zprávu se nepodařilo otevřít. '+e.message,true)}}
- async function setState(item,action){try{const r=await call('process_worklist_command',{listId:snapshot.listId,command:item.number+' '+action});const one=r.results?.[0];if(one?.status!=='completed')throw new Error(one?.reason||'Změna se nezdařila.');snapshot=await call('get_worklist',{listId:snapshot.listId});selected=snapshot.items.find(x=>x.number===item.number);renderList();note('Zpráva '+item.number+': '+stateName(one.state)+(one.dueDate?' do '+one.dueDate:'')+'.')}catch(e){note('Stav se nepodařilo uložit. '+e.message,true)}}
+ async function openItem(item){try{note('Načítám zprávu…');await call('review_worklist',{listId:snapshot.listId,action:'open',number:item.number,timeZone});detail=await call('get_mail',{mailboxId:snapshot.mailboxId,message:item.reference});selected=item;thread=null;show('list');renderList()}catch(e){note('Zprávu se nepodařilo otevřít. '+e.message,true)}}
+ async function setState(item,action){try{const r=await call('process_worklist_command',{listId:snapshot.listId,command:item.number+' '+action,timeZone});const one=r.results?.[0];if(one?.status!=='completed')throw new Error(one?.reason||'Změna se nezdařila.');snapshot=await call('get_worklist',{listId:snapshot.listId});selected=snapshot.items.find(x=>x.number===item.number);renderList();note('Zpráva '+item.number+': '+stateName(one.state)+(one.dueDate?' do '+one.dueDate:'')+'.')}catch(e){note('Stav se nepodařilo uložit. '+e.message,true)}}
  async function prepare(kind,item,recipient){try{const args={listId:snapshot.listId,number:item.number,text:'',signatureMode:'short'};if(kind==='forward')args.recipient=recipient;const saved=await call(kind==='forward'?'draft_forward':'draft_reply',args);draft=await call('preview_workflow_draft',{draftId:saved.draftId});renderDraft();show('draft')}catch(e){note('Návrh se nepodařilo připravit. '+e.message,true)}}
  function renderDetail(){const target=el('detail');if(!detail||!selected)return;const actions=elem('div',undefined,'actions');
    if(!selected.newerReply)actions.append(button('Hotovo',()=>setState(selected,'hotovo')),button('Čekám na odpověď',()=>setState(selected,'čekám na odpověď')),button('Připravit odpověď',()=>prepare('reply',selected)));

@@ -60,7 +60,7 @@ test('real MCP transport initializes, lists tools and returns structured results
   assert.ok(list.result.tools.some(t=>t.name==='get_mail_connection_status'));
   assert.ok(list.result.tools.some(t=>t.name==='submit_mail_view_analysis'));
   const widget = list.result.tools.find(t => t.name === 'render_worklist');
-  assert.equal(widget._meta.ui.resourceUri, 'ui://forpsi/mail-app-v2.html');
+  assert.equal(widget._meta.ui.resourceUri, 'ui://forpsi/mail-app-v3.html');
   assert.equal(widget.annotations.readOnlyHint, true);
   const resources = await (await worker.fetch(request('resources/list'), f.env)).json();
   assert.equal(resources.result.resources[0].mimeType, 'text/html;profile=mcp-app');
@@ -69,7 +69,7 @@ test('real MCP transport initializes, lists tools and returns structured results
     uri:SETUP_UI_URI}),f.env)).json();
   assert.match(setupResource.result.contents[0].text,/Souhlasím a pokračovat/);
   const resource=await (await worker.fetch(request('resources/read',{
-    uri:'ui://forpsi/mail-app-v2.html'}),f.env)).json();
+    uri:'ui://forpsi/mail-app-v3.html'}),f.env)).json();
   assert.match(resource.result.contents[0].text,/ui\/notifications\/tool-result/);
   assert.match(resource.result.contents[0].text,/ui\/notifications\/initialized/);
   assert.match(resource.result.contents[0].text,/get_mail/);

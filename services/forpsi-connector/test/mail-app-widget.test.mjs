@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { mailAppWidget } from '../src/mail-app-widget.mjs';
+import { tools as mcpTools } from '../src/mcp.mjs';
 
 class Element {
   constructor(tag='div'){this.tag=tag;this.children=[];this.textContent='';this.value='';
@@ -24,6 +25,11 @@ function mount(respond){
   const parent={postMessage(message){
     if(message.method==='ui/notifications/initialized')return;
     calls.push(message);
+    if(message.method==='tools/call'){
+      const required=mcpTools.find(tool=>tool.name===message.params.name)?.inputSchema.required??[];
+      for(const key of required)assert.ok(Object.hasOwn(message.params.arguments,key),
+        `${message.params.name} must pass required MCP argument ${key}`);
+    }
     const result=message.method==='ui/initialize'?{}:respond(message);
     onMessage({source:parent,data:{jsonrpc:'2.0',id:message.id,result}});
   }};
@@ -44,7 +50,9 @@ test('mail card opens exact numbered detail and updates personal state in place'
   const widget=mount(message=>{
     const {name,arguments:args}=message.params;
     if(name==='review_worklist'){
-      assert.equal(args.number,2);return {structuredContent:{data:{position:2,message:{}}}};
+      assert.equal(args.number,2);
+      assert.ok(args.timeZone,'The ChatGPT MCP schema requires timeZone even for opening a message.');
+      return {structuredContent:{data:{position:2,message:{}}}};
     }
     if(name==='get_mail'){
       assert.deepEqual(JSON.parse(JSON.stringify(args.message)),item.reference);
@@ -54,6 +62,7 @@ test('mail card opens exact numbered detail and updates personal state in place'
     }
     if(name==='process_worklist_command'){
       assert.equal(args.command,'2 hotovo');
+      assert.ok(args.timeZone,'The ChatGPT MCP schema requires timeZone for state changes.');
       return {structuredContent:{data:{results:[{status:'completed',state:'done'}]}}};
     }
     if(name==='get_worklist')return {structuredContent:{data:{...snapshot,
