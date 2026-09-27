@@ -117,7 +117,14 @@ function questions(observations,answers,proposal={},interactive=false,loadingAva
       ...(newsletterSeriesKey(item.subject)?['newsletterová série tohoto odesílatele']:[]),'přeskočit'],evidence:item});
   if(!interactive)result.push({id:'practical_review',title:'Zkontrolujte vzorek priorit. Má být návrh zatím jen čtecí, bez přesunů a upozornění?',
     options:['ano, jen čtecí','přeskočit']});
-  return result.filter(q=>!Object.hasOwn(answers,q.id));
+  const unanswered=result.filter(q=>!Object.hasOwn(answers,q.id));
+  if(!interactive)return unanswered;
+  // Ask about actual work before optional service cadence. A live mailbox can have
+  // no contact suggestions yet still contain an evidenced open request.
+  const rank=id=>id.startsWith('agenda_')?0:id==='priority_example_high'?1:
+    id==='important_contacts'?2:id==='priority_example_review'?3:id==='signature'?4:
+    id==='loading_mode'?5:6;
+  return unanswered.sort((a,b)=>rank(a.id)-rank(b.id));
 }
 
 export class Onboarding {
@@ -401,7 +408,9 @@ export class Onboarding {
       signaturePreview:profile?.signature?.fullText?
         {plain:`Dobrý den,\n\nDěkuji za zprávu.\n\n${profile.signature.fullText}`,
           html:`<p>Dobrý den,</p><p>Děkuji za zprávu.</p><p>${safeHtml(profile.signature.fullText)}</p>`}:null,
-      nextQuestion:remaining[0]??null,readyToApprove:!!proposal && remaining.length===0 && row.question_count<20 &&
+      nextQuestion:remaining[0]??null,
+      uiNextAction:this.interactive()&&remaining.length?'call_render_mail_setup':null,
+      readyToApprove:!!proposal && remaining.length===0 && row.question_count<20 &&
         (!this.interactive()||facts?.semantic?.status==='chatgpt_proposal'),
       untrustedContent:true,
       approvalAvailable,approvalUrl:approvalAvailable?new URL(`/forpsi-setup/?session=${encodeURIComponent(sessionId)}`,

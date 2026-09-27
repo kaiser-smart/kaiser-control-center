@@ -223,6 +223,35 @@ test('production ChatGPT setup uses the consented sample before asking, and its 
   assert.equal(list.items[1].priority,'review');
 });
 
+test('live setup asks about evidenced work before optional loading and explicitly requests the UI tool',async()=>{
+  const {ctx}=scenario({incoming:[message(1,{text:'Prosím o rozhodnutí.'})],sent:[]});
+  Object.assign(ctx.env,{CHATGPT_INTERACTIVE_SETUP_ENABLED:'true',CONNECTOR_ENABLED:'true',
+    WORKFLOW_SYNC_ENABLED:'true'});
+  const setup=new Onboarding(ctx);
+  const began=await setup.begin({mailboxId:'mail-a',consent:true,days:30,folders:['INBOX']});
+  const analyzed=await setup.analyze({sessionId:began.sessionId});
+  const sample=await setup.readSetupSample({sessionId:began.sessionId});
+  await setup.submitAnalysis({sessionId:began.sessionId,proposalVersion:analyzed.proposal.version,
+    findings:[{kind:'waiting_user',sourceKey:sample.messages[0].key,
+      quote:'Prosím o rozhodnutí.',summary:'Rozhodnutí pro zákazníka.'}],
+    priorities:[{sourceKey:sample.messages[0].key,priority:'high',
+      reason:'Zákazník žádá rozhodnutí.',quote:'Prosím o rozhodnutí.'}]});
+  const state=await executeTool('get_mail_setup',{sessionId:began.sessionId},ctx);
+  assert.equal(state.nextQuestion.id,'agenda_1');
+  assert.equal(state.uiNextAction,'call_render_mail_setup');
+  const rendered=await executeTool('render_mail_setup',{sessionId:began.sessionId},ctx);
+  assert.equal(rendered.nextQuestion.id,'agenda_1');
+  assert.match(rendered.uiPresentation,/host/i);
+  const asked=[];
+  let current=rendered;
+  while(current.nextQuestion){
+    asked.push(current.nextQuestion.id);
+    current=await setup.answer({sessionId:began.sessionId,questionId:current.nextQuestion.id,
+      answer:'přeskočit'});
+  }
+  assert.ok(asked.indexOf('priority_example_high')<asked.indexOf('loading_mode'));
+});
+
 test('existing un-answered production session upgrades in place without wider consent',async()=>{
   const {ctx}=scenario({incoming:[message(1)],sent:[]});
   const setup=new Onboarding(ctx),begin=await setup.begin({mailboxId:'mail-a',consent:true,
