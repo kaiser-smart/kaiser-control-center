@@ -55,12 +55,16 @@ test('real MCP transport initializes, lists tools and returns structured results
   assert.equal(init.status, 200);
   assert.equal((await init.json()).result.serverInfo.name, 'forpsi-company-mail');
   const list = await (await worker.fetch(request('tools/list'), f.env)).json();
-  assert.equal(list.result.tools.length, 62);
+  assert.equal(list.result.tools.length, 64);
   const widget = list.result.tools.find(t => t.name === 'render_worklist');
   assert.equal(widget._meta.ui.resourceUri, 'ui://forpsi/worklist-v1.html');
   assert.equal(widget.annotations.readOnlyHint, true);
   const resources = await (await worker.fetch(request('resources/list'), f.env)).json();
   assert.equal(resources.result.resources[0].mimeType, 'text/html;profile=mcp-app');
+  assert.equal(resources.result.resources[1].uri,'ui://forpsi/setup-v1.html');
+  const setupResource=await (await worker.fetch(request('resources/read',{
+    uri:'ui://forpsi/setup-v1.html'}),f.env)).json();
+  assert.match(setupResource.result.contents[0].text,/Souhlasím a pokračovat/);
   const resource=await (await worker.fetch(request('resources/read',{
     uri:'ui://forpsi/worklist-v1.html'}),f.env)).json();
   assert.match(resource.result.contents[0].text,/ui\/notifications\/tool-result/);

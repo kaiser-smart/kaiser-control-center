@@ -48,7 +48,7 @@ test('90-day bounded metadata and consented content sampling records limits and 
   assert.equal(a.calls.filter(x=>Array.isArray(x)&&x[0]==='read').length,2);
   const bStarted=await b.onboarding.begin({mailboxId:'mail-a',consent:true,days:90});
   const bAnalyzed=await b.onboarding.analyze({sessionId:bStarted.sessionId});
-  assert.equal(bAnalyzed.nextQuestion.id,'direct_vs_cc');
+  assert.equal(bAnalyzed.nextQuestion.id,'loading_mode');
   assert.deepEqual(bAnalyzed.observations.twoWay,[]);
 });
 

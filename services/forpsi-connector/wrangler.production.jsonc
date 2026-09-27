@@ -11,6 +11,7 @@
     "CONNECTOR_ENABLED": "true",
     "CONNECTOR_OAUTH": "true",
     "PERSONAL_PILOT_READ_ONLY": "false",
+    "CHATGPT_INTERACTIVE_SETUP_ENABLED": "true",
     "WORKFLOW_SYNC_ENABLED": "true",
     "SEND_ENABLED": "true",
     "SOAI_MAIL_ENABLED": "true",
