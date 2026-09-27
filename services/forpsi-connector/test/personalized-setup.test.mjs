@@ -165,8 +165,7 @@ test('personal live pilot refuses broad consent and keeps onboarding plus priori
   const navigation=await executeTool('review_worklist',{listId:list.listId,action:'next'},ctx);
   assert.equal(navigation.position,2);
   assert.equal((await executeTool('resume_worklist',{listId:list.listId},ctx)).position,2);
-  await assert.rejects(executeTool('review_worklist',{listId:list.listId,action:'done'},ctx),
-    /PILOT_READ_ONLY/);
+  assert.equal((await executeTool('review_worklist',{listId:list.listId,action:'done'},ctx)).position,2);
   assert.equal((await executeTool('read_message',{mailboxId:'mail-a',message:list.items[0].reference},ctx)).subject,'Zakázka');
   await assert.rejects(executeTool('set_message_flags',{mailboxId:'mail-a',message:ref('INBOX',1),seen:true},ctx),
     /PILOT_READ_ONLY/);

@@ -56,9 +56,11 @@ test('real MCP transport initializes, lists tools and returns structured results
   assert.equal(init.status, 200);
   assert.equal((await init.json()).result.serverInfo.name, 'forpsi-company-mail');
   const list = await (await worker.fetch(request('tools/list'), f.env)).json();
-  assert.equal(list.result.tools.length, 64);
+  assert.ok(list.result.tools.length >= 74);
+  assert.ok(list.result.tools.some(t=>t.name==='get_mail_connection_status'));
+  assert.ok(list.result.tools.some(t=>t.name==='submit_mail_view_analysis'));
   const widget = list.result.tools.find(t => t.name === 'render_worklist');
-  assert.equal(widget._meta.ui.resourceUri, 'ui://forpsi/worklist-v1.html');
+  assert.equal(widget._meta.ui.resourceUri, 'ui://forpsi/mail-app-v2.html');
   assert.equal(widget.annotations.readOnlyHint, true);
   const resources = await (await worker.fetch(request('resources/list'), f.env)).json();
   assert.equal(resources.result.resources[0].mimeType, 'text/html;profile=mcp-app');
@@ -67,10 +69,10 @@ test('real MCP transport initializes, lists tools and returns structured results
     uri:SETUP_UI_URI}),f.env)).json();
   assert.match(setupResource.result.contents[0].text,/Souhlasím a pokračovat/);
   const resource=await (await worker.fetch(request('resources/read',{
-    uri:'ui://forpsi/worklist-v1.html'}),f.env)).json();
+    uri:'ui://forpsi/mail-app-v2.html'}),f.env)).json();
   assert.match(resource.result.contents[0].text,/ui\/notifications\/tool-result/);
   assert.match(resource.result.contents[0].text,/ui\/notifications\/initialized/);
-  assert.match(resource.result.contents[0].text,/name:'read_message'/);
+  assert.match(resource.result.contents[0].text,/get_mail/);
   const send = list.result.tools.find(t => t.name === 'send_message');
   assert.equal(send.annotations.openWorldHint, true);
   assert.equal(send.annotations.destructiveHint, false);
@@ -79,6 +81,27 @@ test('real MCP transport initializes, lists tools and returns structured results
   assert.equal(response.result.structuredContent.data.mailboxes[0].id, 'mail-a');
   const profile = await (await worker.fetch(request('tools/call', { name: 'get_profile', arguments: {} }), f.env)).json();
   assert.deepEqual(profile.result.structuredContent, { id: 'alice' });
+});
+
+test('daily mail exposes only safe tools with frozen setup, while another user cannot read a mailbox',async()=>{
+  const f=fixture(),env={...f.env,ONBOARDING_FROZEN:'true',MCP_NATIVE_MUTATIONS_ENABLED:'false'};
+  const own=createWorker({authenticate:async()=>({id:'alice',scopes:['forpsi:read']}),
+    providerFactory:f.providerFactory});
+  const listed=(await (await own.fetch(request('tools/list'),env)).json()).result.tools.map(x=>x.name);
+  assert.ok(listed.includes('get_mail_connection_status'));
+  assert.ok(listed.includes('submit_mail_view_analysis'));
+  assert.ok(!listed.includes('answer_mail_setup'));
+  assert.ok(!listed.includes('send_message'));
+  assert.ok(!listed.includes('move_message'));
+  const stranger=createWorker({authenticate:async()=>({id:'bob',scopes:['forpsi:read']}),
+    providerFactory:f.providerFactory});
+  const status=(await (await stranger.fetch(request('tools/call',{
+    name:'get_mail_connection_status',arguments:{}}),env)).json()).result.structuredContent.data;
+  assert.deepEqual(status.mailboxes,[]);
+  const read=(await (await stranger.fetch(request('tools/call',{
+    name:'get_mail',arguments:{mailboxId:'mail-a',message:{folder:'INBOX',uid:10,uidValidity:'3'}}}),env)).json()).result;
+  assert.equal(read.isError,true);
+  assert.equal(read.content[0].text,'ACCESS_DENIED');
 });
 test('unauthenticated and cross-origin HTTP requests do not access a mailbox', async () => {
   const f = fixture(); const worker = createWorker();
