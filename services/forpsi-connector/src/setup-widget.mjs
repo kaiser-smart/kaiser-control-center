@@ -1,6 +1,6 @@
 // Presentation only. Consent and every answer are checked against the authenticated
 // mailbox and the current server-side setup session by the existing MCP tools.
-export const SETUP_UI_URI='ui://forpsi/setup-v1.html';
+export const SETUP_UI_URI='ui://forpsi/setup-v2.html';
 export const setupWidget=`<!doctype html>
 <html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
@@ -41,7 +41,11 @@ textarea{min-height:75px}.error{color:#b52628}.info{color:CanvasText;background:
   const choiceLabel=value=>({'přeskočit':'Teď ne','ručně':'Jen když o poštu požádám',
     'každých 15 minut':'Každých 15 minut','použít doložený návrh':'Ano, tento podpis je můj',
     'ponechat bez podpisu':'Pokračovat bez podpisu','žádný':'Žádný z těchto kontaktů',
-    'ano, relevantní':'Ano, patří k mé práci','ne, nerelevantní':'Ne, tohle neřeším'})[value]||value;
+    'ano, relevantní':'Ano, patří k mé práci','ne, nerelevantní':'Ne, tohle neřeším',
+    'ano, tato zpráva je prioritní':'Ano, dejte ji mezi priority',
+    'ne, jen tato zpráva je běžná':'Ne, nechte ji mimo hlavní priority',
+    'ano, tato zpráva je běžná':'Ano, nechte ji mimo hlavní priority',
+    'ne, jen tato zpráva je prioritní':'Ne, dejte ji mezi priority'})[value]||value;
   function consent(){
     heading('Přizpůsobit poštu vám');app.append(node('p','Pomůžu vám nastavit poštu tak, aby důležité věci nezapadly a zbytečnosti vás nezdržovaly. Můžu pro návrh projít nejvýše 50 přijatých a odeslaných e-mailů z posledních 30 dní? Nic neodešlu ani nezměním ve vaší schránce.'));
     if(!snapshot.sentFolderAvailable)app.append(node('p','K vašim odeslaným zprávám se teď nedostanu, takže z nich zatím nemůžu navrhnout podpis.','muted'));
@@ -155,7 +159,7 @@ textarea{min-height:75px}.error{color:#b52628}.info{color:CanvasText;background:
     const msg=event.data;if(msg.id!==undefined&&pending.has(msg.id)){
       const p=pending.get(msg.id);pending.delete(msg.id);msg.error?p.reject(msg.error):p.resolve(msg.result);return}
     if(msg.method==='ui/notifications/tool-result'){snapshot=msg.params?.structuredContent?.data??null;render()}});
-  request('ui/initialize',{protocolVersion:'2026-01-26',appInfo:{name:'forpsi-setup',version:'1'},appCapabilities:{}})
+  request('ui/initialize',{protocolVersion:'2026-01-26',appInfo:{name:'forpsi-setup',version:'2'},appCapabilities:{}})
     .then(()=>window.parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}},'*'))
     .catch(()=>{heading('Formulář není dostupný');app.append(node('p','Pokračujte textově v chatu.'))});
 })();
