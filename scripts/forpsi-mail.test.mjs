@@ -38,6 +38,19 @@ test('session, same-origin, service authentication and strict input reject bypas
   f.env.FORPSI_ADMIN_TOKEN='different-service-token-more-than-32-characters';
   assert.equal((await f.call('list_mailboxes')).status,401);assert.equal(f.calls.length,0);
 });
+test('another authenticated SO.ai employee cannot list or read the pilot mailbox',async()=>{
+  const f=await setup();
+  const colleague={id:'different-employee',name:'TEST colleague',email:'colleague@example.test',role:'readonly',active:true,status:'active'};
+  f.env.AUTH_USERS_JSON=JSON.stringify([user,colleague]);
+  const cookie=(await createSessionCookie(f.env,colleague)).split(';')[0];
+  const request=body=>f.request(body,{cookie});
+  const list=await forwardForpsiMail({env:f.env,request:request({operation:'list_mailboxes',payload:{}})});
+  assert.equal(list.status,200);
+  assert.deepEqual((await list.json()).data.mailboxes,[]);
+  const read=await forwardForpsiMail({env:f.env,request:request({operation:'read_message',payload:{mailboxId:'mail-a',message:ref}})});
+  assert.equal(read.status,403);
+  assert.equal(f.calls.length,0);
+});
 test('missing grants, pause, disabled identity, kill switch and tenant collision fail closed',async()=>{
   const f=await setup();
   f.sqlite.exec("UPDATE grants SET revoked=1 WHERE principal_id LIKE 'soai_%'");

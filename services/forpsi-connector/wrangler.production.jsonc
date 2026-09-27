@@ -4,11 +4,15 @@
   "account_id": "3b25838c1e15dbfe5f3ac0c273826576",
   "main": "src/worker.mjs",
   "compatibility_date": "2026-09-25",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": false,
   "preview_urls": false,
   "vars": {
-    "CONNECTOR_ENABLED": "false",
+    "CONNECTOR_ENABLED": "true",
+    "CONNECTOR_OAUTH": "true",
+    "PERSONAL_PILOT_READ_ONLY": "false",
+    "WORKFLOW_SYNC_ENABLED": "true",
+    "SEND_ENABLED": "true",
     "SOAI_MAIL_ENABLED": "true",
     "SOAI_DRAFTS_ENABLED": "true",
     "SOAI_DRAFT_COPIES_ENABLED": "true",
@@ -20,6 +24,10 @@
     "database_id": "76646cc2-deeb-41af-baeb-92159c9e7e5c",
     "migrations_dir": "migrations"
   }],
-  "triggers": {"crons": []},
+  "kv_namespaces": [{
+    "binding": "OAUTH_KV",
+    "id": "35709c067cf842cc88c16ce90d0a19bf"
+  }],
+  "triggers": {"crons": ["* * * * *"]},
   "observability": {"enabled": false}
 }

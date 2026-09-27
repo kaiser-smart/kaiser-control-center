@@ -1,0 +1,29 @@
+<!doctype html><html lang="cs"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Přístup ChatGPT k poště Forpsi</title>
+<body style="font:16px system-ui;max-width:42rem;margin:3rem auto;padding:1rem;line-height:1.5">
+<h1>Přístup ChatGPT k poště Forpsi</h1><p>Zde můžete odebrat schválený čtecí přístup. Po odebrání tokeny přestanou platit; ke schránce se lze znovu připojit jen novým schválením v SO.ai.</p>
+<p id="status">Načítám…</p><div id="grants"></div>
+<script type="module">
+const status=document.getElementById('status'),list=document.getElementById('grants');
+async function load(){
+  try{
+    const response=await fetch('/api/forpsi/oauth/access',{credentials:'same-origin'}),data=await response.json();
+    if(!response.ok)throw new Error(data.error||'Přístup není dostupný.');
+    status.textContent=data.grants.length?'Aktivní čtecí přístupy:':'Žádný aktivní přístup.';
+    list.replaceChildren();
+    for(const grant of data.grants){
+      const line=document.createElement('p'),button=document.createElement('button');
+      line.textContent='ChatGPT · forpsi:read · '+new Date(grant.createdAt*1000).toLocaleString('cs-CZ')+' ';
+      button.textContent='Odebrat přístup';button.onclick=async()=>{
+        button.disabled=true;
+        try{const result=await fetch('/api/forpsi/oauth/access',{method:'POST',credentials:'same-origin',
+          headers:{'content-type':'application/json'},body:JSON.stringify({grantId:grant.id})});
+          if(!result.ok)throw new Error('Odebrání se nezdařilo.');await load();}
+        catch(error){status.textContent=error.message;button.disabled=false;}
+      };line.append(button);list.append(line);
+    }
+    if(data.incomplete)status.textContent+=' Výpis je neúplný; obnovte stránku.';
+  }catch(error){status.textContent=error.message;}
+}
+load();
+</script></body></html>

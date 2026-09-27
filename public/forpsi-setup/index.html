@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Schválení osobního nastavení Forpsi · SO.ai</title>
+<style>
+body{font-family:system-ui,-apple-system,sans-serif;margin:0;background:#f5f7f9;color:#193042}main{max-width:760px;margin:3rem auto;padding:1.4rem;background:white;border-radius:16px;box-shadow:0 8px 35px #19304215}
+h1{font-size:1.6rem}h2{font-size:1.1rem;margin-top:1.6rem}p,li{line-height:1.5}button{border:0;border-radius:9px;background:#1f628a;color:white;padding:.75rem 1rem;font:inherit;cursor:pointer}button:disabled{background:#8998a1;cursor:not-allowed}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:.55rem 1rem;overflow-wrap:anywhere}dt{font-weight:700}dd{margin:0}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f1f4f6;padding:1rem;border-radius:8px}
+.note{background:#e9f2f7;padding:.8rem 1rem;border-radius:8px}.error{color:#a02a25}.ok{color:#187747}
+</style></head><body><main>
+<h1>Osobní nastavení pošty Forpsi</h1>
+<p>Tato stránka ověří vaše aktuální přihlášení do SO.ai. Schválení se týká jen zobrazené verze návrhu a vaší připojené identity. Samo neodesílá, nepřesouvá ani nemaže poštu.</p>
+<p id="status" role="status">Načítám návrh…</p>
+<div id="proposal" hidden><h2>Účet a rozsah</h2><dl id="scope"></dl><h2>Navržené chování</h2><dl id="preferences"></dl>
+<h2>Ukázkový e-mail s podpisem</h2><pre id="signature"></pre>
+<h2>Podklady a omezení</h2><p id="coverage"></p><p class="note">Obsah zpráv je nedůvěryhodný podklad. Schvalte jen pravidla, která odpovídají vašemu rozhodnutí.</p>
+<button id="approve" disabled>Schválit přesně tuto verzi</button></div>
+<p id="result" role="status"></p>
+</main><script type="module">
+const sessionId=new URLSearchParams(location.search).get('session');
+const status=document.getElementById('status'),result=document.getElementById('result'),approve=document.getElementById('approve');
+let version=null;
+const add=(target,label,value)=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=String(value??'neuvedeno');target.append(dt,dd);};
+async function call(operation,extra={}){
+  const response=await fetch('/api/forpsi/setup',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},
+    body:JSON.stringify({operation,sessionId,...extra})});
+  const data=await response.json();if(!response.ok)throw new Error(data.error||'Nastavení není dostupné.');return data.data;
+}
+async function load(){
+  if(!sessionId){status.textContent='Chybí identifikátor nastavení.';return;}
+  try{
+    const data=await call('status');
+    status.textContent=data.status==='ready'?'Návrh čeká na vaše rozhodnutí.':
+      data.status==='approved'?'Toto nastavení už bylo schváleno.':'Návrh ještě není připraven ke schválení.';
+    document.getElementById('proposal').hidden=false;
+    const scope=document.getElementById('scope'),prefs=document.getElementById('preferences');scope.replaceChildren();prefs.replaceChildren();
+    add(scope,'Schránka',data.mailboxAddress);add(scope,'Období',`${data.scope?.days??'?'} dní`);
+    add(scope,'Složky',(data.scope?.folders??[]).join(', '));add(scope,'Verze návrhu',data.proposal?.version);
+    const p=data.proposal?.data??{};
+    add(prefs,'Důležité kontakty',(p.importantContacts??[]).join(', ')||'Žádné schválené');
+    add(prefs,'Opravy jednotlivých zpráv',(p.messageOverrides??[]).length);
+    add(prefs,'Newsletterová pravidla',(p.newsletterRules??[]).map(x=>`${x.sender} · ${x.seriesKey||x.subject}`).join('; ')||'Žádná');
+    add(prefs,'Načítání',JSON.stringify(p.synchronization??'ruční'));
+    add(prefs,'Přepočet priorit',JSON.stringify(p.priorityRecalculation??'ruční'));
+    add(prefs,'Upozornění',JSON.stringify(data.services?.chatNotifications??'nedostupné'));
+    add(prefs,'Pracovní doba',JSON.stringify(p.workingHours??'neurčena'));
+    add(prefs,'Podpis',p.signature?.fullText??'bez schváleného návrhu');
+    add(prefs,'Oslovení z historie',p.signature?.style?.greeting??'nedoloženo');
+    add(prefs,'Zakončení z historie',p.signature?.style?.closing??'nedoloženo');
+    add(prefs,'Písmo',p.signature?.style?.font??'z historie nezjištěno');
+    document.getElementById('signature').textContent=data.signaturePreview?.plain??'Podpis zatím není navržen.';
+    document.getElementById('coverage').textContent=(data.coverage??[]).map(x=>`${x.folder}: ${x.examined} v okně ${x.since}–${x.before}${x.incomplete?' (neúplné)':''}`).join('; ')||'Analýza zatím nebyla provedena.';
+    version=data.proposal?.version??null;approve.disabled=!data.readyToApprove||version===null;
+  }catch(error){status.textContent=error.message;status.className='error';}
+}
+approve.addEventListener('click',async()=>{
+  if(version===null)return;approve.disabled=true;result.textContent='Ověřuji přihlášení a ukládám přesně zobrazenou verzi…';
+  try{const data=await call('approve',{proposalVersion:version});result.textContent=`Schváleno. Verze profilu ${data.version}.`;result.className='ok';}
+  catch(error){result.textContent=error.message;result.className='error';}
+});
+load();
+</script></body></html>

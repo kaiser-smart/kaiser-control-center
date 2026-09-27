@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="cs">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Potvrzení zprávy Forpsi – SO.ai</title>
+<style>
+  :root{font-family:Quicksand,system-ui,sans-serif;color:#182b31;background:#f4f8f8}
+  *{box-sizing:border-box}body{margin:0;padding:2rem 1rem}main{max-width:760px;margin:auto;background:#fff;border:1px solid #dce8e8;border-radius:18px;padding:clamp(1.1rem,4vw,2rem);box-shadow:0 8px 30px #163b4312}
+  h1{font-size:1.65rem;margin:0 0 .4rem}p{line-height:1.5}dl{display:grid;grid-template-columns:8rem 1fr;gap:.55rem 1rem;margin:1.5rem 0}dt{font-weight:700}dd{margin:0;overflow-wrap:anywhere}
+  pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.55;background:#f5f8f8;border:1px solid #dce8e8;border-radius:12px;padding:1rem;max-height:50vh;overflow:auto}
+  button{font:inherit;border-radius:10px;padding:.72rem 1rem;cursor:pointer;border:1px solid #31545c;background:#fff;color:#17343a}button.primary{background:#126374;color:#fff;border-color:#126374}button:disabled{opacity:.55;cursor:wait}
+  .actions{display:flex;gap:.7rem;flex-wrap:wrap;margin-top:1.3rem}.muted{color:#52666c}.error{color:#a32626}.success{color:#16613b}
+  @media(max-width:550px){dl{grid-template-columns:1fr;gap:.2rem}dt:not(:first-child){margin-top:.5rem}}
+</style>
+<main>
+  <h1>Potvrzení zprávy Forpsi</h1>
+  <p class="muted">Odeslání nastane až po potvrzení tohoto přesného návrhu přihlášeným uživatelem SO.ai.</p>
+  <p id="status" role="status">Načítám návrh…</p>
+  <section id="preview" hidden>
+    <dl><dt>Odesílací účet</dt><dd id="from"></dd><dt>Komu</dt><dd id="to"></dd>
+      <dt>Kopie</dt><dd id="cc"></dd><dt>Skrytá kopie</dt><dd id="bcc"></dd>
+      <dt>Předmět</dt><dd id="subject"></dd><dt>Přílohy</dt><dd id="attachments"></dd>
+      <dt>Odeslat</dt><dd id="sendAt"></dd></dl>
+    <strong>Celé znění</strong><pre id="body"></pre>
+    <div class="actions"><button class="primary" id="approve">Potvrdit tento návrh</button>
+      <button id="cancel">Zrušit návrh</button></div>
+  </section>
+</main>
+<script type="module">
+  const id=new URL(location.href).searchParams.get('proposalId');
+  const $=name=>document.getElementById(name),status=$('status');
+  const valid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id??'');
+  let proposal;
+  async function call(operation,version){
+    const response=await fetch('/api/forpsi/send',{method:'POST',credentials:'same-origin',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({operation,proposalId:id,...(version?{version}:{})})});
+    const result=await response.json();
+    if(!response.ok)throw new Error(result.code??'SEND_UNAVAILABLE');
+    return result.data;
+  }
+  function fill(value){
+    proposal=value;
+    for(const key of ['from','subject'])$(key).textContent=value[key]??'';
+    for(const key of ['to','cc','bcc'])$(key).textContent=(value[key]??[]).join(', ')||'—';
+    $('attachments').textContent=value.attachments?.length?
+      value.attachments.map(a=>a.filename??'příloha').join(', '):'Žádné';
+    $('sendAt').textContent=value.sendAt?new Date(value.sendAt).toLocaleString('cs-CZ'):'Po potvrzení';
+    $('body').textContent=value.text??'';
+    $('preview').hidden=false;
+    $('approve').disabled=value.state!=='pending';$('cancel').disabled=value.state!=='pending';
+    status.className=value.state==='approved'?'success':'';
+    status.textContent=value.state==='pending'?'Návrh čeká na vaše potvrzení.':
+      value.state==='approved'?`Potvrzeno. Stav odeslání: ${value.job?.state??'ověřte níže znovu'}.`:
+        'Návrh byl zrušen.';
+  }
+  async function refresh(){try{fill(await call('status'));}catch(error){status.className='error';
+    status.textContent=`Návrh nelze otevřít: ${error.message}`;}}
+  async function decide(operation){
+    if(!proposal||proposal.state!=='pending')return;
+    $('approve').disabled=true;$('cancel').disabled=true;
+    status.textContent=operation==='approve'?'Potvrzuji a ověřuji odeslání…':'Ruším návrh…';
+    try{await call(operation,proposal.version);await refresh();}
+    catch{status.className='error';status.textContent='Výsledek není jistý. Ověřuji stav návrhu; potvrzení neopakuji.';
+      await refresh();}
+  }
+  $('approve').addEventListener('click',()=>decide('approve'));
+  $('cancel').addEventListener('click',()=>decide('cancel'));
+  if(valid)refresh();else{status.className='error';status.textContent='Neplatný odkaz na návrh.';}
+</script>
