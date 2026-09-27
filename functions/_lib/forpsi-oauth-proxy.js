@@ -1,9 +1,11 @@
 import { json } from './auth.js';
 
 const FORWARDED_HEADERS=['authorization','accept','content-type','mcp-protocol-version','mcp-session-id','origin'];
+const unavailable=(stage,userId)=>json({error:'Připojení Forpsi není dostupné.',
+  ...(userId?{diagnostic_stage:stage}:{})},503);
 
 export async function proxyForpsiOAuth(request,env,{userId=null,consentCookie=false}={}){
-  if(!env.FORPSI_CONNECTOR?.fetch)return json({error:'Připojení Forpsi není dostupné.'},503);
+  if(!env.FORPSI_CONNECTOR?.fetch)return unavailable('missing_service_binding',userId);
   const headers=new Headers();
   for(const name of FORWARDED_HEADERS){
     const value=request.headers.get(name);
@@ -11,7 +13,7 @@ export async function proxyForpsiOAuth(request,env,{userId=null,consentCookie=fa
   }
   if(userId){
     if(!env.FORPSI_ADMIN_TOKEN||env.FORPSI_ADMIN_TOKEN.length<32)
-      return json({error:'Připojení Forpsi není dostupné.'},503);
+      return unavailable('missing_service_token',userId);
     headers.set('authorization',`Bearer ${env.FORPSI_ADMIN_TOKEN}`);
     headers.set('x-soai-user-id',userId);
   }
@@ -37,6 +39,6 @@ export async function proxyForpsiOAuth(request,env,{userId=null,consentCookie=fa
     // A fixed stage is sufficient for diagnosis; OAuth URLs, tokens and mailbox
     // contents must never be written to regular application logs.
     console.error('forpsi.oauth_proxy_failure',{stage});
-    return json({error:'Připojení Forpsi není dostupné.'},503);
+    return unavailable(stage,userId);
   }
 }

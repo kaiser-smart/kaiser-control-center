@@ -73,7 +73,27 @@ test('SO.ai authorization reports service binding failure without leaking the OA
     method:'POST',headers:{origin,cookie,'content-type':'application/x-www-form-urlencoded'},
     body:'handle=synthetic&decision=approve'})});
   assert.equal(response.status,503);
-  assert.deepEqual(await response.json(),{error:'Připojení Forpsi není dostupné.'});
+  assert.deepEqual(await response.json(),{error:'Připojení Forpsi není dostupné.',
+    diagnostic_stage:'service_binding'});
+});
+
+test('authenticated OAuth failure distinguishes missing binding and service token without disclosing either',async()=>{
+  const {env,cookie}=await setup();
+  const request=()=>new Request(`${origin}/authorize`,{headers:{cookie}});
+  delete env.FORPSI_CONNECTOR;
+  const missingBinding=await authorize({env,request:request()});
+  assert.equal(missingBinding.status,503);
+  assert.deepEqual(await missingBinding.json(),{error:'Připojení Forpsi není dostupné.',
+    diagnostic_stage:'missing_service_binding'});
+  env.FORPSI_CONNECTOR={fetch:async()=>new Response('unreachable')};
+  env.FORPSI_ADMIN_TOKEN='';
+  const missingToken=await authorize({env,request:request()});
+  assert.equal(missingToken.status,503);
+  assert.deepEqual(await missingToken.json(),{error:'Připojení Forpsi není dostupné.',
+    diagnostic_stage:'missing_service_token'});
+  const publicResponse=await mcp({env:{},request:new Request(`${origin}/mcp`)});
+  assert.equal(publicResponse.status,503);
+  assert.deepEqual(await publicResponse.json(),{error:'Připojení Forpsi není dostupné.'});
 });
 
 test('public MCP proxy forwards only OAuth bearer and protocol headers, never SO.ai cookie or asserted user ID',async()=>{
