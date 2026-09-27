@@ -22,6 +22,28 @@ function parsedDays(text){
   return [...new Set(singles)];
 }
 const normalized=text=>text.toLocaleLowerCase('cs-CZ').replace(/\s+/g,' ').trim();
+export function contextualSetupAnswer(raw,question){
+  const text=normalized(raw).replace(/[.!?]+$/u,'').trim();
+  const yes=/^(?:ano|to sedí|sedí|souhlasím|to je správně)$/iu.test(text);
+  const no=/^(?:ne|nesedí|to nesedí|ne,?\s*řeší to kolega|řeší to kolega)$/iu.test(text);
+  if(question.id.startsWith('agenda_')){
+    if(yes)return {answer:'ano, relevantní'};
+    if(no)return {answer:'ne, nerelevantní'};
+  }
+  if(question.id.startsWith('priority_example_')){
+    if(yes)return {answer:question.options[0]};
+    if(no)return {answer:question.options[1]};
+    if(/(?:^|\s)jen\s+když(?:\s|$)|(?:^|\s)pouze\s+pokud(?:\s|$)/iu.test(text))return {clarification:
+      /term[ií]n/iu.test(text)?
+        'Rozumím, že priorita závisí na blížícím se termínu. Má být právě tato zpráva teď mezi prioritami? Vyberte odpověď pro tuto zprávu; obecné pravidlo bez dalšího potvrzení nevytvořím.':
+        'Rozumím, že důležitost závisí na podmínce. Má být právě tato zpráva teď mezi prioritami? Vyberte odpověď pro tuto zprávu; obecné pravidlo bez dalšího potvrzení nevytvořím.'};
+  }
+  if(question.id==='newsletter_exclude'){
+    if(yes)return {answer:'ano, mimo hlavní priority'};
+    if(no)return {answer:'ne, ponechat k ručnímu posouzení'};
+  }
+  return null;
+}
 const hhmm=(hour,minute='0')=>{
   const h=Number(hour),m=Number(minute);
   return h>=0&&h<=23&&m>=0&&m<=59?`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`:null;
@@ -45,7 +67,7 @@ function shorterDays(text,start,ambiguities){
 export function interpretSetupAnswer(raw,{questionId,observations,proposal,mailboxAddress,question}) {
   const text=normalized(raw),answers={},changes={},interpreted=[],ambiguities=[];
   if(!text)return {answers,changes,interpreted,ambiguities:['PRÁZDNÁ_ODPOVĚĎ']};
-  if(text==='přeskočit'||text==='nevím')return {answers:{[questionId]:raw},changes,interpreted:['Téma přeskočeno.'],ambiguities};
+  if(text==='přeskočit'||text==='nevím'||text==='teď ne')return {answers:{[questionId]:raw},changes,interpreted:['Téma přeskočeno.'],ambiguities};
   const segments=raw.split(/(?=\bnewsletter\b)|[.;]\s+(?=\p{L})/iu),contactSegments=segments.filter(s=>
     !/newsletter/iu.test(s)&&(questionId==='important_contacts'||/důležit|priorit|kontakt/iu.test(s)));
   const addresses=[...new Set(contactSegments.flatMap(s=>s.match(email)??[]).map(x=>x.toLowerCase()))];
@@ -132,7 +154,17 @@ export function interpretSetupAnswer(raw,{questionId,observations,proposal,mailb
       changes.signature={senderAddress:mailboxAddress,fullText:full[1].trim(),
         shortText:short[1].trim(),source:'user_entered',confirmedAuthor:true};
       answers.signature=raw;interpreted.push('Vlastní plný a krátký podpis jsou v návrhu ke schválení.');
-    }else ambiguities.push('PODPIS_VYŽADUJE_PLNOU_A_KRÁTKOU_VARIANTU');
+    }else if(!/^(?:chci|uprav|změn|bez podpisu|žádný podpis)\b/iu.test(text)){
+      const fullText=raw.trim().replace(/^podpis\s*:\s*/iu,'').trim();
+      const lines=fullText.split('\n').map(x=>x.trim()).filter(Boolean);
+      const shortText=lines.slice(0,2).join('\n');
+      if(fullText.length<=2000&&shortText.length<=1000&&lines.length){
+        changes.signature={senderAddress:mailboxAddress,fullText,
+          shortText,source:'user_entered',confirmedAuthor:true};
+        answers.signature=raw;
+        interpreted.push('Váš podpis je v návrhu. Krátká podoba vychází jen z jeho prvních dvou řádků; před schválením ji zkontrolujte.');
+      }else ambiguities.push('PODPIS_NEPLATNÝ');
+    }else ambiguities.push('PODPIS_VYŽADUJE_OBSAH');
   }
   if(questionId==='practical_review' && /ano|jen čtecí|souhlasím|bez zásahů/iu.test(text)){
     answers.practical_review=raw;interpreted.push('Návrh zůstává čtecí; schválení profilu je samostatný krok.');

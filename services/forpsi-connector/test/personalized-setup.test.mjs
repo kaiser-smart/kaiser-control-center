@@ -252,6 +252,177 @@ test('live setup asks about evidenced work before optional loading and explicitl
   assert.ok(asked.indexOf('priority_example_high')<asked.indexOf('loading_mode'));
 });
 
+test('typed agenda answers follow the current question rather than exact button wording',async()=>{
+  for(const [answer,relevant] of [['Ano',true],['To sedí',true],['Ne, řeší to kolega',false]]){
+    const {ctx}=scenario({incoming:[message(1,{text:'Prosím o plán svozu.'})],sent:[]});
+    ctx.env.CHATGPT_INTERACTIVE_SETUP_ENABLED='true';
+    const setup=new Onboarding(ctx),began=await setup.begin({mailboxId:'mail-a',consent:true,
+      days:30,folders:['INBOX']});
+    const analyzed=await setup.analyze({sessionId:began.sessionId});
+    const sample=await setup.readSetupSample({sessionId:began.sessionId});
+    const state=await setup.submitAnalysis({sessionId:began.sessionId,
+      proposalVersion:analyzed.proposal.version,findings:[{kind:'agenda',
+        sourceKey:sample.messages[0].key,quote:'Prosím o plán svozu.',summary:'Plánování svozu'}],
+      priorities:[]});
+    assert.equal(state.nextQuestion.id,'agenda_1');
+    const answered=await setup.answer({sessionId:began.sessionId,questionId:'agenda_1',answer});
+    assert.equal(answered.proposal.data.agendaRecommendations[0].userMarkedRelevant,relevant,answer);
+    assert.notEqual(answered.nextQuestion?.id,'agenda_1',answer);
+  }
+});
+
+test('typed priority correction is exact; conditional timing stays unapproved pending clarification',async()=>{
+  for(const [answer,expected] of [['Ano',null],['Ne','review'],['Jen když se blíží termín',null]]){
+    const {ctx}=scenario({incoming:[message(1,{text:'Prosím o rozhodnutí.'})],sent:[]});
+    ctx.env.CHATGPT_INTERACTIVE_SETUP_ENABLED='true';
+    const setup=new Onboarding(ctx),began=await setup.begin({mailboxId:'mail-a',consent:true,
+      days:30,folders:['INBOX']});
+    const analyzed=await setup.analyze({sessionId:began.sessionId});
+    const sample=await setup.readSetupSample({sessionId:began.sessionId});
+    const state=await setup.submitAnalysis({sessionId:began.sessionId,
+      proposalVersion:analyzed.proposal.version,findings:[],priorities:[{
+        sourceKey:sample.messages[0].key,priority:'high',reason:'Žádá rozhodnutí.',
+        quote:'Prosím o rozhodnutí.'}]});
+    assert.equal(state.nextQuestion.id,'priority_example_high');
+    const answered=await setup.answer({sessionId:began.sessionId,
+      questionId:'priority_example_high',answer});
+    assert.equal(answered.proposal.data.messageOverrides[0]?.priority??null,expected,answer);
+    if(answer.startsWith('Jen')){
+      assert.equal(answered.questionCount,state.questionCount);
+      assert.equal(answered.nextQuestion.id,'priority_example_high');
+      assert.match(answered.clarification,/termín/i);
+    }else assert.notEqual(answered.nextQuestion?.id,'priority_example_high');
+  }
+  const {ctx}=scenario({incoming:[message(2,{text:'Prosím o rozhodnutí.'})],sent:[]});
+  ctx.env.CHATGPT_INTERACTIVE_SETUP_ENABLED='true';
+  const setup=new Onboarding(ctx),began=await setup.begin({mailboxId:'mail-a',consent:true,
+    days:30,folders:['INBOX']});
+  const analyzed=await setup.analyze({sessionId:began.sessionId});
+  const sample=await setup.readSetupSample({sessionId:began.sessionId});
+  const state=await setup.submitAnalysis({sessionId:began.sessionId,
+    proposalVersion:analyzed.proposal.version,findings:[],priorities:[{
+      sourceKey:sample.messages[0].key,priority:'review',reason:'Zatím bez potvrzené priority.',
+      quote:'Prosím o rozhodnutí.'}]});
+  assert.equal(state.nextQuestion.id,'priority_example_review');
+  const corrected=await setup.answer({sessionId:began.sessionId,
+    questionId:'priority_example_review',answer:'Ne'});
+  assert.equal(corrected.proposal.data.messageOverrides[0].priority,'high');
+});
+
+test('skipping contacts preserves an already approved profile and the card offers a separate skip',async()=>{
+  const {ctx}=scenario({incoming:[message(1,{from:'new@example.net'})],sent:[]});
+  ctx.env.CHATGPT_INTERACTIVE_SETUP_ENABLED='true';
+  await ctx.store.run(`INSERT INTO workflow_profile_versions
+    (tenant_id,principal_id,mailbox_id,version,profile_json,approved_at,active) VALUES (?,?,?,?,?,?,1)`,
+    'tenant-a','alice','mail-a',1,JSON.stringify({importantContacts:['old@example.net'],
+      newsletterRules:[{sender:'older@example.net',subject:'Týdenní přehled',action:'keep_visible'}],
+      messageOverrides:[],replyStyle:{mode:'friendly'},signature:{senderAddress:'alice@example.com',
+        fullText:'Alice Nová',shortText:'Alice',confirmedAuthor:true}}),Date.now());
+  const setup=new Onboarding(ctx),began=await setup.begin({mailboxId:'mail-a',consent:true,
+    days:30,folders:['INBOX']});
+  const analyzed=await setup.analyze({sessionId:began.sessionId});
+  const sample=await setup.readSetupSample({sessionId:began.sessionId});
+  let state=await setup.submitAnalysis({sessionId:began.sessionId,
+    proposalVersion:analyzed.proposal.version,findings:[],priorities:[],
+    importantContacts:[{address:'new@example.net',sourceKey:sample.messages[0].key}]});
+  assert.equal(state.nextQuestion.id,'important_contacts');
+  state=await setup.answer({sessionId:began.sessionId,questionId:'important_contacts',answer:'přeskočit'});
+  assert.deepEqual(state.proposal.data.importantContacts,['old@example.net']);
+  assert.deepEqual(state.proposal.data.replyStyle,{mode:'friendly'});
+  while(state.nextQuestion){
+    assert.ok(state.nextQuestion.options.includes('přeskočit'));
+    state=await setup.answer({sessionId:began.sessionId,
+      questionId:state.nextQuestion.id,answer:'přeskočit'});
+  }
+  assert.deepEqual(state.proposal.data.newsletterRules,
+    [{sender:'older@example.net',subject:'Týdenní přehled',action:'keep_visible'}]);
+  assert.equal(state.proposal.data.signature.fullText,'Alice Nová');
+  assert.equal(state.proposal.data.replyStyle.mode,'friendly');
+  assert.ok(state.questionCount<=19);
+  assert.match(setupWidget,/Žádný z těchto kontaktů/);
+  assert.match(setupWidget,/button\('Teď ne',\(\)=>answer\('přeskočit'\)\)/);
+});
+
+test('cited newsletter choices affect approved priority only for selected sender and series',async()=>{
+  const incoming=[message(1,{from:'a@example.net',subject:'Zprávy dodavatele #4',
+    text:'Nové vydání zpráv dodavatele.'}),message(2,{from:'b@example.net',
+    subject:'Servisní novinky #7',text:'Nové vydání servisních novinek.'}),
+  message(3,{from:'a@example.net',subject:'Zprávy dodavatele #5',
+    text:'Další vydání zpráv dodavatele.'}),message(4,{from:'b@example.net',
+    subject:'Servisní novinky #8',text:'Další vydání servisních novinek.'}),
+  message(5,{from:'unrelated@example.net',subject:'Zprávy dodavatele #5',
+    text:'Jiná zpráva.'})];
+  const {ctx}=scenario({incoming,sent:[]});
+  ctx.env.CHATGPT_INTERACTIVE_SETUP_ENABLED='true';
+  await ctx.store.run(`INSERT INTO workflow_profile_versions
+    (tenant_id,principal_id,mailbox_id,version,profile_json,approved_at,active) VALUES (?,?,?,?,?,?,1)`,
+    'tenant-a','alice','mail-a',1,JSON.stringify({importantContacts:[],messageOverrides:[],
+      newsletterRules:[{sender:'a@example.net',seriesKey:newsletterSeriesKey('Zprávy dodavatele #4'),
+        action:'exclude_from_high_priority'}]}),Date.now());
+  const setup=new Onboarding(ctx),began=await setup.begin({mailboxId:'mail-a',consent:true,
+    days:30,folders:['INBOX']});
+  const analyzed=await setup.analyze({sessionId:began.sessionId});
+  const sample=await setup.readSetupSample({sessionId:began.sessionId});
+  let state=await setup.submitAnalysis({sessionId:began.sessionId,
+    proposalVersion:analyzed.proposal.version,findings:sample.messages.filter(item=>
+      [1,2].includes(item.reference.uid)).map(item=>({
+      kind:'newsletter',sourceKey:item.key,quote:item.text,summary:item.subject})),
+    priorities:sample.messages.map(item=>({sourceKey:item.key,priority:'high',
+      reason:'Před ověřením uživatelem.',quote:item.text}))});
+  while(state.nextQuestion&&!state.nextQuestion.id.startsWith('newsletter_'))
+    state=await setup.answer({sessionId:began.sessionId,questionId:state.nextQuestion.id,
+      answer:'přeskočit'});
+  assert.equal(state.nextQuestion.id,'newsletter_keep');
+  assert.equal(state.nextQuestion.candidates.length,2);
+  const keep=state.nextQuestion.candidates.find(x=>x.sender==='a@example.net');
+  state=await setup.answer({sessionId:began.sessionId,questionId:'newsletter_keep',
+    answer:`vybrat: ${keep.id}`});
+  assert.equal(state.nextQuestion.id,'newsletter_exclude');
+  state=await setup.answer({sessionId:began.sessionId,questionId:'newsletter_exclude',
+    answer:'ano, mimo hlavní priority'});
+  while(state.nextQuestion)state=await setup.answer({sessionId:began.sessionId,
+    questionId:state.nextQuestion.id,answer:'přeskočit'});
+  const approved=await new Onboarding({...ctx,approvalSource:'soai_session'}).approve({
+    sessionId:began.sessionId,proposalVersion:state.proposal.version});
+  assert.equal(approved.profile.newsletterRules.length,2);
+  assert.deepEqual(approved.profile.newsletterRules.filter(x=>x.sender==='a@example.net').map(x=>x.action),
+    ['keep_visible']);
+  assert.ok(state.questionCount<=19);
+  const restored=await new Onboarding(ctx).preferences({mailboxId:'mail-a'});
+  assert.equal(restored.status,'approved');
+  assert.deepEqual(restored.profile.newsletterRules,approved.profile.newsletterRules);
+  const list=await new Workflow(ctx).start({mailboxId:'mail-a',view:'priority',limit:10});
+  assert.equal(list.items.find(x=>x.reference.uid===3).priority,'high');
+  assert.equal(list.items.find(x=>x.reference.uid===4).priority,'review');
+  assert.equal(list.items.find(x=>x.reference.uid===5).priority,'high');
+});
+
+test('reply style is offered with sent evidence; a manually pasted signature needs one field',async()=>{
+  const sent=[message(20,{folder:'Sent',from:'alice@example.com',to:'client@example.net',
+    text:'Dobrý den, děkuji za zprávu. Odpovím zítra.'})];
+  const {ctx}=scenario({incoming:[],sent});
+  ctx.env.CHATGPT_INTERACTIVE_SETUP_ENABLED='true';
+  const setup=new Onboarding(ctx),began=await setup.begin({mailboxId:'mail-a',consent:true,
+    days:30,folders:['Sent']});
+  const analyzed=await setup.analyze({sessionId:began.sessionId});
+  const sample=await setup.readSetupSample({sessionId:began.sessionId});
+  let state=await setup.submitAnalysis({sessionId:began.sessionId,
+    proposalVersion:analyzed.proposal.version,findings:[{kind:'signature_style',
+      sourceKey:sample.messages[0].key,quote:'Dobrý den, děkuji za zprávu.',
+      summary:'Stručné a věcné odpovědi.'}],priorities:[]});
+  while(state.nextQuestion?.id!=='reply_style')state=await setup.answer({
+    sessionId:began.sessionId,questionId:state.nextQuestion.id,answer:'přeskočit'});
+  assert.match(state.nextQuestion.example,/Dobrý den/);
+  state=await setup.answer({sessionId:began.sessionId,questionId:'reply_style',answer:'přátelsky'});
+  assert.equal(state.proposal.data.replyStyle.mode,'friendly');
+  while(state.nextQuestion?.id!=='signature')state=await setup.answer({
+    sessionId:began.sessionId,questionId:state.nextQuestion.id,answer:'přeskočit'});
+  state=await setup.answer({sessionId:began.sessionId,questionId:'signature',
+    answer:'Podpis:\nS pozdravem\nAlice Nová\nKaiser servis'});
+  assert.equal(state.proposal.data.signature.fullText,'S pozdravem\nAlice Nová\nKaiser servis');
+  assert.equal(state.proposal.data.signature.shortText,'S pozdravem\nAlice Nová');
+});
+
 test('existing un-answered production session upgrades in place without wider consent',async()=>{
   const {ctx}=scenario({incoming:[message(1)],sent:[]});
   const setup=new Onboarding(ctx),begin=await setup.begin({mailboxId:'mail-a',consent:true,

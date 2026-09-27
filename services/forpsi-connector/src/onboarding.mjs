@@ -3,7 +3,7 @@ import { id, folder } from './schemas.mjs';
 import { requireValue } from './errors.mjs';
 import { messageKey } from './workflow.mjs';
 import { SOAI_ISSUER } from './admin-access.mjs';
-import { interpretSetupAnswer } from './setup-preferences.mjs';
+import { interpretSetupAnswer, contextualSetupAnswer } from './setup-preferences.mjs';
 import { contentSamples, analyzeContent, openAiEvidenceAnalyzer, signatureFromSent, authoredText,
   validateContentFindings } from './content-evidence.mjs';
 import { newsletterSeriesKey } from './newsletter-series.mjs';
@@ -13,7 +13,7 @@ export const onboardingSchemas={
   begin:z.object({mailboxId:id,consent:z.boolean(),days:z.number().int().min(1).max(90).optional(),
     folders:z.array(folder).max(8).optional()}).strict(),
   session:z.object({sessionId:uuid}).strict(),
-  answer:z.object({sessionId:uuid,questionId:z.string().max(60),answer:z.string().trim().max(500)}).strict(),
+  answer:z.object({sessionId:uuid,questionId:z.string().max(60),answer:z.string().trim().max(2000)}).strict(),
   sample:z.object({sessionId:uuid,offset:z.number().int().min(0).max(49).default(0),
     limit:z.number().int().min(1).max(5).default(5)}).strict(),
   submitAnalysis:z.object({sessionId:uuid,proposalVersion:z.number().int().positive(),
@@ -41,6 +41,27 @@ const profileDefaults=()=>({importantContacts:[],messageOverrides:[],directVsCc:
   synchronization:{mode:'manual'},priorityRecalculation:'manual',notifications:'unavailable',
   workingHours:null,timeZone:'Europe/Prague',automaticMoves:false,automaticSend:false,
   agendaRecommendations:[]});
+function newsletterCandidates(observations){
+  const byKey=new Map((observations.pilotMessages??[]).map(item=>[messageKey(item),item]));
+  const seen=new Set(),result=[];
+  for(const finding of observations.semantic?.findings??[]){
+    if(finding.kind!=='newsletter')continue;
+    const item=byKey.get(finding.sourceKey),sender=item?.from?.[0]?.address?.toLowerCase();
+    const subject=item?.subject?.replace(/\s+/gu,' ').trim();
+    if(!sender||!subject||item.reference?.folder===observations.sentFolder)continue;
+    const seriesKey=newsletterSeriesKey(subject),key=`${sender}\0${seriesKey??subject.toLowerCase()}`;
+    if(seen.has(key))continue;
+    seen.add(key);result.push({id:`n${result.length+1}`,title:subject,sender,subject,
+      seriesKey,sourceKey:finding.sourceKey,reference:item.reference,quote:finding.quote});
+    if(result.length===4)break;
+  }
+  return result;
+}
+const ruleMatchesCandidate=(rule,candidate)=>rule.sender?.toLowerCase()===candidate.sender&&
+  (candidate.seriesKey?rule.seriesKey===candidate.seriesKey:rule.subject===candidate.subject);
+const newsletterRule=(candidate,action)=>({sender:candidate.sender,
+  ...(candidate.seriesKey?{seriesKey:candidate.seriesKey}:{subject:candidate.subject}),
+  action,evidence:candidate.reference,source:'explicit_setup_answer'});
 function signatureStatements(store,tenantId,principalId,mailbox,profile,now){
   if(!Object.hasOwn(profile,'signature'))return []; // Skipped is not removal.
   if(profile.signature===null)return [store.db.prepare(`DELETE FROM workflow_signatures
@@ -89,7 +110,7 @@ function questions(observations,answers,proposal={},interactive=false,loadingAva
       'V odeslané poště nebyl doložen opakovaný podpis. Napište plnou i krátkou variantu, nebo ponechte bez podpisu.',
     options:observations.signatureCandidate?['použít doložený návrh','ponechat bez podpisu','přeskočit']:
       ['ponechat bez podpisu','přeskočit']});
-  for(const [index,item] of (proposal.agendaRecommendations??[]).entries())result.push({
+  for(const [index,item] of (proposal.agendaRecommendations??[]).entries())if(item.userMarkedRelevant==null)result.push({
     id:`agenda_${index+1}`,title:interactive?
       `Zdá se, že řešíte „${item.summary}“. Patří to k vaší běžné práci?`:
       `Model navrhl agendu „${item.summary}“ na základě citace „${item.quote}“. `+
@@ -108,6 +129,27 @@ function questions(observations,answers,proposal={},interactive=false,loadingAva
           ['ano, tato zpráva je běžná','ne, jen tato zpráva je prioritní','přeskočit'],
         evidence:{messageKey:item.sourceKey,reference:source.reference,quote:item.quote}});
     }
+    const newsletters=newsletterCandidates(observations);
+    if(newsletters.length){
+      result.push({id:'newsletter_keep',title:
+        `Chodí vám ${newsletters.map(x=>`„${x.title}“`).join(', ')}. Které chcete nechávat na očích?`,
+      options:['žádný',...newsletters.map(x=>x.id),'přeskočit'],candidates:newsletters});
+      if(Object.hasOwn(answers,'newsletter_keep')&&answers.newsletter_keep!=='přeskočit'){
+        const others=newsletters.filter(candidate=>!(proposal.newsletterRules??[]).some(rule=>
+          rule.action==='keep_visible'&&ruleMatchesCandidate(rule,candidate)));
+        if(others.length)result.push({id:'newsletter_exclude',title:
+          `Ostatní vybrané newslettery (${others.map(x=>`„${x.title}“`).join(', ')}) navrhuji nechat mimo hlavní priority. Ve schránce zůstanou. Vyhovuje vám to?`,
+        options:['ano, mimo hlavní priority','ne, ponechat k ručnímu posouzení','přeskočit'],
+        candidates:others});
+      }
+    }
+    const style=observations.replyStyleCandidate;
+    result.push({id:'reply_style',title:style?
+      `V jedné odeslané zprávě píšete například „${style.quote.slice(0,140)}“. ${style.recommendation?
+        `Navrhuji ${style.recommendation}. `:''}Jak mám připravovat vaše odpovědi?`:
+      'Jak mám připravovat vaše odpovědi: stručně a věcně, přátelsky, nebo formálně?',
+    options:['stručně a věcně','přátelsky','formálně','přeskočit'],
+    ...(style?{example:style.quote,recommendation:style.recommendation}: {})});
   }
   for(const [index,item] of (interactive?[]:(observations.reviewExamples??[])).entries())result.push({
     id:`review_${index+1}`,title:`Zpráva od ${item.sender}: „${(item.subject||'(bez předmětu)').replace(/\s+/g,' ').slice(0,160)}“. Jak ji zařadit? `+
@@ -122,8 +164,9 @@ function questions(observations,answers,proposal={},interactive=false,loadingAva
   // Ask about actual work before optional service cadence. A live mailbox can have
   // no contact suggestions yet still contain an evidenced open request.
   const rank=id=>id.startsWith('agenda_')?0:id==='priority_example_high'?1:
-    id==='important_contacts'?2:id==='priority_example_review'?3:id==='signature'?4:
-    id==='loading_mode'?5:6;
+    id==='important_contacts'?2:id==='newsletter_keep'?3:id==='newsletter_exclude'?4:
+    id==='priority_example_review'?5:id==='reply_style'?6:id==='signature'?7:
+    id==='loading_mode'?8:9;
   return unanswered.sort((a,b)=>rank(a.id)-rank(b.id));
 }
 
@@ -244,26 +287,32 @@ export class Onboarding {
       (this.env.FORPSI_ANALYSIS_API_KEY&&this.env.FORPSI_ANALYSIS_MODEL?
         input=>openAiEvidenceAnalyzer(input,this.env):null)});}
     catch{semantic={status:'unavailable',reason:'MODEL_ANALYSIS_UNAVAILABLE',findings:[]};}
+    const approvedProfile=await this.store.first(`SELECT version,profile_json FROM workflow_profile_versions
+      WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND active=1`,
+    mailbox.tenant_id,this.principal.id,mailbox.id);
     const observations={twoWay,directCount,ccCount,sampleCount:new Set(samples.map(messageKey)).size,
       sampledRecords:samples.length,reviewExamples,
+      sentFolder:mailbox.sent_folder,baseProfileVersion:approvedProfile?.version??null,
       ...(interactive?{pilotMessages:samples.map(m=>({reference:m.reference,from:m.from,to:m.to,cc:m.cc,
         subject:m.subject,date:m.date,messageId:m.messageId,inReplyTo:m.inReplyTo,references:m.references})),
         sampleReadKeys:[],chatgptPriorities:[]}:{}),
       contentCoverage:{attempted:readTargets.size,read:details.length,boundedAt:12},semantic,
       signatureCandidate,signatureLimit:signatureCandidate?'AUTHOR_UNVERIFIED':'REPEATED_SIGNATURE_NOT_FOUND',
       newsletterCandidates:[],unknownSenderCount:[...senderCounts.values()].filter(x=>x.count===1).length};
-    const proposal=profileDefaults();
+    const proposal={...profileDefaults(),...(approvedProfile?JSON.parse(approvedProfile.profile_json):{})};
     const retainedSignature=await this.store.first(`SELECT full_text,short_text FROM workflow_signatures
       WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND sender_address=?`,
     mailbox.tenant_id,this.principal.id,mailbox.id,mailbox.address);
     if(retainedSignature)proposal.signature={senderAddress:mailbox.address,
       fullText:retainedSignature.full_text,shortText:retainedSignature.short_text,
       source:'retained_previous_approval',confirmedAuthor:true};
-    proposal.agendaRecommendations=(semantic.findings??[])
+    const newAgendas=(semantic.findings??[])
       .filter(x=>['agenda','request','waiting_user'].includes(x.kind) && x.quote && x.reference)
       .filter((x,index,all)=>all.findIndex(y=>y.summary===x.summary)===index).slice(0,2)
       .map(x=>({summary:x.summary,quote:x.quote,sourceKey:x.sourceKey,reference:x.reference,
         provenance:'model_proposal_with_exact_quote',userMarkedRelevant:null,priorityRuleActive:false}));
+    proposal.agendaRecommendations=[...(proposal.agendaRecommendations??[]),...newAgendas.filter(x=>
+      !(proposal.agendaRecommendations??[]).some(old=>old.summary===x.summary))];
     const statements=[
       this.store.db.prepare(`INSERT INTO workflow_observations VALUES (?,?,?,?)
         ON CONFLICT(onboarding_id) DO UPDATE SET coverage_json=excluded.coverage_json,
@@ -361,14 +410,24 @@ export class Onboarding {
     }
     facts.semantic={status:'chatgpt_proposal',findings:validated,examined:delivered.size,
       requiresUserReview:true};
+    const styleFinding=validated.find(x=>x.kind==='signature_style'&&bySample.get(x.sourceKey)?.sent);
+    if(styleFinding){
+      const summary=styleFinding.summary.toLocaleLowerCase('cs-CZ');
+      const recommendation=/stručn|věcn/iu.test(summary)?'stručně a věcně':
+        /přátel/iu.test(summary)?'přátelsky':/formáln/iu.test(summary)?'formálně':null;
+      facts.replyStyleCandidate={sourceKey:styleFinding.sourceKey,quote:styleFinding.quote,
+        recommendation};
+    }
     facts.chatgptPriorities=priorities.map(item=>({sourceKey:item.sourceKey,priority:item.priority,
       reason:item.reason,quote:item.quote,provenance:'chatgpt_proposal_with_exact_quote'}));
     facts.modelContactSuggestions=importantContacts;
     const data=JSON.parse(proposal.proposal_json);
-    data.agendaRecommendations=validated.filter(x=>['agenda','request','waiting_user'].includes(x.kind))
+    const newAgendas=validated.filter(x=>['agenda','request','waiting_user'].includes(x.kind))
       .filter((x,index,all)=>all.findIndex(y=>y.summary===x.summary)===index).slice(0,2)
       .map(x=>({summary:x.summary,quote:x.quote,sourceKey:x.sourceKey,reference:x.reference,
         provenance:'chatgpt_proposal_with_exact_quote',userMarkedRelevant:null,priorityRuleActive:false}));
+    data.agendaRecommendations=[...(data.agendaRecommendations??[]),...newAgendas.filter(x=>
+      !(data.agendaRecommendations??[]).some(old=>old.summary===x.summary))];
     const results=await this.store.db.batch([
       this.store.db.prepare(`UPDATE workflow_proposals SET version=version+1,proposal_json=?,updated_at=?
         WHERE onboarding_id=? AND version=?`).bind(JSON.stringify(data),this.now(),sessionId,proposalVersion),
@@ -421,7 +480,6 @@ export class Onboarding {
   async answer({sessionId,questionId,answer}){
     const {row,mailbox}=await this.owned(sessionId);
     requireValue(['analyzed','questioning','ready'].includes(row.status),'ONBOARDING_NOT_READY');
-    requireValue(row.question_count<19,'QUESTION_LIMIT_REACHED');
     const observed=await this.store.first('SELECT observations_json FROM workflow_observations WHERE onboarding_id=?',sessionId);
     if(this.interactive())requireValue(
       JSON.parse(observed.observations_json).semantic?.status==='chatgpt_proposal','ANALYSIS_NOT_SUBMITTED');
@@ -432,58 +490,95 @@ export class Onboarding {
     requireValue(remaining[0]?.id===questionId,'QUESTION_OUT_OF_SEQUENCE');
     const q=remaining[0],observations=JSON.parse(observed.observations_json);
     const data=JSON.parse(proposal.proposal_json);
-    let interpretation={interpreted:[],ambiguities:[]};
-    if(!q.options.includes(answer)){
+    const contextual=contextualSetupAnswer(answer,q);
+    if(contextual?.clarification)return {...await this.status({sessionId}),
+      clarification:contextual.clarification,interpretation:{interpreted:[],ambiguities:[]}};
+    const choice=contextual?.answer??answer;
+    let interpretation={interpreted:contextual?.answer&&contextual.answer!==answer?
+      [`Rozumím vaší odpovědi jako „${contextual.answer}“. Zatím jde jen o návrh.`]:[],ambiguities:[]};
+    if(questionId==='newsletter_keep'&&choice!=='přeskočit'){
+      const picked=choice==='žádný'?[]:choice.startsWith('vybrat:')?
+        choice.slice(7).split(',').map(x=>x.trim()).filter(Boolean):[choice];
+      const unique=[...new Set(picked)],candidates=q.candidates??[];
+      if(unique.some(id=>!candidates.some(x=>x.id===id))||
+        (!unique.length&&choice!=='žádný'))return {...await this.status({sessionId}),
+          clarification:'Vyberte některý z nabízených newsletterů, „Žádný“ nebo „Teď ne“. Nic jsem zatím nezměnila.',
+          interpretation};
+      answers[questionId]=choice;
+      data.newsletterRules=(data.newsletterRules??[]).filter(rule=>
+        !(rule.action==='keep_visible'&&candidates.some(x=>ruleMatchesCandidate(rule,x)))&&
+        !(rule.action==='exclude_from_high_priority'&&candidates.some(x=>
+          unique.includes(x.id)&&ruleMatchesCandidate(rule,x))));
+      for(const id of unique)data.newsletterRules.push(newsletterRule(candidates.find(x=>x.id===id),'keep_visible'));
+      interpretation.interpreted.push(unique.length?
+        `Na očích ponechám ${unique.map(id=>candidates.find(x=>x.id===id).title).join(', ')}.`:
+        'Žádný z nabízených newsletterů nyní neoznačuji k přednostnímu zobrazení.');
+    }else if(!q.options.includes(choice)){
       interpretation=interpretSetupAnswer(answer,{questionId,observations,proposal:data,
         mailboxAddress:mailbox.address,question:q});
-      requireValue(Object.keys(interpretation.answers).length>0 ||
-        Object.keys(interpretation.changes).length>0,'ANSWER_NEEDS_CLARIFICATION');
+      if(Object.keys(interpretation.answers).length===0&&
+        Object.keys(interpretation.changes).length===0)return {...await this.status({sessionId}),
+          clarification:'Této odpovědi zatím nerozumím dost jistě. Zkuste ji prosím upřesnit nebo vyberte jednu z nabízených možností; nic jsem nezměnila.',
+          interpretation};
       Object.assign(answers,interpretation.answers);
       Object.assign(data,interpretation.changes);
-    }else answers[questionId]=answer;
-    if(questionId==='important_contacts' && q.options.includes(answer) && answer!=='žádný' && answer!=='přeskočit')
-      data.importantContacts=[...new Set([...data.importantContacts,answer])];
-    if(questionId==='direct_vs_cc' && ['ano','ne'].includes(answer))data.directVsCc=answer==='ano'?'direct_first':'equal';
-    if(questionId==='working_hours' && answer==='Po–Pá 8:00–16:00')data.workingHours={days:[1,2,3,4,5],start:'08:00',end:'16:00'};
-    if(questionId==='loading_mode' && answer==='každých 15 minut')data.synchronization={mode:'interval',minutes:15};
-    if(questionId==='loading_mode' && answer==='ručně')data.synchronization={mode:'manual'};
-    if(questionId==='notification_window' && answer==='bez upozornění')
+    }else answers[questionId]=choice;
+    requireValue(row.question_count<19,'QUESTION_LIMIT_REACHED');
+    if(questionId==='important_contacts' && q.options.includes(choice) && choice!=='žádný' && choice!=='přeskočit')
+      data.importantContacts=[...new Set([...data.importantContacts,choice])];
+    if(questionId==='direct_vs_cc' && ['ano','ne'].includes(choice))data.directVsCc=choice==='ano'?'direct_first':'equal';
+    if(questionId==='working_hours' && choice==='Po–Pá 8:00–16:00')data.workingHours={days:[1,2,3,4,5],start:'08:00',end:'16:00'};
+    if(questionId==='loading_mode' && choice==='každých 15 minut')data.synchronization={mode:'interval',minutes:15};
+    if(questionId==='loading_mode' && choice==='ručně')data.synchronization={mode:'manual'};
+    if(questionId==='notification_window' && choice==='bez upozornění')
       data.notificationPreference={requested:false,status:'stored_wish_not_implemented'};
-    if(questionId==='notification_window' && ['Po–Pá','každý den'].includes(answer) &&
+    if(questionId==='notification_window' && ['Po–Pá','každý den'].includes(choice) &&
       data.notificationPreference?.window?.days===null)
-      data.notificationPreference.window.days=answer==='Po–Pá'?[1,2,3,4,5]:[1,2,3,4,5,6,7];
-    if(questionId==='signature' && answer==='použít doložený návrh'){
+      data.notificationPreference.window.days=choice==='Po–Pá'?[1,2,3,4,5]:[1,2,3,4,5,6,7];
+    if(questionId==='signature' && choice==='použít doložený návrh'){
       requireValue(observations.signatureCandidate,'SIGNATURE_EVIDENCE_UNAVAILABLE');
       data.signature={...observations.signatureCandidate,confirmedAuthor:true};
     }
-    if(questionId==='signature' && answer==='ponechat bez podpisu')data.signature=null;
-    if(questionId.startsWith('agenda_') && ['ano, relevantní','ne, nerelevantní'].includes(answer)){
+    if(questionId==='signature' && choice==='ponechat bez podpisu')data.signature=null;
+    if(questionId.startsWith('agenda_') && ['ano, relevantní','ne, nerelevantní'].includes(choice)){
       const index=Number(questionId.slice(7))-1;
-      data.agendaRecommendations[index].userMarkedRelevant=answer==='ano, relevantní';
+      data.agendaRecommendations[index].userMarkedRelevant=choice==='ano, relevantní';
     }
-    if(questionId.startsWith('priority_example_') && answer.startsWith('ne, jen tato zpráva')){
+    if(questionId.startsWith('priority_example_') && choice.startsWith('ne, jen tato zpráva')){
       const item=q.evidence;
       data.messageOverrides=[...(data.messageOverrides??[]).filter(x=>x.messageKey!==item.messageKey),
-        {messageKey:item.messageKey,priority:answer.endsWith('prioritní')?'high':'review',
+        {messageKey:item.messageKey,priority:choice.endsWith('prioritní')?'high':'review',
           evidence:item.reference,source:'explicit_setup_answer'}];
     }
-    if(questionId.startsWith('review_') && answer!=='přeskočit'){
+    if(questionId==='newsletter_exclude'&&choice!=='přeskočit'){
+      const candidates=q.candidates??[];
+      data.newsletterRules=(data.newsletterRules??[]).filter(rule=>
+        !(rule.action==='exclude_from_high_priority'&&candidates.some(x=>ruleMatchesCandidate(rule,x))));
+      if(choice==='ano, mimo hlavní priority')for(const item of candidates)
+        data.newsletterRules.push(newsletterRule(item,'exclude_from_high_priority'));
+    }
+    if(questionId==='reply_style'&&choice!=='přeskočit'){
+      const mode={'stručně a věcně':'concise','přátelsky':'friendly','formálně':'formal'}[choice];
+      if(mode)data.replyStyle={mode,source:'user_choice',
+        ...(q.example?{example:{quote:q.example,sourceKey:observations.replyStyleCandidate?.sourceKey}}:{})};
+    }
+    if(questionId.startsWith('review_') && choice!=='přeskočit'){
       const item=q.evidence;
-      if(answer==='prioritní jen tato zpráva'||answer==='běžná jen tato zpráva'){
+      if(choice==='prioritní jen tato zpráva'||choice==='běžná jen tato zpráva'){
         data.messageOverrides=[...(data.messageOverrides??[]).filter(x=>x.messageKey!==item.messageKey),
-          {messageKey:item.messageKey,priority:answer.startsWith('prioritní')?'high':'review',
+          {messageKey:item.messageKey,priority:choice.startsWith('prioritní')?'high':'review',
             evidence:item.reference,source:'explicit_setup_answer'}];
       }
-      if(answer==='prioritní tento odesílatel'){
+      if(choice==='prioritní tento odesílatel'){
         requireValue(item.sender,'SENDER_UNAVAILABLE');
         data.importantContacts=[...new Set([...data.importantContacts,item.sender])];
       }
-      if(answer==='newsletter jen tento odesílatel a přesný předmět'){
+      if(choice==='newsletter jen tento odesílatel a přesný předmět'){
         requireValue(item.sender && item.subject,'NEWSLETTER_RULE_TOO_BROAD');
         data.newsletterRules=[...data.newsletterRules,{sender:item.sender,subject:item.subject,
           action:'exclude_from_high_priority',evidence:item.reference,source:'explicit_setup_answer'}];
       }
-      if(answer==='newsletterová série tohoto odesílatele'){
+      if(choice==='newsletterová série tohoto odesílatele'){
         const seriesKey=newsletterSeriesKey(item.subject);
         requireValue(item.sender && seriesKey,'NEWSLETTER_SERIE_NEURČENA');
         data.newsletterRules=[...data.newsletterRules,{sender:item.sender,seriesKey,
@@ -504,6 +599,14 @@ export class Onboarding {
     requireValue(row.status==='ready' && row.question_count<20,'ONBOARDING_NOT_READY');
     const proposal=await this.store.first('SELECT * FROM workflow_proposals WHERE onboarding_id=?',sessionId);
     requireValue(proposal?.version===proposalVersion,'PROFILE_VERSION_CONFLICT');
+    const observation=await this.store.first('SELECT observations_json FROM workflow_observations WHERE onboarding_id=?',sessionId);
+    const base=observation?JSON.parse(observation.observations_json).baseProfileVersion:undefined;
+    if(base!==undefined){
+      const active=await this.store.first(`SELECT version FROM workflow_profile_versions
+        WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND active=1`,
+      mailbox.tenant_id,this.principal.id,mailbox.id);
+      requireValue((active?.version??null)===base,'PROFILE_VERSION_CONFLICT');
+    }
     const last=await this.store.first('SELECT MAX(version) AS version FROM workflow_profile_versions WHERE tenant_id=? AND principal_id=? AND mailbox_id=?',
       mailbox.tenant_id,this.principal.id,mailbox.id);
     const version=(last?.version??0)+1,now=this.now();
@@ -518,6 +621,8 @@ export class Onboarding {
     const statements=[
       this.store.db.prepare('UPDATE workflow_profile_versions SET active=0 WHERE tenant_id=? AND principal_id=? AND mailbox_id=?').bind(mailbox.tenant_id,this.principal.id,mailbox.id),
       this.store.db.prepare('INSERT INTO workflow_profile_versions VALUES (?,?,?,?,?,?,1)').bind(mailbox.tenant_id,this.principal.id,mailbox.id,version,JSON.stringify(approvedProfile),now),
+      this.store.db.prepare(`UPDATE workflow_lists SET active=0 WHERE tenant_id=? AND principal_id=?
+        AND mailbox_id=? AND active=1`).bind(mailbox.tenant_id,this.principal.id,mailbox.id),
       this.store.db.prepare("UPDATE workflow_onboarding SET status='approved',question_count=question_count+1,updated_at=? WHERE id=?")
         .bind(now,sessionId),
     ];
@@ -553,6 +658,8 @@ export class Onboarding {
     await this.store.db.batch([
       this.store.db.prepare('UPDATE workflow_profile_versions SET active=0 WHERE tenant_id=? AND principal_id=? AND mailbox_id=?').bind(mailbox.tenant_id,this.principal.id,mailbox.id),
       this.store.db.prepare('INSERT INTO workflow_profile_versions VALUES (?,?,?,?,?,?,1)').bind(mailbox.tenant_id,this.principal.id,mailbox.id,newVersion,previous.profile_json,this.now()),
+      this.store.db.prepare(`UPDATE workflow_lists SET active=0 WHERE tenant_id=? AND principal_id=?
+        AND mailbox_id=? AND active=1`).bind(mailbox.tenant_id,this.principal.id,mailbox.id),
       ...signatureStatements(this.store,mailbox.tenant_id,this.principal.id,mailbox,restoredProfile,now),
     ]);
     return {restoredFrom:version,version:newVersion,profile:JSON.parse(previous.profile_json)};

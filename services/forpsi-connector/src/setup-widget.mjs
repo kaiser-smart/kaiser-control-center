@@ -12,7 +12,7 @@ h2{font-size:19px;line-height:1.3;margin:0 0 10px}p{line-height:1.5;margin:8px 0
 button,a.action{font:inherit;cursor:pointer;border:1px solid color-mix(in srgb,CanvasText 18%,transparent);border-radius:10px;padding:11px 13px;background:color-mix(in srgb,#4589e8 10%,Canvas);color:CanvasText;text-align:left;text-decoration:none}
 button:hover,a.action:hover{background:color-mix(in srgb,#4589e8 20%,Canvas)}button:disabled{opacity:.6;cursor:wait}
 label{display:block;margin:10px 0}input[type=checkbox]{margin-right:9px}input[type=number],textarea{box-sizing:border-box;width:100%;font:inherit;border:1px solid color-mix(in srgb,CanvasText 25%,transparent);border-radius:8px;background:Canvas;color:CanvasText;padding:9px}
-textarea{min-height:75px}.error{color:#b52628}.note{border-top:1px solid color-mix(in srgb,CanvasText 12%,transparent);padding-top:12px}
+textarea{min-height:75px}.error{color:#b52628}.info{color:CanvasText;background:color-mix(in srgb,#4589e8 9%,Canvas);border-radius:8px;padding:10px}.note{border-top:1px solid color-mix(in srgb,CanvasText 12%,transparent);padding-top:12px}
 </style></head><body><main id="app" aria-live="polite"><h2>Osobní nastavení pošty</h2><p>Načítám…</p></main>
 <script>
 (()=>{
@@ -20,8 +20,15 @@ textarea{min-height:75px}.error{color:#b52628}.note{border-top:1px solid color-m
   const node=(tag,text,className)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(className)e.className=className;return e};
   const request=(method,params)=>new Promise((resolve,reject)=>{const id=nextId++;pending.set(id,{resolve,reject});
     window.parent.postMessage({jsonrpc:'2.0',id,method,params},'*')});
+  const friendlyError=code=>({'ANSWER_NEEDS_CLARIFICATION':'Této odpovědi zatím nerozumím jistě. Zkuste ji upřesnit.',
+    'QUESTION_OUT_OF_SEQUENCE':'Tato otázka už není aktuální. Otevřete prosím nejnovější kartu.',
+    'PROFILE_VERSION_CONFLICT':'Návrh se mezitím změnil. Otevřete prosím nejnovější kartu.',
+    'ONBOARDING_NOT_READY':'Nastavení ještě není připravené. Zkuste se vrátit k poslední kartě.',
+    'SIGNATURE_EVIDENCE_UNAVAILABLE':'Podpis se nepodařilo ověřit. Můžete ho vložit ručně.',
+    'ACCESS_DENIED':'K této schránce teď nemáte přístup.'})[code]||
+    'Odpověď se nepodařilo uložit. Zkuste to znovu; nic se ve schránce nezměnilo.';
   const tool=async(name,args)=>{const r=await request('tools/call',{name,arguments:args});
-    if(r.isError)throw Error(r.content?.[0]?.text||'Akci se nepodařilo dokončit.');return r.structuredContent?.data};
+    if(r.isError)throw Error(friendlyError(r.content?.[0]?.text));return r.structuredContent?.data};
   const message=prompt=>{
     if(window.openai?.sendFollowUpMessage)return window.openai.sendFollowUpMessage({prompt});
     return request('ui/message',{role:'user',content:[{type:'text',text:prompt}]});
@@ -29,6 +36,7 @@ textarea{min-height:75px}.error{color:#b52628}.note{border-top:1px solid color-m
   const button=(label,action)=>{const b=node('button',label);b.type='button';b.onclick=async()=>{
     if(busy)return;busy=true;b.disabled=true;try{await action();}catch(error){showError(error.message);}finally{busy=false;b.disabled=false;}};return b};
   const showError=text=>{let e=document.getElementById('setup-error');if(!e){e=node('p','','error');e.id='setup-error';app.append(e)}e.textContent=text};
+  const showInfo=text=>{let e=document.getElementById('setup-info');if(!e){e=node('p','','info');e.id='setup-info';app.append(e)}e.textContent=text};
   const heading=text=>{app.replaceChildren(node('h2',text))};
   const choiceLabel=value=>({'přeskočit':'Teď ne','ručně':'Jen když o poštu požádám',
     'každých 15 minut':'Každých 15 minut','použít doložený návrh':'Ano, tento podpis je můj',
@@ -70,7 +78,9 @@ textarea{min-height:75px}.error{color:#b52628}.note{border-top:1px solid color-m
     }));
   }
   async function answer(value){snapshot=await tool('answer_mail_setup',{
-    sessionId:snapshot.sessionId,questionId:snapshot.nextQuestion.id,answer:value});render()}
+    sessionId:snapshot.sessionId,questionId:snapshot.nextQuestion.id,answer:value});render();
+    if(snapshot.clarification)showInfo(snapshot.clarification);
+    else if(snapshot.interpretation?.interpreted?.length)showInfo(snapshot.interpretation.interpreted.join(' '));}
   function question(){
     const q=snapshot.nextQuestion;heading('Nastavení pošty');app.append(node('p',q.title));
     if(q.id==='signature'&&snapshot.observations?.signatureCandidate){
@@ -85,18 +95,31 @@ textarea{min-height:75px}.error{color:#b52628}.note{border-top:1px solid color-m
         label.append(check,document.createTextNode(value));box.append(label)}
       app.append(box,button('Potvrdit vybrané',async()=>{
         const selected=[...box.querySelectorAll('input:checked')].map(x=>x.value);
-        await answer(selected.length?'Důležité kontakty: '+selected.join(', '):'žádný')}));
+        if(!selected.length){showInfo('Vyberte kontakt, nebo použijte „Žádný z těchto kontaktů“ či „Teď ne“.');return}
+        await answer('Důležité kontakty: '+selected.join(', '))}),
+      button('Žádný z těchto kontaktů',()=>answer('žádný')),
+      button('Teď ne',()=>answer('přeskočit')));
+    }else if(q.id==='newsletter_keep'){
+      const box=node('div',undefined,'choices');
+      for(const item of q.candidates||[]){const label=node('label'),check=node('input');
+        check.type='checkbox';check.value=item.id;
+        label.append(check,document.createTextNode(item.title+' — '+item.sender));box.append(label)}
+      app.append(box,button('Nechat vybrané na očích',async()=>{
+        const selected=[...box.querySelectorAll('input:checked')].map(x=>x.value);
+        if(!selected.length){showInfo('Vyberte newsletter, nebo klikněte na „Žádný“ či „Teď ne“.');return}
+        await answer('vybrat: '+selected.join(','))}),
+      button('Žádný z těchto newsletterů',()=>answer('žádný')),
+      button('Teď ne',()=>answer('přeskočit')));
     }else{
       const choices=node('div',undefined,'choices');for(const value of q.options)choices.append(button(choiceLabel(value),()=>answer(value)));
       app.append(choices);
     }
     if(q.id==='signature'){
       const full=node('textarea');full.placeholder='Vložte podpis, který používáte';
-      app.append(node('p','Pokud chcete jiný podpis, vložte jej sem. Kratší podobu vám navrhnu.','muted'),full,
-        button('Navrhnout podpis',()=>{
+      app.append(node('p','Pokud chcete jiný podpis, vložte jej sem. Kratší podobu navrhnu z prvních řádků a uvidíte ji před závěrečným potvrzením.','muted'),full,
+        button('Vložit tento podpis',()=>{
           if(!full.value.trim()){showError('Vložte prosím svůj podpis.');return}
-          return message('V právě otevřeném nastavení pošty používám tento podpis: '+full.value.trim()+
-            '. Navrhněte krátkou variantu pro odpovědi, ukažte mi obě podoby a uložte je pouze jako neschválený návrh.');
+          return answer(full.value.trim());
         }));
     }else{
       const custom=node('textarea');custom.placeholder='Vlastní odpověď (volitelné)';
@@ -111,9 +134,12 @@ textarea{min-height:75px}.error{color:#b52628}.note{border-top:1px solid color-m
     const add=text=>list.append(node('li',text));
     for(const agenda of profile.agendaRecommendations||[])if(agenda.userMarkedRelevant===true)add('Běžná agenda: '+agenda.summary);
     if(profile.importantContacts?.length)add('Přednostní pracovní kontakty: '+profile.importantContacts.join(', '));
-    for(const rule of profile.newsletterRules||[])add('Mimo hlavní priority: '+(rule.subject||rule.seriesKey)+' od '+rule.sender);
+    for(const rule of profile.newsletterRules||[])add((rule.action==='keep_visible'?'Na očích: ':'Mimo hlavní priority: ')+
+      (rule.subject||rule.seriesKey)+' od '+rule.sender);
+    if(profile.replyStyle?.mode)add('Styl návrhů odpovědí: '+({concise:'stručně a věcně',friendly:'přátelsky',formal:'formálně'}[profile.replyStyle.mode]||profile.replyStyle.mode));
     if(profile.synchronization?.mode==='interval')add('Novou poštu kontrolovat každých '+profile.synchronization.minutes+' minut.');
-    if(profile.signature?.fullText)add('Podpis pro nové zprávy: '+profile.signature.fullText);
+    if(profile.signature?.fullText){add('Podpis pro nové zprávy: '+profile.signature.fullText);
+      add('Podpis pro odpovědi: '+profile.signature.shortText)}
     if(!list.children.length)add('Zatím žádné trvalé pravidlo; zprávy zůstávají k posouzení.');
     app.append(list);
     if(snapshot.approvalUrl){const a=node('a','Potvrdit nastavení','action');a.href=snapshot.approvalUrl;a.target='_blank';a.rel='noopener noreferrer';app.append(a)}

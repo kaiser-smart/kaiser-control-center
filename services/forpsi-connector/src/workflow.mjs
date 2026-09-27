@@ -225,9 +225,11 @@ export class Workflow {
         x.evidence?.folder===message.reference.folder &&
         String(x.evidence?.uidValidity)===String(message.reference.uidValidity) &&
         Number(x.evidence?.uid)===Number(message.reference.uid));
-      const newsletter=profile?.newsletterRules?.some(x=>x.action==='exclude_from_high_priority' &&
-        x.sender.toLowerCase()===sender.toLowerCase() &&
+      const newsletterRules=(profile?.newsletterRules??[]).filter(x=>
+        x.sender?.toLowerCase()===sender.toLowerCase() &&
         (x.subject===message.subject || (x.seriesKey&&x.seriesKey===newsletterSeriesKey(message.subject))));
+      const keepNewsletter=newsletterRules.some(x=>x.action==='keep_visible');
+      const newsletter=newsletterRules.some(x=>x.action==='exclude_from_high_priority');
       const relatedFindings=findings.get(messageKey(detail))??[];
       const chatgptPriority=modelDriven?pilotFacts?.chatgptPriorities?.find(x=>x.sourceKey===messageKey(detail)):null;
       const threadEvents=threadFindings.get(key)??[];
@@ -247,19 +249,23 @@ export class Workflow {
         detail.to?.some(x=>x.address?.toLowerCase()===mailbox.address.toLowerCase());
       const semanticHigh=threadDisposition==='open'||(threadDisposition===null&&!!highFinding);
       const semanticLow=threadDisposition==='closed'||(!semanticHigh&&!!lowFinding);
-      const priority=modelDriven&&view==='priority'?override?.priority??chatgptPriority?.priority??'review':
-        override?.priority??(semanticHigh?'high':newsletter||semanticLow?'review':important?'high':'review');
+      const priority=modelDriven&&view==='priority'?override?.priority??
+        (keepNewsletter?'high':newsletter&&!semanticHigh?'review':chatgptPriority?.priority??'review'):
+        override?.priority??(semanticHigh?'high':keepNewsletter?'high':newsletter||semanticLow?'review':important?'high':'review');
       const reason=modelDriven&&view==='priority'?(override?'Výslovná osobní oprava pro tuto zprávu.':
+        keepNewsletter?'Uživatelem vybraný newsletter zůstává na očích.':
+        newsletter&&!semanticHigh?'Uživatelem vybraný newsletter zůstává mimo hlavní priority.':
         chatgptPriority?.reason??'ChatGPT tento vzorek nevyhodnotil; vyžaduje ruční kontrolu.'):
         override?'Výslovná osobní oprava pro tuto zprávu.':semanticHigh?
-        'Modelový návrh otevřeného požadavku s citací; ověřte před akcí.':newsletter?
+        'Modelový návrh otevřeného požadavku s citací; ověřte před akcí.':keepNewsletter?
+        'Uživatelem vybraný newsletter zůstává na očích.':newsletter?
         'Uživatelem schválené pravidlo newsletteru; není automaticky prioritní.':semanticLow?
         'Modelový návrh s citací obsahu; ověřte před akcí.':
         important?'Uživatelem schválený důležitý kontakt.':direct?
         'Přímo adresováno; konkrétní požadavek je nutné ověřit.':'Neověřená priorita; zpráva není skrytá.';
       items.push({ reference: message.reference, threadKey: threadKey(detail), messageKey: messageKey(detail),
         sender, subject: message.subject ?? '', receivedAt: message.date ?? null,priority,reason,
-        contentType:(!modelDriven&&newsletter)||semanticFinding?.kind==='newsletter'?'newsletter':'unclassified',
+        contentType:newsletter||keepNewsletter||semanticFinding?.kind==='newsletter'?'newsletter':'unclassified',
         semanticEvidence:modelDriven&&view==='priority'?chatgptPriority?{...chatgptPriority,
           findings:relatedFindings,contextStatus:semanticContextStatus}:null:
           semanticFinding?{...semanticFinding,
