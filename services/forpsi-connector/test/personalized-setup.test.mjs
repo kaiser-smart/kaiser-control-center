@@ -423,6 +423,32 @@ test('reply style is offered with sent evidence; a manually pasted signature nee
   assert.equal(state.proposal.data.signature.shortText,'S pozdravem\nAlice Nová');
 });
 
+test('a clear typed reply-style answer advances the saved interview; unclear text asks a specific follow-up',async()=>{
+  const {ctx}=scenario({incoming:[message(1)],sent:[]});
+  ctx.env.CHATGPT_INTERACTIVE_SETUP_ENABLED='true';
+  const setup=new Onboarding(ctx),began=await setup.begin({mailboxId:'mail-a',consent:true,
+    days:30,folders:['INBOX']});
+  const analyzed=await setup.analyze({sessionId:began.sessionId});
+  await setup.readSetupSample({sessionId:began.sessionId});
+  let state=await setup.submitAnalysis({sessionId:began.sessionId,
+    proposalVersion:analyzed.proposal.version,findings:[],priorities:[]});
+  while(state.nextQuestion?.id!=='reply_style')state=await setup.answer({
+    sessionId:began.sessionId,questionId:state.nextQuestion.id,answer:'přeskočit'});
+  const before=state.questionCount;
+  const unclear=await setup.answer({sessionId:began.sessionId,questionId:'reply_style',
+    answer:'Piš lidsky, ale dost formálně'});
+  assert.equal(unclear.nextQuestion.id,'reply_style');
+  assert.equal(unclear.questionCount,before);
+  assert.match(unclear.clarification,/stručn|přátelsk|formáln/u);
+  state=await setup.answer({sessionId:began.sessionId,questionId:'reply_style',
+    answer:'Prosím piš stručně a věcně'});
+  assert.equal(state.proposal.data.replyStyle.mode,'concise');
+  assert.notEqual(state.nextQuestion?.id,'reply_style');
+  assert.equal(state.questionCount,before+1);
+  const resumed=await new Onboarding(ctx).status({sessionId:began.sessionId});
+  assert.equal(resumed.nextQuestion?.id,state.nextQuestion?.id);
+});
+
 test('existing un-answered production session upgrades in place without wider consent',async()=>{
   const {ctx}=scenario({incoming:[message(1)],sent:[]});
   const setup=new Onboarding(ctx),begin=await setup.begin({mailboxId:'mail-a',consent:true,
