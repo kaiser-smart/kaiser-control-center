@@ -38,12 +38,17 @@ async function load(){
     const p=data.proposal?.data??{};
     add(prefs,'Důležité kontakty',(p.importantContacts??[]).join(', ')||'Žádné schválené');
     add(prefs,'Opravy jednotlivých zpráv',(p.messageOverrides??[]).length);
-    add(prefs,'Newsletterová pravidla',(p.newsletterRules??[]).map(x=>`${x.sender} · ${x.seriesKey||x.subject}`).join('; ')||'Žádná');
+    add(prefs,'Newslettery na očích',(p.newsletterRules??[]).filter(x=>x.action==='keep_visible')
+      .map(x=>`${x.seriesKey||x.subject} od ${x.sender}`).join('; ')||'Žádné nově vybrané');
+    add(prefs,'Newslettery mimo hlavní priority',(p.newsletterRules??[]).filter(x=>x.action==='exclude_from_high_priority')
+      .map(x=>`${x.seriesKey||x.subject} od ${x.sender}`).join('; ')||'Žádné nově vybrané');
+    add(prefs,'Styl návrhů odpovědí',({concise:'stručně a věcně',friendly:'přátelsky',formal:'formálně'}[p.replyStyle?.mode])||'ponechat bez nové volby');
     add(prefs,'Načítání',JSON.stringify(p.synchronization??'ruční'));
     add(prefs,'Přepočet priorit',JSON.stringify(p.priorityRecalculation??'ruční'));
     add(prefs,'Upozornění',JSON.stringify(data.services?.chatNotifications??'nedostupné'));
     add(prefs,'Pracovní doba',JSON.stringify(p.workingHours??'neurčena'));
-    add(prefs,'Podpis',p.signature?.fullText??'bez schváleného návrhu');
+    add(prefs,'Podpis pro nové zprávy',p.signature?.fullText??'bez schváleného návrhu');
+    add(prefs,'Podpis pro odpovědi',p.signature?.shortText??'bez schváleného návrhu');
     add(prefs,'Oslovení z historie',p.signature?.style?.greeting??'nedoloženo');
     add(prefs,'Zakončení z historie',p.signature?.style?.closing??'nedoloženo');
     add(prefs,'Písmo',p.signature?.style?.font??'z historie nezjištěno');

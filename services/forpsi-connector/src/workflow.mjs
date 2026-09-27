@@ -108,14 +108,15 @@ export class Workflow {
     const mailbox = await this.access(mailboxId);
     const provider = this.providerFactory(this.env, mailbox);
     const pilot=this.env.PERSONAL_PILOT_READ_ONLY==='true';
+    const modelDriven=pilot||this.env.CHATGPT_INTERACTIVE_SETUP_ENABLED==='true';
     let scanLimit=view==='priority'?200:limit,pageSize=view==='priority'?50:limit;
     const summaries=[];let beforeUid=null,olderUnscanned=false,pilotMessages=[],pilotFacts=null;
-    if(pilot){
-      requireValue(path==='INBOX','PILOT_SCOPE_EXCEEDED');
-      const existing=await this.store.first(`SELECT id FROM workflow_lists WHERE tenant_id=? AND principal_id=?
+    if(modelDriven && view==='priority'){
+      if(pilot)requireValue(path==='INBOX','PILOT_SCOPE_EXCEEDED');
+      const existing=await this.store.first(`SELECT id,semantic_status FROM workflow_lists WHERE tenant_id=? AND principal_id=?
         AND mailbox_id=? AND active=1 AND expires_at>? ORDER BY created_at DESC LIMIT 1`,
       mailbox.tenant_id,this.principal.id,mailbox.id,this.now());
-      if(existing)return this.current({listId:existing.id});
+      if(existing?.semantic_status==='chatgpt_proposal')return this.current({listId:existing.id});
       const approved=await this.store.first(`SELECT version FROM workflow_profile_versions
         WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND active=1`,
       mailbox.tenant_id,this.principal.id,mailbox.id);
@@ -126,13 +127,15 @@ export class Workflow {
         ORDER BY s.updated_at DESC LIMIT 1`,mailbox.tenant_id,this.principal.id,mailbox.id);
       requireValue(sample,'PILOT_SAMPLE_NOT_FOUND');
       const scope=JSON.parse(sample.scope_json),observation=JSON.parse(sample.observations_json);
+      requireValue(scope.folders.includes(path),'ANALYSIS_SCOPE_MISMATCH');
       requireValue(observation.semantic?.status==='chatgpt_proposal','ANALYSIS_NOT_SUBMITTED');
       pilotFacts=observation;
       pilotMessages=observation.pilotMessages??[];
-      requireValue(scope.days<=30 && pilotMessages.length<=50 && pilotMessages.every(m=>
+      requireValue(pilotMessages.length<=50,'PILOT_SCOPE_EXCEEDED');
+      if(pilot)requireValue(scope.days<=30 && pilotMessages.every(m=>
         m.reference?.folder==='INBOX'||m.reference?.folder===mailbox.sent_folder),'PILOT_SCOPE_EXCEEDED');
-      const earliest=this.now()-30*86400000;
-      summaries.push(...pilotMessages.filter(m=>m.reference.folder==='INBOX' &&
+      const earliest=this.now()-scope.days*86400000;
+      summaries.push(...pilotMessages.filter(m=>m.reference.folder===path &&
         Date.parse(m.date)>=earliest && Date.parse(m.date)<=this.now()));
       scanLimit=summaries.length;
       olderUnscanned=JSON.parse(sample.coverage_json).some(x=>x.incomplete);
@@ -153,12 +156,12 @@ export class Workflow {
     const candidates=view==='priority'?[...summaries].sort((a,b)=>
       String(b.date??'').localeCompare(String(a.date??'')) ||
       Number(b.reference?.uid??0)-Number(a.reference?.uid??0)):summaries;
-    const analyzer=pilot?null:this.semanticAnalyzer??(this.env.FORPSI_ANALYSIS_API_KEY&&this.env.FORPSI_ANALYSIS_MODEL?
+    const analyzer=modelDriven?null:this.semanticAnalyzer??(this.env.FORPSI_ANALYSIS_API_KEY&&this.env.FORPSI_ANALYSIS_MODEL?
       input=>openAiEvidenceAnalyzer(input,this.env):null);
     const verifiedAliases=view==='priority'?await this.store.verifiedAliases(mailbox):[];
     const detailCache=new Map();let semantic={status:'unavailable',findings:[],examined:0};
     let semanticContextStatus='not_analyzed';
-    if(pilot){
+    if(modelDriven && view==='priority'){
       semantic=pilotFacts.semantic;
       semanticContextStatus=olderUnscanned?'chatgpt_partial_sample':'chatgpt_submitted_sample';
     }
@@ -222,11 +225,13 @@ export class Workflow {
         x.evidence?.folder===message.reference.folder &&
         String(x.evidence?.uidValidity)===String(message.reference.uidValidity) &&
         Number(x.evidence?.uid)===Number(message.reference.uid));
-      const newsletter=profile?.newsletterRules?.some(x=>x.action==='exclude_from_high_priority' &&
-        x.sender.toLowerCase()===sender.toLowerCase() &&
+      const newsletterRules=(profile?.newsletterRules??[]).filter(x=>
+        x.sender?.toLowerCase()===sender.toLowerCase() &&
         (x.subject===message.subject || (x.seriesKey&&x.seriesKey===newsletterSeriesKey(message.subject))));
+      const keepNewsletter=newsletterRules.some(x=>x.action==='keep_visible');
+      const newsletter=newsletterRules.some(x=>x.action==='exclude_from_high_priority');
       const relatedFindings=findings.get(messageKey(detail))??[];
-      const chatgptPriority=pilot?pilotFacts.chatgptPriorities?.find(x=>x.sourceKey===messageKey(detail)):null;
+      const chatgptPriority=modelDriven?pilotFacts?.chatgptPriorities?.find(x=>x.sourceKey===messageKey(detail)):null;
       const threadEvents=threadFindings.get(key)??[];
       let threadDisposition=null,threadEvidence=null;
       for(const event of threadEvents){
@@ -244,20 +249,24 @@ export class Workflow {
         detail.to?.some(x=>x.address?.toLowerCase()===mailbox.address.toLowerCase());
       const semanticHigh=threadDisposition==='open'||(threadDisposition===null&&!!highFinding);
       const semanticLow=threadDisposition==='closed'||(!semanticHigh&&!!lowFinding);
-      const priority=pilot?override?.priority??chatgptPriority?.priority??'review':
-        override?.priority??(semanticHigh?'high':newsletter||semanticLow?'review':important?'high':'review');
-      const reason=pilot?(override?'Výslovná osobní oprava pro tuto zprávu.':
+      const priority=modelDriven&&view==='priority'?override?.priority??
+        (keepNewsletter?'high':newsletter&&!semanticHigh?'review':chatgptPriority?.priority??'review'):
+        override?.priority??(semanticHigh?'high':keepNewsletter?'high':newsletter||semanticLow?'review':important?'high':'review');
+      const reason=modelDriven&&view==='priority'?(override?'Výslovná osobní oprava pro tuto zprávu.':
+        keepNewsletter?'Uživatelem vybraný newsletter zůstává na očích.':
+        newsletter&&!semanticHigh?'Uživatelem vybraný newsletter zůstává mimo hlavní priority.':
         chatgptPriority?.reason??'ChatGPT tento vzorek nevyhodnotil; vyžaduje ruční kontrolu.'):
         override?'Výslovná osobní oprava pro tuto zprávu.':semanticHigh?
-        'Modelový návrh otevřeného požadavku s citací; ověřte před akcí.':newsletter?
+        'Modelový návrh otevřeného požadavku s citací; ověřte před akcí.':keepNewsletter?
+        'Uživatelem vybraný newsletter zůstává na očích.':newsletter?
         'Uživatelem schválené pravidlo newsletteru; není automaticky prioritní.':semanticLow?
         'Modelový návrh s citací obsahu; ověřte před akcí.':
         important?'Uživatelem schválený důležitý kontakt.':direct?
         'Přímo adresováno; konkrétní požadavek je nutné ověřit.':'Neověřená priorita; zpráva není skrytá.';
       items.push({ reference: message.reference, threadKey: threadKey(detail), messageKey: messageKey(detail),
         sender, subject: message.subject ?? '', receivedAt: message.date ?? null,priority,reason,
-        contentType:(!pilot&&newsletter)||semanticFinding?.kind==='newsletter'?'newsletter':'unclassified',
-        semanticEvidence:pilot?chatgptPriority?{...chatgptPriority,
+        contentType:newsletter||keepNewsletter||semanticFinding?.kind==='newsletter'?'newsletter':'unclassified',
+        semanticEvidence:modelDriven&&view==='priority'?chatgptPriority?{...chatgptPriority,
           findings:relatedFindings,contextStatus:semanticContextStatus}:null:
           semanticFinding?{...semanticFinding,
             findings:threadEvents.flatMap(x=>x.entries),contextStatus:semanticContextStatus}:null });

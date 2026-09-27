@@ -7,6 +7,7 @@ import { createWorker } from '../src/worker.mjs';
 import { selectors } from '../src/schemas.mjs';
 import { seal, unseal } from '../src/crypto.mjs';
 import { SOAI_ISSUER } from '../src/admin-access.mjs';
+import { SETUP_UI_URI } from '../src/setup-widget.mjs';
 
 test('verified OAuth subject resolves only through an explicit active SO.ai identity link',async()=>{
   const f=fixture();
@@ -55,12 +56,16 @@ test('real MCP transport initializes, lists tools and returns structured results
   assert.equal(init.status, 200);
   assert.equal((await init.json()).result.serverInfo.name, 'forpsi-company-mail');
   const list = await (await worker.fetch(request('tools/list'), f.env)).json();
-  assert.equal(list.result.tools.length, 62);
+  assert.equal(list.result.tools.length, 64);
   const widget = list.result.tools.find(t => t.name === 'render_worklist');
   assert.equal(widget._meta.ui.resourceUri, 'ui://forpsi/worklist-v1.html');
   assert.equal(widget.annotations.readOnlyHint, true);
   const resources = await (await worker.fetch(request('resources/list'), f.env)).json();
   assert.equal(resources.result.resources[0].mimeType, 'text/html;profile=mcp-app');
+  assert.equal(resources.result.resources[1].uri,SETUP_UI_URI);
+  const setupResource=await (await worker.fetch(request('resources/read',{
+    uri:SETUP_UI_URI}),f.env)).json();
+  assert.match(setupResource.result.contents[0].text,/Souhlasím a pokračovat/);
   const resource=await (await worker.fetch(request('resources/read',{
     uri:'ui://forpsi/worklist-v1.html'}),f.env)).json();
   assert.match(resource.result.contents[0].text,/ui\/notifications\/tool-result/);
