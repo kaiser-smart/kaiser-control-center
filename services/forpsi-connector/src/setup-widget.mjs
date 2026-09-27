@@ -1,6 +1,6 @@
 // Presentation only. Consent and every answer are checked against the authenticated
 // mailbox and the current server-side setup session by the existing MCP tools.
-export const SETUP_UI_URI='ui://forpsi/setup-v2.html';
+export const SETUP_UI_URI='ui://forpsi/setup-v3.html';
 export const setupWidget=`<!doctype html>
 <html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
@@ -21,14 +21,21 @@ textarea{min-height:75px}.error{color:#b52628}.info{color:CanvasText;background:
   const request=(method,params)=>new Promise((resolve,reject)=>{const id=nextId++;pending.set(id,{resolve,reject});
     window.parent.postMessage({jsonrpc:'2.0',id,method,params},'*')});
   const friendlyError=code=>({'ANSWER_NEEDS_CLARIFICATION':'Této odpovědi zatím nerozumím jistě. Zkuste ji upřesnit.',
-    'QUESTION_OUT_OF_SEQUENCE':'Tato otázka už není aktuální. Otevřete prosím nejnovější kartu.',
+    'QUESTION_OUT_OF_SEQUENCE':'Otázka se mezitím změnila. Načítám pokračování.',
     'PROFILE_VERSION_CONFLICT':'Návrh se mezitím změnil. Otevřete prosím nejnovější kartu.',
     'ONBOARDING_NOT_READY':'Nastavení ještě není připravené. Zkuste se vrátit k poslední kartě.',
     'SIGNATURE_EVIDENCE_UNAVAILABLE':'Podpis se nepodařilo ověřit. Můžete ho vložit ručně.',
     'ACCESS_DENIED':'K této schránce teď nemáte přístup.'})[code]||
     'Odpověď se nepodařilo uložit. Zkuste to znovu; nic se ve schránce nezměnilo.';
   const tool=async(name,args)=>{const r=await request('tools/call',{name,arguments:args});
-    if(r.isError)throw Error(friendlyError(r.content?.[0]?.text));return r.structuredContent?.data};
+    if(r.isError){const code=r.content?.[0]?.text,error=Error(friendlyError(code));error.code=code;throw error}
+    let data=r.structuredContent?.data;
+    if(!data&&r.content?.[0]?.text){try{data=JSON.parse(r.content[0].text).data}catch{}}
+    if(!data||typeof data!=='object'){
+      const error=Error('Odpověď se nepodařilo načíst. Zjišťuji uložený stav.');
+      error.code='TOOL_RESULT_MISSING';throw error;
+    }
+    return data};
   const message=prompt=>{
     if(window.openai?.sendFollowUpMessage)return window.openai.sendFollowUpMessage({prompt});
     return request('ui/message',{role:'user',content:[{type:'text',text:prompt}]});
@@ -81,10 +88,20 @@ textarea{min-height:75px}.error{color:#b52628}.info{color:CanvasText;background:
       heading('Dobře, necháme to na později');app.append(node('p','Poštu můžete dál používat beze změny.'));
     }));
   }
-  async function answer(value){snapshot=await tool('answer_mail_setup',{
-    sessionId:snapshot.sessionId,questionId:snapshot.nextQuestion.id,answer:value});render();
-    if(snapshot.clarification)showInfo(snapshot.clarification);
-    else if(snapshot.interpretation?.interpreted?.length)showInfo(snapshot.interpretation.interpreted.join(' '));}
+  async function answer(value){
+    const sessionId=snapshot.sessionId,questionId=snapshot.nextQuestion.id;
+    try{snapshot=await tool('answer_mail_setup',{sessionId,questionId,answer:value})}
+    catch(error){
+      if(!['QUESTION_OUT_OF_SEQUENCE','TOOL_RESULT_MISSING'].includes(error.code))throw error;
+      snapshot=await tool('get_mail_setup',{sessionId});render();return;
+    }
+    render();
+    if(snapshot.clarification){showInfo(snapshot.clarification);return}
+    const understood=snapshot.interpretation?.interpreted??[];
+    if(snapshot.nextQuestion?.id===questionId&&understood.length)
+      showInfo(understood.join(' ')+' Ještě potřebuji odpověď na tuto otázku: '+snapshot.nextQuestion.title);
+    else if(understood.length)showInfo(understood.join(' '));
+  }
   function question(){
     const q=snapshot.nextQuestion;heading('Nastavení pošty');app.append(node('p',q.title));
     if(q.id==='signature'&&snapshot.observations?.signatureCandidate){
@@ -159,7 +176,7 @@ textarea{min-height:75px}.error{color:#b52628}.info{color:CanvasText;background:
     const msg=event.data;if(msg.id!==undefined&&pending.has(msg.id)){
       const p=pending.get(msg.id);pending.delete(msg.id);msg.error?p.reject(msg.error):p.resolve(msg.result);return}
     if(msg.method==='ui/notifications/tool-result'){snapshot=msg.params?.structuredContent?.data??null;render()}});
-  request('ui/initialize',{protocolVersion:'2026-01-26',appInfo:{name:'forpsi-setup',version:'2'},appCapabilities:{}})
+  request('ui/initialize',{protocolVersion:'2026-01-26',appInfo:{name:'forpsi-setup',version:'3'},appCapabilities:{}})
     .then(()=>window.parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}},'*'))
     .catch(()=>{heading('Formulář není dostupný');app.append(node('p','Pokračujte textově v chatu.'))});
 })();

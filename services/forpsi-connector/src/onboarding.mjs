@@ -518,7 +518,9 @@ export class Onboarding {
         mailboxAddress:mailbox.address,question:q});
       if(Object.keys(interpretation.answers).length===0&&
         Object.keys(interpretation.changes).length===0)return {...await this.status({sessionId}),
-          clarification:'Této odpovědi zatím nerozumím dost jistě. Zkuste ji prosím upřesnit nebo vyberte jednu z nabízených možností; nic jsem nezměnila.',
+          clarification:questionId==='reply_style'?
+            'Jaký tón mám používat při přípravě odpovědí: stručný a věcný, přátelský, nebo formální? Můžete to napsat vlastními slovy. Zatím jsem nic nezměnila.':
+            `Potřebuji ještě upřesnit: ${q.title} Zatím jsem nic nezměnila.`,
           interpretation};
       Object.assign(answers,interpretation.answers);
       Object.assign(data,interpretation.changes);

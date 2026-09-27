@@ -42,6 +42,18 @@ export function contextualSetupAnswer(raw,question){
     if(yes)return {answer:'ano, mimo hlavní priority'};
     if(no)return {answer:'ne, ponechat k ručnímu posouzení'};
   }
+  if(question.id==='reply_style'){
+    if(/nechci|nepiš|neodpovídej|nikdy/iu.test(text))return {clarification:
+      'Rozumím, který styl nechcete. Jaký mám používat místo něj: stručný a věcný, přátelský, nebo formální?'};
+    const styles=[
+      [/stručn|věcn|krátc/iu,'stručně a věcně'],
+      [/přátelsk|lidsk|neformáln/iu,'přátelsky'],
+      [/(?<!ne)formáln|úředn/iu,'formálně'],
+    ].filter(([pattern])=>pattern.test(text)).map(([,answer])=>answer);
+    if(styles.length===1)return {answer:styles[0]};
+    if(styles.length>1)return {clarification:
+      'Zmínil jste více stylů. Který má v odpovědích převážit: stručný a věcný, přátelský, nebo formální?'};
+  }
   return null;
 }
 const hhmm=(hour,minute='0')=>{
