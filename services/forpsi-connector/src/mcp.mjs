@@ -13,6 +13,7 @@ import { Workflow, workflowSchemas } from './workflow.mjs';
 import { WORKLIST_UI_URI, worklistWidget } from './worklist-widget.mjs';
 import { Shortcuts, shortcutSchemas } from './shortcuts.mjs';
 import { Onboarding, onboardingSchemas } from './onboarding.mjs';
+import { SendApproval } from './send-approval.mjs';
 
 const empty = z.object({}).strict();
 const definitions = [
@@ -27,8 +28,8 @@ const definitions = [
   ['set_message_flags', 'Set read/unread and star flags for one exact message.', selectors.flags, 'write', false, true],
   ['trash_message', 'Delete one message by moving it to the configured Trash folder. No permanent purge is performed.', selectors.read, 'delete', false, true],
   ['create_folder', 'Create an IMAP mailbox folder.', selectors.folder, 'write', false],
-  ['send_message', 'Unavailable until the connector has an explicit server-bound preview and approval flow for the exact message. Never call for a workflow draft.', selectors.send, 'send', false, true, true],
-  ['schedule_message', 'Unavailable until the connector has an explicit server-bound preview and approval flow for the exact message and schedule.', selectors.schedule, 'schedule', false, true, true],
+  ['send_message', 'Prepare an encrypted proposal for this exact message and return its complete preview and SO.ai approval URL. Does not send until the authenticated user confirms there. Reuse requestId on retry.', selectors.send, 'send', false, false, true],
+  ['schedule_message', 'Prepare an encrypted scheduled proposal and return its complete preview and SO.ai approval URL. Does not schedule until the authenticated user confirms there. Reuse requestId on retry.', selectors.schedule, 'schedule', false, false, true],
   ['get_send_status', 'Get the current employee’s send job status. sent means SMTP accepted, not proof of delivery to the recipient inbox.', selectors.job, 'read', true],
   ['cancel_scheduled_send', 'Cancel a queued send. Sending, sent and uncertain jobs cannot be cancelled.', selectors.job, 'schedule', false, true],
   ['list_labels', 'List connector-owned labels; these are not synchronized with Forpsi webmail labels.', selectors.mailbox, 'read', true],
@@ -131,9 +132,6 @@ export async function executeTool(name, args, ctx) {
     }
   }
   requireValue(definition.securitySchemes[0].scopes.every(scope => principal.scopes.includes(scope)), 'INSUFFICIENT_SCOPE');
-  // The older direct MCP send endpoints lack a server-bound final preview.
-  // Keep their schemas stable but fail closed while the new approval flow is built.
-  requireValue(!['send_message','schedule_message'].includes(name), 'SEND_CONFIRMATION_REQUIRED');
   let mailbox = null;
   if (args.mailboxId) {
     mailbox = await store.access(principal, args.mailboxId, definition.action);
@@ -178,7 +176,9 @@ export async function executeTool(name, args, ctx) {
     }
     case 'set_message_flags': data = await mail().flags(args.message, args); break;
     case 'create_folder': data = await mail().createFolder(args.path); break;
-    case 'send_message': case 'schedule_message': data = await outbox.enqueue(principal, args, name === 'schedule_message'); break;
+    case 'send_message': case 'schedule_message':
+      data=await new SendApproval(store,env,outbox).prepare(principal,args,name==='schedule_message');
+      break;
     case 'get_send_status': data = publicJob(await store.jobFor(principal, args.jobId)); break;
     case 'cancel_scheduled_send': data = await outbox.cancel(principal, args.jobId); break;
     case 'list_labels': data = await organizer.listLabels(mailbox.id); break;

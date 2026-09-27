@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chatgptClientCallback, isPilotAuthorization } from '../src/oauth-client-policy.mjs';
+import { chatgptClientCallback, isPilotAuthorization, isConnectorAuthorization,
+  CONNECTOR_SCOPES } from '../src/oauth-client-policy.mjs';
 
 const stable='https://chatgpt.com/oauth/client.json';
 const stableRedirect='https://chatgpt.com/connector_platform_oauth_redirect';
@@ -27,4 +28,14 @@ test('authorization denies wrong redirect, scope, resource or PKCE method',()=>{
     {codeChallengeMethod:'plain'},
     {codeChallengeMethod:undefined},
   ])assert.equal(isPilotAuthorization({...request,...mutation}),false);
+});
+
+test('production OAuth permits only explicit known scopes on the exact ChatGPT callback',()=>{
+  assert.equal(isConnectorAuthorization({...request,scope:CONNECTOR_SCOPES}),true);
+  assert.equal(isConnectorAuthorization({...request,scope:['forpsi:read','forpsi:send']}),true);
+  for(const change of [{scope:[]},{scope:['forpsi:read','forpsi:read']},
+    {scope:['forpsi:admin']},{scope:['forpsi:read','forpsi:admin']},
+    {redirectUri:'https://chatgpt.com.evil.test/callback'},
+    {resource:'https://other.example/mcp'},{codeChallengeMethod:'plain'}])
+    assert.equal(isConnectorAuthorization({...request,...change}),false);
 });

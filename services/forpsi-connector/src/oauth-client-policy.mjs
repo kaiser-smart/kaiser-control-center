@@ -1,4 +1,5 @@
 const STABLE_CLIENT='https://chatgpt.com/oauth/client.json';
+export const CONNECTOR_SCOPES=['forpsi:read','forpsi:write','forpsi:send','forpsi:delete','forpsi:schedule'];
 
 // ChatGPT publishes either its stable CIMD URL or a callback-specific one.
 // The provider still verifies the fetched CIMD and its declared redirect URI.
@@ -13,5 +14,15 @@ export function isPilotAuthorization(request){
   return !!expected&&expected===request?.redirectUri&&
     request?.codeChallengeMethod==='S256'&&
     request?.scope?.length===1&&request.scope[0]==='forpsi:read'&&
+    request?.resource==='https://smart-odpady.ai/mcp';
+}
+
+export function isConnectorAuthorization(request){
+  const expected=chatgptClientCallback(request?.clientId);
+  const scopes=request?.scope;
+  return !!expected&&expected===request?.redirectUri&&
+    request?.codeChallengeMethod==='S256'&&
+    Array.isArray(scopes)&&scopes.length>0&&scopes.length<=CONNECTOR_SCOPES.length&&
+    new Set(scopes).size===scopes.length&&scopes.every(scope=>CONNECTOR_SCOPES.includes(scope))&&
     request?.resource==='https://smart-odpady.ai/mcp';
 }

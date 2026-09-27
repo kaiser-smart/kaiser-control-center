@@ -9,10 +9,10 @@
   "preview_urls": false,
   "vars": {
     "CONNECTOR_ENABLED": "true",
-    "PERSONAL_PILOT_OAUTH": "true",
-    "PERSONAL_PILOT_READ_ONLY": "true",
-    "WORKFLOW_SYNC_ENABLED": "false",
-    "SEND_ENABLED": "false",
+    "CONNECTOR_OAUTH": "true",
+    "PERSONAL_PILOT_READ_ONLY": "false",
+    "WORKFLOW_SYNC_ENABLED": "true",
+    "SEND_ENABLED": "true",
     "SOAI_MAIL_ENABLED": "true",
     "SOAI_DRAFTS_ENABLED": "true",
     "SOAI_DRAFT_COPIES_ENABLED": "true",
@@ -28,6 +28,6 @@
     "binding": "OAUTH_KV",
     "id": "35709c067cf842cc88c16ce90d0a19bf"
   }],
-  "triggers": {"crons": []},
+  "triggers": {"crons": ["* * * * *"]},
   "observability": {"enabled": false}
 }

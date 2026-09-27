@@ -68,7 +68,7 @@ test('real MCP transport initializes, lists tools and returns structured results
   assert.match(resource.result.contents[0].text,/name:'read_message'/);
   const send = list.result.tools.find(t => t.name === 'send_message');
   assert.equal(send.annotations.openWorldHint, true);
-  assert.equal(send.annotations.destructiveHint, true);
+  assert.equal(send.annotations.destructiveHint, false);
   assert.deepEqual(send.securitySchemes[0].scopes, ['forpsi:send']);
   const response = await (await worker.fetch(request('tools/call', { name: 'list_mailboxes', arguments: {} }), f.env)).json();
   assert.equal(response.result.structuredContent.data.mailboxes[0].id, 'mail-a');
@@ -96,14 +96,17 @@ test('scope escalation fails inside tool execution and exposes an OAuth challeng
   assert.match(result._meta['mcp/www_authenticate'][0], /insufficient_scope/);
   assert.equal(f.calls.length, 0);
 });
-test('direct MCP send cannot bypass a concrete preview and approval', async () => {
+test('direct MCP send only prepares an exact preview and cannot contact SMTP', async () => {
   const f=fixture();
   const worker=createWorker({authenticate:async()=>f.principal,providerFactory:f.providerFactory});
   const response=await worker.fetch(request('tools/call',{name:'send_message',arguments:{
     mailboxId:'mail-a',message:mail,requestId:crypto.randomUUID()}}),f.env);
   const result=(await response.json()).result;
-  assert.equal(result.isError,true);
-  assert.equal(result.content[0].text,'SEND_CONFIRMATION_REQUIRED');
+  assert.equal(result.isError,undefined);
+  assert.equal(result.structuredContent.data.state,'pending');
+  assert.deepEqual(result.structuredContent.data.to,mail.to);
+  assert.equal(result.structuredContent.data.text,mail.text);
+  assert.match(result.structuredContent.data.approvalUrl,/\/forpsi-send\/\?proposalId=/);
   assert.equal((await f.store.rows('SELECT COUNT(*) AS n FROM outbox'))[0].n,0);
   assert.equal(f.calls.length,0);
 });

@@ -10,6 +10,7 @@ import { CalDav } from './caldav.mjs';
 import { CardDav } from './carddav.mjs';
 import { Onboarding } from './onboarding.mjs';
 import { handleSoaiSetup } from './soai-setup.mjs';
+import { handleSoaiSend } from './soai-send.mjs';
 import { runPersonalSync } from './personal-sync.mjs';
 
 export function createWorker(dependencies = {}) {
@@ -25,6 +26,7 @@ export function createWorker(dependencies = {}) {
       if (url.pathname === '/internal/admin') return handleAdmin(request,env,{providerFactory,calendarFactory,contactFactory,verificationMode:dependencies.verificationMode ?? 'provider'});
       if (url.pathname === '/internal/mail') return handleSoaiMail(request,env,{providerFactory,verificationMode:dependencies.verificationMode ?? 'provider'});
       if (url.pathname === '/internal/setup') return handleSoaiSetup(request,env,{providerFactory});
+      if (url.pathname === '/internal/send') return handleSoaiSend(request,env,{providerFactory});
       if (url.pathname === '/health' && request.method === 'GET') return json({ service: 'forpsi-company-mail', version: '0.3.0-dev.1', enabled: env.CONNECTOR_ENABLED === 'true' });
       if (env.CONNECTOR_ENABLED !== 'true') return json({ error: 'CONNECTOR_DISABLED' }, 503);
       try { authConfig(env); } catch { return json({ error: 'AUTH_NOT_CONFIGURED' }, 503); }
@@ -65,7 +67,7 @@ const legacyWorker=createWorker();
 let oauthPilot;
 export default {
   async fetch(request,env,ctx){
-    if(env.PERSONAL_PILOT_OAUTH==='true'){
+    if(env.CONNECTOR_OAUTH==='true'||env.PERSONAL_PILOT_OAUTH==='true'){
       if(!env.OAUTH_KV){
         const path=new URL(request.url).pathname;
         if((path.startsWith('/internal/')&&path!=='/internal/oauth/access')||path==='/health')
