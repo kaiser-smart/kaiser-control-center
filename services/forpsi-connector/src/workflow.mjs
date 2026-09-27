@@ -294,6 +294,7 @@ export class Workflow {
         'Přímo adresováno; konkrétní požadavek je nutné ověřit.':'Neověřená priorita; zpráva není skrytá.';
       items.push({ reference: message.reference, threadKey: threadKey(detail), messageKey: messageKey(detail),
         sender, subject: message.subject ?? '', receivedAt: message.date ?? null,priority,reason,
+        attachmentCount:detail.attachments?.length??null,
         contentType:newsletter||keepNewsletter||semanticFinding?.kind==='newsletter'?'newsletter':'unclassified',
         semanticEvidence:modelDriven&&view==='priority'?chatgptPriority?{...chatgptPriority,
           findings:relatedFindings,contextStatus:semanticContextStatus}:null:
@@ -316,10 +317,11 @@ export class Workflow {
         olderUnscanned?1:0,now,now+30*86400000,summaries.length,scanLimit,semantic.examined??0,
         semantic.status,semanticContextStatus),
       ...visible.map((item,index)=>this.store.db.prepare(`INSERT INTO workflow_list_items
-        (list_id,number,reference_json,thread_key,message_key,sender,subject,received_at,priority,priority_reason,content_type,semantic_evidence_json)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+        (list_id,number,reference_json,thread_key,message_key,sender,subject,received_at,priority,priority_reason,content_type,semantic_evidence_json,attachment_count)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
         listId,index+1,JSON.stringify(item.reference),item.threadKey,item.messageKey,item.sender,item.subject,item.receivedAt,
-        item.priority,item.reason,item.contentType,item.semanticEvidence?JSON.stringify(item.semanticEvidence):null)),
+        item.priority,item.reason,item.contentType,item.semanticEvidence?JSON.stringify(item.semanticEvidence):null,
+        item.attachmentCount)),
     ];
     await this.store.db.batch(statements);
     return this.current({ listId });
@@ -332,6 +334,7 @@ export class Workflow {
       WHERE i.list_id=? ORDER BY i.number`,row.tenant_id,this.principal.id,row.mailbox_id,row.id);
     const items = raw.map(item => ({ number:item.number, reference:JSON.parse(item.reference_json),
       from:item.sender, subject:item.subject, receivedAt:item.received_at,
+      attachmentCount:item.attachment_count,
       priority:item.priority,priorityReason:item.priority_reason,contentType:item.content_type,
       semanticEvidence:item.semantic_evidence_json?JSON.parse(item.semantic_evidence_json):null,
       state:item.state==='snoozed' && item.due_date<=localDate(this.now(),item.time_zone) ? 'todo' : item.state??'todo',
@@ -339,13 +342,18 @@ export class Workflow {
       newerReply:item.latest_inbound_key!=null && item.latest_inbound_key!==item.message_key,
       newerReplyReference:item.latest_inbound_key!=null && item.latest_inbound_key!==item.message_key &&
         item.latest_inbound_reference_json?JSON.parse(item.latest_inbound_reference_json):null }));
+    const savedDraft=await this.store.first(`SELECT id,revision,kind,item_number FROM workflow_drafts
+      WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND list_id=?
+      ORDER BY updated_at DESC LIMIT 1`,row.tenant_id,this.principal.id,row.mailbox_id,row.id);
     return { listId:row.id, mailboxId:row.mailbox_id, folder:row.folder, view:row.view,
       knownRemainingPriority:row.known_remaining_priority,olderUnscanned:row.older_unscanned===1,
       scannedCount:row.scanned_count,scanLimit:row.scan_limit,displayedCount:items.length,
       semanticExaminedCount:row.semantic_examined_count,semanticStatus:row.semantic_status,
       semanticContextStatus:row.semantic_context_status,
       position:row.position,analysisRevision:row.analysis_revision??0,
-      active:row.active===1, expiresAt:row.expires_at, items, pending:items.filter(i=>i.state==='todo').length,
+      active:row.active===1, expiresAt:row.expires_at, items, draft:savedDraft?{
+        id:savedDraft.id,revision:savedDraft.revision,kind:savedDraft.kind,
+        itemNumber:savedDraft.item_number}:null,pending:items.filter(i=>i.state==='todo').length,
       untrustedContent:true };
   }
   async readBatch({listId,offset=0,limit=5}){

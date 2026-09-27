@@ -45,9 +45,11 @@ function setup(){
 
 test('daily mail opens with a safe default profile before onboarding approval',async()=>{
   const {workflow,messages,calls}=setup();
+  messages[0].attachments=[{filename:'podklady.pdf',contentType:'application/pdf',size:123}];
   const list=await workflow.start({mailboxId:'mail-a',view:'priority',limit:2});
   assert.deepEqual(list.items.map(x=>x.reference.uid),[12,11]);
   assert.deepEqual(list.items.map(x=>x.priority),['review','review']);
+  assert.deepEqual(list.items.map(x=>x.attachmentCount),[1,0]);
   const page=await workflow.readBatch({listId:list.listId,offset:0,limit:2});
   assert.equal(page.messages[0].text,'Prosím potvrďte termín.');
   assert.equal(page.messages[1].subject,'Novinky');
@@ -110,6 +112,10 @@ test('open exact number, mark done and prepare an unsendable reply across a new 
   assert.equal(result.results[1].dueDate,'2026-09-28');
   const reply=await workflow.draftReply({listId:list.listId,number:2,
     text:'Dobrý den, děkuji za zprávu.',signatureMode:'none'});
+  const current=await new Workflow(ctx).current({listId:list.listId});
+  assert.equal(current.draft.id,reply.draftId);
+  assert.equal(current.draft.itemNumber,2);
+  assert.equal(current.draft.message,undefined);
   const resumed=await new Workflow(ctx).resume({listId:list.listId});
   assert.equal(resumed.position,2);
   assert.equal(resumed.items[0].state,'done');
@@ -144,7 +150,7 @@ test('frozen onboarding preserves its saved state while daily mail stays availab
   assert.ok(!mailAppWidget.includes('innerHTML'));
   assert.match(mailAppWidget,/process_worklist_command/);
   assert.match(mailAppWidget,/preview_workflow_draft/);
-  assert.match(MAIL_APP_UI_URI,/mail-app-v3/);
+  assert.match(MAIL_APP_UI_URI,/mail-app-v4/);
 });
 
 test('daily mail keeps native mailbox mutations unavailable while personal states work',async()=>{

@@ -19,7 +19,7 @@ function findButton(root,label){
 }
 function mount(respond){
   const ids=new Map(['summary','home-text','notice','items','layout','detail','home','list',
-    'draft','settings','tab-home','tab-list','tab-settings','resume','new-mail'].map(id=>{
+    'draft','settings','tab-home','tab-list','tab-settings','resume','resume-draft','new-mail'].map(id=>{
     const element=new Element(id==='items'?'ol':'div');element.id=id;return [id,element];}));
   let onMessage;const calls=[];
   const parent={postMessage(message){
@@ -44,7 +44,7 @@ function mount(respond){
 test('mail card opens exact numbered detail and updates personal state in place',async()=>{
   const item={number:2,reference:{folder:'INBOX',uid:12,uidValidity:'3'},
     from:'buyer@example.net',subject:'Poptávka',priority:'high',
-    priorityReason:'Prosba o nabídku.',state:'todo',receivedAt:'2026-09-25T09:00:00Z'};
+    priorityReason:'Prosba o nabídku.',state:'todo',receivedAt:'2026-09-25T09:00:00Z',attachmentCount:2};
   const snapshot={listId:'fixed-list',mailboxId:'mail-a',items:[item],displayedCount:1,
     pending:1,semanticStatus:'chatgpt_proposal',olderUnscanned:false};
   const widget=mount(message=>{
@@ -70,6 +70,7 @@ test('mail card opens exact numbered detail and updates personal state in place'
     throw new Error(name);
   });
   widget.notify(snapshot);
+  assert.match(content(widget.ids.get('items')),/přílohy: 2/);
   const row=widget.ids.get('items').children[0].children[0];
   await row.onclick();
   assert.match(content(widget.ids.get('detail')),/Prosím o nabídku/);
@@ -110,4 +111,40 @@ test('reply action displays an unsent draft and saves a revision without sending
   assert.deepEqual(calls,['review_worklist','get_mail','draft_reply',
     'preview_workflow_draft','update_workflow_draft']);
   assert.doesNotMatch(calls.join(' '),/send_message|create_draft/);
+});
+
+test('a new chat card opens the persisted unsent draft without making a new draft',async()=>{
+  const item={number:1,reference:{folder:'INBOX',uid:8,uidValidity:'3'},
+    from:'customer@example.net',subject:'Termín',state:'todo'};
+  const widget=mount(message=>{
+    assert.equal(message.params.name,'preview_workflow_draft');
+    assert.equal(message.params.arguments.draftId,'saved-draft');
+    return {structuredContent:{data:{draftId:'saved-draft',revision:2,kind:'reply',sendable:false,
+      message:{from:'alice@example.com',to:[item.from],cc:[],bcc:[],subject:'Re: Termín',
+        text:'Rozpracovaná odpověď.',attachments:[]}}}};
+  });
+  widget.notify({listId:'fixed-list',mailboxId:'mail-a',items:[item],pending:1,
+    semanticStatus:'chatgpt_proposal',draft:{id:'saved-draft',revision:2,kind:'reply',itemNumber:1}});
+  assert.equal(widget.ids.get('resume-draft').hidden,false);
+  await widget.ids.get('resume-draft').onclick();
+  assert.match(content(widget.ids.get('draft')),/Návrh odpovědi/);
+  assert.equal(widget.calls.filter(x=>x.params?.name==='draft_reply').length,0);
+});
+
+test('next message opens a new fixed number without completing the previous one',async()=>{
+  const items=[1,2].map(n=>({number:n,reference:{folder:'INBOX',uid:n,uidValidity:'3'},
+    from:'customer@example.net',subject:'Zpráva '+n,state:'todo'}));
+  const widget=mount(message=>{
+    const {name,arguments:args}=message.params;
+    if(name==='review_worklist')return {structuredContent:{data:{position:args.number}}};
+    if(name==='get_mail')return {structuredContent:{data:{subject:'Zpráva '+args.message.uid,
+      text:'Obsah.',from:[{address:'customer@example.net'}],to:[],cc:[],attachments:[]}}};
+    throw new Error(name);
+  });
+  widget.notify({listId:'fixed-list',mailboxId:'mail-a',items,pending:2});
+  await widget.ids.get('items').children[0].children[0].onclick();
+  await findButton(widget.ids.get('detail'),'Další').onclick();
+  assert.match(content(widget.ids.get('detail')),/Zpráva 2/);
+  assert.deepEqual(widget.calls.filter(x=>x.method==='tools/call').map(x=>x.params.name),
+    ['review_worklist','get_mail','review_worklist','get_mail']);
 });
