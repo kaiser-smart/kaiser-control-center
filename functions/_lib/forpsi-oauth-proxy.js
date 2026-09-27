@@ -26,7 +26,10 @@ export async function proxyForpsiOAuth(request,env,{userId=null,consentCookie=fa
   if(url.origin!=='https://smart-odpady.ai')return json({error:'Nepovolený původ.'},403);
   let stage='forward_request';
   try{
-    const forwarded=new Request(url.href,{method:request.method,headers,
+    // A new Request defaults to following redirects. The OAuth Worker returns a
+    // 302 with a code; following it here would send the service credential to
+    // the callback host instead of returning the redirect to the browser.
+    const forwarded=new Request(url.href,{method:request.method,headers,redirect:'manual',
       ...(request.method==='GET'||request.method==='HEAD'?{}:{body:request.body,duplex:'half'})});
     stage='service_binding';
     const response=await env.FORPSI_CONNECTOR.fetch(forwarded);

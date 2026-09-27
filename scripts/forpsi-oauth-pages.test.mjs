@@ -54,7 +54,8 @@ test('SO.ai authorization rejects cross-origin approval before service binding',
 
 test('SO.ai authorization relays the OAuth callback and consent cookie',async()=>{
   const {env,cookie}=await setup();
-  env.FORPSI_CONNECTOR={async fetch(){
+  env.FORPSI_CONNECTOR={async fetch(request){
+    assert.equal(request.redirect,'manual');
     return new Response(null,{status:302,headers:{location:'https://chatgpt.com/connector/oauth/callback?code=synthetic',
       'set-cookie':'__Host-oauth-consent-synthetic=; Path=/; Max-Age=0; Secure; HttpOnly'}});
   }};
