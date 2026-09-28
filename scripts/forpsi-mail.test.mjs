@@ -28,6 +28,23 @@ test('active SO.ai reader without admin rights reads only a granted mailbox thro
   assert.equal(f.calls.filter(c=>c[0]==='read').length,1);
   assert.equal((await f.worker.fetch(new Request('https://worker.test/mcp'),f.workerEnv)).status,503);
 });
+test('SO.ai lists Mail Brain only for the configured pilot mailbox',async()=>{
+  const f=await setup();
+  f.workerEnv.MAIL_BRAIN_ENABLED='true';
+  f.workerEnv.MAIL_BRAIN_PILOT_MAILBOX_ID='mail-a';
+  await f.store.run(`INSERT INTO mailboxes (id,tenant_id,address,credential_key,active)
+    VALUES ('mail-c','tenant-a','colleague@example.test','key-c',1)`);
+  const linked=await f.store.first(`SELECT id FROM principals
+    WHERE issuer='urn:smart-odpady:session' AND subject=?`,user.id);
+  await f.store.run(`INSERT INTO grants (principal_id,mailbox_id,action,revoked)
+    VALUES (?,?,?,0)`,linked.id,'mail-c','read');
+  const result=await f.call('list_mailboxes');
+  assert.equal(result.status,200);
+  const data=(await result.json()).data;
+  assert.equal(data.brainEnabled,true);
+  assert.equal(data.mailboxes.find(box=>box.id==='mail-a').brainEnabled,true);
+  assert.equal(data.mailboxes.find(box=>box.id==='mail-c').brainEnabled,false);
+});
 test('session, same-origin, service authentication and strict input reject bypasses before provider',async()=>{
   const f=await setup();
   assert.equal((await f.call('list_mailboxes',{}, {cookie:''})).status,401);
