@@ -154,6 +154,32 @@ test('mail panel keeps a failed consent visible instead of masking it with a ref
   mountForpsiMail({querySelector:()=>null},{apiJson:api,owner:null});
 });
 
+test('Mail Brain shows a model failure without claiming the mail was classified',async()=>{
+  const listeners={};const root={isConnected:true,innerHTML:'',
+    addEventListener:(name,fn)=>listeners[name]=fn,querySelector:()=>null};
+  const api=async(_url,{body})=>{
+    const {operation}=JSON.parse(body);
+    if(operation==='list_mailboxes')return {data:{brainEnabled:true,
+      mailboxes:[{id:'mail-a',address:'alice@example.test',brainEnabled:true}]}};
+    if(operation==='list_folders')return {data:{folders:[{path:'INBOX',selectable:true}]}};
+    if(operation==='attention')return {data:{mailboxes:[{id:'mail-a',consented:true,
+      coverage:'partial'}],counts:{decision:0,todo:0,waiting:0,deadlines:0,overdue:0,
+      invoices:0,review:1},cases:[],notice:'Pokrytí je neúplné.'}};
+    if(operation==='rules')return {data:{rules:[]}};
+    if(operation==='sync')return {data:{analysisErrorCode:'MODEL_ANALYSIS_HTTP_429'}};
+    throw Error(`unexpected operation: ${operation}`);
+  };
+  const tick=()=>new Promise(resolve=>setImmediate(resolve));
+  mountForpsiMail({querySelector:()=>root},{apiJson:api,owner:'model-failure'});await tick();
+  listeners.change({target:{matches:selector=>selector==='[data-mail-mailbox]',value:'mail-a'}});
+  await tick();
+  listeners.click({target:{closest:()=>({dataset:{mailAction:'brain-sync'}})},
+    preventDefault(){},stopPropagation(){}});await tick();await tick();
+  assert.match(root.innerHTML,/Modelová analýza selhala \(MODEL_ANALYSIS_HTTP_429\)/);
+  assert.match(root.innerHTML,/K ověření: 1/);
+  mountForpsiMail({querySelector:()=>null},{apiJson:api,owner:null});
+});
+
 test('Mail Brain consent crosses the SO.ai session and service binding without reading mail',async()=>{
   const f=await setup();f.workerEnv.MAIL_BRAIN_ENABLED='true';
   const command={operation:'consent',payload:{mailboxId:'mail-a',lookbackDays:90}};

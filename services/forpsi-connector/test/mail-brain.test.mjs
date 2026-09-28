@@ -222,6 +222,24 @@ test('revoked read grant during reanalysis cannot update a case',async()=>{
     'unreviewed');
 });
 
+test('model failure is coded in audit and does not trigger repeated model calls in one sync',async()=>{
+  const {f,provider,messages}=setup([item(10)]);
+  f.env.FORPSI_ANALYSIS_MODEL='gpt-5-mini';
+  const brain=new MailBrain({store:f.store,principal:f.principal,providerFactory:()=>provider,
+    env:f.env,now:f.now,analyzer:()=>null});
+  await brain.consent({mailboxId:'mail-a'});await brain.sync({mailboxId:'mail-a'});
+  f.env.FORPSI_ANALYSIS_PROXY_URL='https://smart-odpady.ai/api/forpsi/analysis';
+  messages.push(item(11));
+  let attempts=0;
+  brain.analyzer=()=>{attempts++;throw new Error('MODEL_ANALYSIS_HTTP_429');};
+  const result=await brain.sync({mailboxId:'mail-a'});
+  assert.equal(attempts,1);
+  assert.equal(result.analysisErrorCode,'MODEL_ANALYSIS_HTTP_429');
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM brain_messages')).n,2);
+  assert.equal((await f.store.first(`SELECT details_json FROM brain_case_events
+    WHERE event_type='analysis.attempt'`)).details_json.includes('MODEL_ANALYSIS_HTTP_429'),true);
+});
+
 test('failed message resumes from the last persisted UID checkpoint',async()=>{
   const {brain,f,provider,messages}=setup([item(10),item(11),item(12)]);
   const originalRead=provider.read;

@@ -52,5 +52,12 @@ test('analysis proxy hides upstream failures',async()=>{
   const response=await handleAnalysisProxy({request,env,
     fetcher:async()=>new Response('private provider diagnostic',{status:429})});
   assert.equal(response.status,503);
-  assert.equal((await response.text()).includes('private provider diagnostic'),false);
+  const diagnostic=await response.json();
+  assert.equal(diagnostic.upstreamStatus,429);
+  assert.equal(JSON.stringify(diagnostic).includes('private provider diagnostic'),false);
+  await assert.rejects(openAiBrainAnalyzer({message,direction:'inbound',
+    mailboxAddress:'b@example.net'},workerEnv,{fetcher:async(url,init)=>
+    handleAnalysisProxy({request:new Request(url,init),env,
+      fetcher:async()=>new Response('private provider diagnostic',{status:429})})}),
+  /MODEL_ANALYSIS_HTTP_429/);
 });
