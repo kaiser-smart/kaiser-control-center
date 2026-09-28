@@ -40,7 +40,14 @@ export async function handleSoaiMail(request,env,factories) {
     requireValue((data.mailboxes?.length ?? 0)<=200 && (data.folders?.length ?? 0)<=500,'MAIL_LIMIT_EXCEEDED');
     // A revoked grant or paused mailbox cannot release in-flight content to the caller.
     if(body.payload.mailboxId) {await store.access(principal,body.payload.mailboxId,'read');if(['create_draft','copy_draft','replace_draft'].includes(body.operation))await store.access(principal,body.payload.mailboxId,'write');}
-    if(body.operation==='list_mailboxes'){data.mailboxes=await store.mailboxes(principal);requireValue(data.mailboxes.length<=200,'MAIL_LIMIT_EXCEEDED');}
+    if(body.operation==='list_mailboxes'){
+      const mailboxes=await store.mailboxes(principal);
+      requireValue(mailboxes.length<=200,'MAIL_LIMIT_EXCEEDED');
+      data.brainEnabled=env.MAIL_BRAIN_ENABLED==='true';
+      data.mailboxes=data.brainEnabled?mailboxes.map(mailbox=>({...mailbox,
+        brainEnabled:!env.MAIL_BRAIN_PILOT_MAILBOX_ID||
+          mailbox.id===env.MAIL_BRAIN_PILOT_MAILBOX_ID})):mailboxes;
+    }
     return json({data,mode:factories.verificationMode});
   } catch(error) {
     const code=error instanceof z.ZodError || error instanceof SyntaxError?'INVALID_ARGUMENTS':safeError(error);
