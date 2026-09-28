@@ -431,10 +431,11 @@ export class MailBrain {
         (tenant_id,mailbox_id,folder,window_start,window_end)
         VALUES (?,?,?,?,?)`,mailbox.tenant_id,mailbox.id,folder,windowStart,now);
       const claimed=await this.store.first(`UPDATE brain_sync_cursors SET lease_until=?,last_attempt_at=?,
-        status='partial',error_code=NULL WHERE tenant_id=? AND mailbox_id=? AND folder=?
+        status='partial' WHERE tenant_id=? AND mailbox_id=? AND folder=?
         AND lease_until<=? RETURNING *`,leaseUntil,now,mailbox.tenant_id,mailbox.id,folder,now);
       if(!claimed){result.complete=false;result.folders.push({folder,status:'busy'});continue;}
       let scanned=0,indexed=0,errorCode=null,nextBeforeUid=claimed.next_before_uid;
+      let stickyError=claimed.error_code==='MESSAGE_TOO_LARGE'?'MESSAGE_TOO_LARGE':null;
       let uidValidity=claimed.uid_validity,finished=false;
       try {
         const page=await provider.search({folder,limit:Math.min(limit,
@@ -462,24 +463,41 @@ export class MailBrain {
             requireValue(checkpoint.meta?.changes===1,'SYNC_LEASE_LOST');
             nextBeforeUid=summary.reference.uid;
             indexed++;
-          } catch(error) { errorCode=failureCode(error);break; }
+          } catch(error) {
+            if(failureCode(error)==='MESSAGE_TOO_LARGE'){
+              try{
+                await this.access(mailbox.id);await this.activeConsent(mailbox);
+                const skipped=await this.store.run(`UPDATE brain_sync_cursors SET
+                  uid_validity=?,next_before_uid=?,scanned_count=scanned_count+1,
+                  error_code='MESSAGE_TOO_LARGE' WHERE tenant_id=? AND mailbox_id=?
+                  AND folder=? AND lease_until=?`,uidValidity,summary.reference.uid,
+                mailbox.tenant_id,mailbox.id,folder,leaseUntil);
+                requireValue(skipped.meta?.changes===1,'SYNC_LEASE_LOST');
+                nextBeforeUid=summary.reference.uid;
+                stickyError='MESSAGE_TOO_LARGE';
+                continue;
+              }catch(checkpointError){errorCode=failureCode(checkpointError);break;}
+            }
+            errorCode=failureCode(error);break;
+          }
         }
         finished=page.nextBeforeUid==null && !errorCode;
         if(!errorCode)nextBeforeUid=page.nextBeforeUid;
       } catch(error) { errorCode=failureCode(error); }
-      const status=finished?'complete':errorCode?'failed':'partial';
+      const status=errorCode?'failed':finished&&!stickyError?'complete':'partial';
       const saved=await this.store.run(`UPDATE brain_sync_cursors SET uid_validity=?,next_before_uid=?,
         status=?,
         last_complete_at=CASE WHEN ?='complete' THEN ? ELSE last_complete_at END,
         window_end=CASE WHEN ?='complete' THEN ? ELSE window_end END,
         error_code=?,lease_until=0 WHERE tenant_id=? AND mailbox_id=? AND folder=?
         AND lease_until=?`,uidValidity,nextBeforeUid,status,status,now,status,now,
-      errorCode,mailbox.tenant_id,mailbox.id,folder,leaseUntil);
+      errorCode??stickyError,mailbox.tenant_id,mailbox.id,folder,leaseUntil);
       if(saved.meta?.changes!==1){result.complete=false;
         result.folders.push({folder,status:'superseded',scanned,indexed,errorCode});continue;}
       result.scanned+=scanned;result.indexed+=indexed;
-      result.complete &&= finished;
-      result.folders.push({folder,status,scanned,indexed,errorCode,nextBeforeUid});
+      result.complete &&= finished&&!stickyError;
+      result.folders.push({folder,status,scanned,indexed,errorCode:errorCode??stickyError,
+        nextBeforeUid});
     }
     result.analysisErrorCode=this.analysisErrorCode??result.reanalysis.errorCode??null;
     await this.store.audit(this.principal,mailbox.id,'brain.sync',result.complete?'complete':'partial');

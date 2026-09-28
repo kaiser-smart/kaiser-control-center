@@ -28,6 +28,8 @@ test('analysis proxy accepts only the shared server secret and a bounded strict 
   assert.equal(forwarded.url,'https://api.openai.com/v1/responses');
   assert.equal(forwarded.init.headers.authorization,'Bearer private-server-key');
   assert.equal(JSON.parse(forwarded.init.body).store,false);
+  assert.equal(JSON.parse(forwarded.init.body).reasoning.effort,'minimal');
+  assert.equal(JSON.parse(forwarded.init.body).max_output_tokens,2400);
   for(const supplied of [null,'Bearer wrong']){
     const request=new Request('https://smart-odpady.ai/api/forpsi/analysis',{
       method:'POST',headers:{'content-type':'application/json',
