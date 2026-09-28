@@ -48,11 +48,14 @@ nasazení pilotu pro čtení a 90denní analýzu uvedené schránky.
    byl zapsán přihlášenou identitou přes SO.ai a ověřen v D1. První ruční dávka
    načetla 50 zpráv a 15 příloh. Původní velká dávka skončila časovým limitem;
    pozdější oprava ukládá průběžný UID checkpoint a omezuje velikost dávky.
-4. Připravena oprava: analytické volání používá chráněnou Pages cestu s již
+4. Nasazená oprava: analytické volání používá chráněnou Pages cestu s již
    existujícím serverovým OpenAI klíčem. Zpětné vyhodnocení načtených případů
    ověřuje současný grant, souhlas, otisk zdrojové zprávy a přesnou citaci;
-   nedoložené případy zůstávají „K ověření“. Výsledek v produkci je nutné
-   ověřit po nasazení této opravy.
+   nedoložené případy zůstávají „K ověření“. První produkční průchod této
+   verze narazil na časový limit Pages po dvou modelových pokusech; D1 zůstala
+   bez doložené klasifikace a checkpoint Doručených se posunul o dvě zprávy.
+   Navazující diagnostická oprava omezuje jeden požadavek na jedno modelové
+   volání a ukládá pouze bezpečný chybový kód. Příčinu je nutné ověřit živě.
 5. Zbývá porovnat TEĎ a osm dotazů z produktového zadání s ručně označeným vzorkem
    skutečné pošty. Každý souhrn, termín a částku kontrolovat proti zdroji.
 6. Po nasazení: ověřit podle `PŘÍRUČKA.md` a reálný audit. Zapnutí dalších schránek

@@ -35,7 +35,8 @@ export async function handleAnalysisProxy({request,env,fetcher=fetch}){
       method:'POST',headers:{authorization:`Bearer ${env.OPENAI_API_KEY}`,
         'content-type':'application/json'},body:JSON.stringify(body),
       signal:AbortSignal.timeout(35000)});
-    if(!response.ok)return reply('ANALYSIS_UNAVAILABLE',503);
+    if(!response.ok)return Response.json({error:'ANALYSIS_UNAVAILABLE',
+      upstreamStatus:response.status},{status:503,headers:{'Cache-Control':'no-store'}});
     const result=await response.json();
     const serialized=JSON.stringify(result);
     if(serialized.length>100000)return reply('ANALYSIS_UNAVAILABLE',503);

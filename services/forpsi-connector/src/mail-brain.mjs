@@ -350,7 +350,8 @@ export class MailBrain {
   }
 
   async reanalyzePending(mailbox,provider,consent,limit=2){
-    if(!this.env.FORPSI_ANALYSIS_MODEL)return {attempted:0,verified:0};
+    if(!this.env.FORPSI_ANALYSIS_MODEL||this.analysisBudget===0)
+      return {attempted:0,verified:0};
     const pending=await this.store.rows(`SELECT m.id AS message_id,m.reference_json,m.content_hash,
       c.id AS case_id,c.revision FROM brain_cases c JOIN brain_messages m
       ON m.id=c.reason_message_id WHERE c.tenant_id=? AND c.mailbox_id=?
@@ -362,11 +363,12 @@ export class MailBrain {
       ORDER BY (SELECT COUNT(*) FROM brain_case_events e WHERE e.case_id=c.id
         AND e.event_type='analysis.attempt'),c.latest_at DESC LIMIT ?`,
     mailbox.tenant_id,mailbox.id,this.now()-consent.lookback_days*day,limit);
-    let verified=0;
+    let verified=0,errorCode=null;
     for(const row of pending){
       await this.access(mailbox.id);await this.activeConsent(mailbox);
+      const attemptId=crypto.randomUUID();
       await this.store.run(`INSERT INTO brain_case_events VALUES (?,?,?,?,?,?,?)`,
-        crypto.randomUUID(),mailbox.tenant_id,row.case_id,this.principal.id,
+        attemptId,mailbox.tenant_id,row.case_id,this.principal.id,
         'analysis.attempt',JSON.stringify({messageId:row.message_id}),this.now());
       let message;
       try{message=await provider.read(JSON.parse(row.reference_json));}
@@ -376,8 +378,14 @@ export class MailBrain {
       if(sourceHash!==row.content_hash)continue;
       const direction=message.reference.folder===consent.sent_folder?'outbound':'inbound';
       let proposed=null;
+      if(Number.isFinite(this.analysisBudget))this.analysisBudget--;
       try{proposed=await this.analyzer({message,direction,mailboxAddress:mailbox.address});}
-      catch{continue;}
+      catch(error){
+        errorCode=failureCode(error);
+        await this.store.run(`UPDATE brain_case_events SET details_json=? WHERE id=?`,
+          JSON.stringify({messageId:row.message_id,errorCode}),attemptId);
+        break;
+      }
       await this.access(mailbox.id);await this.activeConsent(mailbox);
       const analysis=normalizeAnalysis(proposed,message,direction);
       if(analysis.analysisStatus!=='evidence_backed')continue;
@@ -406,15 +414,17 @@ export class MailBrain {
       this.now(),this.now());
       verified++;
     }
-    return {attempted:pending.length,verified};
+    return {attempted:pending.length,verified,errorCode};
   }
 
   async sync({mailboxId,limit=10}) {
     requireValue(this.env.MAIL_BRAIN_ENABLED==='true','MAIL_BRAIN_DISABLED');
     const mailbox=await this.access(mailboxId),consent=await this.activeConsent(mailbox);
     const provider=this.providerFactory(this.env,mailbox),now=this.now(),leaseUntil=now+600000;
+    this.analysisBudget=this.env.FORPSI_ANALYSIS_PROXY_URL?1:Infinity;
     const result={mailboxId,folders:[],indexed:0,scanned:0,complete:true,
-      reanalysis:await this.reanalyzePending(mailbox,provider,consent)};
+      reanalysis:await this.reanalyzePending(mailbox,provider,consent,
+        this.env.FORPSI_ANALYSIS_PROXY_URL?1:2)};
     for(const folder of [consent.inbox_folder,consent.sent_folder]) {
       const windowStart=now-consent.lookback_days*day;
       await this.store.run(`INSERT OR IGNORE INTO brain_sync_cursors
@@ -471,6 +481,7 @@ export class MailBrain {
       result.complete &&= finished;
       result.folders.push({folder,status,scanned,indexed,errorCode,nextBeforeUid});
     }
+    result.analysisErrorCode=this.analysisErrorCode??result.reanalysis.errorCode??null;
     await this.store.audit(this.principal,mailbox.id,'brain.sync',result.complete?'complete':'partial');
     return result;
   }
@@ -513,8 +524,12 @@ export class MailBrain {
     }
     const messageId=crypto.randomUUID();
     let proposed=null;
-    if(this.analyzer){try{proposed=await this.analyzer({message,caseRow,direction,
-      mailboxAddress:mailbox.address});}catch{/* Model availability does not hide a message. */}}
+    if(this.analyzer&&this.analysisBudget!==0){
+      if(Number.isFinite(this.analysisBudget))this.analysisBudget--;
+      try{proposed=await this.analyzer({message,caseRow,direction,
+        mailboxAddress:mailbox.address});}
+      catch(error){this.analysisErrorCode=failureCode(error);}
+    }
     await this.access(mailbox.id);
     await this.activeConsent(mailbox);
     const analysis=normalizeAnalysis(proposed,message,direction);

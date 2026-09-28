@@ -29,9 +29,17 @@ export async function openAiBrainAnalyzer({message,direction,mailboxAddress},env
         {role:'user',content:JSON.stringify(input)}],
       text:{format:{type:'json_schema',name:'mail_brain_analysis',strict:true,schema}}}),
     signal:AbortSignal.timeout(30000)});
-  if(!response.ok)throw new Error('MODEL_ANALYSIS_UNAVAILABLE');
+  if(!response.ok){
+    const diagnostic=await response.json().catch(()=>({}));
+    const status=Number.isInteger(diagnostic.upstreamStatus)?diagnostic.upstreamStatus:
+      response.status;
+    throw new Error(`MODEL_ANALYSIS_HTTP_${status}`);
+  }
   const body=await response.json();
   const output=body.output?.flatMap(x=>x.content??[])
     .filter(x=>x.type==='output_text').map(x=>x.text).join('')??'';
-  return JSON.parse(output);
+  if(body.status==='incomplete')throw new Error('MODEL_ANALYSIS_INCOMPLETE');
+  if(!output)throw new Error('MODEL_ANALYSIS_EMPTY_OUTPUT');
+  try{return JSON.parse(output);}
+  catch{throw new Error('MODEL_ANALYSIS_INVALID_JSON');}
 }
