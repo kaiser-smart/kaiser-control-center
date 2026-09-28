@@ -214,6 +214,10 @@ test('a message moved outside Inbox and Sent remains unverified without scanning
   const event=await f.store.first(`SELECT details_json FROM brain_case_events
     WHERE event_type='analysis.attempt' ORDER BY created_at DESC LIMIT 1`);
   assert.equal(result.reanalysis.verified,0);
+  assert.equal(result.complete,true);
+  assert.deepEqual(result.folders.map(x=>[x.folder,x.status,x.scanned,x.indexed]),
+    [['INBOX','complete',0,0],['Sent','complete',0,0]]);
+  assert.equal((await brain.attention({})).coverageComplete,true);
   assert.deepEqual(JSON.parse(event.details_json),{
     messageId:(await f.store.first('SELECT id FROM brain_messages')).id,
     errorCode:'MESSAGE_NOT_FOUND',sourceStatus:'SOURCE_MOVED_OR_UNAVAILABLE'});
@@ -240,7 +244,7 @@ test('same subject and content with a different RFC Message-ID cannot verify the
   assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
 });
 
-test('combined selective read keeps source identity and moved-source coverage fail closed',async()=>{
+test('selective read preserves source identity while moved case and folder coverage stay separate',async()=>{
   const original=item(10);
   original.size=3*1024*1024;
   const {f,brain,provider,messages,calls}=setup([original]);
@@ -261,16 +265,23 @@ test('combined selective read keeps source identity and moved-source coverage fa
   };
   brain.analyzer=()=>{throw Error('Unverified source must not reach the model');};
   const wrongIdentity=await brain.sync({mailboxId:'mail-a'});
-  assert.equal(wrongIdentity.complete,false);
-  assert.equal(wrongIdentity.folders[0].status,'partial');
-  assert.equal(wrongIdentity.folders[0].errorCode,'SOURCE_IDENTITY_MISMATCH');
+  assert.equal(wrongIdentity.complete,true);
+  assert.equal(wrongIdentity.folders[0].status,'complete');
+  assert.equal(wrongIdentity.folders[0].errorCode,null);
+  let event=await f.store.first(`SELECT details_json FROM brain_case_events
+    WHERE event_type='analysis.attempt' ORDER BY rowid DESC LIMIT 1`);
+  assert.equal(JSON.parse(event.details_json).errorCode,'SOURCE_IDENTITY_MISMATCH');
   provider.readForBrain=async()=>{selectiveReads++;throw Error('MESSAGE_NOT_FOUND');};
   const moved=await brain.sync({mailboxId:'mail-a'});
-  assert.equal(moved.complete,false);
-  assert.equal(moved.folders[0].status,'partial');
-  assert.equal(moved.folders[0].errorCode,'MESSAGE_NOT_FOUND');
+  assert.equal(moved.complete,true);
+  assert.equal(moved.folders[0].status,'complete');
+  assert.equal(moved.folders[0].errorCode,null);
   assert.equal(moved.reanalysis.verified,0);
-  assert.equal((await brain.attention({})).coverageComplete,false);
+  event=await f.store.first(`SELECT details_json FROM brain_case_events
+    WHERE event_type='analysis.attempt' ORDER BY rowid DESC LIMIT 1`);
+  assert.equal(JSON.parse(event.details_json).errorCode,'MESSAGE_NOT_FOUND');
+  assert.equal(JSON.parse(event.details_json).sourceStatus,'SOURCE_MOVED_OR_UNAVAILABLE');
+  assert.equal((await brain.attention({})).coverageComplete,true);
   assert.equal(selectiveReads,3);
   assert.equal(calls.some(call=>call[0]==='search'&&call[1]==='Trash'),false);
   assert.deepEqual(await f.store.first(`SELECT state,category,analysis_status,revision,reason_quote

@@ -41,12 +41,6 @@ const sourceReadCode = error => {
     'MIME_HEADERS_TOO_LARGE','SOURCE_CHANGED_DURING_READ']
     .includes(code)?code:'PROVIDER_UNAVAILABLE';
 };
-const sourceFailureCodes=new Set(['MESSAGE_NOT_FOUND','STALE_MESSAGE_REFERENCE',
-  'MESSAGE_TOO_LARGE','MIME_STRUCTURE_INVALID','MIME_TEXT_UNAVAILABLE',
-  'MIME_PART_INCOMPLETE','MIME_PART_UNAVAILABLE','MIME_PART_MISMATCH',
-  'MIME_TEXT_UNREADABLE','MIME_HEADERS_TOO_LARGE','SOURCE_CHANGED_DURING_READ',
-  'SOURCE_REFERENCE_INVALID','SOURCE_REFERENCE_MISMATCH',
-  'SOURCE_IDENTITY_MISMATCH','SOURCE_HASH_CHANGED','PROVIDER_UNAVAILABLE']);
 const explicitDate=quote=>{
   const iso=quote.match(/\b(\d{4}-\d{2}-\d{2})\b/u)?.[1];
   const cz=quote.match(/\b(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\b/u);
@@ -365,28 +359,9 @@ export class MailBrain {
       decision_source:rule.source,decision_rule_id:rule.id};
   }
 
-  async unresolvedSourceFailures(mailbox,consent,current=[]){
-    const rows=await this.store.rows(`SELECT m.folder,e.details_json FROM brain_cases c
-      JOIN brain_messages m ON m.id=c.reason_message_id
-      JOIN brain_case_events e ON e.case_id=c.id AND e.event_type='analysis.attempt'
-      WHERE c.tenant_id=? AND c.mailbox_id=? AND c.analysis_status!='evidence_backed'
-      AND c.merged_into_case_id IS NULL AND m.received_at>=?
-      AND e.rowid=(SELECT MAX(e2.rowid) FROM brain_case_events e2
-        WHERE e2.case_id=c.id AND e2.event_type='analysis.attempt')`,
-    mailbox.tenant_id,mailbox.id,this.now()-consent.lookback_days*day);
-    const failures=new Map();
-    for(const row of rows){
-      let code=null;
-      try{code=JSON.parse(row.details_json)?.errorCode;}catch{/* Bad audit is not evidence. */}
-      if(sourceFailureCodes.has(code))failures.set(row.folder,code);
-    }
-    for(const failure of current)failures.set(failure.folder,failure.errorCode);
-    return failures;
-  }
-
   async reanalyzePending(mailbox,provider,consent,limit=2){
     if(!this.env.FORPSI_ANALYSIS_MODEL||this.analysisBudget===0)
-      return {attempted:0,verified:0,sourceFailures:[]};
+      return {attempted:0,verified:0};
     const pending=await this.store.rows(`SELECT m.id AS message_id,m.folder,m.reference_json,m.message_key,
       m.content_hash,
       c.id AS case_id,c.revision FROM brain_cases c JOIN brain_messages m
@@ -400,7 +375,6 @@ export class MailBrain {
         AND e.event_type='analysis.attempt'),c.latest_at DESC LIMIT ?`,
     mailbox.tenant_id,mailbox.id,this.now()-consent.lookback_days*day,limit);
     let verified=0,errorCode=null;
-    const sourceFailures=[];
     for(const row of pending){
       await this.access(mailbox.id);await this.activeConsent(mailbox);
       const attemptId=crypto.randomUUID();
@@ -408,8 +382,6 @@ export class MailBrain {
         attemptId,mailbox.tenant_id,row.case_id,this.principal.id,
         'analysis.attempt',JSON.stringify({messageId:row.message_id}),this.now());
       const recordReason=async(errorCode,sourceStatus)=>{
-        if(sourceFailureCodes.has(errorCode))
-          sourceFailures.push({folder:row.folder,errorCode});
         // Diagnostic updates must not change whether the read-only sync continues.
         try{await this.store.run(`UPDATE brain_case_events SET details_json=? WHERE id=?`,
           JSON.stringify({messageId:row.message_id,errorCode,
@@ -483,7 +455,7 @@ export class MailBrain {
       this.now(),this.now());
       verified++;
     }
-    return {attempted:pending.length,verified,errorCode,sourceFailures};
+    return {attempted:pending.length,verified,errorCode};
   }
 
   async sync({mailboxId,limit=10}) {
@@ -567,19 +539,6 @@ export class MailBrain {
       result.complete &&= finished&&!stickyError;
       result.folders.push({folder,status,scanned,indexed,errorCode:errorCode??stickyError,
         nextBeforeUid});
-    }
-    const sourceFailures=await this.unresolvedSourceFailures(mailbox,consent,
-      result.reanalysis.sourceFailures);
-    for(const entry of result.folders){
-      const sourceCode=sourceFailures.get(entry.folder);
-      if(!sourceCode)continue;
-      result.complete=false;
-      if(entry.status!=='complete')continue;
-      const updated=await this.store.run(`UPDATE brain_sync_cursors SET status='partial',
-        error_code=? WHERE tenant_id=? AND mailbox_id=? AND folder=? AND status='complete'`,
-      sourceCode,mailbox.tenant_id,mailbox.id,entry.folder);
-      requireValue(updated.meta?.changes===1,'SYNC_CURSOR_CONFLICT');
-      entry.status='partial';entry.errorCode=sourceCode;
     }
     result.analysisErrorCode=this.analysisErrorCode??result.reanalysis.errorCode??null;
     await this.store.audit(this.principal,mailbox.id,'brain.sync',result.complete?'complete':'partial');
@@ -704,10 +663,9 @@ export class MailBrain {
         scanned_count,indexed_count,last_complete_at,error_code FROM brain_sync_cursors
         WHERE tenant_id=? AND mailbox_id=? AND folder IN (?,?)`,mailbox.tenant_id,mailbox.id,
         consent.inbox_folder,consent.sent_folder):[];
-      const sourceFailures=consent?await this.unresolvedSourceFailures(mailbox,consent):new Map();
-      const complete=!!consent&&sourceFailures.size===0&&coverage.length===2&&coverage.every(x=>x.status==='complete'&&
+      const complete=!!consent&&coverage.length===2&&coverage.every(x=>x.status==='complete'&&
         x.indexed_count===x.scanned_count&&x.window_end>=this.now()-900000);
-      const stale=!!consent&&sourceFailures.size===0&&coverage.length===2&&coverage.every(x=>x.status==='complete'&&
+      const stale=!!consent&&coverage.length===2&&coverage.every(x=>x.status==='complete'&&
         x.indexed_count===x.scanned_count)&&!complete;
       const permitted=async action=>{try{await this.store.access(this.principal,mailbox.id,action);
         return true;}catch{return false;}};
