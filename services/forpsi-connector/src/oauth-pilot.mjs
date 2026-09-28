@@ -60,7 +60,9 @@ ${scopes.map(scope=>`<input type="hidden" name="scope" value="${safeHtml(scope)}
 export function createOAuthPilot(legacyWorker){
   const provider=new OAuthProvider({
     apiRoute:'/mcp',authorizeEndpoint:'/authorize',tokenEndpoint:'/oauth/token',
-    scopesSupported:CONNECTOR_SCOPES,accessTokenTTL:900,refreshTokenTTL:43200,
+    // Bearer tokens stay short-lived. The refresh grant must span ordinary
+    // daily use; it still expires after 30 days and can be revoked in SO.ai.
+    scopesSupported:CONNECTOR_SCOPES,accessTokenTTL:900,refreshTokenTTL:30*24*60*60,
     clientIdMetadataDocumentEnabled:true,
     resourceMetadata:{resource:PILOT_RESOURCE,authorization_servers:[PILOT_ISSUER],
       scopes_supported:CONNECTOR_SCOPES,bearer_methods_supported:['header'],resource_name:'Forpsi firemní konektor'},
