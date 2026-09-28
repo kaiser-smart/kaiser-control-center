@@ -168,8 +168,12 @@ test('unverified analysis stays visible and incomplete sync never claims quiet i
 });
 
 for(const scenario of [
-  {name:'unavailable source',code:'SOURCE_UNAVAILABLE',read:async()=>{
+  {name:'unavailable source',code:'MESSAGE_NOT_FOUND',sourceStatus:'SOURCE_MOVED_OR_UNAVAILABLE',read:async()=>{
     throw new Error('MESSAGE_NOT_FOUND');}},
+  {name:'stale UIDVALIDITY',code:'STALE_MESSAGE_REFERENCE',sourceStatus:'SOURCE_MOVED_OR_UNAVAILABLE',read:async()=>{
+    throw new Error('STALE_MESSAGE_REFERENCE');}},
+  {name:'untrusted provider text',code:'PROVIDER_UNAVAILABLE',read:async()=>{
+    throw new Error('private server response with mailbox details');}},
   {name:'changed source hash',code:'SOURCE_HASH_CHANGED',read:async(ref,original)=>({
     ...(await original(ref)),text:'Zdrojová zpráva se změnila.'})},
   {name:'unverifiable quote',code:'EVIDENCE_QUOTE_UNVERIFIED',analyze:()=>({
@@ -190,8 +194,87 @@ for(const scenario of [
   const event=await f.store.first(`SELECT details_json FROM brain_case_events
     WHERE event_type='analysis.attempt' ORDER BY created_at DESC LIMIT 1`);
   assert.equal(JSON.parse(event.details_json).errorCode,scenario.code);
+  if(scenario.sourceStatus)
+    assert.equal(JSON.parse(event.details_json).sourceStatus,scenario.sourceStatus);
   assert.equal(result.reanalysis.verified,0);
   assert.deepEqual(await f.store.first('SELECT state,category,analysis_status,revision FROM brain_cases'),before);
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+});
+
+test('a message moved outside Inbox and Sent remains unverified without scanning Trash',async()=>{
+  const original=item(10);
+  const {f,brain,messages,calls}=setup([original]);
+  f.env.FORPSI_ANALYSIS_MODEL='gpt-5-mini';
+  brain.analyzer=()=>null;
+  await brain.consent({mailboxId:'mail-a'});await brain.sync({mailboxId:'mail-a'});
+  const before=await f.store.first('SELECT state,category,analysis_status,revision FROM brain_cases');
+  messages.splice(0,1,item(20,{folder:'Trash',messageId:original.messageId}));
+  brain.analyzer=()=>{throw Error('Analyzer must not receive an unverified source');};
+  const result=await brain.sync({mailboxId:'mail-a'});
+  const event=await f.store.first(`SELECT details_json FROM brain_case_events
+    WHERE event_type='analysis.attempt' ORDER BY created_at DESC LIMIT 1`);
+  assert.equal(result.reanalysis.verified,0);
+  assert.deepEqual(JSON.parse(event.details_json),{
+    messageId:(await f.store.first('SELECT id FROM brain_messages')).id,
+    errorCode:'MESSAGE_NOT_FOUND',sourceStatus:'SOURCE_MOVED_OR_UNAVAILABLE'});
+  assert.equal(calls.some(call=>call[0]==='search'&&call[1]==='Trash'),false);
+  assert.deepEqual(await f.store.first('SELECT state,category,analysis_status,revision FROM brain_cases'),before);
+  assert.equal((await f.store.first('SELECT reason_quote FROM brain_cases')).reason_quote,null);
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+});
+
+test('same subject and content with a different RFC Message-ID cannot verify the old case',async()=>{
+  const {f,brain,provider}=setup([item(10)]);
+  f.env.FORPSI_ANALYSIS_MODEL='gpt-5-mini';
+  brain.analyzer=()=>null;
+  await brain.consent({mailboxId:'mail-a'});await brain.sync({mailboxId:'mail-a'});
+  const before=await f.store.first('SELECT state,category,analysis_status,revision FROM brain_cases');
+  provider.read=async ref=>({...item(10),reference:ref,messageId:'<other@example.net>'});
+  brain.analyzer=()=>{throw Error('Analyzer must not receive a different message');};
+  const result=await brain.sync({mailboxId:'mail-a'});
+  const event=await f.store.first(`SELECT details_json FROM brain_case_events
+    WHERE event_type='analysis.attempt' ORDER BY created_at DESC LIMIT 1`);
+  assert.equal(JSON.parse(event.details_json).errorCode,'SOURCE_IDENTITY_MISMATCH');
+  assert.equal(result.reanalysis.verified,0);
+  assert.deepEqual(await f.store.first('SELECT state,category,analysis_status,revision FROM brain_cases'),before);
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+});
+
+test('combined selective read keeps source identity and moved-source coverage fail closed',async()=>{
+  const original=item(10);
+  original.size=3*1024*1024;
+  const {f,brain,provider,messages,calls}=setup([original]);
+  f.env.FORPSI_ANALYSIS_MODEL='gpt-5-mini';
+  brain.analyzer=()=>null;
+  const ordinaryRead=provider.read;
+  let selectiveReads=0;
+  provider.readForBrain=async ref=>{selectiveReads++;return ordinaryRead(ref);};
+  await brain.consent({mailboxId:'mail-a'});
+  await brain.sync({mailboxId:'mail-a'});
+  const before=await f.store.first(`SELECT state,category,analysis_status,revision,reason_quote
+    FROM brain_cases`);
+  messages.splice(0,1,item(20,{folder:'Trash',messageId:original.messageId}));
+  provider.read=async()=>{throw Error('Ordinary raw reader must not be used');};
+  provider.readForBrain=async ref=>{
+    selectiveReads++;
+    return {...original,reference:ref,messageId:'<different@example.net>'};
+  };
+  brain.analyzer=()=>{throw Error('Unverified source must not reach the model');};
+  const wrongIdentity=await brain.sync({mailboxId:'mail-a'});
+  assert.equal(wrongIdentity.complete,false);
+  assert.equal(wrongIdentity.folders[0].status,'partial');
+  assert.equal(wrongIdentity.folders[0].errorCode,'SOURCE_IDENTITY_MISMATCH');
+  provider.readForBrain=async()=>{selectiveReads++;throw Error('MESSAGE_NOT_FOUND');};
+  const moved=await brain.sync({mailboxId:'mail-a'});
+  assert.equal(moved.complete,false);
+  assert.equal(moved.folders[0].status,'partial');
+  assert.equal(moved.folders[0].errorCode,'MESSAGE_NOT_FOUND');
+  assert.equal(moved.reanalysis.verified,0);
+  assert.equal((await brain.attention({})).coverageComplete,false);
+  assert.equal(selectiveReads,3);
+  assert.equal(calls.some(call=>call[0]==='search'&&call[1]==='Trash'),false);
+  assert.deepEqual(await f.store.first(`SELECT state,category,analysis_status,revision,reason_quote
+    FROM brain_cases`),before);
   assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
 });
 
