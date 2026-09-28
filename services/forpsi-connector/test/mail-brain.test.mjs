@@ -159,11 +159,38 @@ test('unverified analysis stays visible and incomplete sync never claims quiet i
   const view=await brain.attention({});
   assert.equal(view.cases[0].state,'todo');
   assert.equal(view.counts.review,1);
+  assert.equal(view.counts.todo,0);
   provider.read=async()=>{throw new Error('PROVIDER_UNAVAILABLE')};
   messages.push(item(12));
   const second=await brain.sync({mailboxId:'mail-a'});
   assert.equal(second.complete,false);
   assert.equal((await brain.attention({})).coverageComplete,false);
+});
+
+test('failed message resumes from the last persisted UID checkpoint',async()=>{
+  const {brain,f,provider,messages}=setup([item(10),item(11),item(12)]);
+  const originalRead=provider.read;
+  let fail=true;
+  provider.read=async ref=>{
+    if(fail&&ref.folder==='INBOX'&&ref.uid===11)throw Error('PROVIDER_UNAVAILABLE');
+    return originalRead(ref);
+  };
+  await brain.consent({mailboxId:'mail-a'});
+  const first=await brain.sync({mailboxId:'mail-a',limit:50});
+  assert.equal(first.complete,false);
+  const cursor=await f.store.first("SELECT * FROM brain_sync_cursors WHERE folder='INBOX'");
+  assert.equal(cursor.next_before_uid,12);
+  assert.equal(cursor.scanned_count,1);
+  assert.equal(cursor.indexed_count,1);
+  fail=false;
+  const second=await brain.sync({mailboxId:'mail-a',limit:50});
+  assert.equal(second.complete,true);
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM brain_messages')).n,3);
+  const finished=await f.store.first("SELECT * FROM brain_sync_cursors WHERE folder='INBOX'");
+  assert.equal(finished.scanned_count,3);
+  assert.equal(finished.indexed_count,3);
+  assert.equal(finished.lease_until,0);
+  assert.equal(messages.length,3);
 });
 
 test('an email cannot close its own case through model classification',async()=>{
@@ -194,7 +221,8 @@ test('SO.ai identity consent and MCP case tools share the same persistent state'
   assert.equal((await call('sync',{mailboxId:'mail-a',limit:50})).body.data.complete,true);
   const ctx={...f,providerFactory};
   const overview=await executeTool('attention_list',{mailboxId:'mail-a'},ctx);
-  assert.equal(overview.counts.todo,1);
+  assert.equal(overview.counts.todo,0);
+  assert.equal(overview.counts.review,1);
   const detail=await executeTool('case_get',{caseId:overview.cases[0].id},ctx);
   assert.equal(detail.messages[0].subject,'Nabídka ABC');
   assert.equal((await call('case_get',{caseId:detail.case.id},'foreign-user')).status,403);
