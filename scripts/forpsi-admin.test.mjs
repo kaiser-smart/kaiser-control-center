@@ -98,6 +98,45 @@ test('SO.ai exposes resource discovery through existing session, origin and tena
   assert.equal(f.calls.length,0);
 });
 
+test('existing SO.ai admin resources route carries only the exact gated Mail Brain diagnostic',async()=>{
+  const f=fixture(),calls=[];
+  f.env.CONNECTOR_ADMIN_TOKEN='synthetic-test-admin-token-longer-than-32';
+  f.env.FORPSI_TENANT_ID='tenant-a';
+  Object.assign(f.env,{MAIL_BRAIN_DIAGNOSTIC_ENABLED:'true',
+    MAIL_BRAIN_PILOT_READ_ONLY:'true',MAIL_BRAIN_PILOT_MAILBOX_ID:'mail-a',
+    MAIL_BRAIN_DIAG_TARGET_FOLDER:'Sent',MAIL_BRAIN_DIAG_TARGET_UID:'74324',
+    MAIL_BRAIN_DIAG_TARGET_UIDVALIDITY:'3'});
+  f.sqlite.prepare('UPDATE mailboxes SET sent_folder=? WHERE id=?').run('Sent','mail-a');
+  f.sqlite.prepare('INSERT INTO principals VALUES (?,?,?,?,1)').run('soai-admin',
+    'tenant-a','urn:smart-odpady:session',admin.id);
+  f.sqlite.prepare('INSERT INTO grants VALUES (?,?,?,0)').run('soai-admin','mail-a','read');
+  f.sqlite.prepare(`INSERT INTO brain_consents
+    (tenant_id,principal_id,mailbox_id,sent_folder,consented_at) VALUES (?,?,?,?,?)`)
+    .run('tenant-a','soai-admin','mail-a','Sent',Date.now());
+  const providerFactory=()=>({async readForBrain(reference,metrics){
+    calls.push(reference);Object.assign(metrics,{subject:'Diagnostic',messageId:'<only@example.test>',
+      rawMessageSize:3*1024*1024,textPartsFound:1,downloadedTextParts:1,
+      downloadedBytes:20,textSource:'plain',attachments:[],downloadedBinaryAttachments:0});
+    return {text:'never release body'};
+  }});
+  const worker=createWorker({providerFactory});
+  const env={AUTH_MODE:'mock',AUTH_USERS_JSON:JSON.stringify([admin,user]),
+    FORPSI_ADMIN_TOKEN:f.env.CONNECTOR_ADMIN_TOKEN,
+    FORPSI_CONNECTOR:{fetch:request=>worker.fetch(request,f.env)}};
+  const payload={mailboxId:'mail-a',folder:'Sent',uid:74324,uidValidity:'3'};
+  const command={operation:'resources',payload};
+  const before=f.sqlite.prepare('SELECT total_changes() AS n').get().n;
+  assert.equal((await forwardForpsiAdmin({env,request:await req(env,user,command)})).status,403);
+  const result=await forwardForpsiAdmin({env,request:await req(env,admin,command)});
+  assert.equal(result.status,200);
+  const body=await result.json();
+  assert.equal(body.success,true);
+  assert.equal(body.downloadedBinaryAttachments,0);
+  assert.equal(JSON.stringify(body).includes('never release body'),false);
+  assert.deepEqual(calls,[{folder:'Sent',uid:74324,uidValidity:'3'}]);
+  assert.equal(f.sqlite.prepare('SELECT total_changes() AS n').get().n,before);
+});
+
 test('loading resources preserves the dirty form, excludes parent folders and isolates owner changes',async()=>{
   const listeners={};
   const root={isConnected:true,innerHTML:'',addEventListener:(name,fn)=>{listeners[name]=fn;},querySelector:()=>null,querySelectorAll:()=>[]};
