@@ -167,6 +167,34 @@ test('unverified analysis stays visible and incomplete sync never claims quiet i
   assert.equal((await brain.attention({})).coverageComplete,false);
 });
 
+for(const scenario of [
+  {name:'unavailable source',code:'SOURCE_UNAVAILABLE',read:async()=>{
+    throw new Error('MESSAGE_NOT_FOUND');}},
+  {name:'changed source hash',code:'SOURCE_HASH_CHANGED',read:async(ref,original)=>({
+    ...(await original(ref)),text:'Zdrojová zpráva se změnila.'})},
+  {name:'unverifiable quote',code:'EVIDENCE_QUOTE_UNVERIFIED',analyze:()=>({
+    state:'information',category:'other',reason:'Bez akce.',quote:'Citace ve zdroji není.',
+    nextAction:null,commitments:[]})}
+])test(`reanalyzing a case records ${scenario.name} without changing the case`,async()=>{
+  const {f,brain,provider}=setup([item(10)]);
+  f.env.FORPSI_ANALYSIS_MODEL='gpt-5-mini';
+  brain.analyzer=()=>null;
+  await brain.consent({mailboxId:'mail-a'});
+  await brain.sync({mailboxId:'mail-a'});
+  const before=await f.store.first('SELECT state,category,analysis_status,revision FROM brain_cases');
+  const originalRead=provider.read;
+  if(scenario.read)provider.read=ref=>scenario.read(ref,originalRead);
+  brain.analyzer=scenario.analyze??(()=>{
+    throw new Error('Analyzer must not run before source verification');});
+  const result=await brain.sync({mailboxId:'mail-a'});
+  const event=await f.store.first(`SELECT details_json FROM brain_case_events
+    WHERE event_type='analysis.attempt' ORDER BY created_at DESC LIMIT 1`);
+  assert.equal(JSON.parse(event.details_json).errorCode,scenario.code);
+  assert.equal(result.reanalysis.verified,0);
+  assert.deepEqual(await f.store.first('SELECT state,category,analysis_status,revision FROM brain_cases'),before);
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+});
+
 test('read-only sync rechecks earlier unverified cases without overriding manual decisions',async()=>{
   const {f,provider}=setup([item(10),item(11)]);
   f.env.FORPSI_ANALYSIS_MODEL='gpt-5-mini';

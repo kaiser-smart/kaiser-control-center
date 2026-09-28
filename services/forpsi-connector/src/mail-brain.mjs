@@ -370,12 +370,18 @@ export class MailBrain {
       await this.store.run(`INSERT INTO brain_case_events VALUES (?,?,?,?,?,?,?)`,
         attemptId,mailbox.tenant_id,row.case_id,this.principal.id,
         'analysis.attempt',JSON.stringify({messageId:row.message_id}),this.now());
+      const recordReason=async errorCode=>{
+        // Diagnostic updates must not change whether the read-only sync continues.
+        try{await this.store.run(`UPDATE brain_case_events SET details_json=? WHERE id=?`,
+          JSON.stringify({messageId:row.message_id,errorCode}),attemptId);}
+        catch{/* Preserve the existing sync outcome if only the diagnostic write fails. */}
+      };
       let message;
       try{message=await provider.read(JSON.parse(row.reference_json));}
-      catch{continue;}
+      catch{await recordReason('SOURCE_UNAVAILABLE');continue;}
       const sourceHash=hash(JSON.stringify([message.subject??'',message.from,
         String(message.text??'').slice(0,100000)]));
-      if(sourceHash!==row.content_hash)continue;
+      if(sourceHash!==row.content_hash){await recordReason('SOURCE_HASH_CHANGED');continue;}
       const direction=message.reference.folder===consent.sent_folder?'outbound':'inbound';
       let proposed=null;
       if(Number.isFinite(this.analysisBudget))this.analysisBudget--;
@@ -388,7 +394,12 @@ export class MailBrain {
       }
       await this.access(mailbox.id);await this.activeConsent(mailbox);
       const analysis=normalizeAnalysis(proposed,message,direction);
-      if(analysis.analysisStatus!=='evidence_backed')continue;
+      if(analysis.analysisStatus!=='evidence_backed'){
+        const quote=typeof proposed?.quote==='string'?proposed.quote.trim().slice(0,500):'';
+        if(quote.length<4||!authoredText(message.text??'').includes(quote))
+          await recordReason('EVIDENCE_QUOTE_UNVERIFIED');
+        continue;
+      }
       const rule=await this.decisionRule(mailbox,analysis,message.from?.[0]?.address??'');
       const resultingState=rule?.action==='prioritize'?'todo':
         rule?.action==='deprioritize'?'information':analysis.state;
