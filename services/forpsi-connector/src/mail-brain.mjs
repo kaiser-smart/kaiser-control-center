@@ -349,11 +349,72 @@ export class MailBrain {
       decision_source:rule.source,decision_rule_id:rule.id};
   }
 
+  async reanalyzePending(mailbox,provider,consent,limit=2){
+    if(!this.env.FORPSI_ANALYSIS_MODEL)return {attempted:0,verified:0};
+    const pending=await this.store.rows(`SELECT m.id AS message_id,m.reference_json,m.content_hash,
+      c.id AS case_id,c.revision FROM brain_cases c JOIN brain_messages m
+      ON m.id=c.reason_message_id WHERE c.tenant_id=? AND c.mailbox_id=?
+      AND c.analysis_status!='evidence_backed' AND c.state!='done'
+      AND c.decision_source='ai' AND c.merged_into_case_id IS NULL
+      AND m.received_at>=?
+      AND NOT EXISTS (SELECT 1 FROM brain_case_events e WHERE e.case_id=c.id
+        AND e.event_type LIKE 'case.%')
+      ORDER BY (SELECT COUNT(*) FROM brain_case_events e WHERE e.case_id=c.id
+        AND e.event_type='analysis.attempt'),c.latest_at DESC LIMIT ?`,
+    mailbox.tenant_id,mailbox.id,this.now()-consent.lookback_days*day,limit);
+    let verified=0;
+    for(const row of pending){
+      await this.access(mailbox.id);await this.activeConsent(mailbox);
+      await this.store.run(`INSERT INTO brain_case_events VALUES (?,?,?,?,?,?,?)`,
+        crypto.randomUUID(),mailbox.tenant_id,row.case_id,this.principal.id,
+        'analysis.attempt',JSON.stringify({messageId:row.message_id}),this.now());
+      let message;
+      try{message=await provider.read(JSON.parse(row.reference_json));}
+      catch{continue;}
+      const sourceHash=hash(JSON.stringify([message.subject??'',message.from,
+        String(message.text??'').slice(0,100000)]));
+      if(sourceHash!==row.content_hash)continue;
+      const direction=message.reference.folder===consent.sent_folder?'outbound':'inbound';
+      let proposed=null;
+      try{proposed=await this.analyzer({message,direction,mailboxAddress:mailbox.address});}
+      catch{continue;}
+      await this.access(mailbox.id);await this.activeConsent(mailbox);
+      const analysis=normalizeAnalysis(proposed,message,direction);
+      if(analysis.analysisStatus!=='evidence_backed')continue;
+      const rule=await this.decisionRule(mailbox,analysis,message.from?.[0]?.address??'');
+      const resultingState=rule?.action==='prioritize'?'todo':
+        rule?.action==='deprioritize'?'information':analysis.state;
+      const resultingReason=rule?`Firemní pravidlo ${rule.action}; zdroj: ${analysis.reason}`:
+        analysis.reason;
+      const updated=await this.store.run(`UPDATE brain_cases SET state=?,category=?,next_action=?,
+        reason=?,reason_quote=?,amount_minor=COALESCE(?,amount_minor),
+        currency=COALESCE(?,currency),analysis_status='evidence_backed',
+        decision_source=?,decision_rule_id=?,revision=revision+1,updated_at=?
+        WHERE id=? AND revision=? AND reason_message_id=? AND state!='done'
+        AND analysis_status!='evidence_backed' AND decision_source='ai'
+        AND NOT EXISTS (SELECT 1 FROM brain_case_events e WHERE e.case_id=brain_cases.id
+          AND e.event_type LIKE 'case.%')`,
+      resultingState,analysis.category,analysis.nextAction,resultingReason,analysis.quote,
+      analysis.amountMinor,analysis.currency,rule?.source??'ai',rule?.id??null,
+      this.now(),row.case_id,row.revision,row.message_id);
+      if(updated.meta?.changes!==1)continue;
+      for(const commitment of analysis.commitments)await this.store.run(`INSERT OR IGNORE INTO
+        brain_commitments (id,tenant_id,case_id,message_id,actor,action_text,due_date,
+        due_status,evidence_quote,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      crypto.randomUUID(),mailbox.tenant_id,row.case_id,row.message_id,commitment.actor,
+      commitment.actionText,commitment.dueDate,commitment.dueStatus,commitment.quote,
+      this.now(),this.now());
+      verified++;
+    }
+    return {attempted:pending.length,verified};
+  }
+
   async sync({mailboxId,limit=10}) {
     requireValue(this.env.MAIL_BRAIN_ENABLED==='true','MAIL_BRAIN_DISABLED');
     const mailbox=await this.access(mailboxId),consent=await this.activeConsent(mailbox);
     const provider=this.providerFactory(this.env,mailbox),now=this.now(),leaseUntil=now+600000;
-    const result={mailboxId,folders:[],indexed:0,scanned:0,complete:true};
+    const result={mailboxId,folders:[],indexed:0,scanned:0,complete:true,
+      reanalysis:await this.reanalyzePending(mailbox,provider,consent)};
     for(const folder of [consent.inbox_folder,consent.sent_folder]) {
       const windowStart=now-consent.lookback_days*day;
       await this.store.run(`INSERT OR IGNORE INTO brain_sync_cursors
@@ -366,7 +427,8 @@ export class MailBrain {
       let scanned=0,indexed=0,errorCode=null,nextBeforeUid=claimed.next_before_uid;
       let uidValidity=claimed.uid_validity,finished=false;
       try {
-        const page=await provider.search({folder,limit:Math.min(limit,10),since:isoDay(claimed.window_start),
+        const page=await provider.search({folder,limit:Math.min(limit,
+          this.env.FORPSI_ANALYSIS_PROXY_URL?2:10),since:isoDay(claimed.window_start),
           ...(nextBeforeUid?{beforeUid:nextBeforeUid}:{})});
         if(uidValidity && page.uidValidity && String(page.uidValidity)!==String(uidValidity)) {
           nextBeforeUid=null;uidValidity=String(page.uidValidity);
