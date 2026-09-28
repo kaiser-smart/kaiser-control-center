@@ -57,7 +57,7 @@ export const brainSchemas = {
     targetCaseId:uuid.optional(),targetRevision:z.number().int().positive().optional(),
     messageIds:z.array(uuid).min(1).max(50).optional(),
     note:z.string().max(500).default('')}).strict(),
-  sync: z.object({mailboxId:id,limit:z.number().int().min(1).max(50).default(50)}).strict(),
+  sync: z.object({mailboxId:id,limit:z.number().int().min(1).max(50).default(10)}).strict(),
   rule: z.discriminatedUnion('operation',[
     z.object({operation:z.literal('list'),mailboxId:id}).strict(),
     z.object({operation:z.literal('propose'),mailboxId:id,category:z.string().min(1).max(80),
@@ -349,7 +349,7 @@ export class MailBrain {
       decision_source:rule.source,decision_rule_id:rule.id};
   }
 
-  async sync({mailboxId,limit=50}) {
+  async sync({mailboxId,limit=10}) {
     requireValue(this.env.MAIL_BRAIN_ENABLED==='true','MAIL_BRAIN_DISABLED');
     const mailbox=await this.access(mailboxId),consent=await this.activeConsent(mailbox);
     const provider=this.providerFactory(this.env,mailbox),now=this.now(),leaseUntil=now+600000;
@@ -366,7 +366,7 @@ export class MailBrain {
       let scanned=0,indexed=0,errorCode=null,nextBeforeUid=claimed.next_before_uid;
       let uidValidity=claimed.uid_validity,finished=false;
       try {
-        const page=await provider.search({folder,limit,since:isoDay(claimed.window_start),
+        const page=await provider.search({folder,limit:Math.min(limit,10),since:isoDay(claimed.window_start),
           ...(nextBeforeUid?{beforeUid:nextBeforeUid}:{})});
         if(uidValidity && page.uidValidity && String(page.uidValidity)!==String(uidValidity)) {
           nextBeforeUid=null;uidValidity=String(page.uidValidity);
@@ -382,20 +382,26 @@ export class MailBrain {
             await this.access(mailbox.id);
             await this.activeConsent(mailbox);
             await this.indexMessage(mailbox,detail,folder,provider,consent.sent_folder);
+            const checkpoint=await this.store.run(`UPDATE brain_sync_cursors SET
+              uid_validity=?,next_before_uid=?,scanned_count=scanned_count+1,
+              indexed_count=indexed_count+1 WHERE tenant_id=? AND mailbox_id=?
+              AND folder=? AND lease_until=?`,uidValidity,summary.reference.uid,
+            mailbox.tenant_id,mailbox.id,folder,leaseUntil);
+            requireValue(checkpoint.meta?.changes===1,'SYNC_LEASE_LOST');
+            nextBeforeUid=summary.reference.uid;
             indexed++;
-          } catch(error) { errorCode=failureCode(error);
-            if(['ACCESS_DENIED','BRAIN_CONSENT_REQUIRED'].includes(errorCode))break; }
+          } catch(error) { errorCode=failureCode(error);break; }
         }
         finished=page.nextBeforeUid==null && !errorCode;
-        nextBeforeUid=errorCode?claimed.next_before_uid:page.nextBeforeUid;
+        if(!errorCode)nextBeforeUid=page.nextBeforeUid;
       } catch(error) { errorCode=failureCode(error); }
       const status=finished?'complete':errorCode?'failed':'partial';
       const saved=await this.store.run(`UPDATE brain_sync_cursors SET uid_validity=?,next_before_uid=?,
-        status=?,scanned_count=scanned_count+?,indexed_count=indexed_count+?,
+        status=?,
         last_complete_at=CASE WHEN ?='complete' THEN ? ELSE last_complete_at END,
         window_end=CASE WHEN ?='complete' THEN ? ELSE window_end END,
         error_code=?,lease_until=0 WHERE tenant_id=? AND mailbox_id=? AND folder=?
-        AND lease_until=?`,uidValidity,nextBeforeUid,status,scanned,indexed,status,now,status,now,
+        AND lease_until=?`,uidValidity,nextBeforeUid,status,status,now,status,now,
       errorCode,mailbox.tenant_id,mailbox.id,folder,leaseUntil);
       if(saved.meta?.changes!==1){result.complete=false;
         result.folders.push({folder,status:'superseded',scanned,indexed,errorCode});continue;}
@@ -546,13 +552,17 @@ export class MailBrain {
       for(const entry of rows){
         const effective=this.applyPersonalRule(entry,entry.latest_sender??'',rules);
         delete effective.latest_sender;
-        counts[effective.state]++;
-        if(effective.category==='invoice')counts.invoices++;
         if(effective.analysis_status!=='evidence_backed')counts.review++;
+        else {
+          counts[effective.state]++;
+          if(effective.category==='invoice')counts.invoices++;
+        }
         cases.push(effective);
       }
     }
-    cases.sort((a,b)=>['decision','todo','waiting','information'].indexOf(a.state)-
+    cases.sort((a,b)=>Number(a.analysis_status!=='evidence_backed')-
+      Number(b.analysis_status!=='evidence_backed')||
+      ['decision','todo','waiting','information'].indexOf(a.state)-
       ['decision','todo','waiting','information'].indexOf(b.state)||b.latest_at-a.latest_at);
     const visible=cases.slice(0,limit);
     for(const box of mailboxes.filter(x=>x.consented)){
