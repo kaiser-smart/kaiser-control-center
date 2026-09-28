@@ -70,6 +70,25 @@ test('sync requires explicit consent and complete Inbox plus Sent coverage',asyn
   assert.deepEqual((await brain.search({query:'odpověď'})).results,[]);
 });
 
+test('missing Sent configuration uses one verified IMAP special-use folder',async()=>{
+  const {brain,f,provider,messages}=setup();
+  await f.store.run("UPDATE mailboxes SET sent_folder=NULL WHERE id='mail-a'");
+  provider.listFolders=async()=>({folders:[{path:'INBOX',specialUse:null,selectable:true},
+    {path:'Odeslané',specialUse:'\\Sent',selectable:true}]});
+  const consent=await brain.consent({mailboxId:'mail-a'});
+  assert.equal(consent.sentFolder,'Odeslané');
+  assert.equal((await f.store.first(`SELECT sent_folder FROM brain_consents
+    WHERE principal_id='alice' AND mailbox_id='mail-a'`)).sent_folder,'Odeslané');
+  messages.push(item(11,{folder:'Odeslané',from:'alice@example.com',
+    text:'Nabídku jsem poslal.',subject:'Odeslaná nabídka'}));
+  assert.equal((await brain.sync({mailboxId:'mail-a'})).complete,true);
+  const sent=(await brain.attention({})).cases.find(c=>c.title==='Odeslaná nabídka');
+  assert.equal(sent.state,'waiting');
+  assert.equal((await brain.getCase({caseId:sent.id})).messages[0].direction,'outbound');
+  provider.listFolders=async()=>({folders:[{path:'INBOX',specialUse:null,selectable:true}]});
+  await assert.rejects(brain.consent({mailboxId:'mail-a'}),/SENT_FOLDER_NOT_CONFIGURED/);
+});
+
 test('new inbound reply reopens a done case and stale actions are rejected',async()=>{
   const {brain,messages}=setup();
   await brain.consent({mailboxId:'mail-a'});await brain.sync({mailboxId:'mail-a'});

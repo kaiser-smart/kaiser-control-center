@@ -119,22 +119,31 @@ export class MailBrain {
 
   async consent({mailboxId,lookbackDays=90}) {
     const mailbox=await this.access(mailboxId);
-    requireValue(mailbox.sent_folder && mailbox.sent_folder!=='INBOX','SENT_FOLDER_NOT_CONFIGURED');
     requireValue(Number.isInteger(lookbackDays)&&lookbackDays>=1&&lookbackDays<=90,'INVALID_LOOKBACK');
+    let sentFolder=mailbox.sent_folder;
+    if(!sentFolder){
+      const folders=await this.providerFactory(this.env,mailbox).listFolders();
+      await this.access(mailbox.id);
+      const matches=folders.folders.filter(folder=>folder.specialUse==='\\Sent'&&
+        folder.selectable!==false&&folder.path!=='INBOX');
+      requireValue(matches.length===1,'SENT_FOLDER_NOT_CONFIGURED');
+      sentFolder=matches[0].path;
+    }
+    requireValue(sentFolder!=='INBOX','SENT_FOLDER_NOT_CONFIGURED');
     const now=this.now();
     await this.store.run(`INSERT INTO brain_consents
       (tenant_id,principal_id,mailbox_id,lookback_days,sent_folder,consented_at)
       VALUES (?,?,?,?,?,?) ON CONFLICT(tenant_id,principal_id,mailbox_id) DO UPDATE SET
       lookback_days=excluded.lookback_days,sent_folder=excluded.sent_folder,
       consented_at=excluded.consented_at,revoked_at=NULL`,
-    mailbox.tenant_id,this.principal.id,mailbox.id,lookbackDays,mailbox.sent_folder,now);
+    mailbox.tenant_id,this.principal.id,mailbox.id,lookbackDays,sentFolder,now);
     await this.store.run(`UPDATE brain_sync_cursors SET window_start=?,window_end=?,
       next_before_uid=NULL,status='pending',scanned_count=0,indexed_count=0,
       last_complete_at=NULL,error_code=NULL,lease_until=0 WHERE tenant_id=? AND mailbox_id=?
       AND folder IN ('INBOX',?) AND window_start>?`,now-lookbackDays*day,now,mailbox.tenant_id,mailbox.id,
-    mailbox.sent_folder,now-lookbackDays*day);
+    sentFolder,now-lookbackDays*day);
     await this.store.audit(this.principal,mailbox.id,'brain.consent','completed');
-    return {mailboxId,lookbackDays,consentedAt:now};
+    return {mailboxId,lookbackDays,sentFolder,consentedAt:now};
   }
 
   async revoke({mailboxId}) {
@@ -362,7 +371,7 @@ export class MailBrain {
             const detail=await provider.read(summary.reference);
             await this.access(mailbox.id);
             await this.activeConsent(mailbox);
-            await this.indexMessage(mailbox,detail,folder,provider);
+            await this.indexMessage(mailbox,detail,folder,provider,consent.sent_folder);
             indexed++;
           } catch(error) { errorCode=failureCode(error);
             if(['ACCESS_DENIED','BRAIN_CONSENT_REQUIRED'].includes(errorCode))break; }
@@ -388,11 +397,11 @@ export class MailBrain {
     return result;
   }
 
-  async indexMessage(mailbox,message,folder,provider) {
+  async indexMessage(mailbox,message,folder,provider,sentFolder=mailbox.sent_folder) {
     const now=this.now(),key=messageKey(message),ref=message.reference;
     requireValue(ref?.folder===folder,'SOURCE_FOLDER_MISMATCH');
     const sourceText=String(message.text??'').slice(0,100000),written=authoredText(sourceText);
-    const direction=folder===mailbox.sent_folder?'outbound':'inbound';
+    const direction=folder===sentFolder?'outbound':'inbound';
     const sourceHash=hash(JSON.stringify([message.subject??'',message.from,sourceText]));
     const prior=await this.store.first(`SELECT id,case_id,content_hash FROM brain_messages
       WHERE tenant_id=? AND mailbox_id=? AND message_key=?`,mailbox.tenant_id,mailbox.id,key);

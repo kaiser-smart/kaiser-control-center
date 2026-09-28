@@ -9,7 +9,9 @@ aditivní. V produkční konfiguraci jsou `MAIL_BRAIN_ENABLED` a
 
 - Samostatný souhlas uživatele s analýzou až 90 dnů Doručených a Odeslaných.
   Synchronizace je stránkovaná, ukládá stav obou složek, chyby a poslední úplný
-  průchod. TEĎ neoznačí zbytek pošty za nepodstatný při neúplném pokrytí.
+  průchod. Chybějící nastavení Odeslaných se doplní jen tehdy, když IMAP vrátí
+  právě jednu dostupnou složku s příznakem `\\Sent`. TEĎ neoznačí zbytek pošty
+  za nepodstatný při neúplném pokrytí.
 - Trvalé případy, zdrojové zprávy, pět stavů, odložení, závazky s citací,
   časová osa, audit akcí a ručně potvrzované spojení nebo rozdělení případů
   jedné schránky. Cizí schránka a chybějící grant zůstávají nepřístupné.
