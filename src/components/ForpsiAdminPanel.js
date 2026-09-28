@@ -158,6 +158,16 @@ async function saveAccessDraft() {
 }
 function rules() {
   return `<h3>Seznam pravidel a automatizace</h3><p>Štítky a pravidla patří konektoru. Synchronizace s nastavením webmailu a editace pravidel v SO.ai zatím nejsou zapojené.</p>
+    ${state.data.brainEnabled?`<h4>Firemní pravidla Mail Brain</h4><p>Mají přednost před osobními pravidly. Přeposílání souborů se zpřístupní až po ověřené kontrole příloh.</p>
+    ${state.data.brainPilotReadOnly?'<p>Pilot pouze pro čtení: změny firemních pravidel jsou pozastavené.</p>':''}
+    <ul class="forpsi-list">${(state.data.brainRules??[]).map(r=>`<li>${escape(r.category)}${r.sender_address?` · ${escape(r.sender_address)}`:''} · ${escape(r.mailbox_id?mailboxName(r.mailbox_id):'Všechny schránky')} → ${escape(r.action)}${r.destination?` · ${escape(r.destination)}`:''} · ${r.enabled?'Zapnuto':'Vypnuto'} ${state.data.brainPilotReadOnly?'':`<button type="button" class="secondary-link" data-forpsi-action="brain-rule-toggle" data-id="${escape(r.id)}" ${state.busy?'disabled':''}>${r.enabled?'Vypnout':'Zapnout'}</button>`}</li>`).join('')||'<li>Žádné firemní pravidlo.</li>'}</ul>
+    ${state.data.brainPilotReadOnly?'':`<form data-forpsi-brain-rule class="forpsi-form"><div class="forpsi-grid"><label>Schránka<select name="mailboxId"><option value="">Všechny povolené schránky</option>${state.data.mailboxes.map(m=>`<option value="${escape(m.id)}">${escape(m.address)}</option>`).join('')}</select></label>
+      <label>Kategorie<select name="category">${['request','invoice','contract','deadline','newsletter','marketing','other','unclassified'].map(x=>`<option value="${x}">${x}</option>`).join('')}</select></label>
+      <label>Odesílatel (volitelně)<input name="senderAddress" type="email"></label>
+      <label>Akce<select name="action"><option value="prioritize">Zvýšit prioritu</option><option value="deprioritize">Informace</option><option value="assign">Předat kolegovi</option></select></label>
+      <label>ID kolegy pro předání<input name="destination" maxlength="128"></label></div>
+      <label class="forpsi-mail-check"><input type="checkbox" name="enabled" checked>Zapnout po uložení</label>
+      <button class="primary-action" type="submit" ${state.busy?'disabled':''}>Uložit firemní pravidlo</button></form>`}`:''}
     <div class="forpsi-grid"><label>Hledat<input data-forpsi-search placeholder="Název pravidla nebo štítku"></label><label>Typ<select data-forpsi-kind><option value="">Vše</option><option value="rule">Pravidla</option><option value="label">Štítky</option></select></label><label>Stav<select data-forpsi-status><option value="">Vše</option><option value="active">Aktivní</option><option value="inactive">Neaktivní</option></select></label></div>
     <ul class="forpsi-list">${[...state.data.rules.map(r=>({...r,kind:'rule',label:r.enabled?'Aktivní · ruční spuštění':'Neaktivní'})),...state.data.labels.map(l=>({...l,kind:'label',label:'Štítek',enabled:true}))].map(r=>`<li data-forpsi-entry data-kind="${r.kind}" data-status="${r.enabled?'active':'inactive'}" data-search="${escape(`${r.name} ${mailboxName(r.mailbox_id)}`.toLowerCase())}">${escape(r.name)} · ${escape(mailboxName(r.mailbox_id))} · ${r.label}</li>`).join('')}</ul>
     <p data-forpsi-empty>Žádná položka neodpovídá výběru.</p>
@@ -248,10 +258,30 @@ export function mountForpsiAdmin(app,{apiJson,guard,owner}) {
     }
     if(event.target.form?.matches('[data-forpsi-form]')) { state.draft[event.target.name]=event.target.value; state.dirty=true; } else filterRules();
   });
-  root.addEventListener('submit',event=>{ if(event.target.matches('[data-forpsi-form], [data-forpsi-access-form], [data-forpsi-composition-form]')) { event.preventDefault(); event.stopPropagation(); void saveForpsiDraft(); } });
+  root.addEventListener('submit',event=>{ if(event.target.matches('[data-forpsi-form], [data-forpsi-access-form], [data-forpsi-composition-form]')) { event.preventDefault(); event.stopPropagation(); void saveForpsiDraft(); }
+    if(event.target.matches('[data-forpsi-brain-rule]')){event.preventDefault();event.stopPropagation();
+      const values=new FormData(event.target),payload={category:String(values.get('category')),
+        action:String(values.get('action')),enabled:values.has('enabled')};
+      if(values.get('mailboxId'))payload.mailboxId=String(values.get('mailboxId'));
+      if(values.get('senderAddress'))payload.senderAddress=String(values.get('senderAddress'));
+      if(values.get('destination'))payload.destination=String(values.get('destination'));
+      const epoch=state.epoch;state.busy=true;state.error='';paint();
+      void command('brain_rule_save',payload).then(()=>{if(epoch===state.epoch){state.notice='Firemní pravidlo bylo uloženo.';void load();}})
+        .catch(e=>{if(epoch===state.epoch)state.error=e.message;})
+        .finally(()=>{if(epoch===state.epoch){state.busy=false;paint();}});}});
   root.addEventListener('click',event=>{
     const b=event.target.closest('[data-forpsi-action]'); if(!b) return; event.preventDefault(); event.stopPropagation(); if(state.busy) return;
     const action=b.dataset.forpsiAction;
+    if(action==='brain-rule-toggle'){
+      const rule=(state.data.brainRules??[]).find(r=>r.id===b.dataset.id);if(!rule)return;
+      const epoch=state.epoch;state.busy=true;state.error='';paint();
+      void command('brain_rule_save',{ruleId:rule.id,version:rule.version,
+        ...(rule.mailbox_id?{mailboxId:rule.mailbox_id}:{}),category:rule.category,
+        ...(rule.sender_address?{senderAddress:rule.sender_address}:{}),action:rule.action,
+        ...(rule.destination?{destination:rule.destination}:{}),enabled:!rule.enabled})
+        .then(()=>{if(epoch===state.epoch){state.notice='Stav firemního pravidla byl uložen.';void load();}})
+        .catch(e=>{if(epoch===state.epoch)state.error=e.message;})
+        .finally(()=>{if(epoch===state.epoch){state.busy=false;paint();}});return;}
     if(action==='access-clear' && state.accessDraft) {state.accessDraft.actions=[];state.dirty=true;state.error='';paint();return;}
     if(action==='resources') {
       const m=findMailbox(b.dataset.id); if(!m) return;

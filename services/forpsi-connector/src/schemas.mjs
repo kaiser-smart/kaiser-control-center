@@ -3,10 +3,12 @@ export const id = z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/);
 export const folder = z.string().min(1).max(255).regex(/^[^\x00-\x1f\x7f]+$/);
 const header = z.string().max(500).regex(/^[^\r\n\x00]*$/);
 const address = z.string().email().max(254).regex(/^[^\s<>\r\n]+$/);
+const messageId = z.string().max(500).regex(/^<[^<>\s\r\n]+>$/);
 export const message = z.object({
   to: z.array(address).min(1).max(50), cc: z.array(address).max(50).default([]),
   bcc: z.array(address).max(50).default([]), subject: header,
   text: z.string().min(1).max(100000),
+  inReplyTo: messageId.optional(),references:z.array(messageId).max(20).optional(),
 }).strict().refine(value => value.to.length + value.cc.length + value.bcc.length <= 50,
   'Maximum 50 recipients');
 export const reference = z.object({ folder, uid: z.number().int().min(1).max(4294967295),

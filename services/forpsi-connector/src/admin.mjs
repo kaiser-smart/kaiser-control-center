@@ -20,6 +20,10 @@ const save = z.object({ id: id.optional(), requestId: z.string().uuid(), revisio
   password: z.string().min(1).max(1024).optional() }).strict();
 const selection = z.object({ id, revision }).strict();
 const schemas = { overview: z.object({}).strict(), save,
+  brain_rule_save:z.object({ruleId:z.string().uuid().optional(),version:revision.optional(),
+    mailboxId:id.optional(),category:z.string().min(1).max(80),senderAddress:z.email().optional(),
+    action:z.enum(['prioritize','deprioritize','assign','forward']),
+    destination:z.string().max(254).optional(),enabled:z.boolean()}).strict(),
   composition_get: profileSelection, composition_save: profileInput,
   access_list: z.object({id}).strict(),
   access_save: selection.extend({userId:id,actions:z.array(z.enum(ACTIONS)).max(5)
@@ -64,14 +68,55 @@ export async function executeAdmin(operation, raw, ctx) {
       store.rows(`SELECT r.id,r.mailbox_id,json_extract(r.definition_json,'$.name') name,json_extract(r.definition_json,'$.enabled') enabled,r.version FROM rules r JOIN mailboxes m ON m.id=r.mailbox_id WHERE m.tenant_id=? LIMIT 201`, tenant),
       store.rows(`SELECT l.id,l.mailbox_id,l.name,l.color,l.version FROM labels l JOIN mailboxes m ON m.id=l.mailbox_id WHERE m.tenant_id=? LIMIT 201`, tenant),
     ]);
+    const brainRules=env.MAIL_BRAIN_ENABLED==='true'?await store.rows(`SELECT id,mailbox_id,source,
+      category,sender_address,action,destination,enabled,version FROM brain_rules
+      WHERE tenant_id=? AND source='company' ORDER BY created_at,id LIMIT 201`,tenant):[];
     return { mailboxes: mailboxes.map(publicMailbox), grants: grants.slice(0,500), audit, queue,
       rules: rules.slice(0,200), labels: labels.slice(0,200),
+      brainRules:brainRules.slice(0,200),brainEnabled:env.MAIL_BRAIN_ENABLED==='true',
+      brainPilotReadOnly:env.MAIL_BRAIN_PILOT_READ_ONLY==='true',
       truncated: { grants:grants.length>500, rules:rules.length>200, labels:labels.length>200 },
       capabilities: capabilities(), connectorEnabled: env.CONNECTOR_ENABLED === 'true',
       soaiMailEnabled: env.SOAI_MAIL_ENABLED === 'true',
       soaiDraftsEnabled: env.SOAI_DRAFTS_ENABLED === 'true',
       credentialStorageReady: Boolean(env.CREDENTIALS_KEY), oauthConfigured: Boolean(env.OAUTH_ISSUER && env.OAUTH_JWKS_URL && env.MCP_RESOURCE),
       verificationMode: ctx.verificationMode ?? 'provider', checkedAt: Date.now() };
+  }
+  if(operation==='brain_rule_save'){
+    requireValue(env.MAIL_BRAIN_ENABLED==='true','MAIL_BRAIN_DISABLED');
+    requireValue(env.MAIL_BRAIN_PILOT_READ_ONLY!=='true','BRAIN_PILOT_READ_ONLY');
+    requireValue(!p.ruleId||p.version,'INVALID_INPUT');
+    requireValue(!['assign','forward'].includes(p.action)||!!p.destination,
+      'RULE_DESTINATION_REQUIRED');
+    requireValue(!p.enabled||p.action!=='forward','RULE_FORWARD_NOT_READY');
+    if(p.action==='forward')requireValue(z.email().safeParse(p.destination).success,
+      'INVALID_RULE_DESTINATION');
+    if(p.mailboxId)await mailbox(store,tenant,p.mailboxId);
+    if(p.action==='assign'){
+      requireValue(id.safeParse(p.destination).success,'INVALID_RULE_DESTINATION');
+      const target=await store.first('SELECT id FROM principals WHERE id=? AND tenant_id=? AND active=1',
+        p.destination,tenant);
+      requireValue(target,'OWNER_NOT_FOUND');
+      if(p.mailboxId)await store.access({id:p.destination,scopes:['forpsi:read']},
+        p.mailboxId,'read');
+    }
+    const now=Date.now(),ruleId=p.ruleId??crypto.randomUUID();
+    if(p.ruleId){const prior=await store.first(`SELECT id FROM brain_rules WHERE id=? AND tenant_id=?
+      AND source='company' AND version=?`,ruleId,tenant,p.version);
+      requireValue(prior,'RULE_VERSION_CONFLICT');
+      const changed=await store.first(`UPDATE brain_rules SET mailbox_id=?,category=?,
+        sender_address=?,action=?,destination=?,enabled=?,approved_at=?,version=version+1,
+        updated_at=? WHERE id=? AND tenant_id=? AND source='company' AND version=?
+        RETURNING version`,p.mailboxId??null,p.category,p.senderAddress?.toLowerCase()??null,
+      p.action,p.destination??null,+p.enabled,p.enabled?now:null,now,ruleId,tenant,p.version);
+      requireValue(changed,'RULE_VERSION_CONFLICT');
+    }else await store.run(`INSERT INTO brain_rules
+      (id,tenant_id,mailbox_id,source,category,sender_address,action,destination,enabled,
+        approved_at,created_at,updated_at) VALUES (?,?,?,'company',?,?,?,?,?,?,?,?)`,ruleId,
+      tenant,p.mailboxId??null,p.category,p.senderAddress?.toLowerCase()??null,p.action,
+      p.destination??null,+p.enabled,p.enabled?now:null,now,now);
+    await store.audit({id:actorId},p.mailboxId??null,'brain.company_rule.save','completed');
+    return {ruleId,enabled:p.enabled};
   }
   if (operation === 'save') {
     requireValue(!p.id || p.revision, 'INVALID_INPUT');

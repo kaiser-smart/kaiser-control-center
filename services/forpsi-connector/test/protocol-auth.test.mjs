@@ -107,6 +107,28 @@ test('daily mail exposes only safe tools with frozen setup, while another user c
   assert.equal(read.isError,true);
   assert.equal(read.content[0].text,'ACCESS_DENIED');
 });
+
+test('Mail Brain read-only pilot advertises only its read tools',async()=>{
+  const f=fixture();
+  await f.store.run(`INSERT INTO mailboxes (id,tenant_id,address,credential_key,active)
+    VALUES ('mail-c','tenant-a','colleague@example.com','key-c',1)`);
+  await f.store.run(`INSERT INTO grants (principal_id,mailbox_id,action,revoked)
+    VALUES ('alice','mail-c','read',0)`);
+  const env={...f.env,MAIL_BRAIN_ENABLED:'true',MAIL_BRAIN_PILOT_READ_ONLY:'true',
+    MAIL_BRAIN_PILOT_MAILBOX_ID:'mail-a',MCP_NATIVE_MUTATIONS_ENABLED:'true'};
+  const worker=createWorker({authenticate:async()=>f.principal,
+    providerFactory:f.providerFactory});
+  const listed=(await (await worker.fetch(request('tools/list'),env)).json()).result.tools
+    .map(tool=>tool.name);
+  for(const name of ['attention_list','case_get','mail_search','attachment_get'])
+    assert.ok(listed.includes(name),name);
+  for(const name of ['case_action','rule_manage','draft_create','message_send'])
+    assert.ok(!listed.includes(name),name);
+  const boxes=(await (await worker.fetch(request('tools/call',{
+    name:'list_mailboxes',arguments:{} }),env)).json()).result.structuredContent.data;
+  assert.equal(boxes.mailboxes.find(m=>m.id==='mail-a').brainEnabled,true);
+  assert.equal(boxes.mailboxes.find(m=>m.id==='mail-c').brainEnabled,false);
+});
 test('unauthenticated and cross-origin HTTP requests do not access a mailbox', async () => {
   const f = fixture(); const worker = createWorker();
   const denied = await worker.fetch(request('tools/list'), f.env);
