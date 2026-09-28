@@ -14,6 +14,7 @@
     "WORKFLOW_SYNC_ENABLED": "false",
     "MAIL_BRAIN_ENABLED": "false",
     "MAIL_BRAIN_SCHEDULED_SYNC_ENABLED": "false",
+    "MAIL_BRAIN_PILOT_READ_ONLY": "true",
     "SEND_ENABLED": "false",
     "FORPSI_ANALYSIS_MODEL": "gpt-5-mini"
   },

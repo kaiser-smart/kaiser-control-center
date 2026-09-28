@@ -133,6 +133,7 @@ const FROZEN_SETUP_TOOLS=new Set(['render_setup_consent','begin_mail_setup','ana
   'read_setup_sample','submit_setup_analysis','get_mail_setup','render_mail_setup',
   'answer_mail_setup','approve_mail_setup']);
 const SOAI_ONLY_TOOLS=new Set(['approve_shortcut','remove_shortcut']);
+const BRAIN_MUTATION_TOOLS=new Set(['case_action','rule_manage','draft_create','message_send']);
 
 export async function executeTool(name, args, ctx) {
   const { store, principal, providerFactory, calendarFactory, contactFactory, env, organizer, outbox } = ctx;
@@ -140,6 +141,8 @@ export async function executeTool(name, args, ctx) {
   if (!definition) throw new Error('Unknown tool');
   args = definition.schema.parse(args);
   requireValue(env.ONBOARDING_FROZEN!=='true'||!FROZEN_SETUP_TOOLS.has(name),'SETUP_PAUSED');
+  requireValue(env.MAIL_BRAIN_PILOT_READ_ONLY!=='true'||!BRAIN_MUTATION_TOOLS.has(name),
+    'BRAIN_PILOT_READ_ONLY');
   requireValue(env.MCP_NATIVE_MUTATIONS_ENABLED!=='false'||definition.action==='read',
     'MCP_NATIVE_ACTIONS_PAUSED');
   if(env.PERSONAL_PILOT_READ_ONLY==='true'){
@@ -207,7 +210,9 @@ export async function executeTool(name, args, ctx) {
         const profile=await store.first('SELECT version FROM workflow_profile_versions WHERE principal_id=? AND mailbox_id=? AND active=1',principal.id,m.id);
         const session=profile?null:await store.first(`SELECT id,status FROM workflow_onboarding
           WHERE principal_id=? AND mailbox_id=? ORDER BY updated_at DESC LIMIT 1`,principal.id,m.id);
-        return {...m,setupStatus:profile?'approved':session?.status??'not_configured',
+        return {...m,brainEnabled:env.MAIL_BRAIN_ENABLED==='true'&&
+          (!env.MAIL_BRAIN_PILOT_MAILBOX_ID||m.id===env.MAIL_BRAIN_PILOT_MAILBOX_ID),
+          setupStatus:profile?'approved':session?.status??'not_configured',
           setupSessionId:profile?null:session?.id??null};
       }))};
       break;
@@ -333,6 +338,7 @@ export async function handleMcp(request, context) {
   const server = new Server({ name: 'forpsi-company-mail', version: '0.1.0' }, { capabilities: { tools: {}, resources: {} } });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: tools
     .filter(tool=>context.env.MAIL_BRAIN_ENABLED==='true'||!['attention_list','case_get','mail_search','case_action','rule_manage','draft_create','message_send','attachment_get'].includes(tool.name))
+    .filter(tool=>context.env.MAIL_BRAIN_PILOT_READ_ONLY!=='true'||!BRAIN_MUTATION_TOOLS.has(tool.name))
     .filter(tool=>context.env.PERSONAL_PILOT_READ_ONLY!=='true'||PERSONAL_PILOT_TOOLS.has(tool.name))
     .filter(tool=>context.env.ONBOARDING_FROZEN!=='true'||!FROZEN_SETUP_TOOLS.has(tool.name))
     .filter(tool=>!SOAI_ONLY_TOOLS.has(tool.name))

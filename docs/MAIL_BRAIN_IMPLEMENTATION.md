@@ -2,8 +2,11 @@
 
 Tato větev přidává případový model vedle dosavadního FORPSI konektoru. Nic
 nepřepisuje ve starých pracovních seznamech. Migrace `0012_mail_brain.sql` je
-aditivní. V produkční konfiguraci jsou `MAIL_BRAIN_ENABLED` a
-`MAIL_BRAIN_SCHEDULED_SYNC_ENABLED` vypnuté.
+aditivní. Produkční konfigurace této větve zapíná pouze ručně spouštěný pilot
+pro schránku `oplustil@kaiserservis.cz` (`MAIL_BRAIN_PILOT_MAILBOX_ID`).
+`MAIL_BRAIN_PILOT_READ_ONLY` blokuje případové změny, pravidla a návrhy k
+odeslání; `MAIL_BRAIN_SCHEDULED_SYNC_ENABLED` zůstává vypnuté. K nasazení této
+konfigurace je nutné samostatné schválení produkčního Workeru a Pages.
 
 ## Hotové v této větvi
 
@@ -30,16 +33,23 @@ aditivní. V produkční konfiguraci jsou `MAIL_BRAIN_ENABLED` a
   blokované, protože bezpečnostní skener a extrakce dokumentů nejsou hotové.
 - Uzavřené případy a jejich FTS záznamy se po 365 dnech mažou; otevřené ne.
 
-## Před zapnutím pilotu
+## Produkční příprava a ověření pilotu
 
-1. Zálohovat Git a produkční D1, aplikovat migraci nejprve na kopii exportu.
-2. Ověřit živé OAuth identity, granty, schránku, její složku Odeslané a stav
-   synchronizace. Připojení schránky samo není souhlasem s analýzou historie.
-3. Zajistit aktivní účet a přístup k Cloudflare; spustit pilot jen s jednou
-   výslovně odsouhlasenou schránkou a nejprve bez vnějších akcí.
-4. Porovnat TEĎ a osm dotazů z produktového zadání s ručně označeným vzorkem
+1. Hotovo: soukromá úplná záloha produkční D1 a Git bundle. Obnovená kopie
+   prošla kontrolou integrity a migrací. Samostatně schválená aditivní migrace
+   `0012` byla aplikována do produkční D1; následné čtení potvrdilo 15 nových
+   tabulek včetně FTS stínových tabulek, žádný případ ani souhlas a zachovaný
+   počet schránek, identit a grantů.
+2. Hotovo: živé metadata OAuth identity, grantů a vybrané schránky. Její složka
+   Odeslané se ověří podle IMAP příznaku `\\Sent` při zápisu souhlasu. Připojení
+   schránky samo není souhlasem s analýzou historie.
+3. Čeká na schválení: nasazení Workeru a Pages. Worker poběží jen pro jednu
+   schránku, v režimu bez případových změn či vnějších akcí a bez automatického
+   synchronizačního cronu. Souhlas udělený v chatu se musí svázat s ověřenou
+   identitou v backendu; zatím není v D1 zapsán.
+4. Po nasazení: porovnat TEĎ a osm dotazů z produktového zadání s ručně označeným vzorkem
    skutečné pošty. Každý souhrn, termín a částku kontrolovat proti zdroji.
-5. Ověřit nasazení podle `PŘÍRUČKA.md` a reálný audit. Zapnutí dalších schránek
+5. Po nasazení: ověřit podle `PŘÍRUČKA.md` a reálný audit. Zapnutí dalších schránek
    až po přijetí pilotu.
 
 ## Dosud nesplněné části plánu
@@ -47,6 +57,6 @@ aditivní. V produkční konfiguraci jsou `MAIL_BRAIN_ENABLED` a
 Samostatný vícejazyčný významový index, bezpečnostní skener a náhled PDF,
 extrakce polí faktur se zdroji hodnot, automatické učení po pěti schváleních,
 autopilot přeposílání, schválené propojení mezi osobními schránkami a hlasový
-tok zatím nejsou implementované. Pilot na skutečné poště, produkční migrace a
-nasazení nejsou provedené. Tyto části se nesmějí prezentovat jako hotový
+tok zatím nejsou implementované. Pilot na skutečné poště a nasazení nejsou
+provedené. Tyto části se nesmějí prezentovat jako hotový
 produkt ani zapnout pouhým přepnutím feature flagu.

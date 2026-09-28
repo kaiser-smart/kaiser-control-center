@@ -114,7 +114,13 @@ export class MailBrain {
   }
 
   async access(mailboxId,action='read') {
+    requireValue(!this.env.MAIL_BRAIN_PILOT_MAILBOX_ID||
+      mailboxId===this.env.MAIL_BRAIN_PILOT_MAILBOX_ID,'PILOT_ACCESS_DENIED');
     return this.store.access(this.principal,mailboxId,action);
+  }
+
+  requirePilotMutations(){
+    requireValue(this.env.MAIL_BRAIN_PILOT_READ_ONLY!=='true','BRAIN_PILOT_READ_ONLY');
   }
 
   async consent({mailboxId,lookbackDays=90}) {
@@ -175,6 +181,7 @@ export class MailBrain {
       await this.access(mailbox.id);
       return {rules:rows,precedence:['company','user','learned','ai']};
     }
+    this.requirePilotMutations();
     await this.store.access(this.principal,mailbox.id,'write');
     if(operation==='propose'){
       requireValue(['prioritize','deprioritize'].includes(action),'RULE_ACTION_NOT_READY');
@@ -199,6 +206,7 @@ export class MailBrain {
 
   async createDraft({caseId,caseRevision,requestId,message}) {
     requireValue(this.env.MAIL_BRAIN_ENABLED==='true','MAIL_BRAIN_DISABLED');
+    this.requirePilotMutations();
     const {row,mailbox}=await this.caseAccess(caseId);
     requireValue(row.revision===caseRevision,'CASE_VERSION_CONFLICT');
     await this.store.access(this.principal,mailbox.id,'send');
@@ -228,6 +236,7 @@ export class MailBrain {
 
   async sendDraft({draftId}) {
     requireValue(this.env.MAIL_BRAIN_ENABLED==='true','MAIL_BRAIN_DISABLED');
+    this.requirePilotMutations();
     const draft=await this.store.first(`SELECT * FROM brain_drafts WHERE id=? AND principal_id=?`,
       draftId,this.principal.id);
     requireValue(draft,'DRAFT_NOT_FOUND');
@@ -282,6 +291,7 @@ export class MailBrain {
   }
 
   async activateRule({mailboxId,ruleId,version},approvalSource) {
+    this.requirePilotMutations();
     requireValue(approvalSource==='soai_session','APPROVAL_UI_REQUIRED');
     const mailbox=await this.access(mailboxId);await this.activeConsent(mailbox);
     await this.store.access(this.principal,mailbox.id,'write');
@@ -497,7 +507,9 @@ export class MailBrain {
   async attention({mailboxId,limit=20}={}) {
     requireValue(this.env.MAIL_BRAIN_ENABLED==='true','MAIL_BRAIN_DISABLED');
     const accessible=(await this.store.mailboxes(this.principal))
-      .filter(box=>!mailboxId||box.id===mailboxId);
+      .filter(box=>(!mailboxId||box.id===mailboxId)&&
+        (!this.env.MAIL_BRAIN_PILOT_MAILBOX_ID||
+          box.id===this.env.MAIL_BRAIN_PILOT_MAILBOX_ID));
     requireValue(!mailboxId||accessible.length===1,'ACCESS_DENIED');
     const mailboxes=[];const cases=[];const counts={decision:0,todo:0,waiting:0,information:0,
       invoices:0,deadlines:0,overdue:0,review:0};
@@ -516,7 +528,8 @@ export class MailBrain {
       const permitted=async action=>{try{await this.store.access(this.principal,mailbox.id,action);
         return true;}catch{return false;}};
       mailboxes.push({id:mailbox.id,address:mailbox.address,consented:!!consent,
-        canWrite:await permitted('write'),canSend:await permitted('send'),
+        canWrite:this.env.MAIL_BRAIN_PILOT_READ_ONLY!=='true'&&await permitted('write'),
+        canSend:this.env.MAIL_BRAIN_PILOT_READ_ONLY!=='true'&&await permitted('send'),
         coverage:complete?'complete':!consent?'not_consented':stale?'stale':'partial',
         folders:coverage});
       if(!consent)continue;
@@ -598,7 +611,10 @@ export class MailBrain {
   async search({query,mailboxId,category,state:caseState,from,since,before,attachmentName,
     commitmentActor,olderThanDays,limit=10}) {
     requireValue(this.env.MAIL_BRAIN_ENABLED==='true','MAIL_BRAIN_DISABLED');
-    const granted=(await this.store.mailboxes(this.principal)).filter(x=>!mailboxId||x.id===mailboxId);
+    const granted=(await this.store.mailboxes(this.principal)).filter(x=>
+      (!mailboxId||x.id===mailboxId)&&
+      (!this.env.MAIL_BRAIN_PILOT_MAILBOX_ID||
+        x.id===this.env.MAIL_BRAIN_PILOT_MAILBOX_ID));
     const accessible=[];
     for(const box of granted){const mailbox=await this.access(box.id);
       try{await this.activeConsent(mailbox);accessible.push(box);}catch{}}
@@ -707,6 +723,7 @@ export class MailBrain {
   async action({caseId,revision,action,until,ownerPrincipalId,targetCaseId,targetRevision,
     messageIds,note=''},approvalSource='model') {
     requireValue(this.env.MAIL_BRAIN_ENABLED==='true','MAIL_BRAIN_DISABLED');
+    this.requirePilotMutations();
     const {row,mailbox}=await this.caseAccess(caseId),now=this.now();
     await this.store.access(this.principal,mailbox.id,'write');
     requireValue(row.revision===revision,'CASE_VERSION_CONFLICT');

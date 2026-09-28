@@ -57,7 +57,7 @@ function paint(){
     ${!state.loaded?'':!state.mailboxes.length?'<p>Nemáte žádnou povolenou schránku s právem čtení. Správce ji může přiřadit v nastavení Forpsi.</p>':`
     <div class="forpsi-grid"><label>Schránka<select aria-label="Schránka" data-mail-mailbox ${state.busy?'disabled':''}><option value="">Vyberte schránku</option>${state.mailboxes.map(m=>`<option value="${escape(m.id)}" ${m.id===state.mailboxId?'selected':''}>${escape(m.address)}</option>`).join('')}</select></label></div>
     ${state.mailboxId?'<div data-forpsi-composer-root></div>':''}
-    ${state.mailboxId&&state.brainEnabled?brainPanel():''}
+    ${state.mailboxId&&state.brainEnabled&&state.mailboxes.find(m=>m.id===state.mailboxId)?.brainEnabled?brainPanel():''}
     ${state.mailboxId&&state.replaceCapability!==null?`<p class="forpsi-mail-status">Nahrazení původního konceptu: ${state.replaceCapability?'server podporuje bezpečné nahrazení':'server bezpečné nahrazení nehlásí'}. ${state.canEditDrafts?'Dostupná pro tuto schránku.':'V SO.ai pro tuto schránku zatím nedostupná.'}</p>`:''}
     ${state.canCopyDrafts?'<p class="forpsi-mail-status">Upravenou kopii textového konceptu lze uložit; původní koncept zůstane zachovaný.</p>':''}
     ${state.mailboxId&&!state.folders.length&&!state.busy?'<p>Schránka nevrátila žádnou dostupnou složku.</p>':''}
@@ -94,7 +94,7 @@ async function request(operation,payload,onSuccess){
 async function refresh(){clearContent();state.loaded=false;state.mailboxes=[];state.folders=[];state.draftFolder=null;state.replaceCapability=null;state.canEditDrafts=false;state.canCopyDrafts=false;state.mailboxId='';state.brainEnabled=false;await request('list_mailboxes',{},data=>{state.mailboxes=data.mailboxes;state.brainEnabled=data.brainEnabled===true;state.loaded=true;});}
 async function chooseMailbox(id){clearContent();state.mailboxId=id;state.brain=null;state.brainCase=null;state.brainSearch=null;state.brainRules=null;state.brainAttachment=null;state.brainDraft=null;state.brainApproval=null;state.brainReply=null;state.folders=[];state.draftFolder=null;state.replaceCapability=null;state.canEditDrafts=false;state.canCopyDrafts=false;state.filters=emptyFilters();if(!id){paint();return;}
   await request('list_folders',{mailboxId:id},data=>{state.folders=data.folders.filter(f=>f.selectable!==false);state.draftFolder=data.draftFolder;state.replaceCapability=typeof data.supportsReplace==='boolean'?data.supportsReplace:null;state.canEditDrafts=data.draftEditsEnabled===true&&data.supportsReplace===true&&data.draftWriteAllowed===true&&!!data.draftFolder;state.canCopyDrafts=data.draftCopiesEnabled===true&&data.draftWriteAllowed===true&&!!data.draftFolder;state.filters.folder=state.folders.some(f=>f.path==='INBOX')?'INBOX':state.folders[0]?.path || '';});
-  if(state.brainEnabled)await refreshBrain();}
+  if(state.brainEnabled&&state.mailboxes.find(m=>m.id===id)?.brainEnabled)await refreshBrain();}
 async function brainRequest(operation,payload,onSuccess){
   if(state.busy)return;const epoch=state.epoch;state.busy=true;state.error='';paint();
   try{const response=await state.api('/api/forpsi/brain',{method:'POST',body:JSON.stringify({operation,payload})});

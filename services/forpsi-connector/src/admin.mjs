@@ -74,6 +74,7 @@ export async function executeAdmin(operation, raw, ctx) {
     return { mailboxes: mailboxes.map(publicMailbox), grants: grants.slice(0,500), audit, queue,
       rules: rules.slice(0,200), labels: labels.slice(0,200),
       brainRules:brainRules.slice(0,200),brainEnabled:env.MAIL_BRAIN_ENABLED==='true',
+      brainPilotReadOnly:env.MAIL_BRAIN_PILOT_READ_ONLY==='true',
       truncated: { grants:grants.length>500, rules:rules.length>200, labels:labels.length>200 },
       capabilities: capabilities(), connectorEnabled: env.CONNECTOR_ENABLED === 'true',
       soaiMailEnabled: env.SOAI_MAIL_ENABLED === 'true',
@@ -83,6 +84,7 @@ export async function executeAdmin(operation, raw, ctx) {
   }
   if(operation==='brain_rule_save'){
     requireValue(env.MAIL_BRAIN_ENABLED==='true','MAIL_BRAIN_DISABLED');
+    requireValue(env.MAIL_BRAIN_PILOT_READ_ONLY!=='true','BRAIN_PILOT_READ_ONLY');
     requireValue(!p.ruleId||p.version,'INVALID_INPUT');
     requireValue(!['assign','forward'].includes(p.action)||!!p.destination,
       'RULE_DESTINATION_REQUIRED');
