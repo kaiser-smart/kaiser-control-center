@@ -132,6 +132,28 @@ test('mail panel offers a preserved-original copy when REPLACE is unavailable',a
   mountForpsiMail({querySelector:()=>null},{apiJson:api,owner:null});
 });
 
+test('mail panel keeps a failed consent visible instead of masking it with a refresh',async()=>{
+  const listeners={};const root={isConnected:true,innerHTML:'',addEventListener:(n,fn)=>listeners[n]=fn,querySelector:()=>null};
+  let attentionCalls=0;
+  const api=async(url,{body})=>{
+    const {operation}=JSON.parse(body);
+    if(operation==='list_mailboxes')return {data:{brainEnabled:true,mailboxes:[{id:'mail-a',address:'alice@example.test',brainEnabled:true}]}};
+    if(operation==='list_folders')return {data:{folders:[{path:'INBOX',selectable:true}]}};
+    if(url==='/api/forpsi/brain'&&operation==='attention'){
+      attentionCalls++;return {data:{mailboxes:[{id:'mail-a',consented:false}],counts:{},cases:[]}};
+    }
+    if(operation==='consent')throw Error('SENT_FOLDER_NOT_CONFIGURED');
+    throw Error(`unexpected operation: ${operation}`);
+  };
+  const tick=()=>new Promise(r=>setImmediate(r));
+  mountForpsiMail({querySelector:()=>root},{apiJson:api,owner:'consent-error'});await tick();
+  listeners.change({target:{matches:selector=>selector==='[data-mail-mailbox]',value:'mail-a'}});await tick();
+  listeners.click({target:{closest:()=>({dataset:{mailAction:'brain-consent'}})},preventDefault(){},stopPropagation(){}});await tick();
+  assert.match(root.innerHTML,/SENT_FOLDER_NOT_CONFIGURED/);
+  assert.equal(attentionCalls,1);
+  mountForpsiMail({querySelector:()=>null},{apiJson:api,owner:null});
+});
+
 test('Mail Brain consent crosses the SO.ai session and service binding without reading mail',async()=>{
   const f=await setup();f.workerEnv.MAIL_BRAIN_ENABLED='true';
   const command={operation:'consent',payload:{mailboxId:'mail-a',lookbackDays:90}};

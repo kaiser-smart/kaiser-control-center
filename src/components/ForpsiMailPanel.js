@@ -96,12 +96,13 @@ async function chooseMailbox(id){clearContent();state.mailboxId=id;state.brain=n
   await request('list_folders',{mailboxId:id},data=>{state.folders=data.folders.filter(f=>f.selectable!==false);state.draftFolder=data.draftFolder;state.replaceCapability=typeof data.supportsReplace==='boolean'?data.supportsReplace:null;state.canEditDrafts=data.draftEditsEnabled===true&&data.supportsReplace===true&&data.draftWriteAllowed===true&&!!data.draftFolder;state.canCopyDrafts=data.draftCopiesEnabled===true&&data.draftWriteAllowed===true&&!!data.draftFolder;state.filters.folder=state.folders.some(f=>f.path==='INBOX')?'INBOX':state.folders[0]?.path || '';});
   if(state.brainEnabled&&state.mailboxes.find(m=>m.id===id)?.brainEnabled)await refreshBrain();}
 async function brainRequest(operation,payload,onSuccess){
-  if(state.busy)return;const epoch=state.epoch;state.busy=true;state.error='';paint();
+  if(state.busy)return false;const epoch=state.epoch;state.busy=true;state.error='';paint();
   try{const response=await state.api('/api/forpsi/brain',{method:'POST',body:JSON.stringify({operation,payload})});
-    if(epoch!==state.epoch)return;onSuccess(response.data);
+    if(epoch!==state.epoch)return false;onSuccess(response.data);return true;
   }catch(e){if(epoch!==state.epoch)return;state.error=e.message;
     if([401,403].includes(e.status)){state.brain=null;state.brainCase=null;}}
   finally{if(epoch===state.epoch){state.busy=false;paint();}}
+  return false;
 }
 async function refreshBrain(){if(!state.mailboxId)return;
   await brainRequest('attention',{mailboxId:state.mailboxId},data=>{state.brain=data;});
@@ -139,9 +140,9 @@ export function mountForpsiMail(app,{apiJson,owner,guard}){
         requestId,message},data=>{state.brainDraft=data;state.brainApproval=null;});}});
   root.addEventListener('click',event=>{const b=event.target.closest('[data-mail-action]');if(!b)return;event.preventDefault();event.stopPropagation();if(state.busy)return;
     if(b.dataset.mailAction==='brain-refresh'){void refreshBrain();return;}
-    if(b.dataset.mailAction==='brain-consent'){void brainRequest('consent',{mailboxId:state.mailboxId,lookbackDays:90},()=>{}).then(()=>refreshBrain());return;}
-    if(b.dataset.mailAction==='brain-revoke'){void brainRequest('revoke',{mailboxId:state.mailboxId},()=>{state.brainCase=null;state.brainDraft=null;state.brainApproval=null;state.brainReply=null;}).then(()=>refreshBrain());return;}
-    if(b.dataset.mailAction==='brain-sync'){void brainRequest('sync',{mailboxId:state.mailboxId,limit:50},()=>{}).then(()=>refreshBrain());return;}
+    if(b.dataset.mailAction==='brain-consent'){void brainRequest('consent',{mailboxId:state.mailboxId,lookbackDays:90},()=>{}).then(ok=>{if(ok)void refreshBrain();});return;}
+    if(b.dataset.mailAction==='brain-revoke'){void brainRequest('revoke',{mailboxId:state.mailboxId},()=>{state.brainCase=null;state.brainDraft=null;state.brainApproval=null;state.brainReply=null;}).then(ok=>{if(ok)void refreshBrain();});return;}
+    if(b.dataset.mailAction==='brain-sync'){void brainRequest('sync',{mailboxId:state.mailboxId,limit:50},()=>{}).then(ok=>{if(ok)void refreshBrain();});return;}
     if(b.dataset.mailAction==='brain-open'){void brainRequest('case_get',{caseId:b.dataset.caseId},data=>{state.brainCase=data;state.brainAttachment=null;state.brainDraft=null;state.brainApproval=null;state.brainReply=null;}).then(()=>root.querySelector('.forpsi-mail-message')?.scrollIntoView({block:'start'}));return;}
     if(b.dataset.mailAction==='brain-attachment'){void brainRequest('attachment_get',{attachmentId:b.dataset.attachmentId},data=>{state.brainAttachment=data;});return;}
     if(b.dataset.mailAction==='brain-action'&&state.brainCase){const c=state.brainCase.case;
