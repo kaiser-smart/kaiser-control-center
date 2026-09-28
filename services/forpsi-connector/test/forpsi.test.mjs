@@ -31,6 +31,63 @@ test('reading uses read-only IMAP lock, TLS verification and does not mark seen'
   assert.equal(config.tls.rejectUnauthorized, true); assert.equal(config.port, 993);
   assert.equal(config.logger, false);
 });
+test('Mail Brain reads a 3 MiB message without downloading its 2.5 MiB attachment',async()=>{
+  const body=Buffer.from('Please send the revised offer by Friday.');
+  const downloaded=[];
+  const f=adapter({fetchOne:async()=>({uid:10,size:3*1024*1024,flags:new Set(),
+    envelope:{subject:'Offer',messageId:'<large@example.net>'},
+    bodyStructure:{type:'multipart/mixed',childNodes:[
+      {part:'1',type:'text/plain',size:body.length},
+      {part:'2',type:'application/pdf',size:2.5*1024*1024,
+        disposition:'attachment',dispositionParameters:{filename:'offer.pdf'}}]}}),
+  download:async(_uid,part,options)=>{
+    downloaded.push({part,options});
+    if(part!=='1')throw Error('Binary attachment must not be downloaded');
+    return {meta:{contentType:'text/plain'},content:Readable.from([body])};
+  }});
+  const result=await f.provider.readForBrain(ref);
+  assert.equal(result.text,body.toString());
+  assert.equal(result.size,3*1024*1024);
+  assert.deepEqual(result.attachments,[{filename:'offer.pdf',contentType:'application/pdf',
+    size:2.5*1024*1024}]);
+  assert.deepEqual(downloaded.map(x=>x.part),['1']);
+  assert.equal(downloaded[0].options.maxBytes,512*1024+1);
+  assert.deepEqual(f.calls.find(c=>c[0]==='lock')[2],{readOnly:true});
+  assert.equal(f.calls.some(c=>['append','move','smtp'].includes(c[0])),false);
+});
+test('Mail Brain rejects oversized text and malformed MIME before claiming a read',async()=>{
+  let downloads=0;
+  const large=adapter({fetchOne:async()=>({uid:10,size:3*1024*1024,
+    bodyStructure:{type:'text/plain',size:512*1024+1}}),
+  download:async()=>{downloads++;throw Error('unexpected download');}});
+  await assert.rejects(large.provider.readForBrain(ref),/MESSAGE_TOO_LARGE/);
+  const malformed=adapter({fetchOne:async()=>({uid:10,size:3*1024*1024,
+    bodyStructure:{type:'multipart/mixed'}}),
+  download:async()=>{downloads++;throw Error('unexpected download');}});
+  await assert.rejects(malformed.provider.readForBrain(ref),/MIME_STRUCTURE_INVALID/);
+  assert.equal(downloads,0);
+});
+test('Mail Brain rejects a silently truncated text stream and converts bounded HTML',async()=>{
+  const oversized=adapter({fetchOne:async()=>({uid:10,size:3*1024*1024,
+    bodyStructure:{type:'text/plain',size:10}}),
+  download:async()=>({meta:{contentType:'text/plain'},
+    content:Readable.from([Buffer.alloc(512*1024+1,65)])})});
+  await assert.rejects(oversized.provider.readForBrain(ref),/MESSAGE_TOO_LARGE/);
+  const incomplete=adapter({fetchOne:async()=>({uid:10,size:3*1024*1024,
+    bodyStructure:{type:'text/plain',encoding:'7bit',size:20}}),
+  download:async()=>({meta:{contentType:'text/plain'},
+    content:Readable.from([Buffer.from('short')])})});
+  await assert.rejects(incomplete.provider.readForBrain(ref),/MIME_PART_INCOMPLETE/);
+  const html=Buffer.from('<p>Hello <strong>world</strong>.</p>');
+  const converted=adapter({fetchOne:async()=>({uid:10,size:3*1024*1024,
+    bodyStructure:{type:'text/html',size:html.length}}),
+  download:async()=>({meta:{contentType:'text/html'},content:Readable.from([html])})});
+  assert.match((await converted.provider.readForBrain(ref)).text,/Hello world/);
+});
+test('small messages use the same parsing result in the Mail Brain reader',async()=>{
+  const f=adapter();
+  assert.deepEqual(await f.provider.readForBrain(ref),await f.provider.read(ref));
+});
 test('PDF inspection uses bytes rather than filename and keeps the mailbox read-only',async()=>{
   const real=Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF');
   const fake=Buffer.from('ordinary text, despite a PDF name');

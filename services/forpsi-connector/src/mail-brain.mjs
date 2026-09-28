@@ -31,9 +31,14 @@ const pragueStart=date=>{const utc=Date.parse(`${date}T00:00:00Z`);
   return utc-(Number(value.hour)*60+Number(value.minute))*60000;};
 const failureCode = error => /^[A-Z][A-Z0-9_]{2,70}$/.test(error?.message ?? '')
   ? error.message : 'PROVIDER_UNAVAILABLE';
+const readBrainMessage=(provider,reference)=>typeof provider.readForBrain==='function'
+  ?provider.readForBrain(reference):provider.read(reference);
 const sourceReadCode = error => {
   const code=error?.code??error?.message;
-  return ['MESSAGE_NOT_FOUND','STALE_MESSAGE_REFERENCE','MESSAGE_TOO_LARGE']
+  return ['MESSAGE_NOT_FOUND','STALE_MESSAGE_REFERENCE','MESSAGE_TOO_LARGE',
+    'MIME_STRUCTURE_INVALID','MIME_TEXT_UNAVAILABLE','MIME_PART_INCOMPLETE',
+    'MIME_PART_UNAVAILABLE','MIME_PART_MISMATCH','MIME_TEXT_UNREADABLE',
+    'MIME_HEADERS_TOO_LARGE','SOURCE_CHANGED_DURING_READ']
     .includes(code)?code:'PROVIDER_UNAVAILABLE';
 };
 const explicitDate=quote=>{
@@ -357,7 +362,7 @@ export class MailBrain {
   async reanalyzePending(mailbox,provider,consent,limit=2){
     if(!this.env.FORPSI_ANALYSIS_MODEL||this.analysisBudget===0)
       return {attempted:0,verified:0};
-    const pending=await this.store.rows(`SELECT m.id AS message_id,m.reference_json,m.message_key,
+    const pending=await this.store.rows(`SELECT m.id AS message_id,m.folder,m.reference_json,m.message_key,
       m.content_hash,
       c.id AS case_id,c.revision FROM brain_cases c JOIN brain_messages m
       ON m.id=c.reason_message_id WHERE c.tenant_id=? AND c.mailbox_id=?
@@ -387,7 +392,7 @@ export class MailBrain {
       let reference;
       try{reference=JSON.parse(row.reference_json);}
       catch{await recordReason('SOURCE_REFERENCE_INVALID');continue;}
-      try{message=await provider.read(reference);}
+      try{message=await readBrainMessage(provider,reference);}
       catch(error){
         const code=sourceReadCode(error);
         await recordReason(code,
@@ -487,7 +492,7 @@ export class MailBrain {
           try {
             await this.access(mailbox.id);
             await this.activeConsent(mailbox);
-            const detail=await provider.read(summary.reference);
+            const detail=await readBrainMessage(provider,summary.reference);
             await this.access(mailbox.id);
             await this.activeConsent(mailbox);
             await this.indexMessage(mailbox,detail,folder,provider,consent.sent_folder);

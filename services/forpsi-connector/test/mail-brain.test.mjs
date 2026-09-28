@@ -214,6 +214,10 @@ test('a message moved outside Inbox and Sent remains unverified without scanning
   const event=await f.store.first(`SELECT details_json FROM brain_case_events
     WHERE event_type='analysis.attempt' ORDER BY created_at DESC LIMIT 1`);
   assert.equal(result.reanalysis.verified,0);
+  assert.equal(result.complete,true);
+  assert.deepEqual(result.folders.map(x=>[x.folder,x.status,x.scanned,x.indexed]),
+    [['INBOX','complete',0,0],['Sent','complete',0,0]]);
+  assert.equal((await brain.attention({})).coverageComplete,true);
   assert.deepEqual(JSON.parse(event.details_json),{
     messageId:(await f.store.first('SELECT id FROM brain_messages')).id,
     errorCode:'MESSAGE_NOT_FOUND',sourceStatus:'SOURCE_MOVED_OR_UNAVAILABLE'});
@@ -237,6 +241,51 @@ test('same subject and content with a different RFC Message-ID cannot verify the
   assert.equal(JSON.parse(event.details_json).errorCode,'SOURCE_IDENTITY_MISMATCH');
   assert.equal(result.reanalysis.verified,0);
   assert.deepEqual(await f.store.first('SELECT state,category,analysis_status,revision FROM brain_cases'),before);
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+});
+
+test('selective read preserves source identity while moved case and folder coverage stay separate',async()=>{
+  const original=item(10);
+  original.size=3*1024*1024;
+  const {f,brain,provider,messages,calls}=setup([original]);
+  f.env.FORPSI_ANALYSIS_MODEL='gpt-5-mini';
+  brain.analyzer=()=>null;
+  const ordinaryRead=provider.read;
+  let selectiveReads=0;
+  provider.readForBrain=async ref=>{selectiveReads++;return ordinaryRead(ref);};
+  await brain.consent({mailboxId:'mail-a'});
+  await brain.sync({mailboxId:'mail-a'});
+  const before=await f.store.first(`SELECT state,category,analysis_status,revision,reason_quote
+    FROM brain_cases`);
+  messages.splice(0,1,item(20,{folder:'Trash',messageId:original.messageId}));
+  provider.read=async()=>{throw Error('Ordinary raw reader must not be used');};
+  provider.readForBrain=async ref=>{
+    selectiveReads++;
+    return {...original,reference:ref,messageId:'<different@example.net>'};
+  };
+  brain.analyzer=()=>{throw Error('Unverified source must not reach the model');};
+  const wrongIdentity=await brain.sync({mailboxId:'mail-a'});
+  assert.equal(wrongIdentity.complete,true);
+  assert.equal(wrongIdentity.folders[0].status,'complete');
+  assert.equal(wrongIdentity.folders[0].errorCode,null);
+  let event=await f.store.first(`SELECT details_json FROM brain_case_events
+    WHERE event_type='analysis.attempt' ORDER BY rowid DESC LIMIT 1`);
+  assert.equal(JSON.parse(event.details_json).errorCode,'SOURCE_IDENTITY_MISMATCH');
+  provider.readForBrain=async()=>{selectiveReads++;throw Error('MESSAGE_NOT_FOUND');};
+  const moved=await brain.sync({mailboxId:'mail-a'});
+  assert.equal(moved.complete,true);
+  assert.equal(moved.folders[0].status,'complete');
+  assert.equal(moved.folders[0].errorCode,null);
+  assert.equal(moved.reanalysis.verified,0);
+  event=await f.store.first(`SELECT details_json FROM brain_case_events
+    WHERE event_type='analysis.attempt' ORDER BY rowid DESC LIMIT 1`);
+  assert.equal(JSON.parse(event.details_json).errorCode,'MESSAGE_NOT_FOUND');
+  assert.equal(JSON.parse(event.details_json).sourceStatus,'SOURCE_MOVED_OR_UNAVAILABLE');
+  assert.equal((await brain.attention({})).coverageComplete,true);
+  assert.equal(selectiveReads,3);
+  assert.equal(calls.some(call=>call[0]==='search'&&call[1]==='Trash'),false);
+  assert.deepEqual(await f.store.first(`SELECT state,category,analysis_status,revision,reason_quote
+    FROM brain_cases`),before);
   assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
 });
 
@@ -359,6 +408,33 @@ test('oversized sent message is skipped without claiming complete coverage',asyn
   await brain.sync({mailboxId:'mail-a'});
   assert.equal((await brain.attention({})).coverageComplete,false);
   assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM brain_messages')).n,2);
+});
+
+test('Mail Brain sync uses the selective reader without invoking the ordinary raw reader',async()=>{
+  const large=item(10,{folder:'Sent',from:'alice@example.com'});
+  large.size=3*1024*1024;
+  const {brain,f,provider}=setup([large]);
+  const originalRead=provider.read;
+  let selectiveReads=0;
+  provider.readForBrain=async ref=>{selectiveReads++;return originalRead(ref);};
+  provider.read=async()=>{throw Error('Raw reader must not handle a large message');};
+  await brain.consent({mailboxId:'mail-a'});
+  const result=await brain.sync({mailboxId:'mail-a'});
+  assert.equal(result.complete,true);
+  assert.equal(selectiveReads,1);
+  assert.equal((await f.store.first('SELECT size_bytes FROM brain_messages')).size_bytes,large.size);
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+});
+
+test('malformed MIME in selective reader cannot produce complete coverage',async()=>{
+  const {brain,f,provider}=setup([item(10,{folder:'Sent',from:'alice@example.com'})]);
+  provider.readForBrain=async()=>{throw Error('MIME_STRUCTURE_INVALID');};
+  await brain.consent({mailboxId:'mail-a'});
+  const result=await brain.sync({mailboxId:'mail-a'});
+  assert.equal(result.complete,false);
+  assert.equal(result.folders[1].errorCode,'MIME_STRUCTURE_INVALID');
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM brain_messages')).n,0);
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
 });
 
 test('oversized message cannot bypass a grant revoked during provider read',async()=>{
