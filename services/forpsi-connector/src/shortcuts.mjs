@@ -44,7 +44,7 @@ export class Shortcuts {
     const rows=await this.store.rows('SELECT * FROM workflow_shortcuts WHERE tenant_id=? AND principal_id=? AND mailbox_id=? ORDER BY name',
       mailbox.tenant_id,this.principal.id,mailboxId);
     // The accountant address is a personal suggestion, never a team default.
-    const candidate=this.ctx.env.RADIM_PRINCIPAL_ID===this.principal.id?'faktury@kaiserservis.cz':null;
+    const candidate=this.ctx.env.RADIM_PRINCIPAL_ID===this.principal.id?'fakturu@kaiserservis.cz':null;
     return {shortcuts:rows.map(r=>({id:r.id,name:r.name,phrases:JSON.parse(r.phrases_json),
       definition:JSON.parse(r.definition_json),approved:r.approved===1,version:r.version})),
       proposedDefaults:proposals(candidate),proposalRecipientUnverified:candidate!==null};
@@ -64,6 +64,7 @@ export class Shortcuts {
     return {id:shortcutId,version:1,approved:false};
   }
   async approve(args){
+    requireValue(this.ctx.approvalSource==='soai_session','APPROVAL_UI_REQUIRED');
     const mailbox=await this.access(args.mailboxId);
     const updated=await this.store.first(`UPDATE workflow_shortcuts SET approved=1,version=version+1,updated_at=?
       WHERE id=? AND tenant_id=? AND principal_id=? AND mailbox_id=? AND version=? RETURNING id,version`,
@@ -71,6 +72,7 @@ export class Shortcuts {
     requireValue(updated,'SHORTCUT_VERSION_CONFLICT');return {...updated,approved:true};
   }
   async remove(args){
+    requireValue(this.ctx.approvalSource==='soai_session','APPROVAL_UI_REQUIRED');
     const mailbox=await this.access(args.mailboxId);
     const deleted=await this.store.first(`DELETE FROM workflow_shortcuts WHERE id=? AND tenant_id=? AND principal_id=?
       AND mailbox_id=? AND version=? RETURNING id`,args.shortcutId,mailbox.tenant_id,this.principal.id,mailbox.id,args.version);

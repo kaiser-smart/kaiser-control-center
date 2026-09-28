@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Osobní nastavení pošty Forpsi · SO.ai</title>
+<style>
+:root{font-family:Quicksand,system-ui,-apple-system,sans-serif;color:#193042;background:#f5f7f9}
+*{box-sizing:border-box}body{margin:0;padding:20px}main{max-width:780px;margin:24px auto;padding:24px;background:white;border-radius:18px;box-shadow:0 8px 35px #19304215}
+h1{font-size:1.6rem;margin:0 0 8px}h2{font-size:1.15rem;margin:22px 0 12px}p{line-height:1.5}label{display:block;font-weight:700;margin:13px 0 5px}
+select,textarea{display:block;width:100%;padding:10px;border:1px solid #a9b6bf;border-radius:9px;background:white;color:#193042;font:inherit}
+textarea{min-height:90px;resize:vertical}.actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+button{border:0;border-radius:9px;background:#1f628a;color:white;padding:10px 14px;font:inherit;cursor:pointer}
+button.secondary{background:#edf3f7;color:#193042}button:disabled{opacity:.55;cursor:not-allowed}
+.note{background:#e9f2f7;padding:12px;border-radius:9px}.error{color:#a02a25}.ok{color:#187747}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f1f4f6;border-radius:9px;padding:14px;line-height:1.5}
+</style></head><body><main>
+<h1>Moje nastavení pošty Forpsi</h1>
+<p>Podpis a styl odpovědí platí jen pro váš účet a vybranou odesílací schránku. Uložení nic neodešle ani nezmění v přijaté poště.</p>
+<p id="status" role="status">Načítám vaše nastavení…</p>
+<div id="app" hidden>
+<label for="mailbox">Schránka</label><select id="mailbox"></select>
+<p id="mode" class="note"></p>
+<section><h2>Podpis</h2>
+<label for="full">Plný podpis pro nové zprávy</label><textarea id="full" maxlength="2000"></textarea>
+<label for="short">Krátký podpis pro odpovědi</label><textarea id="short" maxlength="1000"></textarea>
+<h3>Ukázka nové zprávy</h3><pre id="preview-full"></pre>
+<h3>Ukázka odpovědi</h3><pre id="preview-short"></pre>
+<div class="actions"><button id="save-signature">Uložit podpis</button><button id="remove-signature" class="secondary">Připravovat bez podpisu</button></div></section>
+<section><h2>Styl návrhů odpovědí</h2><label for="style">Jak připravovat text</label>
+<select id="style"><option value="">Zatím bez vlastní volby</option><option value="concise">Stručně a věcně</option>
+<option value="friendly">Přátelsky</option><option value="formal">Formálně</option></select>
+<p id="style-example" class="note"></p><button id="save-style">Uložit styl</button></section>
+<section><h2>Moje zkratky</h2><p>Novou zkratku nebo její úpravu připravíte v ChatGPT. Tady schválíte přesnou podobu nebo ji odstraníte. Schválení nikdy neznamená souhlas s odesláním.</p>
+<div id="shortcuts"></div></section>
+</div><p id="result" role="status"></p>
+</main><script type="module">
+const $=id=>document.getElementById(id),status=$('status'),result=$('result');
+let state=null,selected=null,busy=false;
+const humanError=code=>({AUTH_REQUIRED:'Přihlaste se prosím znovu do SO.ai.',ACCESS_DENIED:'K této schránce nemáte přístup.',
+  SIGNATURE_VERSION_CONFLICT:'Podpis se mezitím změnil. Načetl jsem jeho aktuální verzi.',
+  PROFILE_VERSION_CONFLICT:'Styl se mezitím změnil. Načetl jsem aktuální nastavení.',
+  SHORTCUT_VERSION_CONFLICT:'Zkratka se mezitím změnila. Načetl jsem její aktuální podobu.'})[code]||'Nastavení se nepodařilo uložit. Zkuste to prosím znovu.';
+async function call(command){const response=await fetch('/api/forpsi/personal-settings',{method:'POST',credentials:'same-origin',
+  headers:{'content-type':'application/json'},body:JSON.stringify(command)});
+  const json=await response.json();if(!response.ok)throw new Error(json.code||json.error||'SETTINGS_UNAVAILABLE');return json.data;}
+function choice(){return state?.mailboxes.find(m=>m.id===selected)??null;}
+function previews(){const full=$('full').value.trim(),short=$('short').value.trim();
+  $('preview-full').textContent='Dobrý den,\n\nDěkuji za zprávu.\n\n'+(full||'(bez podpisu)');
+  $('preview-short').textContent='Děkuji za odpověď.\n\n'+(short||'(bez podpisu)');}
+function render(){const mailbox=choice(),list=$('mailbox');list.replaceChildren();
+  for(const item of state.mailboxes){const option=document.createElement('option');option.value=item.id;
+    option.textContent=item.address;list.append(option);}list.value=selected||'';
+  $('app').hidden=!mailbox;if(!mailbox)return;
+  $('mode').textContent='Načítání: '+(mailbox.syncMode==='interval'?'podle schváleného intervalu':'na vyžádání')+
+    '. Odesílání a změny pošty z ChatGPT: '+(state.chatgptNativeActionsEnabled?'dostupné podle oprávnění':'vypnuté')+'.';
+  $('full').value=mailbox.signature.fullText;$('short').value=mailbox.signature.shortText;
+  $('remove-signature').disabled=!mailbox.signature.configured;
+  $('style').value=mailbox.replyStyle??'';styleExample();previews();renderShortcuts(mailbox);}
+function renderShortcuts(mailbox){const target=$('shortcuts');target.replaceChildren();
+  if(!mailbox.shortcuts?.length){target.textContent='Zatím nemáte uložené žádné zkratky.';return;}
+  for(const item of mailbox.shortcuts){const box=document.createElement('div'),title=document.createElement('strong'),
+    details=document.createElement('p'),actions=document.createElement('div');
+    title.textContent=item.name+(item.approved?' · Schváleno':' · Čeká na schválení');
+    details.textContent='Povel: '+item.phrases.join(', ')+' · Příjemce: '+
+      (item.definition.recipient||'určí se podle zprávy')+' · Přílohy: '+
+      (item.definition.attachmentRule==='single_verified_invoice_pdf'?'jen ručně potvrzená PDF faktura':'žádné')+
+      ' · Styl: '+item.definition.style+' · Podpis: '+
+      ({full:'plný',short:'krátký',none:'bez podpisu'}[item.definition.signatureMode]||'krátký');
+    actions.className='actions';
+    if(!item.approved){const approve=document.createElement('button');approve.textContent='Schválit tuto podobu';
+      approve.addEventListener('click',()=>void save({operation:'approve_shortcut',mailboxId:mailbox.id,
+        shortcutId:item.id,version:item.version},'Zkratka je schválená. Odeslání zprávy stále vyžaduje zvláštní potvrzení.'));
+      actions.append(approve);}
+    const remove=document.createElement('button');remove.className='secondary';remove.textContent='Odstranit zkratku';
+    remove.addEventListener('click',()=>{if(!window.confirm('Opravdu chcete odstranit zkratku '+item.name+'?'))return;
+      void save({operation:'remove_shortcut',mailboxId:mailbox.id,shortcutId:item.id,version:item.version},
+        'Zkratka byla odstraněna.');});
+    actions.append(remove);box.append(title,details,actions);target.append(box);}}
+function styleExample(){const samples={concise:'Dobrý den, potvrzuji přijetí zprávy. Ozvu se po prověření.',
+  friendly:'Dobrý den, děkuji za zprávu. Podívám se na to a ozvu se.',
+  formal:'Vážená paní, vážený pane, děkuji za Vaši zprávu. Po prověření se Vám ozvu.'};
+  $('style-example').textContent=samples[$('style').value]||'Styl zatím není vybraný; konkrétní text posoudíte před odesláním.';}
+async function load(){try{state=await call({operation:'status'});selected=state.mailboxes.some(m=>m.id===selected)?selected:state.mailboxes[0]?.id;
+  status.textContent=state.mailboxes.length?'Nastavení je připravené.':'Nemáte připojenou žádnou schránku.';
+  result.textContent='';render();}catch(error){status.textContent=humanError(error.message);status.className='error';}}
+async function save(command,message){if(busy)return;busy=true;result.textContent='Ukládám…';
+  try{state=await call(command);result.textContent=message;result.className='ok';render();}
+  catch(error){await load();result.textContent=humanError(error.message);result.className='error';}
+  finally{busy=false;}}
+$('mailbox').addEventListener('change',event=>{selected=event.target.value;result.textContent='';render();});
+$('full').addEventListener('input',previews);$('short').addEventListener('input',previews);
+$('style').addEventListener('change',styleExample);
+$('save-signature').addEventListener('click',()=>{const mailbox=choice(),fullText=$('full').value.trim(),shortText=$('short').value.trim();
+  if(!fullText||!shortText){result.textContent='Vyplňte obě varianty podpisu, nebo zvolte bez podpisu.';result.className='error';return;}
+  void save({operation:'save_signature',mailboxId:mailbox.id,expectedRevision:mailbox.signature.revision,
+    fullText,shortText},'Podpis pro tuto schránku je uložený.');});
+$('remove-signature').addEventListener('click',()=>{const mailbox=choice();
+  if(!window.confirm('Chcete pro tuto schránku připravovat nové návrhy bez podpisu?'))return;
+  void save({operation:'remove_signature',mailboxId:mailbox.id,expectedRevision:mailbox.signature.revision},
+    'Podpis pro tuto schránku byl odstraněn.');});
+$('save-style').addEventListener('click',()=>{const mailbox=choice(),replyStyle=$('style').value;
+  if(!replyStyle){result.textContent='Vyberte styl odpovědí.';result.className='error';return;}
+  void save({operation:'save_style',mailboxId:mailbox.id,expectedProfileVersion:mailbox.profileVersion,
+    replyStyle},'Styl návrhů odpovědí je uložený.');});
+load();
+</script></body></html>

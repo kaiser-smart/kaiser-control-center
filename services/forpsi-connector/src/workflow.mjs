@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { folder, id } from './schemas.mjs';
+import { folder, id, reference } from './schemas.mjs';
 import { requireValue } from './errors.mjs';
 import { seal, unseal } from './crypto.mjs';
 import { newsletterSeriesKey } from './newsletter-series.mjs';
-import { contentSamples, analyzeContent, openAiEvidenceAnalyzer } from './content-evidence.mjs';
+import { contentSamples, analyzeContent, openAiEvidenceAnalyzer, authoredText } from './content-evidence.mjs';
 
 const uuid = z.string().uuid();
 const timeZone = z.string().min(1).max(80).default('Europe/Prague');
@@ -14,13 +14,32 @@ const editableDraft=z.object({to:z.array(email).max(50),cc:z.array(email).max(50
 export const workflowSchemas = {
   start: z.object({ mailboxId: id, folder: folder.default('INBOX'), limit: z.number().int().min(1).max(20).default(10),
     view:z.enum(['recent','priority']).default('recent') }).strict(),
+  mailStart:z.object({mailboxId:id,folder:folder.default('INBOX'),
+    limit:z.number().int().min(1).max(20).default(20),
+    scanLimit:z.number().int().min(1).max(200).default(50),
+    since:z.string().date().optional()}).strict(),
   current: z.object({ listId: uuid.optional() }).strict(),
   command: z.object({ listId: uuid.optional(), command: z.string().trim().min(1).max(1000), timeZone }).strict(),
-  review: z.object({ listId: uuid.optional(), action: z.enum(['start','next','previous','reply','done','waiting','snooze','end']),
+  review: z.object({ listId: uuid.optional(), action: z.enum(['start','open','next','previous','reply','done','waiting','snooze','end']),
+    number:z.number().int().min(1).max(20).optional(),
     until: z.string().trim().max(100).optional(), timeZone }).strict(),
   refresh: z.object({ mailboxId: id, limit: z.number().int().min(1).max(50).default(50) }).strict(),
   previewDraft:z.object({draftId:uuid}).strict(),
   updateDraft:z.object({draftId:uuid,revision:z.number().int().positive(),message:editableDraft}).strict(),
+  batch:z.object({listId:uuid.optional(),offset:z.number().int().min(0).max(19).default(0),
+    limit:z.number().int().min(1).max(5).default(5)}).strict(),
+  thread:z.object({mailboxId:id,message:reference}).strict(),
+  viewAnalysis:z.object({listId:uuid,expectedRevision:z.number().int().min(0),
+    coverageComplete:z.boolean().default(false),evaluations:z.array(z.object({
+      number:z.number().int().min(1).max(20),priority:z.enum(['high','review']),
+      reason:z.string().trim().min(4).max(240),quote:z.string().trim().min(4).max(500),
+      evidenceReference:reference.optional(),
+    }).strict()).min(1).max(20)}).strict(),
+  draftReply:z.object({listId:uuid.optional(),number:z.number().int().min(1).max(20),
+    text:z.string().max(100000),signatureMode:z.enum(['full','short','none']).default('short')}).strict(),
+  draftForward:z.object({listId:uuid.optional(),number:z.number().int().min(1).max(20),
+    recipient:z.string().trim().min(1).max(254),text:z.string().max(100000),
+    signatureMode:z.enum(['full','short','none']).default('short')}).strict(),
 };
 
 const normId = value => typeof value === 'string' && /^<[^<>\s]{1,500}>$/.test(value.trim()) ? value.trim().toLowerCase() : null;
@@ -63,10 +82,10 @@ export function parseCommands(text) {
     const number = Number(match[1]);
     requireValue(number > 0 && !seen.has(number), 'COMMAND_AMBIGUOUS'); seen.add(number);
     const instruction = match[2].trim();
-    if (/^vyřízeno(?:\s+telefonicky)?$/iu.test(instruction))
+    if (/^(?:vyřízeno|hotovo)(?:\s+telefonicky)?$/iu.test(instruction))
       return { number, action: 'done', note: /telefonicky/iu.test(instruction) ? 'Vyřízeno telefonicky' : '' };
     if (/^čekám na odpověď$/iu.test(instruction)) return { number, action: 'waiting' };
-    const snooze = instruction.match(/^odlož\s+(?:na\s+)?(.+)$/iu);
+    const snooze = instruction.match(/^odlož\s+(?:(?:na|do)\s+)?(.+)$/iu);
     if (snooze) return { number, action: 'snooze', until: snooze[1] };
     const forward = instruction.match(/^přepošli\s+(.+)$/iu);
     if (forward) return { number, action: 'forward', recipient: forward[1].trim() };
@@ -104,44 +123,54 @@ export class Workflow {
       mailbox.tenant_id,this.principal.id,mailbox.id,threadKey(message));
     return true;
   }
-  async start({ mailboxId, folder: path = 'INBOX', limit = 10, view='recent' }) {
+  async start({ mailboxId, folder: path = 'INBOX', limit = 10, view='recent',freshAnalysis=false,
+    scanLimitOverride=null,since=null }) {
     const mailbox = await this.access(mailboxId);
     const provider = this.providerFactory(this.env, mailbox);
     const pilot=this.env.PERSONAL_PILOT_READ_ONLY==='true';
     const modelDriven=pilot||this.env.CHATGPT_INTERACTIVE_SETUP_ENABLED==='true';
-    let scanLimit=view==='priority'?200:limit,pageSize=view==='priority'?50:limit;
+    if(pilot&&view==='priority')requireValue(path==='INBOX','PILOT_SCOPE_EXCEEDED');
+    let scanLimit=view==='priority'?(scanLimitOverride??200):limit,pageSize=view==='priority'?50:limit;
     const summaries=[];let beforeUid=null,olderUnscanned=false,pilotMessages=[],pilotFacts=null;
-    if(modelDriven && view==='priority'){
-      if(pilot)requireValue(path==='INBOX','PILOT_SCOPE_EXCEEDED');
-      const existing=await this.store.first(`SELECT id,semantic_status FROM workflow_lists WHERE tenant_id=? AND principal_id=?
-        AND mailbox_id=? AND active=1 AND expires_at>? ORDER BY created_at DESC LIMIT 1`,
-      mailbox.tenant_id,this.principal.id,mailbox.id,this.now());
-      if(existing?.semantic_status==='chatgpt_proposal')return this.current({listId:existing.id});
+    let approvedSample=null;
+    if(modelDriven && view==='priority' && !freshAnalysis){
       const approved=await this.store.first(`SELECT version FROM workflow_profile_versions
         WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND active=1`,
       mailbox.tenant_id,this.principal.id,mailbox.id);
-      requireValue(approved,'PROFILE_NOT_APPROVED');
-      const sample=await this.store.first(`SELECT o.observations_json,o.coverage_json,s.scope_json
+      approvedSample=approved?await this.store.first(`SELECT o.observations_json,o.coverage_json,s.scope_json
         FROM workflow_onboarding s JOIN workflow_observations o ON o.onboarding_id=s.id
         WHERE s.tenant_id=? AND s.principal_id=? AND s.mailbox_id=? AND s.status='approved'
-        ORDER BY s.updated_at DESC LIMIT 1`,mailbox.tenant_id,this.principal.id,mailbox.id);
-      requireValue(sample,'PILOT_SAMPLE_NOT_FOUND');
-      const scope=JSON.parse(sample.scope_json),observation=JSON.parse(sample.observations_json);
-      requireValue(scope.folders.includes(path),'ANALYSIS_SCOPE_MISMATCH');
-      requireValue(observation.semantic?.status==='chatgpt_proposal','ANALYSIS_NOT_SUBMITTED');
-      pilotFacts=observation;
-      pilotMessages=observation.pilotMessages??[];
-      requireValue(pilotMessages.length<=50,'PILOT_SCOPE_EXCEEDED');
-      if(pilot)requireValue(scope.days<=30 && pilotMessages.every(m=>
-        m.reference?.folder==='INBOX'||m.reference?.folder===mailbox.sent_folder),'PILOT_SCOPE_EXCEEDED');
-      const earliest=this.now()-scope.days*86400000;
-      summaries.push(...pilotMessages.filter(m=>m.reference.folder===path &&
-        Date.parse(m.date)>=earliest && Date.parse(m.date)<=this.now()));
-      scanLimit=summaries.length;
-      olderUnscanned=JSON.parse(sample.coverage_json).some(x=>x.incomplete);
-    }else{
+        ORDER BY s.updated_at DESC LIMIT 1`,mailbox.tenant_id,this.principal.id,mailbox.id):null;
+      // Preserve the bounded legacy pilot's existing approved sample and its
+      // fixed numbers; the new daily-mail path does not depend on that sample.
+      if(pilot&&approvedSample){
+        const existing=await this.store.first(`SELECT id FROM workflow_lists WHERE tenant_id=?
+          AND principal_id=? AND mailbox_id=? AND folder=? AND active=1 AND expires_at>?
+          AND semantic_status='chatgpt_proposal' AND analysis_revision=0
+          AND semantic_context_status IN ('chatgpt_partial_sample','chatgpt_submitted_sample')
+          ORDER BY created_at DESC LIMIT 1`,mailbox.tenant_id,this.principal.id,mailbox.id,path,this.now());
+        if(existing)return this.current({listId:existing.id});
+      }
+      if(approvedSample){
+        const scope=JSON.parse(approvedSample.scope_json),observation=JSON.parse(approvedSample.observations_json);
+        if(scope.folders.includes(path)&&observation.semantic?.status==='chatgpt_proposal'){
+          pilotFacts=observation;
+          pilotMessages=observation.pilotMessages??[];
+          requireValue(pilotMessages.length<=50,'PILOT_SCOPE_EXCEEDED');
+          if(pilot)requireValue(scope.days<=30 && pilotMessages.every(m=>
+            m.reference?.folder==='INBOX'||m.reference?.folder===mailbox.sent_folder),'PILOT_SCOPE_EXCEEDED');
+          const earliest=this.now()-scope.days*86400000;
+          summaries.push(...pilotMessages.filter(m=>m.reference.folder===path &&
+            Date.parse(m.date)>=earliest && Date.parse(m.date)<=this.now()));
+          scanLimit=summaries.length;
+          olderUnscanned=JSON.parse(approvedSample.coverage_json).some(x=>x.incomplete);
+        }else approvedSample=null;
+      }
+    }
+    if(!approvedSample){
       do{
         const found=await provider.search({folder:path,limit:Math.min(pageSize,scanLimit-summaries.length),
+          ...(since?{since}:{}),
           ...(beforeUid?{beforeUid}:{})});
         requireValue(found.messages.length<=Math.min(pageSize,scanLimit-summaries.length),'MAIL_LIMIT_EXCEEDED');
         summaries.push(...found.messages);
@@ -149,7 +178,7 @@ export class Workflow {
         olderUnscanned=beforeUid!=null;
       }while(view==='priority'&&beforeUid&&summaries.length<scanLimit);
     }
-    const profileRow=view==='priority'?await this.store.first(`SELECT profile_json FROM workflow_profile_versions
+    const profileRow=view==='priority'&&!freshAnalysis?await this.store.first(`SELECT profile_json FROM workflow_profile_versions
       WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND active=1`,mailbox.tenant_id,this.principal.id,mailbox.id):null;
     const profile=profileRow?JSON.parse(profileRow.profile_json):null;
     const items = [], seenThreads=new Set();
@@ -159,9 +188,9 @@ export class Workflow {
     const analyzer=modelDriven?null:this.semanticAnalyzer??(this.env.FORPSI_ANALYSIS_API_KEY&&this.env.FORPSI_ANALYSIS_MODEL?
       input=>openAiEvidenceAnalyzer(input,this.env):null);
     const verifiedAliases=view==='priority'?await this.store.verifiedAliases(mailbox):[];
-    const detailCache=new Map();let semantic={status:'unavailable',findings:[],examined:0};
+    const detailCache=new Map();let semantic={status:modelDriven?'awaiting_chatgpt':'unavailable',findings:[],examined:0};
     let semanticContextStatus='not_analyzed';
-    if(modelDriven && view==='priority'){
+    if(approvedSample && view==='priority'){
       semantic=pilotFacts.semantic;
       semanticContextStatus=olderUnscanned?'chatgpt_partial_sample':'chatgpt_submitted_sample';
     }
@@ -265,6 +294,7 @@ export class Workflow {
         'Přímo adresováno; konkrétní požadavek je nutné ověřit.':'Neověřená priorita; zpráva není skrytá.';
       items.push({ reference: message.reference, threadKey: threadKey(detail), messageKey: messageKey(detail),
         sender, subject: message.subject ?? '', receivedAt: message.date ?? null,priority,reason,
+        attachmentCount:detail.attachments?.length??null,
         contentType:newsletter||keepNewsletter||semanticFinding?.kind==='newsletter'?'newsletter':'unclassified',
         semanticEvidence:modelDriven&&view==='priority'?chatgptPriority?{...chatgptPriority,
           findings:relatedFindings,contextStatus:semanticContextStatus}:null:
@@ -287,10 +317,11 @@ export class Workflow {
         olderUnscanned?1:0,now,now+30*86400000,summaries.length,scanLimit,semantic.examined??0,
         semantic.status,semanticContextStatus),
       ...visible.map((item,index)=>this.store.db.prepare(`INSERT INTO workflow_list_items
-        (list_id,number,reference_json,thread_key,message_key,sender,subject,received_at,priority,priority_reason,content_type,semantic_evidence_json)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+        (list_id,number,reference_json,thread_key,message_key,sender,subject,received_at,priority,priority_reason,content_type,semantic_evidence_json,attachment_count)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
         listId,index+1,JSON.stringify(item.reference),item.threadKey,item.messageKey,item.sender,item.subject,item.receivedAt,
-        item.priority,item.reason,item.contentType,item.semanticEvidence?JSON.stringify(item.semanticEvidence):null)),
+        item.priority,item.reason,item.contentType,item.semanticEvidence?JSON.stringify(item.semanticEvidence):null,
+        item.attachmentCount)),
     ];
     await this.store.db.batch(statements);
     return this.current({ listId });
@@ -303,6 +334,7 @@ export class Workflow {
       WHERE i.list_id=? ORDER BY i.number`,row.tenant_id,this.principal.id,row.mailbox_id,row.id);
     const items = raw.map(item => ({ number:item.number, reference:JSON.parse(item.reference_json),
       from:item.sender, subject:item.subject, receivedAt:item.received_at,
+      attachmentCount:item.attachment_count,
       priority:item.priority,priorityReason:item.priority_reason,contentType:item.content_type,
       semanticEvidence:item.semantic_evidence_json?JSON.parse(item.semantic_evidence_json):null,
       state:item.state==='snoozed' && item.due_date<=localDate(this.now(),item.time_zone) ? 'todo' : item.state??'todo',
@@ -310,14 +342,133 @@ export class Workflow {
       newerReply:item.latest_inbound_key!=null && item.latest_inbound_key!==item.message_key,
       newerReplyReference:item.latest_inbound_key!=null && item.latest_inbound_key!==item.message_key &&
         item.latest_inbound_reference_json?JSON.parse(item.latest_inbound_reference_json):null }));
+    const savedDraft=await this.store.first(`SELECT id,revision,kind,item_number FROM workflow_drafts
+      WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND list_id=?
+      ORDER BY updated_at DESC LIMIT 1`,row.tenant_id,this.principal.id,row.mailbox_id,row.id);
+    const savedProfile=await this.store.first(`SELECT profile_json FROM workflow_profile_versions
+      WHERE tenant_id=? AND principal_id=? AND mailbox_id=? AND active=1`,
+    row.tenant_id,this.principal.id,row.mailbox_id);
+    const replyStyle=savedProfile?JSON.parse(savedProfile.profile_json).replyStyle?.mode??null:null;
     return { listId:row.id, mailboxId:row.mailbox_id, folder:row.folder, view:row.view,
       knownRemainingPriority:row.known_remaining_priority,olderUnscanned:row.older_unscanned===1,
       scannedCount:row.scanned_count,scanLimit:row.scan_limit,displayedCount:items.length,
       semanticExaminedCount:row.semantic_examined_count,semanticStatus:row.semantic_status,
       semanticContextStatus:row.semantic_context_status,
-      position:row.position,
-      active:row.active===1, expiresAt:row.expires_at, items, pending:items.filter(i=>i.state==='todo').length,
+      position:row.position,analysisRevision:row.analysis_revision??0,
+      active:row.active===1, expiresAt:row.expires_at, replyStyle, items, draft:savedDraft?{
+        id:savedDraft.id,revision:savedDraft.revision,kind:savedDraft.kind,
+        itemNumber:savedDraft.item_number}:null,pending:items.filter(i=>i.state==='todo').length,
       untrustedContent:true };
+  }
+  async readBatch({listId,offset=0,limit=5}){
+    const {row,mailbox}=await this.ownedList(listId);
+    const items=await this.store.rows(`SELECT * FROM workflow_list_items WHERE list_id=?
+      ORDER BY number LIMIT ? OFFSET ?`,row.id,limit,offset);
+    const provider=this.providerFactory(this.env,mailbox),messages=[];
+    for(const item of items){
+      const reference=JSON.parse(item.reference_json),detail=await provider.read(reference);
+      requireValue(messageKey(detail)===item.message_key,'WORKLIST_STALE');
+      messages.push({number:item.number,reference,messageKey:item.message_key,
+        threadKey:item.thread_key,from:detail.from,to:detail.to??[],cc:detail.cc??[],
+        subject:detail.subject,date:detail.date,text:authoredText(detail.text??''),
+        textExcerptLimit:4000,truncated:!!detail.truncated||authoredText(detail.text??'').length<
+          (detail.text??'').length,attachments:detail.attachments??[],untrustedContent:true});
+    }
+    const count=(await this.store.first('SELECT COUNT(*) AS n FROM workflow_list_items WHERE list_id=?',row.id)).n;
+    return {listId:row.id,mailboxId:row.mailbox_id,offset,count,messages,
+      nextOffset:offset+messages.length<count?offset+messages.length:null,
+      scannedCount:row.scanned_count,olderUnscanned:row.older_unscanned===1,
+      coverage:'Only the saved numbered list was read; older unlisted mail may remain unexamined.',
+      untrustedContent:true};
+  }
+  async thread({mailboxId,message}){
+    const mailbox=await this.access(mailboxId),provider=this.providerFactory(this.env,mailbox);
+    const base=await provider.read(message),root=threadKey(base),baseId=messageKey(base);
+    const paths=[...new Set(['INBOX',mailbox.sent_folder].filter(Boolean))];
+    const summaries=[],coverage={sentFolder:mailbox.sent_folder??null,folders:[]};
+    for(const path of paths){
+      try{
+        const page=await provider.search({folder:path,limit:50});
+        summaries.push(...page.messages);
+        coverage.folders.push({path,examined:page.messages.length,
+          olderUnscanned:page.nextBeforeUid!=null});
+      }catch{
+        coverage.folders.push({path,unavailable:true});
+      }
+    }
+    const knownIds=new Set([root,baseId]),selected=new Map([[baseId,base]]);
+    for(let pass=0;pass<2&&selected.size<20;pass++){
+      for(const summary of summaries){
+        const key=messageKey(summary);
+        if(selected.has(key)||selected.size>=20)continue;
+        const related=[key,summary.inReplyTo,...(summary.references??[])]
+          .some(value=>knownIds.has(normId(value)));
+        if(!related)continue;
+        try{
+          const detail=await provider.read(summary.reference);
+          if(threadKey(detail)!==root && ![detail.inReplyTo,...(detail.references??[])]
+            .some(value=>knownIds.has(normId(value))))continue;
+          selected.set(messageKey(detail),detail);knownIds.add(messageKey(detail));
+        }catch{coverage.readError=true;}
+      }
+    }
+    return {mailboxId,threadKey:root,messages:[...selected.values()].sort((a,b)=>
+      String(a.date??'').localeCompare(String(b.date??''))).map(detail=>({
+      reference:detail.reference,messageKey:messageKey(detail),from:detail.from,to:detail.to??[],
+      cc:detail.cc??[],date:detail.date,subject:detail.subject,text:detail.text,
+      truncated:!!detail.truncated,attachments:detail.attachments??[],untrustedContent:true})),
+    coverage:{...coverage,complete:false,note:'Only a bounded recent window in Inbox and Sent was searched.'},
+    untrustedContent:true};
+  }
+  async submitViewAnalysis({listId,expectedRevision,coverageComplete=false,evaluations}){
+    const {row,mailbox}=await this.ownedList(listId);
+    requireValue(row.analysis_revision===expectedRevision,'ANALYSIS_VERSION_CONFLICT');
+    const items=await this.store.rows('SELECT * FROM workflow_list_items WHERE list_id=? ORDER BY number',row.id);
+    requireValue(!coverageComplete||evaluations.length===items.length,'ANALYSIS_COVERAGE_MISMATCH');
+    const byNumber=new Map(items.map(item=>[item.number,item])),seen=new Set();
+    const provider=this.providerFactory(this.env,mailbox);
+    for(const evaluation of evaluations){
+      requireValue(!seen.has(evaluation.number),'ANALYSIS_DUPLICATE_NUMBER');
+      seen.add(evaluation.number);
+      const item=byNumber.get(evaluation.number);
+      requireValue(item,'WORKLIST_NUMBER_NOT_FOUND');
+      const selected=await provider.read(JSON.parse(item.reference_json));
+      requireValue(messageKey(selected)===item.message_key,'WORKLIST_STALE');
+      let evidence=selected;
+      if(evaluation.evidenceReference){
+        requireValue(['INBOX',mailbox.sent_folder].includes(evaluation.evidenceReference.folder),
+          'ANALYSIS_EVIDENCE_SCOPE');
+        evidence=await provider.read(evaluation.evidenceReference);
+        const related=threadKey(evidence)===item.thread_key||
+          [evidence.inReplyTo,...(evidence.references??[])].some(value=>
+            [item.message_key,item.thread_key].includes(normId(value)));
+        requireValue(related,'ANALYSIS_EVIDENCE_UNRELATED');
+      }
+      requireValue(authoredText(evidence.text??'').includes(evaluation.quote),
+        'ANALYSIS_EVIDENCE_MISMATCH');
+    }
+    const nonce=crypto.randomUUID();
+    const statements=[
+      this.store.db.prepare(`UPDATE workflow_lists SET analysis_revision=analysis_revision+1,
+        analysis_nonce=?,semantic_status='chatgpt_proposal',semantic_examined_count=?,
+        semantic_context_status=? WHERE id=? AND tenant_id=? AND principal_id=? AND analysis_revision=?`)
+        .bind(nonce,evaluations.length,coverageComplete?'chatgpt_list_complete':'chatgpt_list_partial',
+          row.id,row.tenant_id,this.principal.id,expectedRevision),
+      this.store.db.prepare(`UPDATE workflow_list_items SET priority='review',priority_reason=?,
+        semantic_evidence_json=NULL WHERE list_id=? AND EXISTS
+        (SELECT 1 FROM workflow_lists WHERE id=? AND analysis_nonce=?)`)
+        .bind('Tato zpráva zatím nebyla v aktuálním přehledu posouzena.',row.id,row.id,nonce),
+      ...evaluations.map(e=>this.store.db.prepare(`UPDATE workflow_list_items SET priority=?,
+        priority_reason=?,semantic_evidence_json=? WHERE list_id=? AND number=? AND EXISTS
+        (SELECT 1 FROM workflow_lists WHERE id=? AND analysis_nonce=?)`).bind(
+        e.priority,e.reason,JSON.stringify({source:'chatgpt_current_view',quote:e.quote,
+          reference:e.evidenceReference??JSON.parse(byNumber.get(e.number).reference_json)}),
+        row.id,e.number,row.id,nonce)),
+    ];
+    await this.store.db.batch(statements);
+    const updated=await this.store.first('SELECT analysis_revision,analysis_nonce FROM workflow_lists WHERE id=?',row.id);
+    requireValue(updated.analysis_nonce===nonce,'ANALYSIS_VERSION_CONFLICT');
+    return this.current({listId:row.id});
   }
   async item(row, number) {
     const item = await this.store.first('SELECT * FROM workflow_list_items WHERE list_id=? AND number=?',row.id,number);
@@ -363,6 +514,23 @@ export class Workflow {
       this.principal.id,row.mailbox_id,row.id,item.number,kind,ciphertext,now,now);
     return { draftId, kind, recipient:recipient??null, sendable:false, excludedAttachments:message.excludedAttachments.length };
   }
+  async draftReply({listId,number,text,signatureMode='short'}){
+    const {row,mailbox}=await this.ownedList(listId),item=await this.item(row,number);
+    const source=await this.providerFactory(this.env,mailbox).read(JSON.parse(item.reference_json));
+    requireValue(messageKey(source)===item.message_key,'WORKLIST_STALE');
+    const recipient=source.from?.[0]?.address;
+    requireValue(z.email().safeParse(recipient).success,'REPLY_RECIPIENT_UNKNOWN');
+    return {listId:row.id,number,...await this.saveDraft(row,item,'reply',recipient,source,
+      [],text,signatureMode)};
+  }
+  async draftForward({listId,number,recipient,text,signatureMode='short'}){
+    const {row,mailbox}=await this.ownedList(listId),item=await this.item(row,number);
+    requireValue(z.email().safeParse(recipient).success,'RECIPIENT_NOT_APPROVED');
+    const source=await this.providerFactory(this.env,mailbox).read(JSON.parse(item.reference_json));
+    requireValue(messageKey(source)===item.message_key,'WORKLIST_STALE');
+    return {listId:row.id,number,...await this.saveDraft(row,item,'forward',recipient,source,
+      [],text,signatureMode)};
+  }
   async command({ listId, command, timeZone:zone='Europe/Prague' }) {
     const { row, mailbox }=await this.ownedList(listId);
     validZone(zone);
@@ -398,11 +566,15 @@ export class Workflow {
     }
     return { listId:row.id,results,allCompleted:results.every(r=>r.status==='completed'||r.status==='prepared') };
   }
-  async review({listId,action,until,timeZone:zone='Europe/Prague'}) {
+  async review({listId,action,number,until,timeZone:zone='Europe/Prague'}) {
     const {row,mailbox}=await this.ownedList(listId);
     if(action==='end') {await this.store.run('UPDATE workflow_lists SET active=0 WHERE id=?',row.id);return {listId:row.id,ended:true};}
     const count=(await this.store.first('SELECT COUNT(*) AS n FROM workflow_list_items WHERE list_id=?',row.id)).n;
-    let position=action==='start'?1:action==='next'?Math.min(count+1,row.position+1):action==='previous'?Math.max(1,row.position-1):row.position;
+    if(action==='open')requireValue(Number.isInteger(number)&&number>=1&&number<=count,
+      'WORKLIST_NUMBER_NOT_FOUND');
+    let position=action==='start'?1:action==='open'?number:
+      action==='next'?Math.min(count+1,row.position+1):
+      action==='previous'?Math.max(1,row.position-1):row.position;
     if(position!==row.position)await this.store.run('UPDATE workflow_lists SET position=? WHERE id=?',position,row.id);
     if(position>count)return {listId:row.id,position,finished:true};
     const item=await this.item(row,position),reference=JSON.parse(item.reference_json);
