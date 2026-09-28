@@ -24,7 +24,8 @@ export async function handleAnalysisProxy({request,env,fetcher=fetch}){
     const source=await request.text();
     if(source.length>12000)throw Error();
     body=JSON.parse(source);
-    if(body.model!=='gpt-5-mini'||body.store!==false||body.max_output_tokens!==1600||
+    if(body.model!=='gpt-5-mini'||body.store!==false||body.max_output_tokens!==2400||
+      body.reasoning?.effort!=='minimal'||
       body.input?.length!==2||body.input[0]?.role!=='system'||
       body.input[1]?.role!=='user'||body.text?.format?.type!=='json_schema'||
       body.text.format.name!=='mail_brain_analysis'||body.text.format.strict!==true)

@@ -54,8 +54,12 @@ nasazení pilotu pro čtení a 90denní analýzu uvedené schránky.
    nedoložené případy zůstávají „K ověření“. První produkční průchod této
    verze narazil na časový limit Pages po dvou modelových pokusech; D1 zůstala
    bez doložené klasifikace a checkpoint Doručených se posunul o dvě zprávy.
-   Navazující diagnostická oprava omezuje jeden požadavek na jedno modelové
-   volání a ukládá pouze bezpečný chybový kód. Příčinu je nutné ověřit živě.
+   Navazující diagnostická oprava omezila jeden požadavek na jedno modelové
+   volání a uložila pouze bezpečný chybový kód. Živý průchod doložil
+   `MODEL_ANALYSIS_INCOMPLETE`: výstupní limit modelu nestačil. Zvyšujeme jej
+   a snižujeme úsilí při odvozování; výsledek klasifikace čeká na ověření.
+   V Odeslaných je současně zpráva nad limitem 2 MiB. Synchronizace ji nově
+   přeskočí s trvale neúplným pokrytím a pokračuje ke starším zprávám.
 5. Zbývá porovnat TEĎ a osm dotazů z produktového zadání s ručně označeným vzorkem
    skutečné pošty. Každý souhrn, termín a částku kontrolovat proti zdroji.
 6. Po nasazení: ověřit podle `PŘÍRUČKA.md` a reálný audit. Zapnutí dalších schránek

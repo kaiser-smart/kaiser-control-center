@@ -266,6 +266,42 @@ test('failed message resumes from the last persisted UID checkpoint',async()=>{
   assert.equal(messages.length,3);
 });
 
+test('oversized sent message is skipped without claiming complete coverage',async()=>{
+  const {brain,f,provider}=setup([item(10,{folder:'Sent',from:'alice@example.com'}),
+    item(11,{folder:'Sent',from:'alice@example.com'}),
+    item(12,{folder:'Sent',from:'alice@example.com'})]);
+  const originalRead=provider.read;
+  provider.read=async ref=>{
+    if(ref.folder==='Sent'&&ref.uid===11)throw Error('MESSAGE_TOO_LARGE');
+    return originalRead(ref);
+  };
+  await brain.consent({mailboxId:'mail-a'});
+  const first=await brain.sync({mailboxId:'mail-a'});
+  assert.equal(first.complete,false);
+  assert.equal(first.folders[1].status,'partial');
+  assert.equal(first.folders[1].errorCode,'MESSAGE_TOO_LARGE');
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM brain_messages')).n,2);
+  assert.equal((await f.store.first("SELECT error_code FROM brain_sync_cursors WHERE folder='Sent'"))
+    .error_code,'MESSAGE_TOO_LARGE');
+  await brain.sync({mailboxId:'mail-a'});
+  assert.equal((await brain.attention({})).coverageComplete,false);
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM brain_messages')).n,2);
+});
+
+test('oversized message cannot bypass a grant revoked during provider read',async()=>{
+  const {brain,f,provider}=setup([item(10,{folder:'Sent',from:'alice@example.com'})]);
+  provider.read=async()=>{
+    await f.store.run("UPDATE grants SET revoked=1 WHERE principal_id='alice' AND mailbox_id='mail-a' AND action='read'");
+    throw Error('MESSAGE_TOO_LARGE');
+  };
+  await brain.consent({mailboxId:'mail-a'});
+  const result=await brain.sync({mailboxId:'mail-a'});
+  assert.equal(result.complete,false);
+  assert.equal(result.folders[1].errorCode,'ACCESS_DENIED');
+  assert.equal((await f.store.first("SELECT next_before_uid FROM brain_sync_cursors WHERE folder='Sent'"))
+    .next_before_uid,null);
+});
+
 test('an email cannot close its own case through model classification',async()=>{
   const {f,provider}=setup([item(10)]);
   const brain=new MailBrain({store:f.store,principal:f.principal,providerFactory:()=>provider,
