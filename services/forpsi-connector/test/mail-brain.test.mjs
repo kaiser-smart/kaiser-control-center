@@ -167,6 +167,61 @@ test('unverified analysis stays visible and incomplete sync never claims quiet i
   assert.equal((await brain.attention({})).coverageComplete,false);
 });
 
+test('read-only sync rechecks earlier unverified cases without overriding manual decisions',async()=>{
+  const {f,provider}=setup([item(10),item(11)]);
+  f.env.FORPSI_ANALYSIS_MODEL='gpt-5-mini';
+  const brain=new MailBrain({store:f.store,principal:f.principal,providerFactory:()=>provider,
+    env:f.env,now:f.now,analyzer:()=>null});
+  await brain.consent({mailboxId:'mail-a'});
+  await brain.sync({mailboxId:'mail-a'});
+  assert.equal((await brain.attention({})).counts.review,2);
+  const first=(await brain.attention({})).cases[0];
+  await brain.action({caseId:first.id,revision:first.revision,action:'waiting'});
+  brain.analyzer=()=>({state:'todo',category:'request',reason:'Dodavatel žádá odpověď.',
+    quote:'Prosím o odpověď do pátku.',nextAction:'Odpovědět',commitments:[]});
+  const result=await brain.sync({mailboxId:'mail-a'});
+  assert.equal(result.reanalysis.verified,1);
+  const view=await brain.attention({});
+  assert.equal(view.counts.review,1);
+  assert.equal(view.counts.todo,1);
+  assert.equal((await brain.getCase({caseId:first.id})).case.state,'waiting');
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM brain_messages')).n,2);
+});
+
+test('failed evidence does not starve other pending cases',async()=>{
+  const {f,provider}=setup([item(10),item(11),item(12)]);
+  f.env.FORPSI_ANALYSIS_MODEL='gpt-5-mini';
+  const brain=new MailBrain({store:f.store,principal:f.principal,providerFactory:()=>provider,
+    env:f.env,now:f.now,analyzer:()=>null});
+  await brain.consent({mailboxId:'mail-a'});
+  await brain.sync({mailboxId:'mail-a'});
+  brain.analyzer=({message})=>message.reference.uid===10?{
+    state:'todo',category:'request',reason:'Odpověď je požadována.',
+    quote:'Prosím o odpověď do pátku.',nextAction:'Odpovědět',commitments:[]
+  }:{state:'todo',quote:'Chybějící citace'};
+  await brain.sync({mailboxId:'mail-a'});
+  assert.equal((await brain.attention({})).counts.review,3);
+  const second=await brain.sync({mailboxId:'mail-a'});
+  assert.equal(second.reanalysis.verified,1);
+  assert.equal((await brain.attention({})).counts.review,2);
+});
+
+test('revoked read grant during reanalysis cannot update a case',async()=>{
+  const {f,provider}=setup([item(10)]);
+  f.env.FORPSI_ANALYSIS_MODEL='gpt-5-mini';
+  const brain=new MailBrain({store:f.store,principal:f.principal,providerFactory:()=>provider,
+    env:f.env,now:f.now,analyzer:()=>null});
+  await brain.consent({mailboxId:'mail-a'});await brain.sync({mailboxId:'mail-a'});
+  brain.analyzer=async()=>{
+    await f.store.run("UPDATE grants SET revoked=1 WHERE principal_id='alice' AND mailbox_id='mail-a' AND action='read'");
+    return {state:'todo',category:'request',reason:'Odpověď je požadována.',
+      quote:'Prosím o odpověď do pátku.',nextAction:'Odpovědět',commitments:[]};
+  };
+  await assert.rejects(brain.sync({mailboxId:'mail-a'}),/ACCESS_DENIED/);
+  assert.equal((await f.store.first('SELECT analysis_status FROM brain_cases')).analysis_status,
+    'unreviewed');
+});
+
 test('failed message resumes from the last persisted UID checkpoint',async()=>{
   const {brain,f,provider,messages}=setup([item(10),item(11),item(12)]);
   const originalRead=provider.read;
