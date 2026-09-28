@@ -31,6 +31,8 @@ const pragueStart=date=>{const utc=Date.parse(`${date}T00:00:00Z`);
   return utc-(Number(value.hour)*60+Number(value.minute))*60000;};
 const failureCode = error => /^[A-Z][A-Z0-9_]{2,70}$/.test(error?.message ?? '')
   ? error.message : 'PROVIDER_UNAVAILABLE';
+const readBrainMessage=(provider,reference)=>typeof provider.readForBrain==='function'
+  ?provider.readForBrain(reference):provider.read(reference);
 const explicitDate=quote=>{
   const iso=quote.match(/\b(\d{4}-\d{2}-\d{2})\b/u)?.[1];
   const cz=quote.match(/\b(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\b/u);
@@ -377,7 +379,7 @@ export class MailBrain {
         catch{/* Preserve the existing sync outcome if only the diagnostic write fails. */}
       };
       let message;
-      try{message=await provider.read(JSON.parse(row.reference_json));}
+      try{message=await readBrainMessage(provider,JSON.parse(row.reference_json));}
       catch{await recordReason('SOURCE_UNAVAILABLE');continue;}
       const sourceHash=hash(JSON.stringify([message.subject??'',message.from,
         String(message.text??'').slice(0,100000)]));
@@ -462,7 +464,7 @@ export class MailBrain {
           try {
             await this.access(mailbox.id);
             await this.activeConsent(mailbox);
-            const detail=await provider.read(summary.reference);
+            const detail=await readBrainMessage(provider,summary.reference);
             await this.access(mailbox.id);
             await this.activeConsent(mailbox);
             await this.indexMessage(mailbox,detail,folder,provider,consent.sent_folder);

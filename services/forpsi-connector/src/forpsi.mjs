@@ -8,6 +8,10 @@ import { requireValue } from './errors.mjs';
 import { smtpSocketFactory } from './smtp-socket.mjs';
 
 const MAX_MESSAGE = 2 * 1024 * 1024;
+const MAX_BRAIN_TEXT = 512 * 1024;
+const MAX_BRAIN_MIME_NODES = 200;
+const MAX_BRAIN_MIME_DEPTH = 20;
+const MAX_BRAIN_HEADERS = 16 * 1024;
 const publicEnvelope = item => ({ uid: item.uid, subject: item.envelope?.subject ?? '',
   from: (item.envelope?.from ?? []).map(a => ({ name: a.name ?? '', address: a.address ?? '' })),
   to: (item.envelope?.to ?? []).map(a => ({ name: a.name ?? '', address: a.address ?? '' })),
@@ -15,6 +19,66 @@ const publicEnvelope = item => ({ uid: item.uid, subject: item.envelope?.subject
   date: item.envelope?.date?.toISOString() ?? null, size: item.size ?? null,
   flags: [...(item.flags ?? [])], messageId: item.envelope?.messageId ?? null,
   inReplyTo: item.envelope?.inReplyTo ?? null });
+
+function brainMimeParts(root) {
+  const plain=[],html=[],attachments=[],seen=new Set();
+  let count=0;
+  const visit=(node,depth,isRoot=false)=>{
+    requireValue(node&&typeof node==='object'&&++count<=MAX_BRAIN_MIME_NODES&&
+      depth<=MAX_BRAIN_MIME_DEPTH,'MIME_STRUCTURE_INVALID');
+    const type=typeof node.type==='string'?node.type.toLowerCase():'';
+    requireValue(type.length<=100&&/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(type),
+      'MIME_STRUCTURE_INVALID');
+    if(type.startsWith('multipart/')){
+      requireValue(Array.isArray(node.childNodes)&&node.childNodes.length>0,
+        'MIME_STRUCTURE_INVALID');
+      for(const child of node.childNodes)visit(child,depth+1);
+      return;
+    }
+    requireValue((!node.childNodes?.length||type==='message/rfc822')&&
+      Number.isSafeInteger(node.size)&&node.size>=0,
+      'MIME_STRUCTURE_INVALID');
+    const part=node.part??(isRoot?'1':null);
+    requireValue(typeof part==='string'&&/^\d+(?:\.\d+)*$/.test(part)&&!seen.has(part),
+      'MIME_STRUCTURE_INVALID');
+    seen.add(part);
+    const filename=String(node.dispositionParameters?.filename??node.parameters?.name??'').slice(0,255);
+    const disposition=String(node.disposition??'').toLowerCase();
+    const candidate={part,type,size:node.size,
+      encoding:String(node.encoding??'').toLowerCase(),
+      charset:String(node.parameters?.charset??'').toLowerCase(),
+      flowed:String(node.parameters?.format??'').toLowerCase()==='flowed'};
+    if(!filename&&disposition!=='attachment'&&(type==='text/plain'||type==='text/html')){
+      (type==='text/plain'?plain:html).push(candidate);
+    } else {
+      attachments.push({filename,contentType:type,size:node.size});
+    }
+  };
+  visit(root,0,true);
+  return {textParts:plain.length?plain:html,attachments,htmlOnly:plain.length===0};
+}
+
+async function brainTextPart(client,uid,part,remaining) {
+  requireValue(part.size<=remaining,'MESSAGE_TOO_LARGE');
+  const downloaded=await client.download(String(uid),part.part,{uid:true,maxBytes:remaining+1});
+  requireValue(downloaded?.content,'MIME_PART_UNAVAILABLE');
+  requireValue(!downloaded.meta?.contentType||
+    downloaded.meta.contentType.toLowerCase()===part.type,'MIME_PART_MISMATCH');
+  requireValue(downloaded.meta?.disposition!=='attachment'&&!downloaded.meta?.filename,
+    'MIME_PART_MISMATCH');
+  const chunks=[];
+  let size=0;
+  for await(const chunk of downloaded.content){
+    size+=chunk.length;
+    requireValue(size<=remaining,'MESSAGE_TOO_LARGE');
+    chunks.push(chunk);
+  }
+  requireValue(size>0||part.size===0,'MIME_PART_UNAVAILABLE');
+  if(['','7bit','8bit','binary'].includes(part.encoding)&&!part.flowed&&
+    ['', 'utf-8','us-ascii'].includes(part.charset))
+    requireValue(size===part.size,'MIME_PART_INCOMPLETE');
+  return Buffer.concat(chunks,size);
+}
 
 export class Forpsi {
   constructor(env, mailbox, dependencies = {}) {
@@ -105,6 +169,67 @@ export class Forpsi {
         references: Array.isArray(parsed.references) ? parsed.references : parsed.references ? [parsed.references] : [],
         attachments: parsed.attachments.map(a => ({ filename: a.filename ?? '',
           contentType: a.contentType, size: a.size })) };
+    }));
+  }
+  async readForBrain(ref) {
+    return this.imap(client=>this.locked(client,ref,true,async()=>{
+      const initial=await client.fetchOne(String(ref.uid),
+        {envelope:true,flags:true,size:true},{uid:true});
+      requireValue(initial,'MESSAGE_NOT_FOUND');
+      requireValue(Number.isSafeInteger(initial.size)&&initial.size>=0,'MIME_STRUCTURE_INVALID');
+      if(initial.size<=MAX_MESSAGE){
+        // The ordinary reader remains the source of truth for small messages.
+        // Read under this lock so another client cannot change the selected folder.
+        const {content}=await client.download(String(ref.uid),undefined,
+          {uid:true,maxBytes:MAX_MESSAGE+1});
+        const chunks=[];let size=0;
+        for await(const chunk of content){size+=chunk.length;
+          requireValue(size<=MAX_MESSAGE,'MESSAGE_TOO_LARGE');chunks.push(chunk);}
+        const parsed=await simpleParser(Buffer.concat(chunks),{skipHtmlToText:false,
+          skipTextToHtml:true,skipImageLinks:true});
+        return {...publicEnvelope(initial),reference:ref,text:(parsed.text??'').slice(0,100000),
+          truncated:(parsed.text?.length??0)>100000,untrustedContent:true,
+          messageId:parsed.messageId??initial.envelope?.messageId??null,
+          inReplyTo:parsed.inReplyTo??initial.envelope?.inReplyTo??null,
+          references:Array.isArray(parsed.references)?parsed.references:
+            parsed.references?[parsed.references]:[],
+          attachments:parsed.attachments.map(a=>({filename:a.filename??'',
+            contentType:a.contentType,size:a.size}))};
+      }
+      const item=await client.fetchOne(String(ref.uid),
+        {envelope:true,flags:true,size:true,bodyStructure:true,headers:['References']},
+        {uid:true});
+      requireValue(item,'MESSAGE_NOT_FOUND');
+      requireValue(item.uid===initial.uid&&item.size===initial.size&&
+        item.envelope?.messageId===initial.envelope?.messageId,'SOURCE_CHANGED_DURING_READ');
+      const {textParts,attachments,htmlOnly}=brainMimeParts(item.bodyStructure);
+      requireValue(textParts.length>0,'MIME_TEXT_UNAVAILABLE');
+      requireValue(!item.headers||Buffer.byteLength(item.headers)<=MAX_BRAIN_HEADERS,
+        'MIME_HEADERS_TOO_LARGE');
+      const chunks=[];let size=0;
+      for(const part of textParts){
+        const content=await brainTextPart(client,ref.uid,part,MAX_BRAIN_TEXT-size);
+        size+=content.length;chunks.push(content);
+      }
+      let decoded;
+      try{decoded=new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks,size));}
+      catch{throw new Error('MIME_TEXT_UNREADABLE');}
+      let text=decoded;
+      if(htmlOnly){
+        const parsed=await simpleParser(Buffer.concat([
+          Buffer.from('MIME-Version: 1.0\r\nContent-Type: text/html; charset=utf-8\r\n\r\n'),
+          Buffer.from(decoded)]),{skipHtmlToText:false,skipTextToHtml:true,skipImageLinks:true});
+        requireValue(typeof parsed.text==='string','MIME_TEXT_UNAVAILABLE');
+        text=parsed.text;
+      }
+      requireValue(Buffer.byteLength(text,'utf8')<=MAX_BRAIN_TEXT,'MESSAGE_TOO_LARGE');
+      const headers=item.headers?.toString('utf8').replace(/\r?\n[\t ]+/g,' ')??'';
+      const refs=headers.match(/^References:\s*([^\r\n]*)/im)?.[1]
+        ?.match(/<[^<>\s]{1,500}>/g)??[];
+      return {...publicEnvelope(item),reference:ref,text:text.slice(0,100000),
+        truncated:text.length>100000,untrustedContent:true,
+        messageId:item.envelope?.messageId??null,inReplyTo:item.envelope?.inReplyTo??null,
+        references:refs,attachments};
     }));
   }
   inspectPdfAttachments(ref) {

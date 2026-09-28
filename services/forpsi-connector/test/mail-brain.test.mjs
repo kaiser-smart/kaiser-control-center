@@ -316,6 +316,33 @@ test('oversized sent message is skipped without claiming complete coverage',asyn
   assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM brain_messages')).n,2);
 });
 
+test('Mail Brain sync uses the selective reader without invoking the ordinary raw reader',async()=>{
+  const large=item(10,{folder:'Sent',from:'alice@example.com'});
+  large.size=3*1024*1024;
+  const {brain,f,provider}=setup([large]);
+  const originalRead=provider.read;
+  let selectiveReads=0;
+  provider.readForBrain=async ref=>{selectiveReads++;return originalRead(ref);};
+  provider.read=async()=>{throw Error('Raw reader must not handle a large message');};
+  await brain.consent({mailboxId:'mail-a'});
+  const result=await brain.sync({mailboxId:'mail-a'});
+  assert.equal(result.complete,true);
+  assert.equal(selectiveReads,1);
+  assert.equal((await f.store.first('SELECT size_bytes FROM brain_messages')).size_bytes,large.size);
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+});
+
+test('malformed MIME in selective reader cannot produce complete coverage',async()=>{
+  const {brain,f,provider}=setup([item(10,{folder:'Sent',from:'alice@example.com'})]);
+  provider.readForBrain=async()=>{throw Error('MIME_STRUCTURE_INVALID');};
+  await brain.consent({mailboxId:'mail-a'});
+  const result=await brain.sync({mailboxId:'mail-a'});
+  assert.equal(result.complete,false);
+  assert.equal(result.folders[1].errorCode,'MIME_STRUCTURE_INVALID');
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM brain_messages')).n,0);
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+});
+
 test('oversized message cannot bypass a grant revoked during provider read',async()=>{
   const {brain,f,provider}=setup([item(10,{folder:'Sent',from:'alice@example.com'})]);
   provider.read=async()=>{
