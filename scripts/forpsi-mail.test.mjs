@@ -4,6 +4,7 @@ import { fixture,ref } from '../services/forpsi-connector/test/fixtures.mjs';
 import { executeAdmin } from '../services/forpsi-connector/src/admin.mjs';
 import { createWorker } from '../services/forpsi-connector/src/worker.mjs';
 import { forwardForpsiMail } from '../functions/api/forpsi/mail.js';
+import { onRequestPost as forwardForpsiBrain } from '../functions/api/forpsi/brain.js';
 import { createSessionCookie } from '../functions/_lib/auth.js';
 import { mailSearchPayload,mountForpsiMail } from '../src/components/ForpsiMailPanel.js';
 
@@ -112,4 +113,19 @@ test('mail panel offers a preserved-original copy when REPLACE is unavailable',a
   assert.match(root.innerHTML,/Vytvořit upravenou kopii/);
   assert.ok(!root.innerHTML.includes('data-mail-action="edit-draft"'));
   mountForpsiMail({querySelector:()=>null},{apiJson:api,owner:null});
+});
+
+test('Mail Brain consent crosses the SO.ai session and service binding without reading mail',async()=>{
+  const f=await setup();f.workerEnv.MAIL_BRAIN_ENABLED='true';
+  const command={operation:'consent',payload:{mailboxId:'mail-a',lookbackDays:90}};
+  const response=await forwardForpsiBrain({env:f.env,request:f.request(command)});
+  assert.equal(response.status,200);
+  assert.equal((await response.json()).data.mailboxId,'mail-a');
+  assert.equal(f.calls.some(([kind])=>kind==='read'||kind==='send'),false);
+  const attention=await forwardForpsiBrain({env:f.env,
+    request:f.request({operation:'attention',payload:{mailboxId:'mail-a'}})});
+  assert.equal(attention.status,200);
+  assert.equal((await attention.json()).data.mailboxes[0].coverage,'partial');
+  assert.equal((await forwardForpsiBrain({env:f.env,request:f.request(command,{origin:'https://evil.test'})})).status,403);
+  assert.equal((await forwardForpsiBrain({env:f.env,request:f.request({...command,actorId:'alice'})})).status,400);
 });

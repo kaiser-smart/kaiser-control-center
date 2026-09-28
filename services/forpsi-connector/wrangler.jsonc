@@ -12,6 +12,8 @@
     "CONNECTOR_ENABLED": "false",
     "SOAI_DRAFTS_ENABLED": "false",
     "WORKFLOW_SYNC_ENABLED": "false",
+    "MAIL_BRAIN_ENABLED": "false",
+    "MAIL_BRAIN_SCHEDULED_SYNC_ENABLED": "false",
     "SEND_ENABLED": "false",
     "FORPSI_ANALYSIS_MODEL": "gpt-5-mini"
   },

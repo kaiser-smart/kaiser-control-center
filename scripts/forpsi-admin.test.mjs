@@ -70,6 +70,19 @@ test('oversized payload is rejected before Worker and upstream errors do not lea
   const r=await forwardForpsiAdmin({env,request:await req(env,admin)});assert.ok(!(await r.text()).includes('secret-value-from-provider'));
 });
 
+test('company Mail Brain rule requires SO.ai administrator and is saved inactive or active exactly',async()=>{
+  const {env,f}=setup();f.env.MAIL_BRAIN_ENABLED='true';
+  const body={operation:'brain_rule_save',payload:{mailboxId:'mail-a',category:'invoice',
+    action:'prioritize',enabled:true}};
+  assert.equal((await forwardForpsiAdmin({env,request:await req(env,user,body)})).status,403);
+  const response=await forwardForpsiAdmin({env,request:await req(env,admin,body)});
+  assert.equal(response.status,200);
+  const saved=await f.store.first(`SELECT source,enabled,category FROM brain_rules WHERE tenant_id=?`,
+    'tenant-a');
+  assert.equal(saved.source,'company');assert.equal(saved.enabled,1);
+  assert.equal(saved.category,'invoice');
+});
+
 test('SO.ai exposes resource discovery through existing session, origin and tenant boundaries',async()=>{
   const {env,f}=setup();f.env.CONNECTOR_ENABLED='false';
   const body={operation:'resources',payload:{id:'mail-a',revision:1}};

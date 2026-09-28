@@ -7,6 +7,7 @@ const preview=(row,mailbox,payload)=>({
   proposalId:row.id,version:row.version,state:row.state,
   from:mailbox.address,to:payload.message.to,cc:payload.message.cc,
   bcc:payload.message.bcc,subject:payload.message.subject,text:payload.message.text,
+  inReplyTo:payload.message.inReplyTo??null,
   attachments:[],sendAt:payload.sendAt??null,
   expiresAt:new Date(row.expires_at).toISOString(),
   approvalUrl:`https://smart-odpady.ai/forpsi-send/?proposalId=${encodeURIComponent(row.id)}`,

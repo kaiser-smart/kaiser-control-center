@@ -39,7 +39,7 @@ export async function forwardForpsiAdmin({request,env}) {
       const bytes=new Uint8Array(size); let offset=0; for(const part of parts) { bytes.set(part,offset); offset+=part.byteLength; }
       command=JSON.parse(new TextDecoder().decode(bytes));
       if(!command || Object.keys(command).some(k=>!['operation','payload'].includes(k)) ||
-        !['save','verify','resources','set_active','access_list','access_save','composition_get','composition_save'].includes(command.operation) || !command.payload || typeof command.payload!=='object') throw new Error();
+        !['save','verify','resources','set_active','access_list','access_save','composition_get','composition_save','brain_rule_save'].includes(command.operation) || !command.payload || typeof command.payload!=='object') throw new Error();
     } catch { return json({error:messages.INVALID_INPUT},400); }
   }
   if(command.operation.startsWith('composition_')) {

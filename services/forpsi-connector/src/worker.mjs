@@ -13,6 +13,8 @@ import { Onboarding } from './onboarding.mjs';
 import { handleSoaiSetup } from './soai-setup.mjs';
 import { handleSoaiSend } from './soai-send.mjs';
 import { runPersonalSync } from './personal-sync.mjs';
+import { handleSoaiBrain } from './soai-brain.mjs';
+import { runBrainSync, purgeClosedBrainCases } from './brain-sync.mjs';
 
 export function createWorker(dependencies = {}) {
   const providerFactory = dependencies.providerFactory ?? ((env, mailbox) => new Forpsi(env, mailbox));
@@ -26,6 +28,7 @@ export function createWorker(dependencies = {}) {
         headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...extra } });
       if (url.pathname === '/internal/admin') return handleAdmin(request,env,{providerFactory,calendarFactory,contactFactory,verificationMode:dependencies.verificationMode ?? 'provider'});
       if (url.pathname === '/internal/mail') return handleSoaiMail(request,env,{providerFactory,verificationMode:dependencies.verificationMode ?? 'provider'});
+      if (url.pathname === '/internal/brain') return handleSoaiBrain(request,env,{providerFactory});
       if (url.pathname === '/internal/setup') return handleSoaiSetup(request,env,{providerFactory});
       if (url.pathname === '/internal/personal-settings') return handleSoaiPersonalSettings(request,env);
       if (url.pathname === '/internal/send') return handleSoaiSend(request,env,{providerFactory});
@@ -60,6 +63,8 @@ export function createWorker(dependencies = {}) {
       const store=new Store(env.DB);
       await new Onboarding({store,principal:{id:'system',scopes:[]},providerFactory,env}).cleanupExpired();
       await runPersonalSync({store,providerFactory,env});
+      await runBrainSync({store,providerFactory,env});
+      await purgeClosedBrainCases({store,env});
       // The read-only pilot must not drain historical queued mail if its cron is enabled.
       if (env.SEND_ENABLED === 'true') await new Outbox(store, env, providerFactory).tick();
     },
