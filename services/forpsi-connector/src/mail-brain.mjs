@@ -31,6 +31,11 @@ const pragueStart=date=>{const utc=Date.parse(`${date}T00:00:00Z`);
   return utc-(Number(value.hour)*60+Number(value.minute))*60000;};
 const failureCode = error => /^[A-Z][A-Z0-9_]{2,70}$/.test(error?.message ?? '')
   ? error.message : 'PROVIDER_UNAVAILABLE';
+const sourceReadCode = error => {
+  const code=error?.code??error?.message;
+  return ['MESSAGE_NOT_FOUND','STALE_MESSAGE_REFERENCE','MESSAGE_TOO_LARGE']
+    .includes(code)?code:'PROVIDER_UNAVAILABLE';
+};
 const explicitDate=quote=>{
   const iso=quote.match(/\b(\d{4}-\d{2}-\d{2})\b/u)?.[1];
   const cz=quote.match(/\b(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\b/u);
@@ -352,7 +357,8 @@ export class MailBrain {
   async reanalyzePending(mailbox,provider,consent,limit=2){
     if(!this.env.FORPSI_ANALYSIS_MODEL||this.analysisBudget===0)
       return {attempted:0,verified:0};
-    const pending=await this.store.rows(`SELECT m.id AS message_id,m.reference_json,m.content_hash,
+    const pending=await this.store.rows(`SELECT m.id AS message_id,m.reference_json,m.message_key,
+      m.content_hash,
       c.id AS case_id,c.revision FROM brain_cases c JOIN brain_messages m
       ON m.id=c.reason_message_id WHERE c.tenant_id=? AND c.mailbox_id=?
       AND c.analysis_status!='evidence_backed' AND c.state!='done'
@@ -370,15 +376,34 @@ export class MailBrain {
       await this.store.run(`INSERT INTO brain_case_events VALUES (?,?,?,?,?,?,?)`,
         attemptId,mailbox.tenant_id,row.case_id,this.principal.id,
         'analysis.attempt',JSON.stringify({messageId:row.message_id}),this.now());
-      const recordReason=async errorCode=>{
+      const recordReason=async(errorCode,sourceStatus)=>{
         // Diagnostic updates must not change whether the read-only sync continues.
         try{await this.store.run(`UPDATE brain_case_events SET details_json=? WHERE id=?`,
-          JSON.stringify({messageId:row.message_id,errorCode}),attemptId);}
+          JSON.stringify({messageId:row.message_id,errorCode,
+            ...(sourceStatus?{sourceStatus}:{})}),attemptId);}
         catch{/* Preserve the existing sync outcome if only the diagnostic write fails. */}
       };
       let message;
-      try{message=await provider.read(JSON.parse(row.reference_json));}
-      catch{await recordReason('SOURCE_UNAVAILABLE');continue;}
+      let reference;
+      try{reference=JSON.parse(row.reference_json);}
+      catch{await recordReason('SOURCE_REFERENCE_INVALID');continue;}
+      try{message=await provider.read(reference);}
+      catch(error){
+        const code=sourceReadCode(error);
+        await recordReason(code,
+          ['MESSAGE_NOT_FOUND','STALE_MESSAGE_REFERENCE'].includes(code)
+            ?'SOURCE_MOVED_OR_UNAVAILABLE':undefined);
+        continue;
+      }
+      if(message?.reference?.folder!==reference.folder||
+        message.reference.uid!==reference.uid||
+        String(message.reference.uidValidity)!==String(reference.uidValidity)){
+        await recordReason('SOURCE_REFERENCE_MISMATCH');continue;
+      }
+      const storedMessageId=normId(row.message_key);
+      if(storedMessageId && normId(message.messageId)!==storedMessageId){
+        await recordReason('SOURCE_IDENTITY_MISMATCH');continue;
+      }
       const sourceHash=hash(JSON.stringify([message.subject??'',message.from,
         String(message.text??'').slice(0,100000)]));
       if(sourceHash!==row.content_hash){await recordReason('SOURCE_HASH_CHANGED');continue;}
