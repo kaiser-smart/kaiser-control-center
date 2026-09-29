@@ -410,6 +410,151 @@ test('oversized sent message is skipped without claiming complete coverage',asyn
   assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM brain_messages')).n,2);
 });
 
+function skippedSentRecoveryFixture(){
+  const f=fixture(),mailboxId='mail_d4cfaf87-2357-4586-97a3-b9ec1782af8f';
+  f.sqlite.exec(`INSERT INTO principals VALUES
+    ('pilot','kaiser-servis','https://id.example','sub-pilot',1);
+    INSERT INTO mailboxes
+    (id,tenant_id,address,credential_key,drafts_folder,sent_folder,trash_folder,active)
+    VALUES ('${mailboxId}','kaiser-servis','pilot@example.com','key-pilot','Drafts',NULL,'Trash',1);
+    INSERT INTO grants VALUES ('pilot','${mailboxId}','read',0);
+    INSERT INTO brain_consents
+    (tenant_id,principal_id,mailbox_id,lookback_days,sent_folder,consented_at)
+    VALUES ('kaiser-servis','pilot','${mailboxId}',90,'INBOX.Sent Items',1);
+    INSERT INTO brain_sync_cursors
+    (tenant_id,mailbox_id,folder,uid_validity,next_before_uid,window_start,window_end,
+      status,scanned_count,indexed_count,error_code)
+    VALUES ('kaiser-servis','${mailboxId}','INBOX.Sent Items','1381849700',74317,1,1,
+      'partial',9,8,'MESSAGE_TOO_LARGE');`);
+  Object.assign(f.env,{MAIL_BRAIN_ENABLED:'true',MAIL_BRAIN_PILOT_READ_ONLY:'true',
+    MAIL_BRAIN_PILOT_MAILBOX_ID:mailboxId,FORPSI_TENANT_ID:'kaiser-servis',
+    MAIL_BRAIN_SCHEDULED_SYNC_ENABLED:'false',MAIL_BRAIN_RECOVER_SENT_UID74324:'true'});
+  const reference={folder:'INBOX.Sent Items',uid:74324,uidValidity:'1381849700'};
+  const message={...item(74324,{folder:reference.folder,from:'pilot@example.com',
+    text:'Nabídku jsem poslal.',subject:'Odeslaná nabídka'}),reference,
+    date:'2026-09-25T10:00:00Z'};
+  const calls=[];
+  const provider={
+    async readForBrain(ref){calls.push(ref);return message;},
+    async search(){throw Error('RECOVERY_MUST_NOT_SEARCH');},
+    async read(){throw Error('RECOVERY_MUST_NOT_READ_RAW');},
+    async inspectPdfAttachments(){return []}
+  };
+  const brain=new MailBrain({store:f.store,principal:{id:'pilot',scopes:['forpsi:read']},
+    providerFactory:()=>provider,env:f.env,now:f.now,analyzer:async()=>({state:'waiting',
+      category:'other',reason:'Čekáme na odpověď.',quote:'Nabídku jsem poslal.',
+      nextAction:null,commitments:[]})});
+  const cursor=async()=>({...await f.store.first(`SELECT status,uid_validity,next_before_uid,scanned_count,
+    indexed_count,error_code,lease_until FROM brain_sync_cursors
+    WHERE mailbox_id=? AND folder='INBOX.Sent Items'`,mailboxId)});
+  const counts=async()=>({...await f.store.first(`SELECT
+    (SELECT COUNT(*) FROM brain_messages WHERE mailbox_id=?) AS messages,
+    (SELECT COUNT(*) FROM brain_cases WHERE mailbox_id=?) AS cases,
+    (SELECT COUNT(*) FROM outbox WHERE mailbox_id=?) AS outbox,
+    (SELECT COUNT(*) FROM audit WHERE mailbox_id=?) AS audits`,
+    mailboxId,mailboxId,mailboxId,mailboxId)});
+  return {f,brain,provider,calls,mailboxId,reference,message,cursor,counts};
+}
+
+test('one-time recovery indexes only UID 74324, changes Sent 9/8 to 9/9 and is idempotent',
+  async()=>{
+    const {brain,calls,mailboxId,reference,cursor,counts}=skippedSentRecoveryFixture();
+    const result=await brain.sync({mailboxId,limit:10});
+    assert.deepEqual(calls,[reference]);
+    assert.equal(result.recovery.status,'recovered');
+    assert.equal(result.scanned,0);
+    assert.equal(result.indexed,1);
+    assert.equal(result.reanalysis.attempted,0);
+    assert.equal(result.reanalysis.verified,0);
+    assert.deepEqual(await cursor(),{status:'partial',uid_validity:'1381849700',
+      next_before_uid:74317,scanned_count:9,indexed_count:9,error_code:null,lease_until:0});
+    assert.deepEqual(await counts(),{messages:1,cases:1,outbox:0,audits:1});
+    await assert.rejects(brain.sync({mailboxId}),/RECOVERY_PRECONDITION_FAILED/);
+    assert.deepEqual(calls,[reference]);
+    assert.deepEqual(await counts(),{messages:1,cases:1,outbox:0,audits:1});
+  });
+
+for(const [name,sql] of [
+  ['wrong consent folder',"UPDATE brain_consents SET sent_folder='Other'"],
+  ['revoked consent','UPDATE brain_consents SET revoked_at=2'],
+  ['revoked grant',"UPDATE grants SET revoked=1 WHERE principal_id='pilot'"],
+  ['inactive mailbox',"UPDATE mailboxes SET active=0 WHERE tenant_id='kaiser-servis'"],
+  ['different UIDVALIDITY',"UPDATE brain_sync_cursors SET uid_validity='7'"],
+  ['different cursor', 'UPDATE brain_sync_cursors SET next_before_uid=74316'],
+  ['resolved error', 'UPDATE brain_sync_cursors SET error_code=NULL'],
+  ['changed count', 'UPDATE brain_sync_cursors SET indexed_count=9'],
+])test(`one-time recovery stops before provider on ${name}`,async()=>{
+  const {f,brain,calls,mailboxId,cursor,counts}=skippedSentRecoveryFixture();
+  f.sqlite.exec(sql);
+  const beforeCursor=await cursor(),beforeCounts=await counts();
+  await assert.rejects(brain.sync({mailboxId}),
+    /RECOVERY_PRECONDITION_FAILED|ACCESS_DENIED|BRAIN_CONSENT_REQUIRED/);
+  assert.deepEqual(calls,[]);
+  assert.deepEqual(await cursor(),beforeCursor);
+  assert.deepEqual(await counts(),beforeCounts);
+});
+
+test('one-time recovery rejects an already indexed reference and outbox before provider',
+  async()=>{
+    for(const setup of [
+      f=>f.sqlite.exec(`INSERT INTO outbox
+        (id,tenant_id,mailbox_id,principal_id,request_id,payload_hash,state,send_at,
+          scheduled,created_at,updated_at)
+        VALUES ('job','kaiser-servis','mail_d4cfaf87-2357-4586-97a3-b9ec1782af8f',
+          'pilot','request','hash','queued',1,0,1,1)`),
+      f=>f.sqlite.exec(`INSERT INTO brain_cases
+        (id,tenant_id,mailbox_id,thread_key,title,latest_at,created_at,updated_at)
+        VALUES ('case','kaiser-servis','mail_d4cfaf87-2357-4586-97a3-b9ec1782af8f',
+          'thread','Existing',1,1,1);
+        INSERT INTO brain_messages
+        (id,tenant_id,mailbox_id,case_id,message_key,reference_json,folder,sender,
+          recipients_json,subject,body_text,authored_text,received_at,direction,content_hash,
+          indexed_at) VALUES ('msg','kaiser-servis',
+          'mail_d4cfaf87-2357-4586-97a3-b9ec1782af8f','case','old',
+          '{"folder":"INBOX.Sent Items","uid":74324,"uidValidity":"1381849700"}',
+          'INBOX.Sent Items','pilot@example.com','[]','Existing','','',1,'outbound','hash',1)`)
+    ]){
+      const {f,brain,calls,mailboxId,cursor,counts}=skippedSentRecoveryFixture();
+      setup(f);
+      const beforeCursor=await cursor(),beforeCounts=await counts();
+      await assert.rejects(brain.sync({mailboxId}),/RECOVERY_PRECONDITION_FAILED/);
+      assert.deepEqual(calls,[]);
+      assert.deepEqual(await cursor(),beforeCursor);
+      assert.deepEqual(await counts(),beforeCounts);
+    }
+  });
+
+test('one-time recovery rejects changed provider identity without an index write',async()=>{
+  const {brain,provider,mailboxId,cursor,counts,message}=skippedSentRecoveryFixture();
+  provider.readForBrain=async()=>({...message,reference:{...message.reference,uid:74323}});
+  const beforeCursor=await cursor();
+  await assert.rejects(brain.sync({mailboxId}),/SOURCE_REFERENCE_MISMATCH/);
+  assert.deepEqual(await cursor(),beforeCursor);
+  assert.deepEqual(await counts(),{messages:0,cases:0,outbox:0,audits:0});
+});
+
+for(const [name,sql] of [
+  ['read grant',"UPDATE grants SET revoked=1 WHERE principal_id='pilot'"],
+  ['consent','UPDATE brain_consents SET revoked_at=2']
+])test(`one-time recovery stops when ${name} is revoked during provider read`,async()=>{
+  const {f,brain,provider,mailboxId,cursor,counts,message}=skippedSentRecoveryFixture();
+  provider.readForBrain=async()=>{f.sqlite.exec(sql);return message;};
+  const beforeCursor=await cursor();
+  await assert.rejects(brain.sync({mailboxId}),/ACCESS_DENIED|BRAIN_CONSENT_REQUIRED/);
+  assert.deepEqual(await cursor(),beforeCursor);
+  assert.deepEqual(await counts(),{messages:0,cases:0,outbox:0,audits:0});
+});
+
+test('one-time recovery releases the lease if indexing fails before writing',async()=>{
+  const {brain,mailboxId,cursor,counts}=skippedSentRecoveryFixture();
+  brain.indexMessage=async()=>{throw Error('TEST_INDEX_FAILURE')};
+  await assert.rejects(brain.sync({mailboxId}),/TEST_INDEX_FAILURE/);
+  assert.deepEqual(await cursor(),{status:'partial',uid_validity:'1381849700',
+    next_before_uid:74317,scanned_count:9,indexed_count:8,
+    error_code:'MESSAGE_TOO_LARGE',lease_until:0});
+  assert.deepEqual(await counts(),{messages:0,cases:0,outbox:0,audits:0});
+});
+
 test('Mail Brain sync uses the selective reader without invoking the ordinary raw reader',async()=>{
   const large=item(10,{folder:'Sent',from:'alice@example.com'});
   large.size=3*1024*1024;
