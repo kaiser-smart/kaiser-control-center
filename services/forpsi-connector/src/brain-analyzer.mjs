@@ -1,10 +1,13 @@
 import { authoredText } from './content-evidence.mjs';
+import { createAnalysisAudit, analysisConfiguration } from './brain-analysis-audit.mjs';
 
 // The model proposes facts. MailBrain checks source quotations before persisting them.
-export async function openAiBrainAnalyzer({message,direction,mailboxAddress},env,{fetcher=fetch}={}) {
-  const proxy=env.FORPSI_ANALYSIS_PROXY_URL===
-    'https://smart-odpady.ai/api/forpsi/analysis'&&env.CONNECTOR_ADMIN_TOKEN?.length>=32;
-  if((!env.FORPSI_ANALYSIS_API_KEY&&!proxy)||!env.FORPSI_ANALYSIS_MODEL)return null;
+export async function openAiBrainAnalyzer({message,direction,mailboxAddress},env,
+  {fetcher=fetch,audit=createAnalysisAudit(env)}={}) {
+  const configuration=analysisConfiguration(env);
+  Object.assign(audit,configuration);
+  const proxy=configuration.proxyConfigured;
+  if(!configuration.analyzerEligible)throw new Error(configuration.eligibilityReason);
   const input={direction,mailboxAddress,from:message.from?.[0]?.address??'',
     to:(message.to??[]).map(x=>x.address),subject:String(message.subject??'').slice(0,500),
     date:message.date??null,text:authoredText(message.text??'').slice(0,4000),
@@ -20,6 +23,8 @@ export async function openAiBrainAnalyzer({message,direction,mailboxAddress},env
         properties:{actor:{type:'string',enum:['us','them']},actionText:{type:'string'},
           quote:{type:'string'},dueDate:{type:['string','null']},
           dueStatus:{type:'string',enum:['resolved','ambiguous','unknown']}}}}}};
+  audit.modelRequestAttempted=true;
+  audit.modelRequestSent=null;
   const response=await fetcher(proxy?env.FORPSI_ANALYSIS_PROXY_URL:
     'https://api.openai.com/v1/responses',{method:'POST',
     headers:{authorization:`Bearer ${proxy?env.CONNECTOR_ADMIN_TOKEN:env.FORPSI_ANALYSIS_API_KEY}`,
@@ -30,17 +35,33 @@ export async function openAiBrainAnalyzer({message,direction,mailboxAddress},env
         {role:'user',content:JSON.stringify(input)}],
       text:{format:{type:'json_schema',name:'mail_brain_analysis',strict:true,schema}}}),
     signal:AbortSignal.timeout(30000)});
+  audit.transportResponseReceived=true;
+  audit.httpStatus=response.status;
+  if(!proxy||response.ok){
+    // The existing authenticated proxy returns 2xx only after an upstream model response.
+    audit.modelRequestSent=true;audit.modelResponseReceived=true;
+    audit.modelHttpStatus=response.status;
+  }
   if(!response.ok){
     const diagnostic=await response.json().catch(()=>({}));
-    const status=Number.isInteger(diagnostic.upstreamStatus)?diagnostic.upstreamStatus:
+    const upstream=Number.isInteger(diagnostic.upstreamStatus)&&
+      diagnostic.upstreamStatus>=100&&diagnostic.upstreamStatus<=599;
+    if(proxy&&upstream){audit.modelRequestSent=true;audit.modelResponseReceived=true;
+      audit.modelHttpStatus=diagnostic.upstreamStatus;}
+    else if(proxy&&[400,401,403,405,413,415].includes(response.status))
+      audit.modelRequestSent=false;
+    const status=upstream?diagnostic.upstreamStatus:
       response.status;
     throw new Error(`MODEL_ANALYSIS_HTTP_${status}`);
   }
-  const body=await response.json();
+  let body;
+  try{body=await response.json();}
+  catch{throw new Error('MODEL_ANALYSIS_INVALID_JSON');}
   const output=body.output?.flatMap(x=>x.content??[])
     .filter(x=>x.type==='output_text').map(x=>x.text).join('')??'';
   if(body.status==='incomplete')throw new Error('MODEL_ANALYSIS_INCOMPLETE');
   if(!output)throw new Error('MODEL_ANALYSIS_EMPTY_OUTPUT');
-  try{return JSON.parse(output);}
+  try{const proposal=JSON.parse(output);audit.responseParsed=true;
+    audit.proposalReturned=proposal!==null;return proposal;}
   catch{throw new Error('MODEL_ANALYSIS_INVALID_JSON');}
 }

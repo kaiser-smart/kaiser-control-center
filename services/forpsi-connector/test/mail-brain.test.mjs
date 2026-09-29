@@ -6,6 +6,7 @@ import { handleSoaiBrain } from '../src/soai-brain.mjs';
 import { executeTool } from '../src/mcp.mjs';
 import { purgeClosedBrainCases } from '../src/brain-sync.mjs';
 import { executeAdmin } from '../src/admin.mjs';
+import { openAiBrainAnalyzer } from '../src/brain-analyzer.mjs';
 
 const reference=(uid,folder='INBOX')=>({folder,uid,uidValidity:folder==='INBOX'?'3':'7'});
 const item=(uid,{folder='INBOX',from='supplier@example.net',to='alice@example.com',
@@ -218,9 +219,11 @@ test('a message moved outside Inbox and Sent remains unverified without scanning
   assert.deepEqual(result.folders.map(x=>[x.folder,x.status,x.scanned,x.indexed]),
     [['INBOX','complete',0,0],['Sent','complete',0,0]]);
   assert.equal((await brain.attention({})).coverageComplete,true);
-  assert.deepEqual(JSON.parse(event.details_json),{
-    messageId:(await f.store.first('SELECT id FROM brain_messages')).id,
-    errorCode:'MESSAGE_NOT_FOUND',sourceStatus:'SOURCE_MOVED_OR_UNAVAILABLE'});
+  const audit=JSON.parse(event.details_json);
+  assert.equal(audit.messageId,(await f.store.first('SELECT id FROM brain_messages')).id);
+  assert.equal(audit.errorCode,'MESSAGE_NOT_FOUND');
+  assert.equal(audit.sourceStatus,'SOURCE_MOVED_OR_UNAVAILABLE');
+  assert.equal(audit.analyzerInvoked,false);
   assert.equal(calls.some(call=>call[0]==='search'&&call[1]==='Trash'),false);
   assert.deepEqual(await f.store.first('SELECT state,category,analysis_status,revision FROM brain_cases'),before);
   assert.equal((await f.store.first('SELECT reason_quote FROM brain_cases')).reason_quote,null);
@@ -779,4 +782,171 @@ test('Kaiser administrator can save versioned company rule but cannot enable for
   await assert.rejects(executeAdmin('brain_rule_save',{ruleId:rule.ruleId,version:99,
     mailboxId:'mail-a',category:'invoice',action:'deprioritize',enabled:true},ctx),
     /RULE_VERSION_CONFLICT/);
+});
+
+for(const [name,proposal,reason] of [
+  ['no proposal',null,'NO_PROPOSAL'],
+  ['missing quote',{state:'todo'},'QUOTE_MISSING'],
+  ['short quote',{state:'todo',quote:'Pro'},'QUOTE_TOO_SHORT'],
+  ['foreign quote',{state:'todo',quote:'Private invented quotation'},'QUOTE_NOT_IN_AUTHORED_TEXT'],
+  ['invalid state',{state:'unknown',quote:'Prosím o odpověď do pátku.'},'INVALID_STATE'],
+  ['done is not an AI state',{state:'done',quote:'Prosím o odpověď do pátku.'},'INVALID_STATE'],
+  ['verified quote',{state:'todo',quote:'Prosím o odpověď do pátku.'},'EVIDENCE_BACKED']
+])test(`index and reanalysis share content-free audit: ${name}`,async()=>{
+  const {f,brain,provider}=setup();
+  Object.assign(f.env,{FORPSI_ANALYSIS_MODEL:'gpt-5-mini',FORPSI_ANALYSIS_API_KEY:'PRIVATE_TEST_KEY'});
+  brain.analyzer=(input,options)=>openAiBrainAnalyzer(input,f.env,{...options,
+    fetcher:async()=>Response.json({status:'completed',output:[{content:[{type:'output_text',
+      text:JSON.stringify(proposal)}]}]})});
+  await brain.consent({mailboxId:'mail-a'});await brain.sync({mailboxId:'mail-a'});
+  const row=await f.store.first('SELECT * FROM brain_cases');
+  const indexed=JSON.parse((await f.store.first(
+    "SELECT details_json FROM brain_case_events WHERE event_type='analysis.result'")).details_json);
+  assert.equal(indexed.finalReason,reason);
+  assert.equal(indexed.modelRequestSent,true);assert.equal(indexed.responseParsed,true);
+  assert.equal(indexed.caseEvidenceBacked,reason==='EVIDENCE_BACKED');
+  assert.equal(row.analysis_status,reason==='EVIDENCE_BACKED'?'evidence_backed':'unreviewed');
+  // Test-only reset lets the exact same proposal pass through the other existing path.
+  await f.store.run("UPDATE brain_cases SET analysis_status='unreviewed',reason_quote=NULL WHERE id=?",row.id);
+  const mailbox=await brain.access('mail-a');
+  await brain.reanalyzePending(mailbox,provider,await brain.activeConsent(mailbox),1);
+  const repeated=JSON.parse((await f.store.first(
+    "SELECT details_json FROM brain_case_events WHERE event_type='analysis.attempt'")).details_json);
+  for(const key of ['modelConfigured','apiKeyConfigured','proxyConfigured','analyzerEligible',
+    'modelRequestAttempted','modelRequestSent','modelResponseReceived','responseParsed',
+    'proposalReturned','quotePresent','quoteLength','quoteMatchesAuthoredText','stateValid',
+    'normalizedAnalysisStatus','finalReason','caseEvidenceBacked'])
+    assert.deepEqual(repeated[key],indexed[key],key);
+  for(const audit of [indexed,repeated]){
+    const serialized=JSON.stringify(audit);
+    for(const secret of ['PRIVATE_TEST_KEY','Prosím o odpověď','Private invented','Nabídka ABC'])
+      assert.equal(serialized.includes(secret),false);
+    for(const forbidden of ['quote','prompt','text','body','proposal','token','apiKey'])
+      assert.equal(Object.hasOwn(audit,forbidden),false);
+  }
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+});
+
+test('index audit distinguishes unavailable configuration and exhausted analysis budget',async()=>{
+  const {f,brain,provider}=setup();await brain.consent({mailboxId:'mail-a'});
+  brain.analyzer=(input,options)=>openAiBrainAnalyzer(input,f.env,options);
+  const mailbox=await brain.access('mail-a');
+  await brain.indexMessage(mailbox,item(10),'INBOX',provider);
+  let audit=JSON.parse((await f.store.first(
+    "SELECT details_json FROM brain_case_events WHERE event_type='analysis.result'")).details_json);
+  assert.equal(audit.analyzerEligible,false);assert.equal(audit.finalReason,'MODEL_NOT_CONFIGURED');
+  assert.equal(audit.modelRequestAttempted,false);
+  brain.analysisBudget=0;
+  await brain.indexMessage(mailbox,item(11),'INBOX',provider);
+  audit=JSON.parse((await f.store.first(
+    "SELECT details_json FROM brain_case_events WHERE event_type='analysis.result' ORDER BY rowid DESC LIMIT 1")).details_json);
+  assert.equal(audit.finalReason,'ANALYSIS_BUDGET_EXHAUSTED');assert.equal(audit.analyzerInvoked,false);
+});
+
+async function targetedFixture(){
+  const x=setup();x.brain.analyzer=()=>null;
+  await x.brain.consent({mailboxId:'mail-a'});await x.brain.sync({mailboxId:'mail-a'});
+  const row=await x.f.store.first('SELECT * FROM brain_cases');
+  Object.assign(x.f.env,{FORPSI_TENANT_ID:'tenant-a',MAIL_BRAIN_PILOT_READ_ONLY:'true',
+    MAIL_BRAIN_SCHEDULED_SYNC_ENABLED:'false',MAIL_BRAIN_PILOT_MAILBOX_ID:'mail-a',
+    MAIL_BRAIN_ANALYSIS_CASE_ID:row.id,FORPSI_ANALYSIS_MODEL:'gpt-5-mini',
+    FORPSI_ANALYSIS_API_KEY:'PRIVATE_TEST_KEY'});
+  x.brain.analyzer=(input,options)=>openAiBrainAnalyzer(input,x.f.env,{...options,
+    fetcher:async()=>Response.json({status:'completed',output:[{content:[{type:'output_text',
+      text:JSON.stringify({state:'todo',quote:'Prosím o odpověď do pátku.'})}]}]})});
+  x.calls.length=0;
+  x.provider.search=()=>{throw Error('History search must never run');};
+  x.provider.readForBrain=ref=>x.provider.read(ref);
+  return {...x,row};
+}
+
+test('one selected reanalysis verifies the source, preserves cursors, and never indexes history',async()=>{
+  const {f,brain,provider,row,calls}=await targetedFixture();
+  const before=await f.store.rows('SELECT * FROM brain_sync_cursors');
+  const messageBefore=await f.store.rows('SELECT * FROM brain_messages');
+  brain.indexMessage=()=>{throw Error('No new indexing allowed');};
+  const result=await brain.sync({mailboxId:'mail-a'});
+  assert.equal(result.reanalysis.attempted,1);assert.equal(result.reanalysis.verified,1);
+  assert.equal(result.reanalysis.audits[0].finalReason,'EVIDENCE_BACKED');
+  assert.equal(result.reanalysis.audits[0].auditPersisted,true);
+  assert.deepEqual(calls,[['read','INBOX',10]]);
+  assert.deepEqual(await f.store.rows('SELECT * FROM brain_sync_cursors'),before);
+  assert.deepEqual(await f.store.rows('SELECT * FROM brain_messages'),messageBefore);
+  assert.equal((await f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+  await assert.rejects(brain.sync({mailboxId:'mail-a'}),/TARGET_CASE_NOT_ELIGIBLE/);
+  assert.equal(calls.length,1);
+});
+
+for(const [name,mutate,code] of [
+  ['missing flag',async x=>{delete x.f.env.MAIL_BRAIN_ANALYSIS_CASE_ID;},'TARGETED_ANALYSIS_DISABLED'],
+  ['wrong mailbox',async x=>{x.f.env.MAIL_BRAIN_PILOT_MAILBOX_ID='mail-b';},'TARGETED_ANALYSIS_DISABLED'],
+  ['scheduled sync enabled',async x=>{x.f.env.MAIL_BRAIN_SCHEDULED_SYNC_ENABLED='true';},'TARGETED_ANALYSIS_DISABLED'],
+  ['done case',async x=>{await x.f.store.run("UPDATE brain_cases SET state='done' WHERE id=?",x.row.id);},'TARGET_CASE_NOT_ELIGIBLE'],
+  ['manual case action',async x=>{await x.f.store.run('INSERT INTO brain_case_events VALUES (?,?,?,?,?,?,?)',
+    crypto.randomUUID(),'tenant-a',x.row.id,'alice','case.snooze','{}',x.f.now());},'TARGET_CASE_NOT_ELIGIBLE'],
+  ['revoked consent',async x=>{await x.f.store.run('UPDATE brain_consents SET revoked_at=1');},'BRAIN_CONSENT_REQUIRED'],
+  ['revoked read grant',async x=>{await x.f.store.run("UPDATE grants SET revoked=1 WHERE action='read'");},'ACCESS_DENIED']
+])test(`targeted analysis stops before provider on ${name}`,async()=>{
+  const x=await targetedFixture();await mutate(x);
+  await assert.rejects(x.brain.reanalyzeOne({mailboxId:'mail-a',caseId:x.row.id}),new RegExp(code));
+  assert.equal(x.calls.length,0);assert.equal((await x.f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+});
+
+for(const [name,change,code] of [
+  ['moved source',()=>{throw Error('MESSAGE_NOT_FOUND');},'MESSAGE_NOT_FOUND'],
+  ['changed source hash',message=>({...message,text:'Changed authored text'}),'SOURCE_HASH_CHANGED'],
+  ['changed Message-ID',message=>({...message,messageId:'<different@example.net>'}),'SOURCE_IDENTITY_MISMATCH'],
+])test(`targeted analysis never calls the model for ${name}`,async()=>{
+  const x=await targetedFixture();const source=x.messages[0];
+  x.provider.readForBrain=async()=>change(source);
+  x.brain.analyzer=()=>{throw Error('Model must not be called');};
+  const result=await x.brain.sync({mailboxId:'mail-a'});
+  const audit=result.reanalysis.audits[0];
+  assert.equal(audit.errorCode,code);assert.equal(audit.analyzerInvoked,false);
+  assert.equal(audit.modelRequestSent,false);assert.equal(result.reanalysis.verified,0);
+  assert.equal((await x.f.store.first('SELECT analysis_status FROM brain_cases')).analysis_status,'unreviewed');
+  await assert.rejects(x.brain.sync({mailboxId:'mail-a'}),/TARGET_ANALYSIS_ALREADY_ATTEMPTED/);
+  assert.equal((await x.f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+});
+
+test('accepted evidence records a case update conflict without claiming persistence',async()=>{
+  const x=await targetedFixture();const original=x.brain.analyzer;
+  x.brain.analyzer=async(input,options)=>{
+    const proposal=await original(input,options);
+    await x.f.store.run('UPDATE brain_cases SET revision=revision+1 WHERE id=?',x.row.id);
+    return proposal;
+  };
+  const result=await x.brain.sync({mailboxId:'mail-a'});
+  const audit=result.reanalysis.audits[0];
+  assert.equal(audit.quoteMatchesAuthoredText,true);
+  assert.equal(audit.normalizedAnalysisStatus,'evidence_backed');
+  assert.equal(audit.caseEvidenceBacked,false);assert.equal(audit.finalReason,'CASE_UPDATE_CONFLICT');
+  assert.equal(result.reanalysis.verified,0);
+  assert.equal((await x.f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+});
+
+test('revoking read access while the model runs is audited and cannot promote a case',async()=>{
+  const x=await targetedFixture();const original=x.brain.analyzer;
+  x.brain.analyzer=async(input,options)=>{
+    const proposal=await original(input,options);
+    await x.f.store.run("UPDATE grants SET revoked=1 WHERE action='read'");return proposal;
+  };
+  await assert.rejects(x.brain.sync({mailboxId:'mail-a'}),/ACCESS_DENIED/);
+  const audit=JSON.parse((await x.f.store.first(
+    "SELECT details_json FROM brain_case_events WHERE event_type='analysis.attempt'")).details_json);
+  assert.equal(audit.modelRequestSent,true);assert.equal(audit.finalReason,'ACCESS_DENIED');
+  assert.equal(audit.caseEvidenceBacked,false);
+  assert.equal((await x.f.store.first('SELECT analysis_status FROM brain_cases')).analysis_status,'unreviewed');
+  assert.equal((await x.f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+});
+
+test('concurrent one-case triggers claim only one model pass',async()=>{
+  const x=await targetedFixture();let modelCalls=0;const analyze=x.brain.analyzer;
+  x.brain.analyzer=(...args)=>{modelCalls++;return analyze(...args);};
+  const results=await Promise.allSettled([
+    x.brain.reanalyzeOne({mailboxId:'mail-a',caseId:x.row.id}),
+    x.brain.reanalyzeOne({mailboxId:'mail-a',caseId:x.row.id})]);
+  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+  assert.equal(modelCalls,1);assert.equal(x.calls.length,1);
+  assert.equal((await x.f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
 });
