@@ -1,8 +1,13 @@
 # Mail Brain analysis audit
 
 Both new-message indexing and pending-case reanalysis use `analyzeMessage()` and
-the same evidence predicates as `normalizeAnalysis()`. Classification, model,
-prompt and evidence acceptance conditions are unchanged.
+the same evidence predicates as `normalizeAnalysis()`. The model, classification
+instructions and evidence acceptance conditions are unchanged.
+The `literal-quote-v2` prompt adds a precise quote contract: one short contiguous
+authored-text fragment, copied character-for-character without translation,
+paraphrase, added ellipses or joined fragments. The strict server substring
+check is unchanged. This follows a live HTTP-200 proposal with a non-matching
+172-character quote; the rejected quote itself was not stored in the audit.
 
 The existing `brain_case_events` table stores only allowlisted metadata. New
 messages use `analysis.result`; reanalysis enriches its existing
@@ -35,8 +40,10 @@ read-only pilot, its exact mailbox, scheduled Brain sync disabled, current read
 grant/consent, a non-done/non-evidence-backed case without manual case actions,
 an indexed source in the consented folders/window, and empty outbox.
 
-An atomic `analysis.targeted` claim permits one attempt for that case, including
-concurrent requests. It does not retry after failure. The normal reanalysis
+An atomic `analysis.targeted` claim permits one attempt for that case per deployed
+evidence-contract version, including concurrent requests. It does not automatically
+retry after failure. A deliberately deployed contract change permits a new explicit
+attempt on the same case while preserving every previous audit. The normal reanalysis
 path verifies the stored reference, RFC Message-ID and content hash before
 calling the model. No history search, cursor change, new message indexing,
 native mail mutation, send or outbox operation occurs. The completed result

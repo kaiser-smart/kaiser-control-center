@@ -950,3 +950,30 @@ test('concurrent one-case triggers claim only one model pass',async()=>{
   assert.equal(modelCalls,1);assert.equal(x.calls.length,1);
   assert.equal((await x.f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
 });
+
+test('a deployed evidence-contract revision can verify the same case without erasing its prior attempt',async()=>{
+  const x=await targetedFixture();
+  const priorId=crypto.randomUUID();
+  await x.f.store.run('INSERT INTO brain_case_events VALUES (?,?,?,?,?,?,?)',priorId,'tenant-a',
+    x.row.id,'alice','analysis.targeted',JSON.stringify({status:'completed',verified:0,outboxCount:0}),x.f.now());
+  const result=await x.brain.sync({mailboxId:'mail-a'});
+  assert.equal(result.reanalysis.verified,1);
+  assert.equal(result.reanalysis.audits[0].evidenceContractVersion,'literal-quote-v2');
+  const prior=JSON.parse((await x.f.store.first('SELECT details_json FROM brain_case_events WHERE id=?',priorId)).details_json);
+  assert.deepEqual(prior,{status:'completed',verified:0,outboxCount:0});
+  assert.equal((await x.f.store.first("SELECT COUNT(*) AS n FROM brain_case_events WHERE event_type='analysis.targeted'")).n,2);
+  assert.equal((await x.f.store.first('SELECT COUNT(*) AS n FROM outbox')).n,0);
+});
+
+test('literal evidence contract retains exact whitespace and punctuation acceptance',async()=>{
+  const x=setup();
+  const message=item(10,{text:'Prosím  potvrďte cenu.\nTermín: pátek.'});
+  for(const [quote,reason] of [['Prosím  potvrďte cenu.','EVIDENCE_BACKED'],
+    ['Prosím potvrďte cenu.','QUOTE_NOT_IN_AUTHORED_TEXT'],
+    ['Prosím  potvrďte cenu. Termín: pátek.','QUOTE_NOT_IN_AUTHORED_TEXT'],
+    ['Prosím  potvrďte cenu...','QUOTE_NOT_IN_AUTHORED_TEXT']]){
+    x.brain.analyzer=()=>({state:'todo',quote});
+    const result=await x.brain.analyzeMessage({message,direction:'inbound',mailboxAddress:'alice@example.com'});
+    assert.equal(result.audit.finalReason,reason);
+  }
+});

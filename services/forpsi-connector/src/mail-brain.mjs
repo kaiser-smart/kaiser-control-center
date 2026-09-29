@@ -4,7 +4,7 @@ import { authoredText } from './content-evidence.mjs';
 import { requireValue } from './errors.mjs';
 import { id, message as sendMessage } from './schemas.mjs';
 import { openAiBrainAnalyzer } from './brain-analyzer.mjs';
-import { createAnalysisAudit, analysisErrorCode, analysisOutcome, safeAnalysisAudit }
+import { createAnalysisAudit, analysisErrorCode, analysisOutcome, safeAnalysisAudit,evidenceContractVersion }
   from './brain-analysis-audit.mjs';
 import { seal, unseal, digest } from './crypto.mjs';
 import { SendApproval } from './send-approval.mjs';
@@ -538,20 +538,21 @@ export class MailBrain {
     requireValue(eligible,'TARGET_CASE_NOT_ELIGIBLE');
     requireValue((await this.store.first('SELECT COUNT(*) AS n FROM outbox')).n===0,
       'TARGET_OUTBOX_NOT_EMPTY');
-    // One atomic statement makes repeated or concurrent triggers fail before the provider/model.
+    // One attempt per deployed evidence contract; preserve all previous attempt records.
     const eventId=crypto.randomUUID();
     const claimed=await this.store.run(`INSERT INTO brain_case_events
       (id,tenant_id,case_id,actor_principal_id,event_type,details_json,created_at)
       SELECT ?,?,?,?,'analysis.targeted',?,? WHERE NOT EXISTS
-      (SELECT 1 FROM brain_case_events WHERE case_id=? AND event_type='analysis.targeted')`,
-    eventId,mailbox.tenant_id,caseId,this.principal.id,JSON.stringify({status:'claimed'}),
-    this.now(),caseId);
+      (SELECT 1 FROM brain_case_events WHERE case_id=? AND event_type='analysis.targeted'
+        AND json_extract(details_json,'$.evidenceContractVersion')=?)`,
+    eventId,mailbox.tenant_id,caseId,this.principal.id,
+    JSON.stringify({status:'claimed',evidenceContractVersion}),this.now(),caseId,evidenceContractVersion);
     requireValue(claimed.meta?.changes===1,'TARGET_ANALYSIS_ALREADY_ATTEMPTED');
     this.analysisBudget=1;
     const result=await this.reanalyzePending(mailbox,this.providerFactory(this.env,mailbox),consent,1,caseId);
     const outboxCount=(await this.store.first('SELECT COUNT(*) AS n FROM outbox')).n;
     await this.store.run('UPDATE brain_case_events SET details_json=? WHERE id=?',
-      JSON.stringify({status:'completed',verified:result.verified,outboxCount}),eventId);
+      JSON.stringify({status:'completed',verified:result.verified,outboxCount,evidenceContractVersion}),eventId);
     const output={mailboxId,targetCaseId:caseId,reanalysis:result,outboxCount};
     console.info('mail_brain.analysis.targeted',JSON.stringify(output));
     return output;

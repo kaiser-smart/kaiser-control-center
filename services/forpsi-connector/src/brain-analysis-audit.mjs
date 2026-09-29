@@ -1,4 +1,5 @@
 // Deliberately excludes message content, prompts, proposals, quotations and credentials.
+export const evidenceContractVersion='literal-quote-v2';
 export function analysisConfiguration(env) {
   const modelConfigured=Boolean(env.FORPSI_ANALYSIS_MODEL);
   const apiKeyConfigured=Boolean(env.FORPSI_ANALYSIS_API_KEY);
@@ -11,7 +12,7 @@ export function analysisConfiguration(env) {
 }
 
 export function createAnalysisAudit(env) {
-  return {...analysisConfiguration(env),analyzerInvoked:false,
+  return {...analysisConfiguration(env),evidenceContractVersion,analyzerInvoked:false,
     modelRequestAttempted:false,modelRequestSent:false,modelResponseReceived:false,
     transportResponseReceived:false,httpStatus:null,modelHttpStatus:null,
     responseParsed:false,proposalReturned:false,quotePresent:false,quoteLength:0,
@@ -48,7 +49,7 @@ export function analysisOutcome(audit,evidence,analysis) {
 
 // Explicit allowlist: never spread a model response or arbitrary exception into the audit.
 export function safeAnalysisAudit(audit) {
-  const result={};
+  const result={evidenceContractVersion};
   for(const key of ['modelConfigured','apiKeyConfigured','proxyConfigured','analyzerEligible',
     'analyzerInvoked','modelRequestAttempted','modelResponseReceived','transportResponseReceived',
     'responseParsed','proposalReturned','quotePresent','quoteMatchesAuthoredText','stateValid',

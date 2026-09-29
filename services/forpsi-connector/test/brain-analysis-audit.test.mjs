@@ -73,3 +73,16 @@ test('proxy rejection is distinct from an upstream model response',async()=>{
     assert.equal(audit.modelRequestSent,sent);assert.equal(audit.modelResponseReceived,received);
   }
 });
+
+test('model request specifies literal authored-text evidence without changing response schema',async()=>{
+  let payload;
+  await openAiBrainAnalyzer(input,env,{fetcher:async(_url,init)=>{
+    payload=JSON.parse(init.body);return modelResponse({state:'todo',quote:'Prosím o odpověď.'});}});
+  const prompt=payload.input[0].content;
+  assert.match(prompt,/copy one meaningful contiguous substring/);
+  assert.match(prompt,/Never translate, paraphrase/);
+  assert.match(prompt,/return an empty quote/);
+  assert.deepEqual(payload.text.format.schema.properties.state.enum,['todo','decision','waiting','information']);
+  assert.deepEqual(payload.text.format.schema.properties.quote,{type:'string'});
+  assert.equal(payload.store,false);
+});
