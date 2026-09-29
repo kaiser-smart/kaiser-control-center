@@ -4,6 +4,8 @@ import { authoredText } from './content-evidence.mjs';
 import { requireValue } from './errors.mjs';
 import { id, message as sendMessage } from './schemas.mjs';
 import { openAiBrainAnalyzer } from './brain-analyzer.mjs';
+import { createAnalysisAudit, analysisErrorCode, analysisOutcome, safeAnalysisAudit }
+  from './brain-analysis-audit.mjs';
 import { seal, unseal, digest } from './crypto.mjs';
 import { SendApproval } from './send-approval.mjs';
 import { Outbox } from './outbox.mjs';
@@ -84,17 +86,26 @@ export const brainSchemas = {
   attachment: z.object({attachmentId:uuid}).strict(),
 };
 
+function analysisEvidence(raw,message) {
+  const text = authoredText(message.text ?? '');
+  const quote = typeof raw?.quote === 'string' ? raw.quote.trim().slice(0, 500) : '';
+  const validState = state.safeParse(raw?.state);
+  return {quotePresent:quote.length>0,quoteLength:quote.length,
+    quoteMatchesAuthoredText:quote.length>0&&text.includes(quote),
+    stateValid:validState.success&&validState.data!=='done'};
+}
+
 function normalizeAnalysis(raw, message, direction) {
   const text = authoredText(message.text ?? '');
   const quote = typeof raw?.quote === 'string' ? raw.quote.trim().slice(0, 500) : '';
-  const evidence = quote.length >= 4 && text.includes(quote);
+  const evidence=analysisEvidence(raw,message);
   const validState = state.safeParse(raw?.state);
   const base = {state:direction==='inbound'?'todo':'waiting',category:'unclassified',
     reason:direction==='inbound'?'Přijatá zpráva čeká na posouzení.':'Odeslaná zpráva; čekáme na další vývoj.',
     quote:null,nextAction:null,commitments:[],amountMinor:null,currency:null,
     analysisStatus:'unreviewed'};
   // Only a person or an explicit case action can close a case.
-  if (!evidence || !validState.success || validState.data==='done') return base;
+  if (evidence.quoteLength<4 || !evidence.quoteMatchesAuthoredText || !evidence.stateValid) return base;
   const commitments=[];
   for (const candidate of Array.isArray(raw.commitments) ? raw.commitments.slice(0, 10) : []) {
     const cQuote=String(candidate.quote??'').trim().slice(0,500);
@@ -124,7 +135,38 @@ function searchTerms(query) {
 export class MailBrain {
   constructor({store,principal,providerFactory,env,now=Date.now,analyzer}) {
     Object.assign(this,{store,principal,providerFactory,env,now,
-      analyzer:analyzer===undefined?(input=>openAiBrainAnalyzer(input,env)):analyzer});
+      analyzer:analyzer===undefined?((input,options)=>openAiBrainAnalyzer(input,env,options)):analyzer});
+  }
+
+  async analyzeMessage(input) {
+    const audit=createAnalysisAudit(this.env);
+    let proposed=null;
+    if(!this.analyzer)audit.errorCode='ANALYZER_UNAVAILABLE';
+    else if(this.analysisBudget===0)audit.errorCode='ANALYSIS_BUDGET_EXHAUSTED';
+    else {
+      if(Number.isFinite(this.analysisBudget))this.analysisBudget--;
+      audit.analyzerInvoked=true;
+      try{proposed=await this.analyzer(input,{audit});}
+      catch(error){audit.errorCode=analysisErrorCode(error);}
+    }
+    audit.proposalReturned=proposed!==null&&proposed!==undefined;
+    const analysis=normalizeAnalysis(proposed,input.message,input.direction);
+    analysisOutcome(audit,analysisEvidence(proposed,input.message),analysis);
+    return {analysis,audit,errorCode:audit.errorCode};
+  }
+
+  async recordAnalysis({tenantId,caseId,messageId,path,audit,eventId,errorCode,sourceStatus}) {
+    const details={messageId,path,...safeAnalysisAudit(audit),
+      ...(errorCode?{errorCode}:{}),...(sourceStatus?{sourceStatus}:{})};
+    try{
+      if(eventId)await this.store.run(`UPDATE brain_case_events SET details_json=? WHERE id=?`,
+        JSON.stringify(details),eventId);
+      else await this.store.run(`INSERT INTO brain_case_events VALUES (?,?,?,?,?,?,?)`,
+        crypto.randomUUID(),tenantId,caseId,this.principal.id,
+        'analysis.result',JSON.stringify(details),this.now());
+      return true;
+    }catch{console.warn('mail_brain.analysis.audit_failed',JSON.stringify({caseId,messageId}));
+      return false;}
   }
 
   async access(mailboxId,action='read') {
@@ -363,39 +405,51 @@ export class MailBrain {
       decision_source:rule.source,decision_rule_id:rule.id};
   }
 
-  async reanalyzePending(mailbox,provider,consent,limit=2){
-    if(!this.env.FORPSI_ANALYSIS_MODEL||this.analysisBudget===0)
-      return {attempted:0,verified:0};
+  async reanalyzePending(mailbox,provider,consent,limit=2,targetCaseId=null){
+    if(!this.env.FORPSI_ANALYSIS_MODEL||this.analysisBudget===0){
+      const audit=createAnalysisAudit(this.env);
+      audit.errorCode=!this.env.FORPSI_ANALYSIS_MODEL?'MODEL_NOT_CONFIGURED':'ANALYSIS_BUDGET_EXHAUSTED';
+      audit.finalReason=audit.errorCode;
+      return {attempted:0,verified:0,skipReason:audit.errorCode,configuration:safeAnalysisAudit(audit)};
+    }
     const pending=await this.store.rows(`SELECT m.id AS message_id,m.folder,m.reference_json,m.message_key,
       m.content_hash,
       c.id AS case_id,c.revision FROM brain_cases c JOIN brain_messages m
       ON m.id=c.reason_message_id WHERE c.tenant_id=? AND c.mailbox_id=?
       AND c.analysis_status!='evidence_backed' AND c.state!='done'
       AND c.decision_source='ai' AND c.merged_into_case_id IS NULL
+      AND (? IS NULL OR c.id=?)
       AND m.received_at>=?
       AND NOT EXISTS (SELECT 1 FROM brain_case_events e WHERE e.case_id=c.id
         AND e.event_type LIKE 'case.%')
       ORDER BY (SELECT COUNT(*) FROM brain_case_events e WHERE e.case_id=c.id
         AND e.event_type='analysis.attempt'),c.latest_at DESC LIMIT ?`,
-    mailbox.tenant_id,mailbox.id,this.now()-consent.lookback_days*day,limit);
+    mailbox.tenant_id,mailbox.id,targetCaseId,targetCaseId,
+    this.now()-consent.lookback_days*day,limit);
     let verified=0,errorCode=null;
+    const audits=[];
     for(const row of pending){
       await this.access(mailbox.id);await this.activeConsent(mailbox);
       const attemptId=crypto.randomUUID();
+      let audit=createAnalysisAudit(this.env);
       await this.store.run(`INSERT INTO brain_case_events VALUES (?,?,?,?,?,?,?)`,
         attemptId,mailbox.tenant_id,row.case_id,this.principal.id,
         'analysis.attempt',JSON.stringify({messageId:row.message_id}),this.now());
-      const recordReason=async(errorCode,sourceStatus)=>{
-        // Diagnostic updates must not change whether the read-only sync continues.
-        try{await this.store.run(`UPDATE brain_case_events SET details_json=? WHERE id=?`,
-          JSON.stringify({messageId:row.message_id,errorCode,
-            ...(sourceStatus?{sourceStatus}:{})}),attemptId);}
-        catch{/* Preserve the existing sync outcome if only the diagnostic write fails. */}
+      const recordReason=async(code=null,sourceStatus)=>{
+        if(code){audit.errorCode=code;audit.finalReason=sourceStatus??code;}
+        const auditPersisted=await this.recordAnalysis({tenantId:mailbox.tenant_id,
+          caseId:row.case_id,messageId:row.message_id,path:'reanalysis',audit,
+          eventId:attemptId,errorCode:code,sourceStatus});
+        audits.push({caseId:row.case_id,messageId:row.message_id,
+          ...safeAnalysisAudit(audit),auditPersisted});
       };
       let message;
       let reference;
       try{reference=JSON.parse(row.reference_json);}
       catch{await recordReason('SOURCE_REFERENCE_INVALID');continue;}
+      if(targetCaseId&&![consent.inbox_folder,consent.sent_folder].includes(reference.folder)){
+        await recordReason('SOURCE_OUTSIDE_CONSENT');continue;
+      }
       try{message=await readBrainMessage(provider,reference);}
       catch(error){
         const code=sourceReadCode(error);
@@ -417,21 +471,21 @@ export class MailBrain {
         String(message.text??'').slice(0,100000)]));
       if(sourceHash!==row.content_hash){await recordReason('SOURCE_HASH_CHANGED');continue;}
       const direction=message.reference.folder===consent.sent_folder?'outbound':'inbound';
-      let proposed=null;
-      if(Number.isFinite(this.analysisBudget))this.analysisBudget--;
-      try{proposed=await this.analyzer({message,direction,mailboxAddress:mailbox.address});}
-      catch(error){
-        errorCode=failureCode(error);
-        await this.store.run(`UPDATE brain_case_events SET details_json=? WHERE id=?`,
-          JSON.stringify({messageId:row.message_id,errorCode}),attemptId);
+      const analyzed=await this.analyzeMessage({message,direction,mailboxAddress:mailbox.address});
+      audit=analyzed.audit;
+      if(analyzed.errorCode){
+        errorCode=analyzed.errorCode;
+        await recordReason();
         break;
       }
-      await this.access(mailbox.id);await this.activeConsent(mailbox);
-      const analysis=normalizeAnalysis(proposed,message,direction);
+      try{await this.access(mailbox.id);await this.activeConsent(mailbox);}
+      catch(error){await recordReason(analysisErrorCode(error));throw error;}
+      const analysis=analyzed.analysis;
       if(analysis.analysisStatus!=='evidence_backed'){
-        const quote=typeof proposed?.quote==='string'?proposed.quote.trim().slice(0,500):'';
-        if(quote.length<4||!authoredText(message.text??'').includes(quote))
-          await recordReason('EVIDENCE_QUOTE_UNVERIFIED');
+        // Keep the legacy error code while exposing the precise common evidence reason.
+        if(audit.quoteLength<4||!audit.quoteMatchesAuthoredText)
+          audit.errorCode='EVIDENCE_QUOTE_UNVERIFIED';
+        await recordReason();
         continue;
       }
       const rule=await this.decisionRule(mailbox,analysis,message.from?.[0]?.address??'');
@@ -450,7 +504,8 @@ export class MailBrain {
       resultingState,analysis.category,analysis.nextAction,resultingReason,analysis.quote,
       analysis.amountMinor,analysis.currency,rule?.source??'ai',rule?.id??null,
       this.now(),row.case_id,row.revision,row.message_id);
-      if(updated.meta?.changes!==1)continue;
+      if(updated.meta?.changes!==1){audit.finalReason='CASE_UPDATE_CONFLICT';
+        await recordReason();continue;}
       for(const commitment of analysis.commitments)await this.store.run(`INSERT OR IGNORE INTO
         brain_commitments (id,tenant_id,case_id,message_id,actor,action_text,due_date,
         due_status,evidence_quote,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
@@ -458,12 +513,56 @@ export class MailBrain {
       commitment.actionText,commitment.dueDate,commitment.dueStatus,commitment.quote,
       this.now(),this.now());
       verified++;
+      audit.caseEvidenceBacked=true;
+      await recordReason();
     }
-    return {attempted:pending.length,verified,errorCode};
+    return {attempted:pending.length,verified,errorCode,audits};
+  }
+
+  async reanalyzeOne({mailboxId,caseId}) {
+    requireValue(this.env.MAIL_BRAIN_ENABLED==='true'&&
+      this.env.MAIL_BRAIN_PILOT_READ_ONLY==='true'&&
+      this.env.MAIL_BRAIN_SCHEDULED_SYNC_ENABLED==='false'&&
+      this.env.MAIL_BRAIN_ANALYSIS_CASE_ID===caseId&&uuid.safeParse(caseId).success&&
+      mailboxId===this.env.MAIL_BRAIN_PILOT_MAILBOX_ID,'TARGETED_ANALYSIS_DISABLED');
+    const mailbox=await this.access(mailboxId),consent=await this.activeConsent(mailbox);
+    requireValue(mailbox.tenant_id===this.env.FORPSI_TENANT_ID,'ACCESS_DENIED');
+    const eligible=await this.store.first(`SELECT c.id FROM brain_cases c JOIN brain_messages m
+      ON m.id=c.reason_message_id AND m.case_id=c.id WHERE c.id=? AND c.tenant_id=?
+      AND c.mailbox_id=? AND c.analysis_status!='evidence_backed' AND c.state!='done'
+      AND c.decision_source='ai' AND c.merged_into_case_id IS NULL
+      AND m.folder IN (?,?) AND m.received_at>=?
+      AND NOT EXISTS(SELECT 1 FROM brain_case_events e WHERE e.case_id=c.id
+        AND e.event_type LIKE 'case.%')`,caseId,mailbox.tenant_id,mailboxId,
+    consent.inbox_folder,consent.sent_folder,this.now()-consent.lookback_days*day);
+    requireValue(eligible,'TARGET_CASE_NOT_ELIGIBLE');
+    requireValue((await this.store.first('SELECT COUNT(*) AS n FROM outbox')).n===0,
+      'TARGET_OUTBOX_NOT_EMPTY');
+    // One atomic statement makes repeated or concurrent triggers fail before the provider/model.
+    const eventId=crypto.randomUUID();
+    const claimed=await this.store.run(`INSERT INTO brain_case_events
+      (id,tenant_id,case_id,actor_principal_id,event_type,details_json,created_at)
+      SELECT ?,?,?,?,'analysis.targeted',?,? WHERE NOT EXISTS
+      (SELECT 1 FROM brain_case_events WHERE case_id=? AND event_type='analysis.targeted')`,
+    eventId,mailbox.tenant_id,caseId,this.principal.id,JSON.stringify({status:'claimed'}),
+    this.now(),caseId);
+    requireValue(claimed.meta?.changes===1,'TARGET_ANALYSIS_ALREADY_ATTEMPTED');
+    this.analysisBudget=1;
+    const result=await this.reanalyzePending(mailbox,this.providerFactory(this.env,mailbox),consent,1,caseId);
+    const outboxCount=(await this.store.first('SELECT COUNT(*) AS n FROM outbox')).n;
+    await this.store.run('UPDATE brain_case_events SET details_json=? WHERE id=?',
+      JSON.stringify({status:'completed',verified:result.verified,outboxCount}),eventId);
+    const output={mailboxId,targetCaseId:caseId,reanalysis:result,outboxCount};
+    console.info('mail_brain.analysis.targeted',JSON.stringify(output));
+    return output;
   }
 
   async sync({mailboxId,limit=10}) {
     requireValue(this.env.MAIL_BRAIN_ENABLED==='true','MAIL_BRAIN_DISABLED');
+    // Temporary, server-selected one-case execution through the existing authenticated transport.
+    // It returns before any history search, indexMessage call or cursor access.
+    if(this.env.MAIL_BRAIN_ANALYSIS_CASE_ID)
+      return this.reanalyzeOne({mailboxId,caseId:this.env.MAIL_BRAIN_ANALYSIS_CASE_ID});
     if(this.env.MAIL_BRAIN_RECOVER_SENT_UID74324==='true')
       return this.recoverSkippedSent({mailboxId});
     const mailbox=await this.access(mailboxId),consent=await this.activeConsent(mailbox);
@@ -690,16 +789,15 @@ export class MailBrain {
       caseRow=await this.store.first('SELECT * FROM brain_cases WHERE id=?',caseId);
     }
     const messageId=crypto.randomUUID();
-    let proposed=null;
-    if(this.analyzer&&this.analysisBudget!==0){
-      if(Number.isFinite(this.analysisBudget))this.analysisBudget--;
-      try{proposed=await this.analyzer({message,caseRow,direction,
-        mailboxAddress:mailbox.address});}
-      catch(error){this.analysisErrorCode=failureCode(error);}
-    }
-    await this.access(mailbox.id);
-    await this.activeConsent(mailbox);
-    const analysis=normalizeAnalysis(proposed,message,direction);
+    const analyzed=await this.analyzeMessage({message,caseRow,direction,mailboxAddress:mailbox.address});
+    if(analyzed.errorCode&&!['ANALYZER_UNAVAILABLE','ANALYSIS_BUDGET_EXHAUSTED']
+      .includes(analyzed.errorCode))this.analysisErrorCode=analyzed.errorCode;
+    try{await this.access(mailbox.id);await this.activeConsent(mailbox);}
+    catch(error){analyzed.audit.errorCode=analysisErrorCode(error);
+      analyzed.audit.finalReason=analyzed.audit.errorCode;
+      await this.recordAnalysis({tenantId:mailbox.tenant_id,caseId,messageId,path:'index',audit:analyzed.audit});
+      throw error;}
+    const analysis=analyzed.analysis;
     const rule=await this.decisionRule(mailbox,analysis,message.from?.[0]?.address??'');
     const resultingState=rule?.action==='prioritize'?'todo':
       rule?.action==='deprioritize'?'information':analysis.state;
@@ -732,7 +830,8 @@ export class MailBrain {
       attachment.size??observed?.size??0,observed?.sha256??null,
       observed?.isPdf?'application/pdf':null,observed?'pending':'unavailable',now);
     }
-    if(at>=caseRow.latest_at)await this.store.run(`UPDATE brain_cases SET state=?,category=?,next_action=?,reason=?,
+    let caseUpdate;
+    if(at>=caseRow.latest_at)caseUpdate=await this.store.run(`UPDATE brain_cases SET state=?,category=?,next_action=?,reason=?,
       reason_message_id=?,reason_quote=?,amount_minor=COALESCE(?,amount_minor),
       currency=COALESCE(?,currency),latest_at=?,done_at=NULL,analysis_status=?,
       owner_principal_id=COALESCE(?,owner_principal_id),decision_source=?,decision_rule_id=?,
@@ -742,6 +841,10 @@ export class MailBrain {
       rule?.source??'ai',rule?.id??null,now,caseId);
     await this.store.run(`INSERT INTO brain_case_events VALUES (?,?,?,?,?,?,?)`,crypto.randomUUID(),
       mailbox.tenant_id,caseId,this.principal.id,'message.indexed',JSON.stringify({messageId,direction}),now);
+    analyzed.audit.caseEvidenceBacked=caseUpdate?.meta?.changes===1&&analysis.analysisStatus==='evidence_backed';
+    if(at<caseRow.latest_at)analyzed.audit.finalReason='CASE_NOT_LATEST_MESSAGE';
+    else if(caseUpdate?.meta?.changes!==1)analyzed.audit.finalReason='CASE_UPDATE_CONFLICT';
+    await this.recordAnalysis({tenantId:mailbox.tenant_id,caseId,messageId,path:'index',audit:analyzed.audit});
     return {messageId,caseId,unchanged:false};
   }
 
