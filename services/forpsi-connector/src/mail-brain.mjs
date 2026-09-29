@@ -12,6 +12,10 @@ const uuid = z.string().uuid();
 const state = z.enum(['todo','decision','waiting','information','done']);
 const ruleAction=z.enum(['prioritize','deprioritize','assign','forward']);
 const day = 86400000;
+const skippedSentRecovery=Object.freeze({tenant:'kaiser-servis',
+  mailboxId:'mail_d4cfaf87-2357-4586-97a3-b9ec1782af8f',folder:'INBOX.Sent Items',
+  uid:74324,uidValidity:'1381849700',nextBeforeUid:74317,
+  scannedCount:9,indexedCount:8});
 const hash = value => createHash('sha256').update(value).digest('hex');
 const normId = value => typeof value === 'string' && /^<[^<>\s]{1,500}>$/.test(value.trim())
   ? value.trim().toLowerCase() : null;
@@ -460,6 +464,8 @@ export class MailBrain {
 
   async sync({mailboxId,limit=10}) {
     requireValue(this.env.MAIL_BRAIN_ENABLED==='true','MAIL_BRAIN_DISABLED');
+    if(this.env.MAIL_BRAIN_RECOVER_SENT_UID74324==='true')
+      return this.recoverSkippedSent({mailboxId});
     const mailbox=await this.access(mailboxId),consent=await this.activeConsent(mailbox);
     const provider=this.providerFactory(this.env,mailbox),now=this.now(),leaseUntil=now+600000;
     this.analysisBudget=this.env.FORPSI_ANALYSIS_PROXY_URL?1:Infinity;
@@ -542,7 +548,109 @@ export class MailBrain {
     }
     result.analysisErrorCode=this.analysisErrorCode??result.reanalysis.errorCode??null;
     await this.store.audit(this.principal,mailbox.id,'brain.sync',result.complete?'complete':'partial');
+    if(this.env.MAIL_BRAIN_PILOT_READ_ONLY==='true')console.info('mail_brain.sync.summary',
+      JSON.stringify({mailboxId,scanned:result.scanned,indexed:result.indexed,
+        folders:result.folders.map(({folder,status,scanned,indexed,errorCode})=>
+          ({folder,status,scanned,indexed,errorCode})),
+        reanalysis:result.reanalysis,analysisErrorCode:result.analysisErrorCode}));
     return result;
+  }
+
+  async recoverSkippedSent({mailboxId}) {
+    const target=skippedSentRecovery,now=this.now(),leaseUntil=now+600000;
+    requireValue(this.env.MAIL_BRAIN_ENABLED==='true'&&
+      this.env.MAIL_BRAIN_PILOT_READ_ONLY==='true'&&
+      this.env.MAIL_BRAIN_SCHEDULED_SYNC_ENABLED!=='true'&&
+      this.env.FORPSI_TENANT_ID===target.tenant&&
+      this.env.MAIL_BRAIN_PILOT_MAILBOX_ID===target.mailboxId&&
+      mailboxId===target.mailboxId,'RECOVERY_DISABLED');
+    const mailbox=await this.access(mailboxId),consent=await this.activeConsent(mailbox);
+    requireValue(mailbox.active===1&&mailbox.tenant_id===target.tenant&&
+      consent.sent_folder===target.folder,'RECOVERY_PRECONDITION_FAILED');
+    const cursor=await this.store.first(`SELECT * FROM brain_sync_cursors
+      WHERE tenant_id=? AND mailbox_id=? AND folder=?`,target.tenant,mailboxId,target.folder);
+    requireValue(cursor?.status==='partial'&&cursor.uid_validity===target.uidValidity&&
+      cursor.next_before_uid===target.nextBeforeUid&&
+      cursor.scanned_count===target.scannedCount&&
+      cursor.indexed_count===target.indexedCount&&
+      cursor.error_code==='MESSAGE_TOO_LARGE'&&cursor.lease_until<=now,
+    'RECOVERY_PRECONDITION_FAILED');
+    const indexed=async key=>this.store.first(`SELECT id FROM brain_messages WHERE tenant_id=?
+      AND mailbox_id=? AND (message_key=? OR (folder=?
+      AND json_extract(reference_json,'$.uid')=?
+      AND json_extract(reference_json,'$.uidValidity')=?)) LIMIT 1`,
+    target.tenant,mailboxId,key,target.folder,target.uid,target.uidValidity);
+    const ref={folder:target.folder,uid:target.uid,uidValidity:target.uidValidity};
+    requireValue(!(await indexed(`${target.folder}:${target.uidValidity}:${target.uid}`)),
+      'RECOVERY_PRECONDITION_FAILED');
+    requireValue((await this.store.first('SELECT COUNT(*) AS n FROM outbox WHERE mailbox_id=?',
+      mailboxId)).n===0,'RECOVERY_PRECONDITION_FAILED');
+    const provider=this.providerFactory(this.env,mailbox);
+    requireValue(typeof provider.readForBrain==='function','RECOVERY_READER_UNAVAILABLE');
+    const message=await provider.readForBrain(ref);
+    requireValue(message?.reference?.folder===target.folder&&
+      message.reference.uid===target.uid&&
+      String(message.reference.uidValidity)===target.uidValidity,
+    'SOURCE_REFERENCE_MISMATCH');
+    const key=messageKey(message);
+    await this.access(mailboxId);
+    const currentConsent=await this.activeConsent(mailbox);
+    requireValue(currentConsent.sent_folder===target.folder&&!(await indexed(key)),
+      'RECOVERY_PRECONDITION_FAILED');
+    const claimed=await this.store.first(`UPDATE brain_sync_cursors SET lease_until=?
+      WHERE tenant_id=? AND mailbox_id=? AND folder=? AND status='partial'
+      AND uid_validity=? AND next_before_uid=? AND scanned_count=? AND indexed_count=?
+      AND error_code='MESSAGE_TOO_LARGE' AND lease_until<=?
+      AND NOT EXISTS (SELECT 1 FROM brain_messages WHERE tenant_id=? AND mailbox_id=?
+        AND message_key=?) RETURNING *`,leaseUntil,target.tenant,mailboxId,target.folder,
+    target.uidValidity,target.nextBeforeUid,target.scannedCount,target.indexedCount,now,
+    target.tenant,mailboxId,key);
+    requireValue(claimed,'RECOVERY_PRECONDITION_FAILED');
+    let committed=false;
+    try{
+      this.analysisBudget=this.env.FORPSI_ANALYSIS_PROXY_URL?1:Infinity;
+      const result=await this.indexMessage(mailbox,message,target.folder,provider,
+        consent.sent_folder);
+      requireValue(!result.unchanged,'RECOVERY_PRECONDITION_FAILED');
+      await this.access(mailboxId);
+      const finalConsent=await this.activeConsent(mailbox);
+      requireValue(finalConsent.sent_folder===target.folder,'RECOVERY_PRECONDITION_FAILED');
+      const update=this.store.db.prepare(`UPDATE brain_sync_cursors SET
+        indexed_count=indexed_count+1,error_code=NULL,lease_until=0
+        WHERE tenant_id=? AND mailbox_id=? AND folder=? AND lease_until=?
+        AND uid_validity=? AND next_before_uid=? AND scanned_count=? AND indexed_count=?
+        AND error_code='MESSAGE_TOO_LARGE'`).bind(target.tenant,mailboxId,target.folder,
+      leaseUntil,target.uidValidity,target.nextBeforeUid,target.scannedCount,
+      target.indexedCount);
+      const audit=this.store.db.prepare(`INSERT INTO audit SELECT ?,?,?,?,?,?
+        WHERE EXISTS (SELECT 1 FROM brain_sync_cursors WHERE tenant_id=? AND mailbox_id=?
+          AND folder=? AND indexed_count=? AND error_code IS NULL AND lease_until=0)`)
+        .bind(crypto.randomUUID(),this.now(),this.principal.id,mailboxId,
+          'brain.recovery.skipped_sent','completed',target.tenant,mailboxId,target.folder,
+          target.indexedCount+1);
+      const saved=await this.store.db.batch([update,audit]);
+      requireValue(saved[0].meta?.changes===1&&saved[1].meta?.changes===1,
+        'RECOVERY_CURSOR_CONFLICT');
+      committed=true;
+      const outbox=(await this.store.first('SELECT COUNT(*) AS n FROM outbox WHERE mailbox_id=?',
+        mailboxId)).n;
+      requireValue(outbox===0,'RECOVERY_OUTBOX_CHANGED');
+      console.info('mail_brain.recovery.summary',JSON.stringify({mailboxId,
+        scannedCount:target.scannedCount,indexedCount:target.indexedCount+1,
+        nextBeforeUid:target.nextBeforeUid,analysisErrorCode:this.analysisErrorCode??null,
+        outboxCount:outbox}));
+      return {mailboxId,scanned:0,indexed:1,complete:false,folders:[{
+        folder:target.folder,status:'partial',scanned:0,indexed:1,errorCode:null,
+        nextBeforeUid:target.nextBeforeUid}],reanalysis:{attempted:0,verified:0},
+      analysisErrorCode:this.analysisErrorCode??null,recovery:{status:'recovered',
+        messageId:result.messageId,caseId:result.caseId,
+        scannedCount:target.scannedCount,indexedCount:target.indexedCount+1,
+        nextBeforeUid:target.nextBeforeUid},outboxCount:outbox};
+    }finally{
+      if(!committed)await this.store.run(`UPDATE brain_sync_cursors SET lease_until=0
+        WHERE tenant_id=? AND mailbox_id=? AND folder=? AND lease_until=?`,
+      target.tenant,mailboxId,target.folder,leaseUntil);
+    }
   }
 
   async indexMessage(mailbox,message,folder,provider,sentFolder=mailbox.sent_folder) {
