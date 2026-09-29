@@ -45,15 +45,30 @@ test('Mail Brain reads a 3 MiB message without downloading its 2.5 MiB attachmen
     if(part!=='1')throw Error('Binary attachment must not be downloaded');
     return {meta:{contentType:'text/plain'},content:Readable.from([body])};
   }});
-  const result=await f.provider.readForBrain(ref);
+  const metrics={};
+  const result=await f.provider.readForBrain(ref,metrics);
   assert.equal(result.text,body.toString());
   assert.equal(result.size,3*1024*1024);
   assert.deepEqual(result.attachments,[{filename:'offer.pdf',contentType:'application/pdf',
     size:2.5*1024*1024}]);
   assert.deepEqual(downloaded.map(x=>x.part),['1']);
   assert.equal(downloaded[0].options.maxBytes,512*1024+1);
+  assert.deepEqual(metrics,{subject:'Offer',messageId:'<large@example.net>',
+    rawMessageSize:3*1024*1024,textPartsFound:1,downloadedTextParts:1,
+    downloadedBytes:body.length,textSource:'plain',
+    attachments:[{filename:'offer.pdf',contentType:'application/pdf',size:2.5*1024*1024}],
+    downloadedBinaryAttachments:0});
   assert.deepEqual(f.calls.find(c=>c[0]==='lock')[2],{readOnly:true});
   assert.equal(f.calls.some(c=>['append','move','smtp'].includes(c[0])),false);
+});
+test('diagnostic metrics refuse a raw download that could include an attachment',async()=>{
+  const f=adapter({download:async()=>{throw Error('Raw download must not happen');}});
+  const metrics={};
+  await assert.rejects(f.provider.readForBrain(ref,metrics),
+    /DIAGNOSTIC_REQUIRES_SELECTIVE_MIME/);
+  assert.equal(metrics.rawMessageSize,100);
+  assert.equal(metrics.downloadedBytes,0);
+  assert.equal(metrics.downloadedBinaryAttachments,0);
 });
 test('Mail Brain rejects oversized text and malformed MIME before claiming a read',async()=>{
   let downloads=0;
@@ -82,7 +97,13 @@ test('Mail Brain rejects a silently truncated text stream and converts bounded H
   const converted=adapter({fetchOne:async()=>({uid:10,size:3*1024*1024,
     bodyStructure:{type:'text/html',size:html.length}}),
   download:async()=>({meta:{contentType:'text/html'},content:Readable.from([html])})});
-  assert.match((await converted.provider.readForBrain(ref)).text,/Hello world/);
+  const metrics={};
+  assert.match((await converted.provider.readForBrain(ref,metrics)).text,/Hello world/);
+  assert.equal(metrics.textSource,'html');
+  assert.equal(metrics.textPartsFound,1);
+  assert.equal(metrics.downloadedTextParts,1);
+  assert.equal(metrics.downloadedBytes,html.length);
+  assert.equal(metrics.downloadedBinaryAttachments,0);
 });
 test('small messages use the same parsing result in the Mail Brain reader',async()=>{
   const f=adapter();

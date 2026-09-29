@@ -1,5 +1,5 @@
 const escape = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state={epoch:0,owner:null,data:null,resources:{},disclosures:{},accessData:null,accessDraft:null,compositionDraft:null,error:'',notice:'',tab:'mailboxes',draft:null,dirty:false,busy:false,loading:false,root:null,api:null,guard:null};
+const state={epoch:0,owner:null,data:null,resources:{},disclosures:{},accessData:null,accessDraft:null,compositionDraft:null,diagnosticResult:null,error:'',notice:'',tab:'mailboxes',draft:null,dirty:false,busy:false,loading:false,root:null,api:null,guard:null};
 const date = value => value ? new Date(value).toLocaleString('cs-CZ') : 'Dosud neověřeno';
 const tabs=[['mailboxes','Schránky'],['access','Přístupy kolegů'],['settings','Rozšířené']];
 const moduleNames={mail:'Pošta',calendar:'Kalendář',contacts:'Adresář',files:'Soubory',tasks:'Úkoly',notes:'Poznámky',signatures:'Podpisy',labels:'Štítky',rules:'Pravidla'};
@@ -184,7 +184,30 @@ function settings() {
     ${disclosure('rules','Štítky, pravidla a plánované zprávy',rules())}
     ${disclosure('audit','Log událostí',`<p>Posledních nejvýše 50 událostí.</p>${d.audit.length?`<ul>${d.audit.map(e=>`<li>${date(e.at)} · ${escape(mailboxName(e.mailbox_id))} · ${escape({'admin.composition.save':'Uložení podpisu','soai.create_draft':'Uložení konceptu','admin.save':'Uložení nastavení','admin.verify':'Test připojení','admin.set_active':'Změna dostupnosti','admin.access.save':'Změna přístupů'}[e.action] || e.action)} · ${escape(auditOutcome(e))}</li>`).join('')}</ul>`:'<p>Zatím žádné zaznamenané události.</p>'}`)}
     ${disclosure('diagnostics','Technická diagnostika',`<p>Pracovní čtení v SO.ai: ${d.soaiMailEnabled?'zapnuté pro účty s přidělenými právy':'vypnuté'}. Připojení ChatGPT: ${d.connectorEnabled?'povolené, přihlášení vyžaduje ověření':'vypnuté'}.</p>
-      <p>Ukládání nových konceptů: ${d.soaiDraftsEnabled?'zapnuté pro účty s právem Úpravy':'vypnuté'}. Podpisy platí pro SO.ai, bez synchronizace nastavení webmailu.</p><p>Šifrované ukládání hesel: ${d.credentialStorageReady?'nakonfigurováno':'čeká na nastavení'}. Načteno ${date(d.checkedAt)}.</p><p>Stav přihlášení v prohlížeči nepotvrzuje serverové připojení. Test IMAP/SMTP nepotvrzuje odeslání, doručení ani uložení kopie do Odeslané.</p>`)}`;
+      <p>Ukládání nových konceptů: ${d.soaiDraftsEnabled?'zapnuté pro účty s právem Úpravy':'vypnuté'}. Podpisy platí pro SO.ai, bez synchronizace nastavení webmailu.</p><p>Šifrované ukládání hesel: ${d.credentialStorageReady?'nakonfigurováno':'čeká na nastavení'}. Načteno ${date(d.checkedAt)}.</p><p>Stav přihlášení v prohlížeči nepotvrzuje serverové připojení. Test IMAP/SMTP nepotvrzuje odeslání, doručení ani uložení kopie do Odeslané.</p>
+      ${d.canRunBrainDiagnostic&&d.brainDiagnosticEnabled?`${button('brain-diagnostic','Ověřit selective MIME – UID 74324')}${diagnosticResult()}`:''}`)}`;
+}
+function diagnosticResult(){
+  const r=state.diagnosticResult;if(!r)return '';
+  const field=(label,value)=>`<div><dt>${label}</dt><dd>${escape(value??'—')}</dd></div>`;
+  return `<dl class="forpsi-service-status" data-forpsi-brain-diagnostic-result>
+    ${field('Úspěch',r.success===true?'ano':'ne')}${field('Kód chyby',r.errorCode)}
+    ${field('Předmět',r.subject)}${field('Message-ID',r.messageId)}
+    ${field('Velikost raw zprávy (bajty)',r.rawMessageSize)}
+    ${field('Nalezené textové části',r.textPartsFound)}
+    ${field('Stažené textové části',r.downloadedTextParts)}
+    ${field('Stažené bajty',r.downloadedBytes)}${field('Zdroj textu',r.textSource)}
+    ${field('Stažené binární přílohy',r.downloadedBinaryAttachments)}</dl>
+    <p>Metadata příloh:</p><ul>${(Array.isArray(r.attachments)?r.attachments:[]).map(a=>`<li>${escape(a.filename??'—')} · ${escape(a.contentType??'—')} · ${escape(a.size??'—')} bajtů</li>`).join('')||'<li>Žádné</li>'}</ul>`;
+}
+function safeDiagnosticResult(r){
+  return {success:r.success===true,errorCode:r.errorCode??null,subject:r.subject??null,
+    messageId:r.messageId??null,rawMessageSize:r.rawMessageSize??null,
+    textPartsFound:r.textPartsFound??0,downloadedTextParts:r.downloadedTextParts??0,
+    downloadedBytes:r.downloadedBytes??0,textSource:r.textSource??null,
+    downloadedBinaryAttachments:r.downloadedBinaryAttachments??0,
+    attachments:(Array.isArray(r.attachments)?r.attachments:[]).map(a=>({
+      filename:a.filename??null,contentType:a.contentType??null,size:a.size??null}))};
 }
 function auditOutcome(event) {
   if(event.action!=='admin.access.save') return ({saved:'Uloženo',uncertain:'Výsledek uložení je nejistý'})[event.outcome] || event.outcome;
@@ -239,7 +262,7 @@ export async function saveForpsiDraft() {
 }
 export function forpsiAdminSection(owner) { return `<section id="forpsi-admin" class="users-panel forpsi-admin" data-forpsi-root data-owner="${escape(owner)}"></section>`; }
 export function mountForpsiAdmin(app,{apiJson,guard,owner}) {
-  if(state.owner!==owner) { Object.assign(state,{epoch:state.epoch+1,owner,data:null,resources:{},disclosures:{},accessData:null,accessDraft:null,compositionDraft:null,draft:null,dirty:false,error:'',notice:'',tab:'mailboxes',loading:false,busy:false}); }
+  if(state.owner!==owner) { Object.assign(state,{epoch:state.epoch+1,owner,data:null,resources:{},disclosures:{},accessData:null,accessDraft:null,compositionDraft:null,diagnosticResult:null,draft:null,dirty:false,error:'',notice:'',tab:'mailboxes',loading:false,busy:false}); }
   const root=app.querySelector('[data-forpsi-root]'); if(!root) { state.root=null; return; }
   state.root=root; state.api=apiJson;
   // Panel actions only repaint this panel; other settings forms stay mounted.
@@ -272,6 +295,14 @@ export function mountForpsiAdmin(app,{apiJson,guard,owner}) {
   root.addEventListener('click',event=>{
     const b=event.target.closest('[data-forpsi-action]'); if(!b) return; event.preventDefault(); event.stopPropagation(); if(state.busy) return;
     const action=b.dataset.forpsiAction;
+    if(action==='brain-diagnostic'){
+      if(!state.data?.canRunBrainDiagnostic||!state.data?.brainDiagnosticEnabled)return;
+      const epoch=state.epoch;state.busy=true;state.error='';state.diagnosticResult=null;paint();
+      void command('diagnostic_uid_74324',{}).then(result=>{
+        if(epoch===state.epoch)state.diagnosticResult=safeDiagnosticResult(result);
+      }).catch(error=>{if(epoch===state.epoch)state.error=error.message;})
+        .finally(()=>{if(epoch===state.epoch){state.busy=false;paint();}});return;
+    }
     if(action==='brain-rule-toggle'){
       const rule=(state.data.brainRules??[]).find(r=>r.id===b.dataset.id);if(!rule)return;
       const epoch=state.epoch;state.busy=true;state.error='';paint();

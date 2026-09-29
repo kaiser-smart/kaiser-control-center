@@ -55,10 +55,11 @@ function brainMimeParts(root) {
     }
   };
   visit(root,0,true);
-  return {textParts:plain.length?plain:html,attachments,htmlOnly:plain.length===0};
+  return {textParts:plain.length?plain:html,attachments,htmlOnly:plain.length===0,
+    textPartsFound:plain.length+html.length};
 }
 
-async function brainTextPart(client,uid,part,remaining) {
+async function brainTextPart(client,uid,part,remaining,diagnostics) {
   requireValue(part.size<=remaining,'MESSAGE_TOO_LARGE');
   const downloaded=await client.download(String(uid),part.part,{uid:true,maxBytes:remaining+1});
   requireValue(downloaded?.content,'MIME_PART_UNAVAILABLE');
@@ -70,6 +71,7 @@ async function brainTextPart(client,uid,part,remaining) {
   let size=0;
   for await(const chunk of downloaded.content){
     size+=chunk.length;
+    if(diagnostics)diagnostics.downloadedBytes+=chunk.length;
     requireValue(size<=remaining,'MESSAGE_TOO_LARGE');
     chunks.push(chunk);
   }
@@ -171,12 +173,24 @@ export class Forpsi {
           contentType: a.contentType, size: a.size })) };
     }));
   }
-  async readForBrain(ref) {
+  async readForBrain(ref,diagnostics=null) {
+    if(diagnostics)Object.assign(diagnostics,{subject:null,messageId:null,rawMessageSize:null,
+      textPartsFound:0,downloadedTextParts:0,downloadedBytes:0,textSource:null,
+      attachments:[],downloadedBinaryAttachments:0});
     return this.imap(client=>this.locked(client,ref,true,async()=>{
       const initial=await client.fetchOne(String(ref.uid),
         {envelope:true,flags:true,size:true},{uid:true});
       requireValue(initial,'MESSAGE_NOT_FOUND');
       requireValue(Number.isSafeInteger(initial.size)&&initial.size>=0,'MIME_STRUCTURE_INVALID');
+      if(diagnostics){
+        requireValue(initial.uid===ref.uid,'SOURCE_REFERENCE_MISMATCH');
+        diagnostics.subject=initial.envelope?.subject??'';
+        diagnostics.messageId=initial.envelope?.messageId??null;
+        diagnostics.rawMessageSize=initial.size;
+        // A raw small-message download could include attachments, so a diagnostic
+        // claiming zero binary downloads must use the selective MIME path.
+        requireValue(initial.size>MAX_MESSAGE,'DIAGNOSTIC_REQUIRES_SELECTIVE_MIME');
+      }
       if(initial.size<=MAX_MESSAGE){
         // The ordinary reader remains the source of truth for small messages.
         // Read under this lock so another client cannot change the selected folder.
@@ -202,13 +216,16 @@ export class Forpsi {
       requireValue(item,'MESSAGE_NOT_FOUND');
       requireValue(item.uid===initial.uid&&item.size===initial.size&&
         item.envelope?.messageId===initial.envelope?.messageId,'SOURCE_CHANGED_DURING_READ');
-      const {textParts,attachments,htmlOnly}=brainMimeParts(item.bodyStructure);
+      const {textParts,attachments,htmlOnly,textPartsFound}=brainMimeParts(item.bodyStructure);
+      if(diagnostics)Object.assign(diagnostics,{textPartsFound,
+        textSource:htmlOnly?'html':'plain',attachments});
       requireValue(textParts.length>0,'MIME_TEXT_UNAVAILABLE');
       requireValue(!item.headers||Buffer.byteLength(item.headers)<=MAX_BRAIN_HEADERS,
         'MIME_HEADERS_TOO_LARGE');
       const chunks=[];let size=0;
       for(const part of textParts){
-        const content=await brainTextPart(client,ref.uid,part,MAX_BRAIN_TEXT-size);
+        const content=await brainTextPart(client,ref.uid,part,MAX_BRAIN_TEXT-size,diagnostics);
+        if(diagnostics)diagnostics.downloadedTextParts++;
         size+=content.length;chunks.push(content);
       }
       let decoded;

@@ -7,7 +7,7 @@ import { capabilities } from './capabilities.mjs';
 import { requireValue, ConnectorError } from './errors.mjs';
 import { providerDiagnostic } from './diagnostics.mjs';
 import { readResources, validateFolderChange } from './admin-resources.mjs';
-import { listAccess, saveAccess } from './admin-access.mjs';
+import { listAccess, saveAccess, SOAI_ISSUER } from './admin-access.mjs';
 import { profileSelection, profileInput, compositionProfile, saveCompositionProfile } from './composition.mjs';
 import { ACTIONS } from './access-policy.mjs';
 
@@ -19,6 +19,19 @@ const save = z.object({ id: id.optional(), requestId: z.string().uuid(), revisio
   draftsFolder: folder, sentFolder: folder, trashFolder: folder,
   password: z.string().min(1).max(1024).optional() }).strict();
 const selection = z.object({ id, revision }).strict();
+const diagnosticSelection=z.object({mailboxId:id,
+  folder:z.string().min(1).max(500).refine(s=>!/[\x00-\x1f]/.test(s)),
+  uid:z.number().int().min(1).max(4294967295),
+  uidValidity:z.string().regex(/^\d{1,20}$/)}).strict();
+const diagnosticErrorCodes=new Set(['MESSAGE_NOT_FOUND','STALE_MESSAGE_REFERENCE',
+  'SOURCE_REFERENCE_MISMATCH','SOURCE_CHANGED_DURING_READ','MESSAGE_TOO_LARGE',
+  'MIME_STRUCTURE_INVALID','MIME_TEXT_UNAVAILABLE','MIME_PART_UNAVAILABLE',
+  'MIME_PART_MISMATCH','MIME_PART_INCOMPLETE','MIME_TEXT_UNREADABLE',
+  'MIME_HEADERS_TOO_LARGE','DIAGNOSTIC_REQUIRES_SELECTIVE_MIME']);
+const diagnosticError=error=>{
+  const code=error?.code??error?.message;
+  return diagnosticErrorCodes.has(code)?code:'PROVIDER_UNAVAILABLE';
+};
 const schemas = { overview: z.object({}).strict(), save,
   brain_rule_save:z.object({ruleId:z.string().uuid().optional(),version:revision.optional(),
     mailboxId:id.optional(),category:z.string().min(1).max(80),senderAddress:z.email().optional(),
@@ -28,7 +41,8 @@ const schemas = { overview: z.object({}).strict(), save,
   access_list: z.object({id}).strict(),
   access_save: selection.extend({userId:id,actions:z.array(z.enum(ACTIONS)).max(5)
     .refine(a=>new Set(a).size===a.length && (!a.includes('schedule') || a.includes('send')))}).strict(),
-  verify: selection, resources: selection, set_active: selection.extend({ active: z.boolean() }) };
+  verify: selection, resources: z.union([selection,diagnosticSelection]),
+  set_active: selection.extend({ active: z.boolean() }) };
 const publicColumns = `m.id,m.address,m.display_name,m.active,m.revision,m.drafts_folder,m.sent_folder,m.trash_folder,
   m.updated_at,m.updated_by,m.verified_at,m.verification_json`;
 function publicMailbox(m) {
@@ -75,12 +89,60 @@ export async function executeAdmin(operation, raw, ctx) {
       rules: rules.slice(0,200), labels: labels.slice(0,200),
       brainRules:brainRules.slice(0,200),brainEnabled:env.MAIL_BRAIN_ENABLED==='true',
       brainPilotReadOnly:env.MAIL_BRAIN_PILOT_READ_ONLY==='true',
+      brainDiagnosticEnabled:env.MAIL_BRAIN_DIAGNOSTIC_ENABLED==='true'&&
+        env.MAIL_BRAIN_PILOT_READ_ONLY==='true'&&
+        env.MAIL_BRAIN_PILOT_MAILBOX_ID==='mail_d4cfaf87-2357-4586-97a3-b9ec1782af8f'&&
+        env.MAIL_BRAIN_DIAG_TARGET_FOLDER==='INBOX.Sent Items'&&
+        env.MAIL_BRAIN_DIAG_TARGET_UID==='74324'&&
+        env.MAIL_BRAIN_DIAG_TARGET_UIDVALIDITY==='1381849700',
       truncated: { grants:grants.length>500, rules:rules.length>200, labels:labels.length>200 },
       capabilities: capabilities(), connectorEnabled: env.CONNECTOR_ENABLED === 'true',
       soaiMailEnabled: env.SOAI_MAIL_ENABLED === 'true',
       soaiDraftsEnabled: env.SOAI_DRAFTS_ENABLED === 'true',
       credentialStorageReady: Boolean(env.CREDENTIALS_KEY), oauthConfigured: Boolean(env.OAUTH_ISSUER && env.OAUTH_JWKS_URL && env.MCP_RESOURCE),
       verificationMode: ctx.verificationMode ?? 'provider', checkedAt: Date.now() };
+  }
+  // The existing authenticated admin resources route carries this one-message
+  // read-only diagnostic without adding a public endpoint or MCP tool.
+  if(operation==='resources'&&'mailboxId' in p){
+    requireValue(env.MAIL_BRAIN_DIAGNOSTIC_ENABLED==='true'&&
+      env.MAIL_BRAIN_PILOT_READ_ONLY==='true','DIAGNOSTIC_DISABLED');
+    requireValue(p.mailboxId===env.MAIL_BRAIN_PILOT_MAILBOX_ID&&
+      p.folder===env.MAIL_BRAIN_DIAG_TARGET_FOLDER&&
+      String(p.uid)===env.MAIL_BRAIN_DIAG_TARGET_UID&&
+      p.uidValidity===env.MAIL_BRAIN_DIAG_TARGET_UIDVALIDITY,
+    'DIAGNOSTIC_TARGET_DENIED');
+    const m=await mailbox(store,tenant,p.mailboxId);
+    requireValue(m.active===1&&m.sent_folder===p.folder,'ACCESS_DENIED');
+    const identity=await store.identity(SOAI_ISSUER,actorId);
+    requireValue(identity?.tenant_id===tenant,'ACCESS_DENIED');
+    const principal={id:identity.id,scopes:['forpsi:read']};
+    const permitted=async()=>{
+      await store.access(principal,m.id,'read');
+      const consent=await store.first(`SELECT 1 FROM brain_consents WHERE tenant_id=?
+        AND principal_id=? AND mailbox_id=? AND sent_folder=? AND revoked_at IS NULL`,
+      tenant,identity.id,m.id,p.folder);
+      requireValue(consent,'BRAIN_CONSENT_REQUIRED');
+    };
+    await permitted();
+    const provider=providerFactory(env,m);
+    requireValue(typeof provider.readForBrain==='function','DIAGNOSTIC_READER_UNAVAILABLE');
+    const metrics={};let readError=null;
+    try{await provider.readForBrain({folder:p.folder,uid:p.uid,
+      uidValidity:p.uidValidity},metrics);}
+    catch(error){readError=diagnosticError(error);}
+    await permitted();
+    const clean=value=>typeof value==='string'?value.replace(/[\x00-\x1f\x7f]/g,' ').slice(0,500):null;
+    return {success:readError===null,errorCode:readError,
+      subject:clean(metrics.subject),messageId:clean(metrics.messageId),
+      rawMessageSize:metrics.rawMessageSize??null,
+      textPartsFound:metrics.textPartsFound??0,
+      downloadedTextParts:metrics.downloadedTextParts??0,
+      downloadedBytes:metrics.downloadedBytes??0,
+      textSource:metrics.textSource??null,
+      attachments:(metrics.attachments??[]).map(a=>({filename:clean(a.filename),
+        contentType:clean(a.contentType),size:a.size??null})),
+      downloadedBinaryAttachments:metrics.downloadedBinaryAttachments??0};
   }
   if(operation==='brain_rule_save'){
     requireValue(env.MAIL_BRAIN_ENABLED==='true','MAIL_BRAIN_DISABLED');
