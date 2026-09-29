@@ -113,7 +113,7 @@ export async function executeAdmin(operation, raw, ctx) {
       p.uidValidity===env.MAIL_BRAIN_DIAG_TARGET_UIDVALIDITY,
     'DIAGNOSTIC_TARGET_DENIED');
     const m=await mailbox(store,tenant,p.mailboxId);
-    requireValue(m.active===1&&m.sent_folder===p.folder,'ACCESS_DENIED');
+    requireValue(m.active===1,'ACCESS_DENIED');
     const identity=await store.identity(SOAI_ISSUER,actorId);
     requireValue(identity?.tenant_id===tenant,'ACCESS_DENIED');
     const principal={id:identity.id,scopes:['forpsi:read']};
@@ -133,16 +133,38 @@ export async function executeAdmin(operation, raw, ctx) {
     catch(error){readError=diagnosticError(error);}
     await permitted();
     const clean=value=>typeof value==='string'?value.replace(/[\x00-\x1f\x7f]/g,' ').slice(0,500):null;
-    return {success:readError===null,errorCode:readError,
+    const downloadedParts=(metrics.downloadedParts??[]).map(part=>({
+      part:clean(part.part),contentType:clean(part.contentType),
+      bytes:Number.isSafeInteger(part.bytes)&&part.bytes>=0?part.bytes:0,
+      complete:part.complete===true}));
+    const attachmentParts=new Set((metrics.attachments??[]).map(a=>a.part));
+    const downloadedAttachmentParts=downloadedParts.filter(part=>
+      attachmentParts.has(part.part));
+    const result={success:readError===null,errorCode:readError,
       subject:clean(metrics.subject),messageId:clean(metrics.messageId),
       rawMessageSize:metrics.rawMessageSize??null,
       textPartsFound:metrics.textPartsFound??0,
       downloadedTextParts:metrics.downloadedTextParts??0,
+      // Counts MIME body part stream bytes, excluding IMAP metadata and protocol traffic.
       downloadedBytes:metrics.downloadedBytes??0,
+      downloadedMimeBodyBytes:metrics.downloadedBytes??0,
+      downloadedParts,
       textSource:metrics.textSource??null,
-      attachments:(metrics.attachments??[]).map(a=>({filename:clean(a.filename),
+      attachments:(metrics.attachments??[]).map(a=>({part:clean(a.part),filename:clean(a.filename),
         contentType:clean(a.contentType),size:a.size??null})),
-      downloadedBinaryAttachments:metrics.downloadedBinaryAttachments??0};
+      downloadedAttachmentParts:downloadedAttachmentParts.length,
+      downloadedBinaryAttachments:downloadedAttachmentParts.filter(part=>
+        !part.contentType?.startsWith('text/')).length};
+    // The Pages control intentionally shows fewer fields. Ephemeral Worker tail
+    // exposes only these safe measurements for the single authorized live test.
+    console.info('mail_brain.diagnostic.result',JSON.stringify({
+      success:result.success,errorCode:result.errorCode,
+      rawMessageSize:result.rawMessageSize,textPartsFound:result.textPartsFound,
+      downloadedParts:result.downloadedParts,textSource:result.textSource,
+      attachments:result.attachments,
+      downloadedAttachmentParts:result.downloadedAttachmentParts,
+      downloadedBinaryAttachments:result.downloadedBinaryAttachments}));
+    return result;
   }
   if(operation==='brain_rule_save'){
     requireValue(env.MAIL_BRAIN_ENABLED==='true','MAIL_BRAIN_DISABLED');

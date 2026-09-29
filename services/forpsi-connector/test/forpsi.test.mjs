@@ -56,8 +56,9 @@ test('Mail Brain reads a 3 MiB message without downloading its 2.5 MiB attachmen
   assert.deepEqual(metrics,{subject:'Offer',messageId:'<large@example.net>',
     rawMessageSize:3*1024*1024,textPartsFound:1,downloadedTextParts:1,
     downloadedBytes:body.length,textSource:'plain',
-    attachments:[{filename:'offer.pdf',contentType:'application/pdf',size:2.5*1024*1024}],
-    downloadedBinaryAttachments:0});
+    attachments:[{part:'2',filename:'offer.pdf',contentType:'application/pdf',
+      size:2.5*1024*1024}],
+    downloadedParts:[{part:'1',contentType:'text/plain',bytes:body.length,complete:true}]});
   assert.deepEqual(f.calls.find(c=>c[0]==='lock')[2],{readOnly:true});
   assert.equal(f.calls.some(c=>['append','move','smtp'].includes(c[0])),false);
 });
@@ -68,7 +69,7 @@ test('diagnostic metrics refuse a raw download that could include an attachment'
     /DIAGNOSTIC_REQUIRES_SELECTIVE_MIME/);
   assert.equal(metrics.rawMessageSize,100);
   assert.equal(metrics.downloadedBytes,0);
-  assert.equal(metrics.downloadedBinaryAttachments,0);
+  assert.deepEqual(metrics.downloadedParts,[]);
 });
 test('Mail Brain rejects oversized text and malformed MIME before claiming a read',async()=>{
   let downloads=0;
@@ -92,7 +93,11 @@ test('Mail Brain rejects a silently truncated text stream and converts bounded H
     bodyStructure:{type:'text/plain',encoding:'7bit',size:20}}),
   download:async()=>({meta:{contentType:'text/plain'},
     content:Readable.from([Buffer.from('short')])})});
-  await assert.rejects(incomplete.provider.readForBrain(ref),/MIME_PART_INCOMPLETE/);
+  const incompleteMetrics={};
+  await assert.rejects(incomplete.provider.readForBrain(ref,incompleteMetrics),
+    /MIME_PART_INCOMPLETE/);
+  assert.deepEqual(incompleteMetrics.downloadedParts,[{part:'1',contentType:'text/plain',
+    bytes:5,complete:false}]);
   const html=Buffer.from('<p>Hello <strong>world</strong>.</p>');
   const converted=adapter({fetchOne:async()=>({uid:10,size:3*1024*1024,
     bodyStructure:{type:'text/html',size:html.length}}),
@@ -103,7 +108,8 @@ test('Mail Brain rejects a silently truncated text stream and converts bounded H
   assert.equal(metrics.textPartsFound,1);
   assert.equal(metrics.downloadedTextParts,1);
   assert.equal(metrics.downloadedBytes,html.length);
-  assert.equal(metrics.downloadedBinaryAttachments,0);
+  assert.deepEqual(metrics.downloadedParts,[{part:'1',contentType:'text/html',
+    bytes:html.length,complete:true}]);
 });
 test('small messages use the same parsing result in the Mail Brain reader',async()=>{
   const f=adapter();

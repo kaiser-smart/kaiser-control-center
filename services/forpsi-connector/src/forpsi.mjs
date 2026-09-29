@@ -21,7 +21,7 @@ const publicEnvelope = item => ({ uid: item.uid, subject: item.envelope?.subject
   inReplyTo: item.envelope?.inReplyTo ?? null });
 
 function brainMimeParts(root) {
-  const plain=[],html=[],attachments=[],seen=new Set();
+  const plain=[],html=[],attachments=[],attachmentParts=[],seen=new Set();
   let count=0;
   const visit=(node,depth,isRoot=false)=>{
     requireValue(node&&typeof node==='object'&&++count<=MAX_BRAIN_MIME_NODES&&
@@ -52,15 +52,21 @@ function brainMimeParts(root) {
       (type==='text/plain'?plain:html).push(candidate);
     } else {
       attachments.push({filename,contentType:type,size:node.size});
+      attachmentParts.push({part,filename,contentType:type,size:node.size});
     }
   };
   visit(root,0,true);
-  return {textParts:plain.length?plain:html,attachments,htmlOnly:plain.length===0,
+  return {textParts:plain.length?plain:html,attachments,attachmentParts,
+    htmlOnly:plain.length===0,
     textPartsFound:plain.length+html.length};
 }
 
 async function brainTextPart(client,uid,part,remaining,diagnostics) {
   requireValue(part.size<=remaining,'MESSAGE_TOO_LARGE');
+  // This records the exact MIME part handed to IMAP download; bytes below count
+  // only chunks delivered by its body stream, never metadata or protocol traffic.
+  const measured=diagnostics?{part:part.part,contentType:part.type,bytes:0,complete:false}:null;
+  if(measured)diagnostics.downloadedParts.push(measured);
   const downloaded=await client.download(String(uid),part.part,{uid:true,maxBytes:remaining+1});
   requireValue(downloaded?.content,'MIME_PART_UNAVAILABLE');
   requireValue(!downloaded.meta?.contentType||
@@ -71,7 +77,7 @@ async function brainTextPart(client,uid,part,remaining,diagnostics) {
   let size=0;
   for await(const chunk of downloaded.content){
     size+=chunk.length;
-    if(diagnostics)diagnostics.downloadedBytes+=chunk.length;
+    if(diagnostics){diagnostics.downloadedBytes+=chunk.length;measured.bytes+=chunk.length;}
     requireValue(size<=remaining,'MESSAGE_TOO_LARGE');
     chunks.push(chunk);
   }
@@ -79,6 +85,7 @@ async function brainTextPart(client,uid,part,remaining,diagnostics) {
   if(['','7bit','8bit','binary'].includes(part.encoding)&&!part.flowed&&
     ['', 'utf-8','us-ascii'].includes(part.charset))
     requireValue(size===part.size,'MIME_PART_INCOMPLETE');
+  if(measured)measured.complete=true;
   return Buffer.concat(chunks,size);
 }
 
@@ -176,7 +183,7 @@ export class Forpsi {
   async readForBrain(ref,diagnostics=null) {
     if(diagnostics)Object.assign(diagnostics,{subject:null,messageId:null,rawMessageSize:null,
       textPartsFound:0,downloadedTextParts:0,downloadedBytes:0,textSource:null,
-      attachments:[],downloadedBinaryAttachments:0});
+      attachments:[],downloadedParts:[]});
     return this.imap(client=>this.locked(client,ref,true,async()=>{
       const initial=await client.fetchOne(String(ref.uid),
         {envelope:true,flags:true,size:true},{uid:true});
@@ -216,9 +223,10 @@ export class Forpsi {
       requireValue(item,'MESSAGE_NOT_FOUND');
       requireValue(item.uid===initial.uid&&item.size===initial.size&&
         item.envelope?.messageId===initial.envelope?.messageId,'SOURCE_CHANGED_DURING_READ');
-      const {textParts,attachments,htmlOnly,textPartsFound}=brainMimeParts(item.bodyStructure);
+      const {textParts,attachments,attachmentParts,htmlOnly,textPartsFound}=
+        brainMimeParts(item.bodyStructure);
       if(diagnostics)Object.assign(diagnostics,{textPartsFound,
-        textSource:htmlOnly?'html':'plain',attachments});
+        textSource:htmlOnly?'html':'plain',attachments:attachmentParts});
       requireValue(textParts.length>0,'MIME_TEXT_UNAVAILABLE');
       requireValue(!item.headers||Buffer.byteLength(item.headers)<=MAX_BRAIN_HEADERS,
         'MIME_HEADERS_TOO_LARGE');
