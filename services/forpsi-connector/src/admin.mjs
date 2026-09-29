@@ -89,6 +89,12 @@ export async function executeAdmin(operation, raw, ctx) {
       rules: rules.slice(0,200), labels: labels.slice(0,200),
       brainRules:brainRules.slice(0,200),brainEnabled:env.MAIL_BRAIN_ENABLED==='true',
       brainPilotReadOnly:env.MAIL_BRAIN_PILOT_READ_ONLY==='true',
+      brainDiagnosticEnabled:env.MAIL_BRAIN_DIAGNOSTIC_ENABLED==='true'&&
+        env.MAIL_BRAIN_PILOT_READ_ONLY==='true'&&
+        env.MAIL_BRAIN_PILOT_MAILBOX_ID==='mail_d4cfaf87-2357-4586-97a3-b9ec1782af8f'&&
+        env.MAIL_BRAIN_DIAG_TARGET_FOLDER==='INBOX.Sent Items'&&
+        env.MAIL_BRAIN_DIAG_TARGET_UID==='74324'&&
+        env.MAIL_BRAIN_DIAG_TARGET_UIDVALIDITY==='1381849700',
       truncated: { grants:grants.length>500, rules:rules.length>200, labels:labels.length>200 },
       capabilities: capabilities(), connectorEnabled: env.CONNECTOR_ENABLED === 'true',
       soaiMailEnabled: env.SOAI_MAIL_ENABLED === 'true',

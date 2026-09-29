@@ -17,6 +17,9 @@ const messages = {
   VERIFICATION_REQUIRED:'Před zapnutím ověřte přihlášení k příchozí a odchozí poště.',
   ADMIN_LIMIT_EXCEEDED:'Přehled překročil limit. Je potřeba doplnit stránkování.'
 };
+// Temporary one-message pilot control. The browser never supplies a reference.
+const brainDiagnosticTarget=Object.freeze({mailboxId:'mail_d4cfaf87-2357-4586-97a3-b9ec1782af8f',
+  folder:'INBOX.Sent Items',uid:74324,uidValidity:'1381849700'});
 
 export async function forwardForpsiAdmin({request,env}) {
   // Reuse the existing session and permission checks; never trust an actor from the browser.
@@ -39,8 +42,16 @@ export async function forwardForpsiAdmin({request,env}) {
       const bytes=new Uint8Array(size); let offset=0; for(const part of parts) { bytes.set(part,offset); offset+=part.byteLength; }
       command=JSON.parse(new TextDecoder().decode(bytes));
       if(!command || Object.keys(command).some(k=>!['operation','payload'].includes(k)) ||
-        !['save','verify','resources','set_active','access_list','access_save','composition_get','composition_save','brain_rule_save'].includes(command.operation) || !command.payload || typeof command.payload!=='object') throw new Error();
+        !['save','verify','resources','set_active','access_list','access_save','composition_get','composition_save','brain_rule_save','diagnostic_uid_74324'].includes(command.operation) || !command.payload || typeof command.payload!=='object' || Array.isArray(command.payload)) throw new Error();
     } catch { return json({error:messages.INVALID_INPUT},400); }
+  }
+  // Never forward diagnostic coordinates supplied by a browser, even for an admin.
+  if(command.operation==='resources'&&Object.hasOwn(command.payload,'mailboxId'))
+    return json({error:messages.INVALID_INPUT},400);
+  if(command.operation==='diagnostic_uid_74324'){
+    if(user.role!=='admin')return json({error:'Nemáte oprávnění.',code:'ACCESS_DENIED'},403);
+    if(Object.keys(command.payload).length)return json({error:messages.INVALID_INPUT},400);
+    command={operation:'resources',payload:brainDiagnosticTarget};
   }
   if(command.operation.startsWith('composition_')) {
     try {const actor=await currentUser(env,request,{strict:true});if(!hasPermission(actor,'settings','manage'))return json({error:'Nemáte oprávnění spravovat podpisy.'},403);}
@@ -71,6 +82,7 @@ export async function forwardForpsiAdmin({request,env}) {
     }));
     const body=await result.json();
     if(!result.ok) return json({error:messages[body.error] || 'Konektor není dostupný. Změnu nepovažujte za uloženou.',code:Object.hasOwn(messages,body.error)?body.error:'ADMIN_UNAVAILABLE'},result.status>=400?result.status:503);
+    if(command.operation==='overview')body.canRunBrainDiagnostic=user.role==='admin';
     if(directory) {
       body.users=directory.map(item=>({id:item.id,name:item.name || '',email:item.email || '',active:isUserActive(item)}));
       body.canManageAccess=hasPermission(directory.find(item=>item.id===user.id),'users','edit');

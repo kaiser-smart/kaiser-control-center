@@ -98,43 +98,59 @@ test('SO.ai exposes resource discovery through existing session, origin and tena
   assert.equal(f.calls.length,0);
 });
 
-test('existing SO.ai admin resources route carries only the exact gated Mail Brain diagnostic',async()=>{
-  const f=fixture(),calls=[];
-  f.env.CONNECTOR_ADMIN_TOKEN='synthetic-test-admin-token-longer-than-32';
-  f.env.FORPSI_TENANT_ID='tenant-a';
-  Object.assign(f.env,{MAIL_BRAIN_DIAGNOSTIC_ENABLED:'true',
-    MAIL_BRAIN_PILOT_READ_ONLY:'true',MAIL_BRAIN_PILOT_MAILBOX_ID:'mail-a',
-    MAIL_BRAIN_DIAG_TARGET_FOLDER:'Sent',MAIL_BRAIN_DIAG_TARGET_UID:'74324',
-    MAIL_BRAIN_DIAG_TARGET_UIDVALIDITY:'3'});
-  f.sqlite.prepare('UPDATE mailboxes SET sent_folder=? WHERE id=?').run('Sent','mail-a');
-  f.sqlite.prepare('INSERT INTO principals VALUES (?,?,?,?,1)').run('soai-admin',
-    'tenant-a','urn:smart-odpady:session',admin.id);
-  f.sqlite.prepare('INSERT INTO grants VALUES (?,?,?,0)').run('soai-admin','mail-a','read');
-  f.sqlite.prepare(`INSERT INTO brain_consents
-    (tenant_id,principal_id,mailbox_id,sent_folder,consented_at) VALUES (?,?,?,?,?)`)
-    .run('tenant-a','soai-admin','mail-a','Sent',Date.now());
-  const providerFactory=()=>({async readForBrain(reference,metrics){
-    calls.push(reference);Object.assign(metrics,{subject:'Diagnostic',messageId:'<only@example.test>',
-      rawMessageSize:3*1024*1024,textPartsFound:1,downloadedTextParts:1,
-      downloadedBytes:20,textSource:'plain',attachments:[],downloadedBinaryAttachments:0});
-    return {text:'never release body'};
-  }});
-  const worker=createWorker({providerFactory});
-  const env={AUTH_MODE:'mock',AUTH_USERS_JSON:JSON.stringify([admin,user]),
-    FORPSI_ADMIN_TOKEN:f.env.CONNECTOR_ADMIN_TOKEN,
-    FORPSI_CONNECTOR:{fetch:request=>worker.fetch(request,f.env)}};
-  const payload={mailboxId:'mail-a',folder:'Sent',uid:74324,uidValidity:'3'};
-  const command={operation:'resources',payload};
+test('SO.ai fixed diagnostic command is admin-only and browser coordinates cannot reach Worker',async()=>{
+  const {env,f}=setup(),calls=[];
+  env.FORPSI_CONNECTOR.fetch=async request=>{
+    calls.push(await request.json());
+    return Response.json({success:true,downloadedBinaryAttachments:0});
+  };
   const before=f.sqlite.prepare('SELECT total_changes() AS n').get().n;
-  assert.equal((await forwardForpsiAdmin({env,request:await req(env,user,command)})).status,403);
-  const result=await forwardForpsiAdmin({env,request:await req(env,admin,command)});
+  const fixed={operation:'diagnostic_uid_74324',payload:{}};
+  assert.equal((await forwardForpsiAdmin({env,request:await req(env,user,fixed)})).status,403);
+  assert.equal((await forwardForpsiAdmin({env,request:await req(env,admin,
+    {operation:'resources',payload:{mailboxId:'mail-a',folder:'Sent',uid:1,uidValidity:'3'}})})).status,400);
+  assert.equal((await forwardForpsiAdmin({env,request:await req(env,admin,
+    {operation:'diagnostic_uid_74324',payload:{uid:1}})})).status,400);
+  assert.equal(calls.length,0);
+  const result=await forwardForpsiAdmin({env,request:await req(env,admin,fixed)});
   assert.equal(result.status,200);
-  const body=await result.json();
-  assert.equal(body.success,true);
-  assert.equal(body.downloadedBinaryAttachments,0);
-  assert.equal(JSON.stringify(body).includes('never release body'),false);
-  assert.deepEqual(calls,[{folder:'Sent',uid:74324,uidValidity:'3'}]);
+  assert.equal((await result.json()).downloadedBinaryAttachments,0);
+  assert.deepEqual(calls,[{operation:'resources',actorId:admin.id,payload:{
+    mailboxId:'mail_d4cfaf87-2357-4586-97a3-b9ec1782af8f',
+    folder:'INBOX.Sent Items',uid:74324,uidValidity:'1381849700'}}]);
   assert.equal(f.sqlite.prepare('SELECT total_changes() AS n').get().n,before);
+});
+
+test('admin-only diagnostic button appears only with Worker flag and renders safe metadata',async()=>{
+  const listeners={};
+  const root={isConnected:true,innerHTML:'',addEventListener:(name,fn)=>{listeners[name]=fn;},querySelector:()=>null,querySelectorAll:()=>[]};
+  const data={mailboxes:[],grants:[],audit:[],queue:[],rules:[],labels:[],truncated:{},
+    capabilities:{modules:[]},connectorEnabled:false,credentialStorageReady:true,
+    canRunBrainDiagnostic:true,brainDiagnosticEnabled:true};
+  const calls=[];
+  const apiJson=async(_url,options)=>{
+    if(!options)return data;
+    calls.push(JSON.parse(options.body));
+    return {success:true,errorCode:null,subject:'<subject>',messageId:'<id>',
+      rawMessageSize:3145728,textPartsFound:2,downloadedTextParts:1,downloadedBytes:40,
+      textSource:'plain',attachments:[{filename:'<invoice.pdf>',contentType:'application/pdf',size:2500000}],
+      downloadedBinaryAttachments:0,body:'private-body',token:'private-token'};
+  };
+  mountForpsiAdmin({querySelector:()=>root},{owner:'diagnostic-ui-owner',apiJson,guard:action=>action()});
+  await new Promise(resolve=>setImmediate(resolve));
+  const click=action=>listeners.click({target:{closest:()=>({dataset:{forpsiAction:action,tab:'settings'}})},preventDefault(){},stopPropagation(){}});
+  click('tab');await new Promise(resolve=>setImmediate(resolve));
+  assert.match(root.innerHTML,/Ověřit selective MIME – UID 74324/);
+  click('brain-diagnostic');await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(calls,[{operation:'diagnostic_uid_74324',payload:{}}]);
+  assert.match(root.innerHTML,/3145728/);
+  assert.match(root.innerHTML,/&lt;invoice.pdf&gt;/);
+  assert.ok(!root.innerHTML.includes('private-body')&&!root.innerHTML.includes('private-token'));
+  data.canRunBrainDiagnostic=false;click('tab');await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(!root.innerHTML.includes('Ověřit selective MIME – UID 74324'));
+  data.canRunBrainDiagnostic=true;data.brainDiagnosticEnabled=false;click('tab');await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(!root.innerHTML.includes('Ověřit selective MIME – UID 74324'));
+  root.isConnected=false;
 });
 
 test('loading resources preserves the dirty form, excludes parent folders and isolates owner changes',async()=>{
