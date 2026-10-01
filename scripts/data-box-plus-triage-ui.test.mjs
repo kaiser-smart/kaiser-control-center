@@ -108,7 +108,7 @@ assert.match(appSource, /restoreDataBoxPlusInputFocus\(`\[data-ds-plus-reply-tex
 assert.match(appSource, /data-ds-plus-mailbox-test=/);
 assert.match(appSource, /\/api\/data-box-plus\/mailboxes\/\$\{encodeURIComponent\(mailboxId\)\}\/test/);
 assert.doesNotMatch(triageClickSource, /apiJson\(|method:\s*"POST"|confirmDataBoxPlusRecommendation|runDataBoxPlusInstruction/);
-assert.match(loaderSource, /dataBoxPlusWorkingInboxActive\(\)[\s\S]*readDataBoxPlusTriageSnapshot\(apiJson\)/);
+assert.match(loaderSource, /dataBoxPlusWorkingInboxActive\(\)[\s\S]*readDataBoxPlusTriageSnapshot\(requestSnapshot\)/);
 assert.equal(attachmentPreviewLabel({ mimeType: "application/pdf", fileName: "dokument" }), "Otevřít náhled");
 assert.equal(attachmentPreviewLabel({ mimeType: "application/octet-stream", fileName: "SMLOUVA.PDF" }), "Otevřít náhled");
 assert.equal(attachmentPreviewLabel({ mimeType: "image/png", fileName: "foto.png" }), "Otevřít přílohu");

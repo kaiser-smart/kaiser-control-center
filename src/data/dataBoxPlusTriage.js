@@ -36,7 +36,7 @@ export async function readDataBoxPlusTriageSnapshot(requestJson) {
     messagesResult,
     { recommendations: [] },
     { rules: [] },
-    { syncRuns: [] },
+    { syncRuns: statusPayload?.latestSyncRun ? [statusPayload.latestSyncRun] : [] },
     draftsResult
   ];
 }
