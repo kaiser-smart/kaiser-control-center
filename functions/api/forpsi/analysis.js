@@ -8,20 +8,66 @@ function equalSecret(expected,supplied){
   return difference===0;
 }
 
+// Temporary, analysis-only capability. The secret stores token + expiry + seven request hashes.
+function evaluationAccess(request,env,supplied){
+  if(request.url!=='https://smart-odpady.ai/api/forpsi/analysis'||
+    request.headers.get('authorization')!==`Bearer ${supplied}`)return null;
+  try{
+    const policy=JSON.parse(env.FORPSI_ANALYSIS_EVAL_TOKEN??'null');
+    if(!policy||typeof policy!=='object'||Array.isArray(policy)||
+      Object.keys(policy).length!==3||
+      Object.keys(policy).some(key=>!['token','expiresAt','requestSha256'].includes(key))||
+      typeof policy.token!=='string'||!/^[a-f0-9]{64}$/.test(policy.token)||
+      supplied.length!==64||!equalSecret(policy.token,supplied)||
+      !Number.isSafeInteger(policy.expiresAt)||policy.expiresAt<=Date.now()||
+      !Array.isArray(policy.requestSha256)||policy.requestSha256.length!==7||
+      new Set(policy.requestSha256).size!==7||
+      !policy.requestSha256.every(hash=>typeof hash==='string'&&/^[a-f0-9]{64}$/.test(hash)))
+      return null;
+    return new Set(policy.requestSha256);
+  }catch{return null;}
+}
+
+async function evaluationBody(request){
+  const reader=request.body?.getReader();
+  if(!reader)throw Error();
+  const chunks=[];let length=0;
+  try{
+    for(;;){
+      const {value,done}=await reader.read();if(done)break;
+      length+=value.byteLength;
+      if(length>16000){await reader.cancel();throw Error();}
+      chunks.push(value);
+    }
+  }finally{reader.releaseLock();}
+  const bytes=new Uint8Array(length);let offset=0;
+  for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+  return bytes;
+}
+
 export async function handleAnalysisProxy({request,env,fetcher=fetch}){
   if(request.method!=='POST')return reply('METHOD_NOT_ALLOWED',405);
   const expected=env.FORPSI_ADMIN_TOKEN;
   const supplied=request.headers.get('authorization')?.replace(/^Bearer /,'')??'';
-  if(typeof expected!=='string'||expected.length<32||supplied.length>256||
-    !equalSecret(expected,supplied))
-    return reply('ACCESS_DENIED',401);
+  const adminAuthorized=typeof expected==='string'&&expected.length>=32&&
+    supplied.length<=256&&equalSecret(expected,supplied);
+  const evaluation=adminAuthorized?null:evaluationAccess(request,env,supplied);
+  if(!adminAuthorized&&!evaluation)return reply('ACCESS_DENIED',401);
   if(!env.OPENAI_API_KEY)return reply('ANALYSIS_UNAVAILABLE',503);
   if(request.headers.get('content-type')?.split(';')[0]!=='application/json')
     return reply('INVALID_ARGUMENTS',415);
   if(Number(request.headers.get('content-length')??0)>16000)return reply('INVALID_ARGUMENTS',413);
   let body;
   try{
-    const source=await request.text();
+    let source;
+    if(evaluation){
+      const bytes=await evaluationBody(request);
+      const digest=await crypto.subtle.digest('SHA-256',bytes);
+      const hash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+      // Pin the whole approved request, including prompt, nested schema and case input.
+      if(!evaluation.has(hash))return reply('INVALID_ARGUMENTS',400);
+      source=new TextDecoder('utf-8',{fatal:true}).decode(bytes);
+    }else source=await request.text();
     if(source.length>12000)throw Error();
     body=JSON.parse(source);
     if(body.model!=='gpt-5-mini'||body.store!==false||body.max_output_tokens!==2400||
@@ -35,7 +81,11 @@ export async function handleAnalysisProxy({request,env,fetcher=fetch}){
     const response=await fetcher('https://api.openai.com/v1/responses',{
       method:'POST',headers:{authorization:`Bearer ${env.OPENAI_API_KEY}`,
         'content-type':'application/json'},body:JSON.stringify(body),
-      signal:AbortSignal.timeout(35000)});
+      signal:AbortSignal.timeout(35000),...(evaluation?{redirect:'manual'}:{})});
+    // Workers fetch supports manual redirects; reject instead of following Location.
+    if(evaluation&&(response.redirected||(response.status>=300&&response.status<400)||
+      (response.url&&response.url!=='https://api.openai.com/v1/responses')))
+      return reply('ANALYSIS_UNAVAILABLE',503);
     if(!response.ok)return Response.json({error:'ANALYSIS_UNAVAILABLE',
       upstreamStatus:response.status},{status:503,headers:{'Cache-Control':'no-store'}});
     const result=await response.json();
