@@ -1920,6 +1920,7 @@ Pokud uživatel musí přemýšlet, co tlačítko znamená, nebo nevidí celou i
 ### 19.3 Canonická trasa modulu
 
 - Pro Datové schránky se používá výhradně trasa `/datove-schranky-plus`.
+- Otevřený přehled Datových schránek Plus obnovuje serverový snapshot každou minutu a po návratu do karty / obnovení sítě. Obnova pouze čte API, nespouští ISDS synchronizaci. Rozpracovaný formulář a detail blokují překreslení; po zavření se obnova obnoví. Čtení má timeout 25 s a po chybě se opakuje nejvýše jednou za minutu. Panel odlišuje čas ověření zobrazení od posledního serverového načtení, varuje při stáří nad 45 minut a neoznačuje neúspěšný pokus za úspěšné načtení.
 - Trasa `/datova-schranka` se nepoužívá v navigaci, aplikaci, testech ani v integracích.
 - Pokud zadání říká `vytvoř chat` nebo `chat k datové zprávě`, znamená to serverový AI chat nad konkrétní zprávou, jejími přílohami, historií a kanonickým adresářem kontaktů. Nesmí se vytvořit lokální simulátor, pevně napsané větvení podle klíčových slov ani chat, který si vymýšlí kontakty nebo stav provedení akce.
 - Prompt takového chatu patří do chráněného Nastavení daného modulu; frontend jej nesmí nahrazovat vlastním promptem. Akce mimo systém, zejména e-mail, zůstávají serverové a vyžadují potvrzení uživatele.

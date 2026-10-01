@@ -326,6 +326,8 @@ import {
   readDataBoxPlusTriageSnapshot
 } from "./data/dataBoxPlusTriage.js";
 
+import { dataBoxPlusSyncHealth, installDataBoxPlusViewRecovery } from "./data/dataBoxPlusRefresh.js";
+
 const app = document.querySelector("#app");
 const orderedModules = [...modules].sort((a, b) => a.order - b.order);
 const feedbackMenuItem = {
@@ -1836,6 +1838,8 @@ const dataBoxPlusState = {
   error: "",
   deepLinkHandled: "",
   lastLoadedAt: 0,
+  lastAttemptAt: 0,
+  background: null,
   mailboxSaving: false,
   mailboxTestingId: "",
   mailboxTestResults: {},
@@ -30180,21 +30184,31 @@ function dataBoxPlusTriageMailboxOptions() {
   });
 }
 
+function dataBoxPlusViewHealth() {
+  return dataBoxPlusSyncHealth({ ...dataBoxPlusState, mailboxes: dataBoxPlusMailboxes() });
+}
+
+function updateDataBoxPlusHealthNodes() {
+  const health = dataBoxPlusViewHealth();
+  document.querySelectorAll('[data-ds-plus-health]').forEach((node) => {
+    node.classList.toggle('ds-plus-status-note--warning', health.warning);
+    const text = node.querySelector('[data-ds-plus-health-text]');
+    if (text) text.textContent = health.text;
+    const checked = node.querySelector('[data-ds-plus-checked]');
+    if (checked) checked.textContent = dataBoxPlusState.lastLoadedAt
+      ? `Zobrazení ověřeno ${formatDateTime(new Date(dataBoxPlusState.lastLoadedAt).toISOString())}` : '';
+  });
+}
+
 function dataBoxPlusTriageStatusNotice() {
-  const details = [];
-  if (dataBoxPlusState.loading && !dataBoxPlusState.loaded) {
-    details.push("Načítám aktuální zprávy.");
-  }
-  if (dataBoxPlusState.error) {
-    details.push(`Data se nepodařilo načíst: ${dataBoxPlusHumanError(dataBoxPlusState.error)}`);
-  }
-  if (dataBoxPlusState.triageDetailError) {
-    details.push(`Detail se nepodařilo načíst: ${dataBoxPlusState.triageDetailError}`);
-  }
+  const health = dataBoxPlusViewHealth();
   return `
-    <div class="ds-plus-status-note ds-plus-triage-mode-note ${details.length ? "ds-plus-status-note--warning" : ""}" role="status">
+    <div class="ds-plus-status-note ds-plus-triage-mode-note ${health.warning ? "ds-plus-status-note--warning" : ""}" role="status" data-ds-plus-health>
       <strong>Automatické načítání</strong>
-      <span>Zprávy se z ISDS načítají automaticky každých 30 minut.${details.length ? ` ${escapeHtml(details.join(" "))}` : ""}</span>
+      <span>Server načítá zprávy automaticky každých 30 minut. Zobrazení kontrolujeme každou minutu.</span>
+      <span data-ds-plus-health-text>${escapeHtml(health.text)}</span>
+      ${dataBoxPlusState.triageDetailError ? `<span>${escapeHtml(dataBoxPlusState.triageDetailError)}</span>` : ''}
+      <span data-ds-plus-checked>${dataBoxPlusState.lastLoadedAt ? `Zobrazení ověřeno ${escapeHtml(formatDateTime(new Date(dataBoxPlusState.lastLoadedAt).toISOString()))}` : ''}</span>
     </div>
   `;
 }
@@ -30212,7 +30226,7 @@ function dataBoxPlusTriageConnection(mailbox = {}) {
 
 function dataBoxPlusTriageSyncLabel(mailbox = {}) {
   return mailbox.lastSync
-    ? `Naposledy načteno ${formatDateTime(mailbox.lastSync)}`
+    ? `${mailbox.lastSyncStatus === "failed" ? "Poslední neúspěšný pokus" : "Naposledy načteno"} ${formatDateTime(mailbox.lastSync)}`
     : "Poslední načtení není doložené";
 }
 
@@ -44065,19 +44079,25 @@ async function loadDataBoxPlusData(options = {}) {
   if (dataBoxPlusState.loading) return;
   if (!force && dataBoxPlusState.loaded && now - dataBoxPlusState.lastLoadedAt < 60000) return;
 
+  if (!force && dataBoxPlusState.error && now - dataBoxPlusState.lastAttemptAt < 60000) return;
+  dataBoxPlusState.lastAttemptAt = now;
   dataBoxPlusState.loading = true;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 25000);
+  const requestSnapshot = (path, options = {}) => apiJson(path, { ...options, cache: "no-store", signal: controller.signal });
   dataBoxPlusState.error = "";
   try {
     const [statusResult, messagesResult, recommendationsResult, rulesResult, syncRunsResult, draftsResult = { drafts: [] }] = dataBoxPlusWorkingInboxActive()
-      ? await readDataBoxPlusTriageSnapshot(apiJson)
+      ? await readDataBoxPlusTriageSnapshot(requestSnapshot)
       : await Promise.all([
-        apiJson("/api/data-box-plus/status"),
-        apiJson("/api/data-box-plus/messages?limit=150"),
-        apiJson("/api/data-box-plus/recommendations?status=all&limit=150"),
-        apiJson("/api/data-box-plus/rules"),
-        apiJson("/api/data-box-plus/sync-runs?limit=20"),
-        apiJson("/api/data-box-plus/drafts?status=all")
+        requestSnapshot("/api/data-box-plus/status"),
+        requestSnapshot("/api/data-box-plus/messages?limit=150"),
+        requestSnapshot("/api/data-box-plus/recommendations?status=all&limit=150"),
+        requestSnapshot("/api/data-box-plus/rules"),
+        requestSnapshot("/api/data-box-plus/sync-runs?limit=20"),
+        requestSnapshot("/api/data-box-plus/drafts?status=all")
       ]);
+    dataBoxPlusState.background = statusResult.background || null;
     dataBoxPlusState.apiStatus = statusResult.apiStatus || "ready";
     dataBoxPlusState.mailboxes = Array.isArray(statusResult.mailboxes) ? statusResult.mailboxes : [];
     dataBoxPlusState.sendReadiness = statusResult.sendReadiness || null;
@@ -44089,21 +44109,43 @@ async function loadDataBoxPlusData(options = {}) {
     dataBoxPlusState.rules = Array.isArray(rulesResult.rules) ? rulesResult.rules : [];
     dataBoxPlusState.syncRuns = Array.isArray(syncRunsResult.syncRuns) ? syncRunsResult.syncRuns : [];
     dataBoxPlusState.loaded = true;
-    dataBoxPlusState.lastLoadedAt = now;
+    dataBoxPlusState.lastLoadedAt = Date.now();
     await applyDataBoxPlusMessageDeepLink();
   } catch (error) {
     dataBoxPlusState.apiStatus = error.payload?.apiStatus || "waiting";
     dataBoxPlusState.error = dataBoxPlusHumanError(error.payload?.error || error.message || "Datové schránky Plus se teď nepodařilo načíst.");
   } finally {
+    window.clearTimeout(timeout);
+    controller.abort();
     dataBoxPlusState.loading = false;
     if (options.renderAfter !== false) {
       render();
     }
     updateDataBoxPlusCountdownNodes();
+    updateDataBoxPlusHealthNodes();
   }
 }
 
+let dataBoxPlusViewRecovery;
+function dataBoxPlusRefreshBlocked() {
+  return Boolean(dataBoxPlusState.loading || dataBoxPlusState.composeOpen || dataBoxPlusState.accessSettingsOpen
+    || dataBoxPlusState.replyDraftMessageId || dataBoxPlusState.chatMessageId || dataBoxPlusState.selectedMessageId
+    || dataBoxPlusState.triageSelectedMessageId || dataBoxPlusState.mailboxSaving || dataBoxPlusState.triageBulkBusy
+    || document.activeElement?.matches('input, textarea, select, [contenteditable="true"]'));
+}
 function ensureDataBoxPlusData() {
+  if (!dataBoxPlusViewRecovery) {
+    dataBoxPlusViewRecovery = installDataBoxPlusViewRecovery({
+      window, document,
+      active: () => Boolean(authState.user) && window.location.pathname.replace(/\/+$/, '') === '/datove-schranky-plus',
+      blocked: dataBoxPlusRefreshBlocked,
+      updateStatus: updateDataBoxPlusHealthNodes,
+      refresh: async () => {
+        await loadDataBoxPlusData({ force: true, renderAfter: false });
+        if (!dataBoxPlusRefreshBlocked() && window.location.pathname.replace(/\/+$/, '') === '/datove-schranky-plus') render();
+      }
+    });
+  }
   void loadDataBoxPlusData({ force: !dataBoxPlusState.loaded });
 }
 
