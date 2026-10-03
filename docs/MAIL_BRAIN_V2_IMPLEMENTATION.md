@@ -43,14 +43,30 @@ pro konkrétního přihlášeného uživatele. Upozornění zůstávají samosta
 ## Implementované cesty
 
 `work-v2-contract.mjs` a `work-v2-extraction.mjs` určují strukturu, identitu
-zdrojových výroků, evidence a omezený modelový požadavek. Resolver nevolá
-model. `work-v2-store.mjs` zapisuje neměnné události do D1, kontroluje
-oprávnění, spravuje revize, rozpočet a konzistentní stránkování.
+zdrojových výroků a evidence. Vyhodnocování běží přímo v připojené konverzaci
+ChatGPT: `list_work_analysis` najde čekající případy, `prepare_work_analysis`
+vrátí přesné podklady a `submit_work_analysis` ověří a uloží návrhy. Poté
+`case_get` a `render_attention` načtou skutečně uložený stav. Nativní karta
+umí předat zadání hostiteli přes standardní `ui/message`.
+
+Příprava má podepsanou patnáctiminutovou vazbu na případ, přihlášenou osobu,
+revizi, přesné podklady, ověřené identity a aktuální souhlasy/oprávnění.
+Změna podkladů, souběžná úprava, jiný účet nebo expirace vyžadují novou
+přípravu. Opakování stejného podání vrátí tentýž výsledek; změněný obsah pod
+stejnou vazbou je odmítnut. Návrhy i potvrzení podání se ukládají v jedné
+transakci. Serverové ověřování citací nepřijímá model za člověka.
+
+`MAIL_BRAIN_V2_ANALYSIS_MODE=chatgpt` je výchozí i produkční režim.
+Nepoužívá samostatné OpenAI API ani jeho denní rozpočet. Sync pouze načte
+zprávy; na pozadí nespustí model. Původní serverová API cesta vyžaduje
+výslovný režim `api` a nenulový rozpočet; není automatickým fallbackem.
+Resolver nevolá model. `work-v2-store.mjs` ukládá neměnné události do D1,
+kontroluje oprávnění a spravuje revize a konzistentní stránkování.
 
 SO.ai používá skutečné Pages a Worker handlery pro ověření výkladů, úpravy
 práce, osobní odložení, podmínky a podklady. Nativní MCP aplikace TEĎ
 používá stejný serverový výběr. Sdílené změny odkazuje do přihlášeného SO.ai;
-MCP dovoluje jen osobní zobrazení. Staré mutace případů a pravidel jsou při
+MCP ukládá návrhy výkladu a dovoluje změny osobního zobrazení. Staré mutace případů a pravidel jsou při
 zapnutí V2 odmítnuty i při přímém volání. Starší klient bez uvedené verze
 dostane V2, pokud je V2 na serveru zapnutá.
 
@@ -79,11 +95,15 @@ Neaktivní vazbu identity nelze obejít založením dalšího principálu.
   osobní ověření obsahu, správného odesílatele a znovunačteného otisku přílohy.
   Bezpečný náhled a automatické předávání PDF zůstávají samostatnou funkcí.
 - Původní sedmivolací evaluace ani její odvolaný token se neopakují.
-  Nový skutečný modelový průchod a přijetí pilotu musejí mít vlastní
-  rozsah, rozpočet a audit. Úspěch fixtures není důkaz kvality extrakce.
+  Nový průchod v připojeném ChatGPT a přijetí pilotu mají vlastní
+  rozsah a audit; nevyžadují další volání API. Úspěch fixtures není důkaz kvality extrakce.
 
-Ověření 3. 10. 2026: úplná sada 362 PASS / 0 FAIL / 1 úmyslně vynechaný
-skutečný modelový test; závěrečná sada resolveru, úložiště a MCP 49 PASS.
+Ověření 3. 10. 2026: úplná sada po doplnění ChatGPT 371 PASS / 0 FAIL / 1 úmyslně vynechaný
+skutečný API test. Devět nových testů ověřuje nativní MCP postup, více než
+20 podání bez API rozpočtu, opakování, expiraci, podvrh, změny podkladů a
+identity, odvolání přístupu i souhlas změněný těsně při publikaci. Ani jeden
+z těchto průchodů nepoužívá placený model. Jde o syntetická data, nikoli
+ověření kvality skutečného ChatGPT výkladu.
 Kontrola syntaxe 699 souborů, Pages build 49 rout a produkční Worker dry-run
 prošly. Šířky 320, 375, 430, 768, 1024 a 1440 px byly ověřeny i s otevřenými
 formuláři bez vodorovného přetékání. Přijetí výkladu zachovalo rozepsanou
@@ -96,17 +116,24 @@ cizí klíče bez chyb. Protože D1 neumí přímý export FTS5, záloha obsahuj
 export běžných tabulek a úplné schéma; fulltextový index byl v kopii
 znovu sestaven z původních zpráv a prošel kontrolou shody obsahu.
 Záloha obsahuje neveřejná data a není součástí repozitáře ani příloh PR.
+Před nativní aktivací byl bez nového exportu ověřen také aktuální bod
+obnovy Cloudflare D1 Time Travel. Přesná upravená migrace prošla znovu
+na kopii již existující zálohy; všech 36 původních tabulek zůstalo beze změny.
 
 ## Nasazení a aktivace
 
-Tato větev má `MAIL_BRAIN_V2_ENABLED=false` a
-`MAIL_BRAIN_V2_DAILY_CALL_LIMIT=0`. Migrace `0013` pouze přidává tabulky,
+Schválený produkční cíl má `MAIL_BRAIN_V2_ENABLED=true`,
+`MAIL_BRAIN_V2_ANALYSIS_MODE=chatgpt`, `MAIL_BRAIN_V2_DAILY_CALL_LIMIT=0`
+a `MAIL_BRAIN_PILOT_READ_ONLY=false`, pouze pro dosavadní pilotní schránku. Migrace `0013` pouze přidává tabulky,
 indexy a ochrany neměnnosti; nepřevádí staré výklady na přijaté V2 povinnosti
-a nepřiděluje nikomu novou pravomoc. Existující produkční pilot je pouze
-pro čtení. Nasazení kódu samo není aktivací nové analýzy ani sdílených změn.
+a nepřiděluje nikomu novou pravomoc. Nasazení nejprve proběhne s dočasně vypnutou V2 a pouze čtecím pilotem;
+teprve po nasazení podporujícího rozhraní se použije schválená konfigurace.
+Běžný cron Mail Brain zůstává vypnutý. Nové konkrétní pravomoci se ukládají
+samostatně pouze pro schválený účet.
 
-1. Ověřit aktuální hlavní větev, projít CI a uložit soukromou zálohu D1.
-   Nad její izolovanou kopií ověřit migraci a integritu. Poté aplikovat
+1. Ověřit aktuální hlavní větev a CI. Zaznamenat bod obnovy Cloudflare D1
+   Time Travel bez exportu dat; nad již existující soukromou zálohou
+   znovu ověřit přesnou migraci a integritu. Poté aplikovat
    aditivní migraci do přesně určené produkční D1 a ověřit původní počty.
 2. Nasadit Worker s vypnutou V2 a nulovým rozpočtem. Pages nasazovat výhradně
    projektovým `deploy:pages:production` z čisté hlavní větve. Zkontrolovat
@@ -114,18 +141,19 @@ pro čtení. Nasazení kódu samo není aktivací nové analýzy ani sdílených
 3. Po schválení aktivace ponechat rozsah na existující pilotní schránce,
    ověřit aktuální souhlas a identitu. Výslovně přidělit konkrétní
    oprávnění konkrétnímu člověku; nerozšířit je na ostatní zaměstnance.
-4. Nastavit přesný nový rozpočet skutečných modelových volání a zapnout V2.
-   Automatický cron zůstává vypnutý. Každé ruční vyhodnocení provede nejvýše
-   jedno modelové volání; denní limit platí pro celý tenant a pokusy se
-   rezervují před voláním, včetně neúspěšných. Po ověřovací dávce limit opět
-   nastavit na nulu, pokud není schválen běžný provozní rozpočet.
+4. Zapnout V2 s režimem `chatgpt` a nulovým API rozpočtem. Ověřit, že sync
+   i stará cesta `work_refresh` nevolají serverový model. V ChatGPT projít
+   přípravu, odevzdání návrhů a jejich zpětné načtení. Limit počtu položek
+   na stránce není denní limit vyhodnocování.
 5. Porovnat skutečné zdrojové zprávy, uložené návrhy a výstup v SO.ai i MCP.
    Ověřit přijetí, osobní odložení, opravu a podmínku, následně číst stav
    zpět. Změny skutečných pracovních závazků musí potvrdit oprávněný člověk.
    Tento postup neopravňuje k odesílání e-mailů ani k rozšíření schránek.
 
-Bezpečné pozastavení: ponechat V2 čtení, nastavit denní limit na nulu
-a zapnout `MAIL_BRAIN_PILOT_READ_ONLY`. Vypnutí V2 na novém kódu po již
+Bezpečné pozastavení sdílených změn: ponechat V2 čtení, ponechat režim
+`chatgpt` a nulový API rozpočet a zapnout `MAIL_BRAIN_PILOT_READ_ONLY`.
+Tím se nezakazují neautoritativní návrhy z připojeného chatu; sdílenou
+práci nelze bez příslušné lidské pravomoci měnit. Vypnutí V2 na novém kódu po již
 publikované revizi vrátí `WORK_V2_PAUSED`, nikoli starou pravdu. Návrat ke
 starému binárnímu kódu vyžaduje vypnutí celého Mail Brain, protože starý
 kód tuto ochranu neobsahuje. Nové tabulky ani historii při návratu nemažeme.

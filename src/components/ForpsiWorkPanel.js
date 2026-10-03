@@ -99,6 +99,7 @@ export function renderWorkPanel({view,detail,mailboxId,busy,notice='',replyHtml=
     <p role="status">${view.coverage.complete?'Pošta je načtená pro uvedené období.':'Část pošty nebo jejího vyhodnocení zatím chybí.'}</p>
     ${notice?`<p role="status">${esc(notice)}</p>`:''}
     <div class="forpsi-actions">${button('brain-sync','Načíst novou poštu',busy)}${button('brain-revoke','Odvolat souhlas',busy)}</div>
+    ${view.analysisSource==='chatgpt'?'<p>Komunikaci vyhodnocuje připojený ChatGPT. Načtení pošty zde připraví podklady; vyhodnocení spustíte v chatu s konektorem FORPSI.</p>':''}
     <p><strong>${counted(view.counts.activeObligations.items,'aktivní povinnost','aktivní povinnosti','aktivních povinností')}</strong> v ${view.counts.activeObligations.cases} ${view.counts.activeObligations.cases===1?'případu':'případech'} ·
       ${view.counts.pendingConditionItems.items} čeká na podmínku · ${view.counts.attentionSignals.signals} upozornění ·
       ${counted(view.deadlineFacet.items,'termín','termíny','termínů')}</p>
@@ -109,7 +110,10 @@ export function renderWorkPanel({view,detail,mailboxId,busy,notice='',replyHtml=
     ${view.legacyFallback.length?`<details><summary>Případy čekající na nové vyhodnocení (${view.legacyFallback.length})</summary>
       <ul class="forpsi-mail-list">${view.legacyFallback.map(c=>`<li><strong>${esc(c.title)}</strong>${open(c.caseId)}</li>`).join('')}</ul></details>`:''}
     ${detail?`<article class="forpsi-mail-message"><h3>${esc(detail.case.title)}</h3>
-      <div class="forpsi-actions">${button('work-refresh','Vyhodnotit komunikaci v případu',busy,`data-case-id="${esc(detail.case.id)}"`)}</div>
+      ${work?.analysisSource==='chatgpt'?`<p>O nové vyhodnocení tohoto případu můžete požádat v připojeném chatu.</p>
+        <div class="forpsi-actions">${button('work-chatgpt','Zkopírovat zadání pro ChatGPT',busy,`data-case-id="${esc(detail.case.id)}"`)}
+        <a class="secondary-link" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">Otevřít ChatGPT</a></div>`:
+        `<div class="forpsi-actions">${button('work-refresh','Vyhodnotit komunikaci v případu',busy,`data-case-id="${esc(detail.case.id)}"`)}</div>`}
       ${work?.mode==='v2_unavailable'?'<p role="alert">Předchozí výklad už nelze bezpečně použít. Ověřte podklady.</p>':''}
       <ul class="forpsi-mail-list">${(work?.projection.workItems??[]).map(itemActions).join('')}</ul>
       ${work?.canManage?`<details><summary>Přidat vlastní úkol</summary>${commandForm('created_manually',null,

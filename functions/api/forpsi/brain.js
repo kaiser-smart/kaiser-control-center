@@ -14,6 +14,7 @@ const workMessages={
   WORK_DAILY_ANALYSIS_LIMIT:'Dnešní limit analýz byl dosažen. Uložená práce zůstává dostupná.',
   WORK_ANALYSIS_BUSY:'Tento případ se právě vyhodnocuje. Za chvíli obnovte přehled.',
   WORK_ANALYSIS_UNAVAILABLE:'Vyhodnocení teď není dostupné. Dosavadní platné výsledky zůstávají zachované.',
+  WORK_CHATGPT_ANALYSIS_REQUIRED:'Tento případ vyhodnocuje připojený ChatGPT. Otevřete jej v chatu s konektorem FORPSI.',
   WORK_CONTEXT_LIMIT:'Případ přesahuje rozsah jednoho vyhodnocení. Jeho obsah vyžaduje samostatné zpracování.',
   WORK_DOCUMENT_UNAVAILABLE:'Dostupnost a shodu vybraného dokumentu se nepodařilo ověřit.',
   WORK_COUNTERPARTY_MISMATCH:'Podklad nepochází od protistrany určené podmínkou.',

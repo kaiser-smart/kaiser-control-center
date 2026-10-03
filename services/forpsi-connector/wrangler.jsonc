@@ -15,6 +15,7 @@
     "MAIL_BRAIN_ENABLED": "false",
     "MAIL_BRAIN_V2_ENABLED": "false",
     "MAIL_BRAIN_V2_DAILY_CALL_LIMIT": "0",
+    "MAIL_BRAIN_V2_ANALYSIS_MODE": "chatgpt",
     "MAIL_BRAIN_SCHEDULED_SYNC_ENABLED": "false",
     "MAIL_BRAIN_PILOT_READ_ONLY": "true",
     "SEND_ENABLED": "false",

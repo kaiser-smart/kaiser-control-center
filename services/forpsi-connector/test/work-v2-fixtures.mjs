@@ -7,6 +7,7 @@ export const alice={kind:'person',id:'alice',label:'Alice',address:'alice@exampl
 export const vendor={kind:'external',id:null,label:'vendor@example.test',address:'vendor@example.test'};
 export async function workFixture(){
   const f=fixture();f.env.MAIL_BRAIN_ENABLED='true';f.env.MAIL_BRAIN_V2_ENABLED='true';
+  f.env.MAIL_BRAIN_V2_ANALYSIS_MODE='api';f.env.MAIL_BRAIN_V2_DAILY_CALL_LIMIT='20';
   const brain=new MailBrain({...f,analyzer:null});
   await brain.consent({mailboxId:'mail-a'});
   for(const cap of ['facts.review','work.manage'])await f.store.run(`INSERT INTO brain_work_authorities_v2

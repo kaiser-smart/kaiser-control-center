@@ -218,6 +218,10 @@ export function mountForpsiMail(app,{apiJson,owner,guard}){
     if(b.dataset.mailAction==='work-next'&&state.brain?.pagination.nextCursor){void brainRequest('attention',{
       version:'2.2',mailboxId:state.mailboxId,cursor:state.brain.pagination.nextCursor},data=>{state.brain=data;});return;}
     if(b.dataset.mailAction==='work-refresh'){void updateWork('work_refresh',{caseId:b.dataset.caseId});return;}
+    if(b.dataset.mailAction==='work-chatgpt'){
+      const prompt=`Vyhodnoť přes konektor FORPSI komunikaci případu ${b.dataset.caseId}. Načti aktuální podklady, ulož návrhy výkladu a zobraz přehled TEĎ. E-maily neodesílej.`;
+      void navigator.clipboard.writeText(prompt).then(()=>{state.brainSyncNotice='Zadání je zkopírované. Vložte je do chatu s připojeným konektorem FORPSI.';paint();})
+        .catch(()=>{state.error='Zadání se nepodařilo zkopírovat. Případ můžete otevřít přímo v chatu s konektorem FORPSI.';paint();});return;}
     if(b.dataset.mailAction==='work-reject'&&state.brainCase?.work){const work=state.brainCase.work;
       void updateWork('work_review',{caseId:work.caseId,revision:work.revision,eventId:b.dataset.eventId,
         outcome:'rejected',authorityConfirmed:false});return;}

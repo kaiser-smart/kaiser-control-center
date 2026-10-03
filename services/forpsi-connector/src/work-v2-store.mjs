@@ -3,7 +3,7 @@ import { requireValue } from './errors.mjs';
 import { stableId,workHash,stableJson,eventSchema,factSchema,decisionSchema,signalSchema,
   effectiveDecisions,eventCapability,validateEvidence,resolverVersion,payloadSchema,identityDecisionSchema,correspondentId } from './work-v2-contract.mjs';
 import { resolveWorkItems,projectAttention } from './work-v2-resolver.mjs';
-import { analyzeWorkCase,extractionInput,normalizeWorkExtraction } from './work-v2-extraction.mjs';
+import { analyzeWorkCase,extractionInput,normalizeWorkExtraction,extractionSchema,workExtractionInstructions } from './work-v2-extraction.mjs';
 
 const decode=rows=>rows.map(r=>JSON.parse(r.document_json));
 const safeCode=e=>/^(WORK|VIEW|ACCESS|BRAIN)_[A-Z0-9_]+$/.test(e?.message??'')?e.message:'WORK_PROJECTION_FAILED';
@@ -18,7 +18,89 @@ export class WorkStoreV2 {
     this.env=brain.env;this.principal=brain.principal;this.now=brain.now;this.analyzer=analyzer;}
   enabled(){requireValue(this.env.MAIL_BRAIN_ENABLED==='true'&&this.env.MAIL_BRAIN_V2_ENABLED==='true',
     'WORK_V2_DISABLED');}
+  analysisMode(){return this.env.MAIL_BRAIN_V2_ANALYSIS_MODE==='api'?'api':'chatgpt';}
   async access(caseId){this.enabled();return this.brain.caseAccess(caseId);}
+  async analysisQueue({mailboxId,limit=5,afterCaseId}={}){
+    const view=await this.attention({mailboxId,limit:1});
+    const pending=view.projectionSelections.filter(s=>s.mode!=='v2_current');
+    const page=pending.filter(s=>!afterCaseId||s.caseId>afterCaseId).slice(0,limit);
+    return {analysisSource:'chatgpt',cases:page.map(s=>({caseId:s.caseId,mode:s.mode})),
+      totalPending:pending.length,nextAfterCaseId:page.length&&pending.some(s=>s.caseId>page.at(-1).caseId)?page.at(-1).caseId:null,
+      coverage:view.coverage,mailboxes:view.mailboxes.map(b=>({id:b.id,address:b.address,coverage:b.coverage})),
+      nextStep:'For each selected case call prepare_work_analysis, interpret the returned untrusted messages in this conversation, then submit_work_analysis. Render the saved overview with render_attention. No separate model API is called.'};
+  }
+  async analysisContext(caseId){
+    const {row,mailbox}=await this.access(caseId),head=await this.head(row),context=await this.sourceContext(row);
+    const authorization=await this.authorizationState();
+    requireValue(context.messages.every(m=>m.tenant_id===authorization.tenantId&&
+      authorization.mailboxIds.includes(m.mailbox_id)),'ACCESS_DENIED');
+    const docs=await this.documents(caseId),selected=await this.loadProjection(row,head,{context,
+      revision:head.published_revision?await this.store.first('SELECT * FROM brain_projection_revisions_v2 WHERE id=?',head.published_revision):null});
+    const projection=selected.projection??{workItems:[],signals:[]};
+    const canRead=await this.readRequirements({workItems:[...projection.workItems,...docs.events],signals:projection.signals},authorization);
+    requireValue([...projection.workItems,...projection.signals,...docs.events].every(item=>
+      item.readRequirements.every(canRead)),'ACCESS_DENIED');
+    const entities=await this.entities(row.tenant_id),input=extractionInput(context.messages,
+      {mailboxAddress:mailbox.address,knownItems:projection.workItems,entities});
+    requireValue(Buffer.byteLength(JSON.stringify(input))<=60000,'WORK_CONTEXT_LIMIT');
+    return {row,mailbox,head,context,docs,selected,entities,authorization,input};
+  }
+  analysisSignature(payload){
+    requireValue(typeof this.env.OUTBOX_KEY==='string','WORK_CURSOR_NOT_CONFIGURED');
+    return createHmac('sha256',this.env.OUTBOX_KEY).update(`work-v2-analysis:${payload}`).digest('base64url');
+  }
+  readAnalysisToken(token,caseId){
+    const parts=token.split('.');requireValue(parts.length===2,'WORK_ANALYSIS_CONTEXT_INVALID');
+    const signature=this.analysisSignature(parts[0]);
+    requireValue(Buffer.byteLength(signature)===Buffer.byteLength(parts[1])&&
+      timingSafeEqual(Buffer.from(signature),Buffer.from(parts[1])),'WORK_ANALYSIS_CONTEXT_INVALID');
+    let binding;try{binding=JSON.parse(Buffer.from(parts[0],'base64url').toString('utf8'));}
+    catch{requireValue(false,'WORK_ANALYSIS_CONTEXT_INVALID');}
+    requireValue(binding.version===1&&binding.caseId===caseId&&binding.principalId===this.principal.id,
+      'WORK_ANALYSIS_CONTEXT_INVALID');
+    requireValue(binding.expiresAt>this.now(),'WORK_ANALYSIS_CONTEXT_EXPIRED');return binding;
+  }
+  assertAnalysisBinding(binding,prepared){
+    const {row,head,context,authorization,input}=prepared;
+    requireValue(binding.tenantId===row.tenant_id&&binding.authorizationDigest===authorization.digest,'WORK_ANALYSIS_CONTEXT_CHANGED');
+    requireValue(binding.caseRevision===context.inputRevision&&binding.sourceDigest===context.inputDigest,
+      'WORK_SOURCE_CHANGED');
+    requireValue(binding.revision===head.revision&&binding.inputHash===workHash(input),'WORK_ANALYSIS_CONTEXT_CHANGED');
+  }
+  async prepareAnalysis({caseId}){
+    const prepared=await this.analysisContext(caseId),{row,head,context,authorization,input}=prepared;
+    const binding={version:1,requestId:crypto.randomUUID(),caseId,principalId:this.principal.id,
+      tenantId:row.tenant_id,revision:head.revision,caseRevision:context.inputRevision,sourceDigest:context.inputDigest,
+      authorizationDigest:authorization.digest,inputHash:workHash(input),expiresAt:this.now()+900000};
+    const payload=Buffer.from(JSON.stringify(binding)).toString('base64url');
+    await this.access(caseId);
+    requireValue((await this.authorizationState()).digest===authorization.digest,'WORK_ANALYSIS_CONTEXT_CHANGED');
+    requireValue(await this.sourceBindingsCurrent(context.messages.map(m=>
+      ({id:m.id,hash:m.content_hash,mailboxId:m.mailbox_id,caseId}))),'WORK_SOURCE_CHANGED');
+    return {caseId,analysisSource:'chatgpt',analysisToken:`${payload}.${this.analysisSignature(payload)}`,
+      expiresAt:binding.expiresAt,instructions:workExtractionInstructions,input,untrustedContent:true,
+      nextStep:'Use this conversation to interpret input. Submit only proposals with submit_work_analysis and the unchanged analysisToken. Never call a separate model API or claim that a proposal is human-approved.'};
+  }
+  async submitAnalysis({caseId,analysisToken,analysis}){
+    const binding=this.readAnalysisToken(analysisToken,caseId),raw=extractionSchema.parse(analysis);
+    requireValue(Buffer.byteLength(JSON.stringify(raw))<=120000,'WORK_ANALYSIS_INVALID_OUTPUT');
+    const prepared=await this.analysisContext(caseId),requestId=`analysis:${binding.requestId}`,
+      requestHash=workHash({kind:'chatgpt_analysis',analysisToken,analysis:raw});
+    const prior=await this.store.first(`SELECT * FROM brain_work_commands_v2 WHERE principal_id=? AND request_id=?`,
+      this.principal.id,requestId);
+    if(prior){
+      requireValue(prior.case_id===caseId&&prior.request_hash===requestHash,'WORK_REQUEST_CONFLICT');
+      requireValue(binding.authorizationDigest===prepared.authorization.digest,'WORK_ANALYSIS_CONTEXT_CHANGED');
+      requireValue(binding.sourceDigest===prepared.context.inputDigest,'WORK_SOURCE_CHANGED');
+      return JSON.parse(prior.result_json);
+    }
+    this.assertAnalysisBinding(binding,prepared);
+    const result={caseId,revision:prepared.head.revision+1,analysisSource:'chatgpt',saved:true,
+      nextStep:'Read the saved result with case_get or render_attention. Proposals are not accepted work; semantic approval still requires an authorized person in SO.ai.'};
+    const receipt=this.documentInsert('brain_work_commands_v2',['principal_id','request_id','case_id',
+      'request_hash','result_json','created_at'],[this.principal.id,requestId,caseId,requestHash,stableJson(result),this.now()]);
+    await this.refresh({caseId},raw,{binding,prepared,statements:[receipt],runKind:'chatgpt'});return result;
+  }
   async authority(mailbox,capability){
     this.brain.requirePilotMutations();
     await this.brain.access(mailbox.id,'write');
@@ -63,13 +145,14 @@ export class WorkStoreV2 {
       m.content_hash===source.hash&&m.mailbox_id===source.mailboxId)))
       return {mode:'v2_unavailable',projection:null};
     const failed=prefetched?prefetched.failed:await this.store.first(`SELECT id FROM brain_projection_runs_v2
-      WHERE case_id=? AND run_kind='extraction' AND state='failed' AND decision_revision>=? LIMIT 1`,row.id,revision.decision_revision);
+      WHERE case_id=? AND run_kind IN ('extraction','chatgpt') AND state='failed' AND decision_revision>=? LIMIT 1`,row.id,revision.decision_revision);
     const mode=revision.input_digest===context.inputDigest&&projection.analyzedInputDigest===context.inputDigest&&
       revision.decision_revision===head.revision&&!failed?
       'v2_current':'v2_stale';
     return {mode,projection,revision:revision.id,at:revision.created_at};
   }
-  async publish(row,base,documents,runId,context,{guardChange=false,statements=[],requiredCapabilities=[],analysisComplete=false}={}){
+  async publish(row,base,documents,runId,context,{guardChange=false,statements=[],requiredCapabilities=[],analysisComplete=false,
+    sourceAuthorizations=[]}={}){
     for(const decision of effectiveDecisions(documents.decisions).filter(d=>d.outcome==='accepted')){
       const event=documents.events.find(e=>e.id===decision.eventId);if(event?.manual)continue;
       for(const factId of decision.acceptedFactIds){const fact=documents.facts.find(f=>f.id===factId);
@@ -111,14 +194,23 @@ export class WorkStoreV2 {
     const capabilities=requiredCapabilities.map(()=>`EXISTS (SELECT 1 FROM brain_work_authorities_v2 a
       JOIN grants g ON g.principal_id=a.principal_id AND g.mailbox_id=a.mailbox_id AND g.action='write' AND g.revoked=0
       WHERE a.tenant_id=? AND a.principal_id=? AND a.mailbox_id=? AND a.capability=? AND a.enabled=1)`).join(' AND ');
+    const allSourcesAuthorized=`NOT EXISTS (SELECT 1 FROM json_each(?) required WHERE NOT EXISTS (
+      SELECT 1 FROM principals p JOIN grants g ON g.principal_id=p.id
+      JOIN mailboxes m ON m.id=g.mailbox_id AND m.tenant_id=p.tenant_id
+      JOIN brain_consents c ON c.mailbox_id=m.id AND c.principal_id=p.id AND c.tenant_id=p.tenant_id
+      WHERE p.id=? AND p.active=1 AND m.id=json_extract(required.value,'$.id') AND m.active=1
+        AND g.action='read' AND g.revoked=0 AND c.revoked_at IS NULL
+        AND c.consented_at=json_extract(required.value,'$.consentedAt')))`;
     const owns=`EXISTS (SELECT 1 FROM brain_work_heads_v2 WHERE case_id=? AND mutation_token=?)`;
     await this.store.run(`UPDATE brain_projection_runs_v2 SET state='validated',candidate_revision=? WHERE id=?`,revision,runId);
     const batch=[db.prepare(`UPDATE brain_work_heads_v2 SET revision=?,guard_revision=?,
       published_revision=?,ever_published=1,mutation_token=?,updated_at=? WHERE case_id=? AND revision=?
-      AND guard_revision=? AND ${unchanged} AND ${sourcesUnchanged} AND ${authorized}${capabilities?` AND ${capabilities}`:''}`)
+      AND guard_revision=? AND ${unchanged} AND ${sourcesUnchanged} AND ${authorized}
+      AND ${allSourcesAuthorized}${capabilities?` AND ${capabilities}`:''}`)
       .bind(next,guard,revision,token,this.now(),row.id,base.revision,base.guard_revision,row.id,
         context.inputRevision,row.id,context.messages.length,stableJson(context.messages.map(m=>
-          ({id:m.id,hash:m.content_hash,mailboxId:m.mailbox_id}))),row.id,this.principal.id,row.mailbox_id,...requiredCapabilities.flatMap(cap=>
+          ({id:m.id,hash:m.content_hash,mailboxId:m.mailbox_id}))),row.id,this.principal.id,row.mailbox_id,
+        stableJson(sourceAuthorizations),this.principal.id,...requiredCapabilities.flatMap(cap=>
           [row.tenant_id,this.principal.id,row.mailbox_id,cap]))];
     // Every statement is guarded by the winning CAS token. A failed CAS leaves no partial facts or revision.
     for(const statement of statements)batch.push(statement({owns,args:[row.id,token],revision:next}));
@@ -140,7 +232,7 @@ export class WorkStoreV2 {
       workItems:view.workItems.length,signals:view.signals.length};
   }
   async startRun(row,head,context,kind='projection'){const id=crypto.randomUUID();
-    const limit=Math.max(0,Math.min(500,Number(this.env.MAIL_BRAIN_V2_DAILY_CALL_LIMIT??20)||0));
+    const limit=Math.max(0,Math.min(500,Number(this.env.MAIL_BRAIN_V2_DAILY_CALL_LIMIT??0)||0));
     const result=await this.store.run(`INSERT INTO brain_projection_runs_v2
       (id,tenant_id,case_id,input_revision,input_digest,resolver_version,decision_revision,state,started_at,run_kind)
       SELECT ?,?,?,?,?,?,?,'running',?,? WHERE ?!='extraction' OR
@@ -164,16 +256,20 @@ export class WorkStoreV2 {
       ['id','tenant_id','case_id','document_json','created_at'],[signal.id,row.tenant_id,row.id,stableJson(signal),now]));
     return statements;
   }
-  async refresh({caseId},provided){
-    const {row,mailbox}=await this.access(caseId),head=await this.head(row),context=await this.sourceContext(row);
+  async refresh({caseId},provided,{binding,prepared,statements:extraStatements=[],runKind}={}){
+    requireValue(provided!==undefined||this.analysisMode()==='api','WORK_CHATGPT_ANALYSIS_REQUIRED');
+    const {row,mailbox}=prepared??await this.access(caseId),head=prepared?.head??await this.head(row),
+      context=prepared?.context??await this.sourceContext(row);
     const leaseToken=crypto.randomUUID();
     const lease=await this.store.run(`UPDATE brain_work_heads_v2 SET analysis_token=?,analysis_lease_until=?
       WHERE case_id=? AND analysis_lease_until<=?`,leaseToken,this.now()+120000,caseId,this.now());
     requireValue(lease.meta?.changes===1,'WORK_ANALYSIS_BUSY');
     let runId;
     try{
-      runId=await this.startRun(row,head,context,provided===undefined?'extraction':'projection');
-      const docs=await this.documents(caseId),selected=await this.loadProjection(row,head),entities=await this.entities(row.tenant_id);
+      if(binding)this.assertAnalysisBinding(binding,prepared);
+      runId=await this.startRun(row,head,context,runKind??(provided===undefined?'extraction':'projection'));
+      const docs=prepared?.docs??await this.documents(caseId),selected=prepared?.selected??await this.loadProjection(row,head),
+        entities=prepared?.entities??await this.entities(row.tenant_id);
       const raw=provided??await this.analyzer(extractionInput(context.messages,{mailboxAddress:mailbox.address,
         knownItems:selected.projection?.workItems??[],entities}),this.env);
       await this.access(caseId);
@@ -190,18 +286,26 @@ export class WorkStoreV2 {
       const replacedSources=new Set([...bundle.signals,...bundle.events].map(s=>s.sourceMessageId));
       const currentSignalIds=new Set(bundle.signals.map(s=>s.id));
       docs.signals=docs.signals.filter(s=>!replacedSources.has(s.sourceMessageId)||currentSignalIds.has(s.id));
-      const statements=this.proposalStatements(bundle,row);
+      const statements=[...this.proposalStatements(bundle,row),...extraStatements];
       for(const sourceMessageId of replacedSources){const selection={id:crypto.randomUUID(),sourceMessageId,
         signalIds:bundle.signals.filter(s=>s.sourceMessageId===sourceMessageId).map(s=>s.id)};
         statements.push(this.documentInsert('brain_signal_selections_v2',
           ['id','tenant_id','case_id','source_message_id','revision','document_json','created_at'],
           [selection.id,row.tenant_id,caseId,sourceMessageId,head.revision+1,stableJson(selection),this.now()]));}
-      return await this.publish(row,head,docs,runId,context,{statements,analysisComplete:true});
+      if(binding){
+        requireValue((await this.authorizationState()).digest===binding.authorizationDigest,'WORK_ANALYSIS_CONTEXT_CHANGED');
+        requireValue(workHash(extractionInput(context.messages,{mailboxAddress:mailbox.address,
+          knownItems:selected.projection?.workItems??[],entities:await this.entities(row.tenant_id)}))===binding.inputHash,
+          'WORK_ANALYSIS_CONTEXT_CHANGED');
+      }
+      return await this.publish(row,head,docs,runId,context,{statements,analysisComplete:true,
+        sourceAuthorizations:prepared?.authorization.consents.filter(c=>context.messages.some(m=>m.mailbox_id===c.id))??[]});
     }catch(error){if(runId)await this.failRun(runId,safeCode(error));throw error;}
     finally{await this.store.run(`UPDATE brain_work_heads_v2 SET analysis_lease_until=0,analysis_token=NULL
       WHERE case_id=? AND analysis_token=?`,caseId,leaseToken);}
   }
   async refreshNext(mailbox){
+    if(this.analysisMode()==='chatgpt')return {attempted:0,errorCode:null,analysisSource:'chatgpt'};
     const row=await this.store.first(`SELECT c.id FROM brain_cases c
       LEFT JOIN brain_work_heads_v2 h ON h.case_id=c.id
       LEFT JOIN brain_projection_revisions_v2 r ON r.id=h.published_revision
@@ -466,7 +570,7 @@ export class WorkStoreV2 {
     const authorities=await this.store.rows(`SELECT mailbox_id,capability,enabled,revision
       FROM brain_work_authorities_v2 WHERE tenant_id=? AND principal_id=? ORDER BY mailbox_id,capability`,
     principal.tenant_id,principal.id);
-    return {tenantId:principal.tenant_id,mailboxIds:authorized.map(b=>b.id),
+    return {tenantId:principal.tenant_id,mailboxIds:authorized.map(b=>b.id),consents:authorized,
       digest:workHash({principal,scopes:[...this.principal.scopes].sort(),authorized,authorities})};
   }
   async guardDigest(caseIds){if(!caseIds.length)return workHash([]);
@@ -560,7 +664,7 @@ export class WorkStoreV2 {
         JOIN brain_work_heads_v2 h ON h.published_revision=r.id WHERE h.case_id IN (${list})`,...ids));
       failures.push(...await this.store.rows(`SELECT DISTINCT run.case_id FROM brain_projection_runs_v2 run
         JOIN brain_work_heads_v2 h ON h.case_id=run.case_id JOIN brain_projection_revisions_v2 r ON r.id=h.published_revision
-        WHERE run.case_id IN (${list}) AND run.run_kind='extraction' AND run.state='failed'
+        WHERE run.case_id IN (${list}) AND run.run_kind IN ('extraction','chatgpt') AND run.state='failed'
           AND run.decision_revision>=r.decision_revision`,...ids));
       sources.push(...await this.store.rows(`SELECT id,tenant_id,case_id,mailbox_id,content_hash FROM brain_messages
         WHERE case_id IN (${list}) ORDER BY received_at,id`,...ids));
@@ -593,7 +697,7 @@ export class WorkStoreV2 {
         canReview:this.env.MAIL_BRAIN_PILOT_READ_ONLY!=='true'&&await this.hasAuthority(box,'facts.review'),
         canSend:this.env.MAIL_BRAIN_PILOT_READ_ONLY!=='true'&&await this.hasGrant(box,'send')});
     }
-    const full={...view,viewRevision:crypto.randomUUID(),appliedFilters:filters,projectionSelections,legacyFallback,mailboxes,
+    const full={...view,analysisSource:this.analysisMode(),viewRevision:crypto.randomUUID(),appliedFilters:filters,projectionSelections,legacyFallback,mailboxes,
       coverage:{complete:mailboxes.length>0&&mailboxes.every(b=>b.coverage==='complete')&&
         projectionSelections.every(s=>s.mode==='v2_current'),scope:'authorized_indexed_mail'},
       notice:'Přehled rozlišuje přijatou práci, upozornění a výklady čekající na ověření.'};
@@ -618,7 +722,7 @@ export class WorkStoreV2 {
     const allowed=projection.workItems.every(i=>i.readRequirements.every(canRead))&&
       projection.signals.every(i=>i.readRequirements.every(canRead));
     requireValue(allowed,'ACCESS_DENIED');
-    const result={caseId,revision:head?.revision??0,mode:selected.mode,
+    const result={caseId,analysisSource:this.analysisMode(),revision:head?.revision??0,mode:selected.mode,
       projection:projectAttention({projection,principalId:this.principal.id,asOf:this.now(),canRead,
         overrides:docs.overrides,includeHistory:true,includeDismissed:true}),
       proposals:docs.events.filter(e=>e.readRequirements.every(canRead)&&!effectiveDecisions(docs.decisions).some(d=>d.eventId===e.id&&

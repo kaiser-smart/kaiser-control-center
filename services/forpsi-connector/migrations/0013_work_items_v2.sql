@@ -75,7 +75,7 @@ CREATE TABLE brain_projection_runs_v2 (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
   case_id TEXT NOT NULL REFERENCES brain_cases(id) ON DELETE CASCADE,
-  run_kind TEXT NOT NULL DEFAULT 'projection' CHECK(run_kind IN ('projection','extraction')),
+  run_kind TEXT NOT NULL DEFAULT 'projection' CHECK(run_kind IN ('projection','extraction','chatgpt')),
   input_revision INTEGER NOT NULL,
   input_digest TEXT NOT NULL,
   resolver_version TEXT NOT NULL,

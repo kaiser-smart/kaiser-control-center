@@ -20,7 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
-  { title: "Pošta: ověřené úkoly a upozornění", text: "Připravené rozšíření TEĎ odděluje potvrzené povinnosti, čekání na podmínku a upozornění. Opravy zachovávají historii a osobní odložení nemění práci kolegů. Aktivace vyžaduje samostatné povolení pilotu." },
+  { title: "Pošta: ověřené úkoly a upozornění", text: "Povolený pilot TEĎ vyhodnocuje komunikaci přímo v ChatGPT. Konektor ověřuje podklady a ukládá výklady; potvrzené povinnosti, čekání a upozornění zůstávají oddělené. Osobní odložení nemění práci kolegů." },
   { title: "Datové schránky: čerstvé zobrazení", text: "Přehled se sám obnovuje po návratu i po výpadku sítě, chrání otevřené formuláře a upozorní na zastaralé načítání nebo chybu připojení." },
   {
     title: "Pošta: pilot TEĎ",

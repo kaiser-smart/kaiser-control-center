@@ -10,7 +10,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #247a4b}button:disabled{o
 .actions{display:flex;flex-wrap:wrap;gap:8px;margin-block:10px}article{border:1px solid #8885;border-radius:12px;padding:14px;margin-block:12px;min-width:0}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}small{opacity:.75}#status{min-height:1.5em}details{margin-block:10px}
 </style></head><body><header><h1>TEĎ</h1><p id="counts"></p><p id="coverage"></p></header>
-<div class="actions"><button id="refresh">Obnovit přehled</button><button id="back" hidden>Zpět na přehled</button></div>
+<div class="actions"><button id="refresh">Obnovit přehled</button><button id="analyze" hidden>Vyhodnotit v ChatGPT</button><button id="back" hidden>Zpět na přehled</button></div>
 <p id="status" role="status">Načítám…</p><main id="content"></main><div id="pages" class="actions"></div>
 <script>(()=>{
 let view=null,detail=null,busy=false,nextId=1;const pending=new Map(),el=id=>document.getElementById(id);
@@ -24,11 +24,18 @@ finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=fal
 const labels={todo:'Vyřídit',decision:'Rozhodnout',waiting:'Čekám',information:'Informace',review:'K ověření'};
 const amount=(n,one,few,many)=>n+' '+(n===1?one:n>=2&&n<=4?few:many);
 const filters=()=>({version:'2.2',...(view?.appliedFilters??{})});
+async function askAnalysis(caseId){if(busy)return;busy=true;document.querySelectorAll('button').forEach(b=>b.disabled=true);
+const prompt=caseId?'Vyhodnoť přes konektor FORPSI komunikaci případu '+caseId+'. Načti aktuální podklady, ulož návrhy výkladu a zobraz přehled TEĎ. E-maily neodesílej.':
+  'Vyhodnoť přes konektor FORPSI dosud nevyhodnocené případy'+(view?.appliedFilters?.mailboxId?' ve schránce '+view.appliedFilters.mailboxId:'')+'. Načti aktuální podklady, ulož návrhy výkladu a zobraz přehled TEĎ. E-maily neodesílej.';
+try{await request('ui/message',{role:'user',content:[{type:'text',text:prompt}]});el('status').textContent='Zadání je předáno do chatu. ChatGPT provede vyhodnocení a zobrazí uložený výsledek.';}
+catch{el('status').textContent='Vyhodnocení se nepodařilo předat do chatu. Napište v chatu: Vyhodnoť komunikaci přes konektor FORPSI.';}
+finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false);}}
 function editLink(caseId){const a=node('a','Ověřit podklady a upravit práci v SO.ai');a.className='button';a.target='_blank';a.rel='noopener noreferrer';
 const url=new URL('https://smart-odpady.ai/dashboard');url.searchParams.set('view','forpsi-mail');const mailboxId=detail?.case.mailbox_id??(view?.mailboxes.length===1?view.mailboxes[0].id:null);if(mailboxId)url.searchParams.set('forpsiMailboxId',mailboxId);if(caseId)url.searchParams.set('forpsiCaseId',caseId);a.href=url.href;
 a.onclick=e=>{if(window.openai?.openExternal){e.preventDefault();window.openai.openExternal({href:a.href,redirectUrl:false});}};return a}
 async function openCase(caseId){await run(async()=>{detail=await call('case_get',{caseId,version:'2.2'});renderDetail();});}
 function render(){if(!view)return;detail=null;el('back').hidden=true;el('content').replaceChildren();el('pages').replaceChildren();
+el('analyze').hidden=view.analysisSource!=='chatgpt';
 const c=view.counts;el('counts').textContent=amount(c.activeObligations.items,'aktivní povinnost','aktivní povinnosti','aktivních povinností')+' v '+amount(c.activeObligations.cases,'případu','případech','případech')+' · '+c.pendingConditionItems.items+' čeká na podmínku · '+c.attentionSignals.signals+' upozornění · '+amount(view.deadlineFacet.items,'termín','termíny','termínů');
 el('coverage').textContent=view.coverage.complete?'Pošta je načtená pro uvedené období.':'Část pošty nebo vyhodnocení chybí. Přehled neznamená, že je vše vyřízené.';
 for(const [key,label] of Object.entries(labels)){const items=view.workItems.filter(v=>v.primarySection===key);const groups=key==='review'?view.signalGroups:[];if(!items.length&&!groups.length)continue;
@@ -46,6 +53,7 @@ for(const [property,refs] of Object.entries(v.item.propertyEvidence)){for(const 
 root.append(a);}if(w.proposals.length)root.append(node('p','K ověření významu a pravomoci autora: '+amount(w.proposals.length,'výklad','výklady','výkladů')+'.'));
 root.append(editLink(w.caseId));for(const m of detail.messages){const d=node('details');d.append(node('summary',m.subject+' · '+m.sender),node('pre',m.body_text));root.append(d);}}
 el('refresh').onclick=()=>run(async()=>{view=await call('attention_list',filters());render();});el('back').onclick=render;
+el('analyze').onclick=()=>askAnalysis(detail?.work?.caseId);
 window.addEventListener('message',event=>{if(event.source!==window.parent||event.data?.jsonrpc!=='2.0')return;const m=event.data;if(m.id!==undefined&&pending.has(m.id)){const p=pending.get(m.id);pending.delete(m.id);clearTimeout(p.timer);m.error?p.reject(Error(m.error.message||'Konektor odmítl požadavek.')):p.resolve(m.result);return;}
 if(m.method==='ui/notifications/tool-result'){const data=m.params?.structuredContent?.data;if(data?.schemaVersion==='mail-brain-attention.v2.2'){view=data;render();el('status').textContent='';}}});
 request('ui/initialize',{protocolVersion:'2026-01-26',appInfo:{name:'forpsi-attention',version:'2.2'},appCapabilities:{}})

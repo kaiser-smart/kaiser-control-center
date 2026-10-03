@@ -14,7 +14,7 @@ import { forwardForpsiAdmin } from '../../../functions/api/forpsi/admin.js';
 import { createSessionCookie } from '../../../functions/_lib/auth.js';
 
 const f=await workFixture(),root=fileURLToPath(new URL('../../../',import.meta.url));
-Object.assign(f.env,{SOAI_MAIL_ENABLED:'true',FORPSI_TENANT_ID:'tenant-a',
+Object.assign(f.env,{MAIL_BRAIN_V2_ANALYSIS_MODE:'chatgpt',MAIL_BRAIN_V2_DAILY_CALL_LIMIT:'0',SOAI_MAIL_ENABLED:'true',FORPSI_TENANT_ID:'tenant-a',
   CONNECTOR_ADMIN_TOKEN:'synthetic-loopback-service-token-never-used-in-production'});
 f.provider.listFolders=async()=>({folders:[{path:'INBOX',selectable:true},{path:'Sent',selectable:true}]});
 f.provider.search=async()=>({messages:[],nextBeforeUid:null,uidValidity:'7'});
@@ -36,14 +36,16 @@ const adminHtml=hostHtml.replace("import {forpsiMailSection,mountForpsiMail} fro
   "import {forpsiAdminSection,mountForpsiAdmin} from '/src/components/ForpsiAdminPanel.js';")
   .replace('app.innerHTML=forpsiMailSection();',"app.innerHTML=forpsiAdminSection('test-alice');")
   .replace('mountForpsiMail(app,','mountForpsiAdmin(app,');
-const widgetHost=`<!doctype html><html lang="cs"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TEĎ – izolovaný test hostitele MCP</title><body><p>IZOLOVANÝ TEST hostitele MCP · syntetická pošta</p><iframe title="TEĎ" src="/widget-frame" style="width:100%;height:80vh;border:0"></iframe><script>
+const widgetHost=`<!doctype html><html lang="cs"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TEĎ – izolovaný test hostitele MCP</title><body><p>IZOLOVANÝ TEST hostitele MCP · syntetická pošta · ChatGPT zde neběží</p><p id="followup" role="status"></p><iframe title="TEĎ" src="/widget-frame" style="width:100%;height:80vh;border:0"></iframe><script>
 const frame=document.querySelector('iframe');window.addEventListener('message',async event=>{if(event.source!==frame.contentWindow||event.origin!==location.origin)return;const m=event.data;if(m.method==='ui/initialize'){frame.contentWindow.postMessage({jsonrpc:'2.0',id:m.id,result:{}},location.origin);return;}
 if(m.method==='ui/notifications/initialized'){const r=await fetch('/fixture-mcp',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:'render_attention',arguments:{version:'2.2',mailboxId:'mail-a'}})});const data=await r.json();frame.contentWindow.postMessage({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{data}}},location.origin);return;}
+if(m.method==='ui/message'){document.getElementById('followup').textContent='Předané zadání: '+m.params.content.map(c=>c.text||'').join(' ');frame.contentWindow.postMessage({jsonrpc:'2.0',id:m.id,result:{}},location.origin);return;}
 if(m.method==='tools/call'){const r=await fetch('/fixture-mcp',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(m.params)});const data=await r.json();frame.contentWindow.postMessage({jsonrpc:'2.0',id:m.id,result:r.ok?{structuredContent:{data}}:{isError:true}},location.origin);}});</script></body></html>`;
 const responsiveHost=`<!doctype html><html lang="cs"><meta charset="utf-8"><title>Mail Brain – test rozměrů</title>
 <body><label>Šířka ověřované aplikace<select id="width"><option>320</option><option selected>375</option><option>430</option><option>768</option><option>1024</option><option>1440</option></select></label>
-<p>IZOLOVANÝ TEST: skutečná aplikace v rámci o vybrané šířce.</p><iframe title="Testovaná aplikace" src="/" style="display:block;width:375px;height:80vh;border:0"></iframe>
-<script>document.getElementById('width').onchange=e=>document.querySelector('iframe').style.width=e.target.value+'px';</script></body></html>`;
+<p>IZOLOVANÝ TEST: skutečná aplikace v rámci o vybrané šířce.</p><button id="measure">Změřit zobrazení</button><output id="metrics"></output><iframe title="Testovaná aplikace" src="/" style="display:block;width:375px;height:80vh;border:0"></iframe>
+<script>document.getElementById('width').onchange=e=>document.querySelector('iframe').style.width=e.target.value+'px';
+document.getElementById('measure').onclick=()=>{const d=document.querySelector('iframe').contentDocument,h=d.documentElement;document.getElementById('metrics').textContent=JSON.stringify({width:h.clientWidth,scrollWidth:h.scrollWidth,overflow:h.scrollWidth>h.clientWidth,hasChatGptButton:[...d.querySelectorAll('button')].some(b=>b.textContent==='Zkopírovat zadání pro ChatGPT')});};</script></body></html>`;
 const server=createServer(async(req,res)=>{try{
   f.setTime(Date.now());
   const origin='http://127.0.0.1:4179',url=new URL(req.url,origin),parts=[];
