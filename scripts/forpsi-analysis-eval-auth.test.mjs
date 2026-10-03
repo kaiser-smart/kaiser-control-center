@@ -77,7 +77,7 @@ test('admin authorization still works when the evaluation policy is absent or br
   for(const policy of [undefined,'invalid',JSON.stringify({...f.policy,expiresAt:0})]){
     const response=await handleAnalysisProxy({request:f.request(undefined,admin),
       env:{...f.env,FORPSI_ANALYSIS_EVAL_TOKEN:policy},fetcher:async(_url,init)=>{
-        calls++;assert.equal(init.redirect,undefined);return Response.json(modelReply);
+        calls++;assert.equal(init.redirect,'manual');return Response.json(modelReply);
       }});
     assert.equal(response.status,200);
   }

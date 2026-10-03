@@ -8,6 +8,8 @@ import { selectors } from '../src/schemas.mjs';
 import { seal, unseal } from '../src/crypto.mjs';
 import { SOAI_ISSUER } from '../src/admin-access.mjs';
 import { SETUP_UI_URI } from '../src/setup-widget.mjs';
+import { WORK_V2_UI_URI } from '../src/work-v2-widget.mjs';
+import { workFixture } from './work-v2-fixtures.mjs';
 
 test('verified OAuth subject resolves only through an explicit active SO.ai identity link',async()=>{
   const f=fixture();
@@ -128,6 +130,37 @@ test('Mail Brain read-only pilot advertises only its read tools',async()=>{
     name:'list_mailboxes',arguments:{} }),env)).json()).result.structuredContent.data;
   assert.equal(boxes.mailboxes.find(m=>m.id==='mail-a').brainEnabled,true);
   assert.equal(boxes.mailboxes.find(m=>m.id==='mail-c').brainEnabled,false);
+});
+
+test('V2 native MCP resource and tools share accepted state, recheck access and reject shared model writes',async()=>{
+  const f=await workFixture();await f.work.refresh({caseId:f.first.caseId},await f.proposal());await f.accept();
+  const worker=createWorker({authenticate:async()=>f.principal,providerFactory:f.providerFactory});
+  const call=async(name,args={})=>(await (await worker.fetch(request('tools/call',{name,arguments:args}),f.env)).json()).result;
+  const tools=(await (await worker.fetch(request('tools/list'),f.env)).json()).result.tools;
+  assert.equal(tools.find(t=>t.name==='render_attention')._meta.ui.resourceUri,WORK_V2_UI_URI);
+  assert.ok(!tools.some(t=>['case_action','rule_manage'].includes(t.name)));
+  const legacy=await call('case_action',{caseId:f.first.caseId,revision:1,action:'done'});
+  assert.equal(legacy.isError,true);assert.match(legacy.content[0].text,/WORK_LEGACY_ACTION_DISABLED/);
+  const resource=(await (await worker.fetch(request('resources/read',{uri:WORK_V2_UI_URI}),f.env)).json()).result;
+  assert.match(resource.contents[0].text,/ui\/notifications\/tool-result/);
+  const view=(await call('render_attention',{version:'2.2',mailboxId:'mail-a'})).structuredContent.data;
+  assert.equal(view.schemaVersion,'mail-brain-attention.v2.2');assert.equal(view.counts.activeObligations.items,1);
+  const detail=(await call('case_get',{caseId:f.first.caseId})).structuredContent.data;
+  assert.equal(detail.work.projection.workItems[0].item.id,view.workItems[0].item.id);
+  const command={caseId:f.first.caseId,revision:detail.work.revision,requestId:crypto.randomUUID(),scope:'shared',
+    action:'completed',targetId:view.workItems[0].item.id};
+  const denied=await call('work_item_action',command);assert.equal(denied.isError,true);
+  assert.match(denied.content[0].text,/WORK_SHARED_ACTION_UI_REQUIRED/);
+  const personal=await call('work_item_action',{...command,scope:'personal',action:'snooze',until:Date.now()+86400000});
+  assert.equal(personal.isError,undefined,JSON.stringify(personal));
+  assert.equal((await call('attention_list',{})).structuredContent.data.counts.activeObligations.items,1);
+  await f.store.run("UPDATE grants SET revoked=1 WHERE principal_id='alice' AND action='read'");
+  assert.equal((await call('case_get',{caseId:f.first.caseId})).isError,true);
+  f.env.MAIL_BRAIN_PILOT_READ_ONLY='true';
+  const readOnly=(await (await worker.fetch(request('tools/list'),f.env)).json()).result.tools.map(t=>t.name);
+  assert.ok(readOnly.includes('render_attention'));assert.ok(!readOnly.includes('work_item_action'));
+  f.env.MAIL_BRAIN_V2_ENABLED='false';
+  assert.ok(!(await (await worker.fetch(request('tools/list'),f.env)).json()).result.tools.some(t=>t.name==='render_attention'));
 });
 test('unauthenticated and cross-origin HTTP requests do not access a mailbox', async () => {
   const f = fixture(); const worker = createWorker();

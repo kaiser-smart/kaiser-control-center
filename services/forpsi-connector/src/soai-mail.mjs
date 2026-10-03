@@ -44,6 +44,7 @@ export async function handleSoaiMail(request,env,factories) {
       const mailboxes=await store.mailboxes(principal);
       requireValue(mailboxes.length<=200,'MAIL_LIMIT_EXCEEDED');
       data.brainEnabled=env.MAIL_BRAIN_ENABLED==='true';
+      data.brainV2Enabled=data.brainEnabled&&env.MAIL_BRAIN_V2_ENABLED==='true';
       data.mailboxes=data.brainEnabled?mailboxes.map(mailbox=>({...mailbox,
         brainEnabled:!env.MAIL_BRAIN_PILOT_MAILBOX_ID||
           mailbox.id===env.MAIL_BRAIN_PILOT_MAILBOX_ID})):mailboxes;

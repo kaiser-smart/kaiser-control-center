@@ -127,6 +127,13 @@ function accessForm() {
       ${Object.entries(actionNames).map(([key,label])=>`<label><input type="checkbox" data-forpsi-permission="${key}" ${d.actions.includes(key)?'checked':''} ${canGrant?'':'disabled'}><span><strong>${label}</strong><small>${descriptions[key]}</small></span></label>`).join('')}</fieldset>
       ${canGrant?'':'<p>Neaktivní nebo chybějící účet nemůže dostat nová práva. Můžete odebrat všechna dosavadní.</p>'}
       <p data-forpsi-access-preview>Při uložení: ${d.actions.length?d.actions.map(a=>escape(actionNames[a])).join(' · '):'všechna oprávnění budou odebrána'}.</p>
+      ${data.access.workV2Enabled?`<fieldset class="forpsi-permissions" ${state.busy||!canGrant?'disabled':''}><legend>Pravomoci v přehledu TEĎ</legend>
+        ${[['facts.review','Ověřovat význam podkladů'],['work.manage','Spravovat společnou práci'],['signals.manage_shared','Spravovat společná upozornění']].map(([key,label])=>
+          `<label><input type="checkbox" data-forpsi-work-capability="${key}" ${(d.workCapabilities??[]).includes(key)?'checked':''}><span>${label}</span></label>`).join('')}
+        <p>Vyžadují také právo čtení a úprav. Nové výklady zpráv se přijímají pouze po výslovném ověření významu a pravomoci autora.</p>
+        <label><input type="checkbox" data-forpsi-work-identity ${d.verifyWorkIdentity?'checked':''}><span>Potvrzuji, že ${escape(selected?.email??'adresa kolegy')} patří vybranému kolegovi a smí určovat vlastnictví jeho práce.</span></label>
+        ${entry?.verifiedWorkAddress?`<p>Ověřená pracovní adresa: ${escape(entry.verifiedWorkAddress)}</p>`:''}
+      </fieldset>`:''}
       <p>Práva se týkají celé schránky včetně dostupných kalendářů a adresářů. Rozdělení podle jednotlivých kolekcí zatím není dostupné. Odebrání nezastaví operaci, která už začala.</p>
       <div class="forpsi-actions"><button type="submit" class="primary-action" ${state.busy || !state.dirty?'disabled':''}>Uložit oprávnění</button>${button('access-clear','Odebrat všechna práva')}${button('access-cancel','Zrušit úpravu')}</div>`:''}
   </form>`;
@@ -134,7 +141,8 @@ function accessForm() {
 function selectAccessUser(userId) {
   const d=state.accessData;
   const entry=d.access.entries.find(e=>e.userId===userId);
-  state.accessDraft=userId?{id:d.access.mailboxId,revision:d.access.revision,userId,actions:[...(entry?.actions || [])]}:null;
+  state.accessDraft=userId?{id:d.access.mailboxId,revision:d.access.revision,userId,actions:[...(entry?.actions || [])],
+    ...(d.access.workV2Enabled?{workCapabilities:[...(entry?.workCapabilities??[])],verifyWorkIdentity:false}:{})}:null;
   state.dirty=false; paint();
 }
 async function loadAccess(id) {
@@ -148,6 +156,8 @@ async function loadAccess(id) {
 async function saveAccessDraft() {
   const payload=state.accessDraft; if(!payload || !state.dirty || state.busy) return false;
   if(payload.actions.includes('schedule') && !payload.actions.includes('send')) {state.error='Plánování vyžaduje také právo odesílání.';paint();return false;}
+  if(payload.workCapabilities?.length&&(!payload.actions.includes('read')||!payload.actions.includes('write'))){
+    state.error='Pravomoci TEĎ vyžadují čtení i úpravy schránky.';paint();return false;}
   const epoch=state.epoch; state.busy=true; state.error=''; paint();
   try { const result=await command('access_save',payload); if(epoch!==state.epoch) return false;
     state.accessData=result; state.accessDraft=null; state.dirty=false;
@@ -271,6 +281,15 @@ export function mountForpsiAdmin(app,{apiJson,guard,owner}) {
   root.addEventListener('toggle',event=>{if(event.target.matches?.('details[data-forpsi-disclosure]'))state.disclosures[event.target.dataset.forpsiDisclosure]=event.target.open;},true);
   root.addEventListener('input',event=>{ if(event.target.form?.matches('[data-forpsi-composition-form]')) {state.compositionDraft[event.target.name]=event.target.value;state.dirty=true;} else if(event.target.form?.matches('[data-forpsi-form]')) { state.draft[event.target.name]=event.target.value; state.dirty=true; } else filterRules(); });
   root.addEventListener('change',event=>{
+    if(event.target.dataset?.forpsiWorkCapability&&state.accessDraft){
+      const cap=event.target.dataset.forpsiWorkCapability;
+      state.accessDraft.workCapabilities=['facts.review','work.manage','signals.manage_shared'].filter(c=>
+        c===cap?event.target.checked:state.accessDraft.workCapabilities.includes(c));
+      state.dirty=true;state.error='';paint();return;
+    }
+    if(event.target.matches?.('[data-forpsi-work-identity]')&&state.accessDraft){
+      state.accessDraft.verifyWorkIdentity=event.target.checked;state.dirty=true;paint();return;
+    }
     if(event.target.matches?.('[data-forpsi-person]')) {
       const userId=event.target.value; paint(); state.guard(()=>selectAccessUser(userId)); return;
     }
@@ -313,7 +332,9 @@ export function mountForpsiAdmin(app,{apiJson,guard,owner}) {
         .then(()=>{if(epoch===state.epoch){state.notice='Stav firemního pravidla byl uložen.';void load();}})
         .catch(e=>{if(epoch===state.epoch)state.error=e.message;})
         .finally(()=>{if(epoch===state.epoch){state.busy=false;paint();}});return;}
-    if(action==='access-clear' && state.accessDraft) {state.accessDraft.actions=[];state.dirty=true;state.error='';paint();return;}
+    if(action==='access-clear' && state.accessDraft) {state.accessDraft.actions=[];
+      if(state.accessDraft.workCapabilities){state.accessDraft.workCapabilities=[];state.accessDraft.verifyWorkIdentity=false;}
+      state.dirty=true;state.error='';paint();return;}
     if(action==='resources') {
       const m=findMailbox(b.dataset.id); if(!m) return;
       const epoch=state.epoch; state.busy=true; state.error=''; state.notice='Načítám dostupné zdroje…'; paint();

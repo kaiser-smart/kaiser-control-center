@@ -73,3 +73,25 @@ test('revoked sending permission blocks an existing queued job without calling p
   f.setTime(f.now()+2000);await f.outbox.process(job.id);
   assert.equal((await f.store.jobFor(actor,job.id)).state,'blocked');assert.equal(f.calls.length,0);
 });
+
+test('explicit V2 capabilities use the already linked SO.ai identity and never infer authority from email',async()=>{
+  const f=context();f.env.MAIL_BRAIN_V2_ENABLED='true';
+  await f.store.run(`INSERT INTO principal_identity_links
+    (issuer,subject,tenant_id,principal_id,active)
+    VALUES (?,?,?,'alice',1)`,SOAI_ISSUER,'so-colleague','tenant-a');
+  const command={...change(1,['read','write']),workCapabilities:['facts.review','work.manage'],
+    workIdentity:{address:'alice@example.com',label:'Alice'}};
+  const result=await executeAdmin('access_save',command,f);
+  assert.equal(await f.store.first('SELECT id FROM principals WHERE issuer=? AND subject=?',SOAI_ISSUER,'so-colleague'),null);
+  const entry=result.access.entries.find(e=>e.userId==='so-colleague');
+  assert.equal(entry.principalId,'alice');assert.deepEqual(entry.workCapabilities,['facts.review','work.manage']);
+  assert.equal(entry.verifiedWorkAddress,'alice@example.com');
+  assert.equal((await f.store.first("SELECT principal_id FROM brain_entities_v2 WHERE address='alice@example.com'")).principal_id,'alice');
+  await assert.rejects(executeAdmin('access_save',{...command,revision:2,actions:['read']},f),/INVALID_INPUT/);
+  await executeAdmin('access_save',{...change(2,['read']),workCapabilities:[]},f);
+  assert.equal((await f.store.first('SELECT COUNT(*) n FROM brain_work_authorities_v2 WHERE enabled=1')).n,0);
+  await f.store.run('UPDATE principal_identity_links SET active=0 WHERE subject=?','so-colleague');
+  await assert.rejects(executeAdmin('access_save',{...command,revision:3},f),/PRINCIPAL_DISABLED/);
+  assert.equal(await f.store.first('SELECT id FROM principals WHERE issuer=? AND subject=?',SOAI_ISSUER,'so-colleague'),null);
+  assert.equal(f.calls.length,0);
+});

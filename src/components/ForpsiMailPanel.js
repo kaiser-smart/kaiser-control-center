@@ -1,4 +1,5 @@
 import { mountForpsiComposer, openForpsiDraft, forpsiComposerDirtyTarget } from './ForpsiComposer.js';
+import { renderWorkPanel } from './ForpsiWorkPanel.js';
 const escape=value=>String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const emptyFilters=()=>({folder:'INBOX',from:'',subject:'',since:'',through:'',unread:false});
 let state={owner:null,epoch:0,root:null,api:null,loaded:false,busy:false,mailboxes:[],mailboxId:'',folders:[],draftFolder:null,replaceCapability:null,canEditDrafts:false,canCopyDrafts:false,filters:emptyFilters(),applied:null,result:null,message:null,error:'',mode:null,brain:null,brainCase:null,brainSearch:null,brainRules:null,brainAttachment:null,brainDraft:null,brainApproval:null,brainReply:null,brainEnabled:false,brainSyncNotice:''};
@@ -9,7 +10,8 @@ const brainLabels={decision:'Rozhodnout',todo:'Vyřídit',waiting:'Čekám',info
 function brainReply(box,inbound,replySubject,safeApprovalUrl){
   if(!box.canSend)return '';
   const draft=state.brainDraft;
-  const saved=state.brainReply?.message;
+  const saved=state.brainReplyEdit&&state.brainReplyEdit.caseId===state.brainCase?.case.id?
+    state.brainReplyEdit.message:state.brainReply?.message;
   return `<h4>Odpověď k případu</h4>${draft?`<p>Návrh je uložený. Nic se neodeslalo.</p><p><strong>Komu:</strong> ${escape(draft.message.to.join(', '))}<br><strong>Předmět:</strong> ${escape(draft.message.subject)}</p><pre>${escape(draft.message.text)}</pre>${!state.brainApproval?button('brain-approve-prepare','Připravit schválení'):''}`:
     `<form data-brain-reply><label>Komu<input name="to" type="email" required value="${escape(saved?.to[0]??inbound?.sender??'')}"></label><label>Předmět<input name="subject" required maxlength="500" value="${escape(saved?.subject??`Re: ${replySubject}`)}"></label><label>Text odpovědi<textarea name="text" required maxlength="96000" rows="7">${escape(saved?.text??'')}</textarea></label><button type="submit" class="primary-action" ${state.busy?'disabled':''}>Uložit návrh odpovědi</button></form>`}
     ${safeApprovalUrl?`<p>Odeslání vyžaduje kontrolu celého návrhu v SO.ai. <a href="${escape(safeApprovalUrl)}" target="_blank" rel="noopener noreferrer">Otevřít schválení odeslání</a></p>`:''}`;
@@ -20,6 +22,9 @@ function brainPanel(){
   const replySubject=state.brainCase?.case.title.replace(/^re:\s*/i,'')??'';
   const approvalUrl=state.brainApproval?.approvalUrl;
   const safeApprovalUrl=typeof approvalUrl==='string'&&approvalUrl.startsWith('https://smart-odpady.ai/forpsi-send/?proposalId=')?approvalUrl:null;
+  if(view?.schemaVersion==='mail-brain-attention.v2.2')return renderWorkPanel({view,detail:state.brainCase,
+    mailboxId:state.mailboxId,busy:state.busy,notice:state.brainSyncNotice,
+    replyHtml:brainReply(box??{},inbound,replySubject,safeApprovalUrl)});
   return `<section class="forpsi-card" aria-label="Mail Brain"><div class="forpsi-card-heading"><div><h2>TEĎ</h2><p>Případy, závazky a další krok.</p></div>${button('brain-refresh','Obnovit přehled')}</div>
     ${!view?'<p>Přehled zatím nebyl načten.</p>':!box?.consented?`<p>Analýza historie této schránky vyžaduje samostatný souhlas. Zpracuje Doručené a Odeslané za posledních 90 dní; původní zprávy zůstávají ve Forpsi.</p><button type="button" class="primary-action" data-mail-action="brain-consent" ${state.busy?'disabled':''}>Souhlasím se zpracováním 90 dní</button>`:
       `<p><strong>Pokrytí: ${box.coverage==='complete'?'úplné pro uvedené období':'neúplné'}</strong>. ${escape(view.notice)}</p>
@@ -92,23 +97,47 @@ async function request(operation,payload,onSuccess){
     if([401,403].includes(e.status) || ['AUTH_REQUIRED','ACCESS_DENIED'].includes(e.code || e.payload?.code)){state.mailboxes=[];state.folders=[];state.mailboxId='';}
   }finally{if(epoch===state.epoch){state.busy=false;paint();}}
 }
-async function refresh(){clearContent();state.loaded=false;state.mailboxes=[];state.folders=[];state.draftFolder=null;state.replaceCapability=null;state.canEditDrafts=false;state.canCopyDrafts=false;state.mailboxId='';state.brainEnabled=false;await request('list_mailboxes',{},data=>{state.mailboxes=data.mailboxes;state.brainEnabled=data.brainEnabled===true;state.loaded=true;});}
+async function refresh(){clearContent();state.loaded=false;state.mailboxes=[];state.folders=[];state.draftFolder=null;state.replaceCapability=null;state.canEditDrafts=false;state.canCopyDrafts=false;state.mailboxId='';state.brainEnabled=false;state.brainV2Enabled=false;state.workCommand=null;await request('list_mailboxes',{},data=>{state.mailboxes=data.mailboxes;state.brainEnabled=data.brainEnabled===true;state.brainV2Enabled=data.brainV2Enabled===true;state.loaded=true;});
+  const linked=typeof location!=='undefined'?new URLSearchParams(location.search).get('forpsiMailboxId'):null;
+  if(linked&&state.mailboxes.some(m=>m.id===linked))await chooseMailbox(linked);}
 async function chooseMailbox(id){clearContent();state.mailboxId=id;state.brain=null;state.brainCase=null;state.brainSearch=null;state.brainRules=null;state.brainAttachment=null;state.brainDraft=null;state.brainApproval=null;state.brainReply=null;state.brainSyncNotice='';state.folders=[];state.draftFolder=null;state.replaceCapability=null;state.canEditDrafts=false;state.canCopyDrafts=false;state.filters=emptyFilters();if(!id){paint();return;}
   await request('list_folders',{mailboxId:id},data=>{state.folders=data.folders.filter(f=>f.selectable!==false);state.draftFolder=data.draftFolder;state.replaceCapability=typeof data.supportsReplace==='boolean'?data.supportsReplace:null;state.canEditDrafts=data.draftEditsEnabled===true&&data.supportsReplace===true&&data.draftWriteAllowed===true&&!!data.draftFolder;state.canCopyDrafts=data.draftCopiesEnabled===true&&data.draftWriteAllowed===true&&!!data.draftFolder;state.filters.folder=state.folders.some(f=>f.path==='INBOX')?'INBOX':state.folders[0]?.path || '';});
-  if(state.brainEnabled&&state.mailboxes.find(m=>m.id===id)?.brainEnabled)await refreshBrain();}
+  if(state.brainEnabled&&state.mailboxes.find(m=>m.id===id)?.brainEnabled)await refreshBrain();
+  const linkedCase=typeof location!=='undefined'?new URLSearchParams(location.search).get('forpsiCaseId'):null;
+  if(linkedCase&&state.brainV2Enabled&&state.brain)await openBrainCase(linkedCase);}
 async function brainRequest(operation,payload,onSuccess){
   if(state.busy)return false;const epoch=state.epoch;state.busy=true;state.error='';paint();
   try{const response=await state.api('/api/forpsi/brain',{method:'POST',body:JSON.stringify({operation,payload})});
     if(epoch!==state.epoch)return false;onSuccess(response.data);return true;
   }catch(e){if(epoch!==state.epoch)return;state.error=e.message;
-    if([401,403].includes(e.status)){state.brain=null;state.brainCase=null;}}
+    if([401,403].includes(e.status)){state.brain=null;state.brainCase=null;}
+    if(['VIEW_EXPIRED','WORK_VERSION_CONFLICT'].includes(e.code??e.payload?.code)){
+      state.brain=null;state.brainCase=null;state.workCommand=null;
+      state.error='Případ nebo přístup se mezitím změnil. Obnovte přehled a zkontrolujte aktuální podklady.';}}
   finally{if(epoch===state.epoch){state.busy=false;paint();}}
   return false;
 }
 async function refreshBrain(){if(!state.mailboxId)return;
-  await brainRequest('attention',{mailboxId:state.mailboxId},data=>{state.brain=data;});
-  if(state.brain?.mailboxes.find(x=>x.id===state.mailboxId)?.consented)
+  await brainRequest('attention',{mailboxId:state.mailboxId,...(state.brainV2Enabled?{version:'2.2'}:{})},data=>{state.brain=data;});
+  if(!state.brainV2Enabled&&state.brain?.mailboxes.find(x=>x.id===state.mailboxId)?.consented)
     await brainRequest('rules',{operation:'list',mailboxId:state.mailboxId},data=>{state.brainRules=data;});}
+async function openBrainCase(caseId){return brainRequest('case_get',{caseId,...(state.brainV2Enabled?{version:'2.2'}:{})},data=>{
+  if(state.brainCase?.case.id!==caseId){state.brainReplyEdit=null;state.brainDraft=null;state.brainApproval=null;state.brainReply=null;}
+  state.brainCase=data;state.brainAttachment=null;});}
+async function updateWork(operation,payload){const caseId=payload.caseId;
+  if(await brainRequest(operation,payload,()=>{state.workCommand=null;})){
+    await refreshBrain();if(state.brain)await openBrainCase(caseId);
+  }}
+function submitWorkAction(action,scope,targetId,payload={},until,extra={}){
+  const work=state.brainCase?.work;if(!work)return;
+  if(action==='snooze'&&state.workCommand?.input.action===action&&state.workCommand.input.targetId===targetId)
+    until=state.workCommand.input.until;
+  const input={caseId:work.caseId,revision:work.revision,scope,action,...(targetId?{targetId}:{}),payload,...(until?{until}:{}),...extra};
+  // Repeating a request after a lost response keeps its idempotency key.
+  const fingerprint=JSON.stringify(input);
+  if(state.workCommand?.fingerprint!==fingerprint)state.workCommand={fingerprint,input:{...input,requestId:crypto.randomUUID()}};
+  void updateWork('work_action',state.workCommand.input);
+}
 async function search(next=false){
   const f={...state.filters};
   if(!f.folder || (f.since&&f.through&&f.since>f.through)){state.error='Datum od musí být nejpozději v den data do.';paint();return;}
@@ -124,9 +153,47 @@ export function mountForpsiMail(app,{apiJson,owner,guard}){
     state.filters[event.target.name]=event.target.type==='checkbox'?event.target.checked:event.target.value;
     const hint=root.querySelector('[data-mail-filter-state]');if(hint)hint.hidden=!changed();
     const next=root.querySelector('[data-mail-action="next"]');if(next)next.disabled=!!changed();
+  }
+  if(event.target.form?.matches('[data-brain-reply]')&&state.brainCase){
+    const form=new FormData(event.target.form);state.brainReplyEdit={caseId:state.brainCase.case.id,
+      message:{to:[String(form.get('to')??'')],subject:String(form.get('subject')??''),text:String(form.get('text')??'')}};
   }});
   root.addEventListener('change',event=>{if(event.target.matches('[data-mail-mailbox]')){const id=event.target.value;event.target.value=state.mailboxId;const action=()=>chooseMailbox(id);if(forpsiComposerDirtyTarget())guard(action);else void action();}});
   root.addEventListener('submit',event=>{if(event.target.matches('[data-mail-search]')){event.preventDefault();event.stopPropagation();void search();}
+    if(event.target.matches('[data-work-review]')){event.preventDefault();event.stopPropagation();
+      const work=state.brainCase?.work;if(!work||!event.target.reportValidity())return;
+      const form=new FormData(event.target),replacement=work.acceptedInterpretations.find(e=>e.id===form.get('replacesEventId'));
+      void updateWork('work_review',{caseId:work.caseId,revision:work.revision,eventId:event.target.dataset.eventId,
+        outcome:'accepted',authorityConfirmed:form.get('authority')==='on',...(replacement?{
+          replacesEventIds:[replacement.id],identityRelation:'same_work',canonicalWorkItemId:replacement.workItemId,
+          ...(form.get('manualBinding')?{manualBinding:String(form.get('manualBinding'))}:{})}:
+          form.get('replacesEventId')==='distinct'?{identityRelation:'distinct_work'}:{})});}
+    if(event.target.matches('[data-work-command]')){event.preventDefault();event.stopPropagation();
+      const work=state.brainCase?.work;if(!work||!event.target.reportValidity())return;
+      const form=new FormData(event.target),value=name=>String(form.get(name)??'').trim();
+      let action=event.target.dataset.workAction;const payload={},extra={note:value('note')};
+      const owner=work.entities.find(e=>e.id===value('ownerId'));
+      if(owner)payload.owner=owner;
+      if(value('actionText'))payload.action=value('actionText');
+      if(value('dueDate'))payload.dueDate={kind:'date',value:value('dueDate'),timeZone:'Europe/Prague'};
+      if(value('result'))payload.result=value('result');
+      if(action==='reopened'){payload.releaseProtection=true;payload.retainDue=form.get('retainDue')==='on';}
+      if(action==='accepted')payload.acceptanceKind='offer';
+      if(action==='override_owner'||action==='override_action'){
+        payload.property=action==='override_owner'?'owner':'action';payload.operation='set';action='overridden';}
+      if(action==='override_condition'){
+        payload.property='condition';payload.operation='set';action='overridden';
+        payload.condition={kind:value('conditionKind'),description:value('conditionDescription'),
+          dependsOnWorkItemIds:form.getAll('dependencyIds').map(String),
+          requiredResult:form.get('requirePositive')==='on'?'positive':'any',
+          documentKey:value('documentKey')||null,counterpartyId:value('counterpartyId')||null,
+          onDependencyCancelled:'block_and_review'};
+      }
+      if(action==='release_override'){payload.property=value('property');payload.operation='release';action='overridden';}
+      if(action==='condition_evaluated')extra.conditionEvaluation={result:value('conditionResult'),
+        contentConfirmed:form.get('contentConfirmed')==='on',...(value('attachmentId')?{attachmentId:value('attachmentId')}:{}),
+        ...(value('messageId')?{messageId:value('messageId'),relevantResponse:form.get('contentConfirmed')==='on'}:{})};
+      submitWorkAction(action,'shared',event.target.dataset.targetId||undefined,payload,undefined,extra);}
     if(event.target.matches('[data-brain-search]')){event.preventDefault();event.stopPropagation();
       const query=String(new FormData(event.target).get('query')??'').trim();
       if(query.length>=2)void brainRequest('search',{query,mailboxId:state.mailboxId},data=>{state.brainSearch=data;});}
@@ -147,7 +214,21 @@ export function mountForpsiMail(app,{apiJson,owner,guard}){
       state.brainSyncNotice=data.analysisErrorCode?
         `Modelová analýza selhala (${data.analysisErrorCode}); zprávy zůstávají k ověření.`:'';
     }).then(ok=>{if(ok)void refreshBrain();});return;}
-    if(b.dataset.mailAction==='brain-open'){void brainRequest('case_get',{caseId:b.dataset.caseId},data=>{state.brainCase=data;state.brainAttachment=null;state.brainDraft=null;state.brainApproval=null;state.brainReply=null;}).then(()=>root.querySelector('.forpsi-mail-message')?.scrollIntoView({block:'start'}));return;}
+    if(b.dataset.mailAction==='brain-open'){void openBrainCase(b.dataset.caseId).then(()=>root.querySelector('.forpsi-mail-message')?.scrollIntoView({block:'start'}));return;}
+    if(b.dataset.mailAction==='work-next'&&state.brain?.pagination.nextCursor){void brainRequest('attention',{
+      version:'2.2',mailboxId:state.mailboxId,cursor:state.brain.pagination.nextCursor},data=>{state.brain=data;});return;}
+    if(b.dataset.mailAction==='work-refresh'){void updateWork('work_refresh',{caseId:b.dataset.caseId});return;}
+    if(b.dataset.mailAction==='work-chatgpt'){
+      const prompt=`Vyhodnoť přes konektor FORPSI komunikaci případu ${b.dataset.caseId}. Načti aktuální podklady, ulož návrhy výkladu a zobraz přehled TEĎ. E-maily neodesílej.`;
+      void navigator.clipboard.writeText(prompt).then(()=>{state.brainSyncNotice='Zadání je zkopírované. Vložte je do chatu s připojeným konektorem FORPSI.';paint();})
+        .catch(()=>{state.error='Zadání se nepodařilo zkopírovat. Případ můžete otevřít přímo v chatu s konektorem FORPSI.';paint();});return;}
+    if(b.dataset.mailAction==='work-reject'&&state.brainCase?.work){const work=state.brainCase.work;
+      void updateWork('work_review',{caseId:work.caseId,revision:work.revision,eventId:b.dataset.eventId,
+        outcome:'rejected',authorityConfirmed:false});return;}
+    if(b.dataset.mailAction==='work-action'){const action=b.dataset.workAction;
+      submitWorkAction(action,b.dataset.scope,b.dataset.targetId,
+        action==='reopened'?{releaseProtection:true,retainDue:false}:action==='completed'?{result:'unspecified'}:{},
+        action==='snooze'?Date.now()+86400000:undefined);return;}
     if(b.dataset.mailAction==='brain-attachment'){void brainRequest('attachment_get',{attachmentId:b.dataset.attachmentId},data=>{state.brainAttachment=data;});return;}
     if(b.dataset.mailAction==='brain-action'&&state.brainCase){const c=state.brainCase.case;
       void brainRequest('case_action',{caseId:c.id,revision:c.revision,action:b.dataset.nextState},()=>{state.brainCase=null;state.brainDraft=null;state.brainApproval=null;state.brainReply=null;}).then(()=>refreshBrain());return;}

@@ -70,9 +70,16 @@ export async function forwardForpsiAdmin({request,env}) {
     if(command.operation==='access_save') {
       const p=command.payload;
       if(!Array.isArray(p.actions) || typeof p.userId!=='string') return json({error:messages.INVALID_INPUT},400);
+      if(Object.hasOwn(p,'workIdentity')||Object.hasOwn(p,'verifyWorkIdentity')&&typeof p.verifyWorkIdentity!=='boolean')
+        return json({error:messages.INVALID_INPUT},400);
       const target=directory.find(item=>item.id===p.userId);
       // Revocation remains possible for a disabled or removed user; it cannot create new access.
       if(p.actions.length && !isUserActive(target)) return json({error:'Vybraný kolega není aktivní uživatel SO.ai.',code:'USER_NOT_ACTIVE'},409);
+      if(p.verifyWorkIdentity){
+        if(!isUserActive(target)||!target.email)return json({error:messages.INVALID_INPUT},400);
+        p.workIdentity={label:target.name||target.email,address:target.email};
+      }
+      delete p.verifyWorkIdentity;
     }
   }
   try {
