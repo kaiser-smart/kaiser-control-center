@@ -1,5 +1,9 @@
 # Mail Brain: stav implementace a hranice pilotu
 
+Tento dokument popisuje původní pilot V1 a jeho historické ověření. Nový
+model práce, aktuální ověření a postup aktivace obsahuje
+[MAIL_BRAIN_V2_IMPLEMENTATION.md](MAIL_BRAIN_V2_IMPLEMENTATION.md).
+
 Nasazený pilot přidává případový model vedle dosavadního FORPSI konektoru. Nic
 nepřepisuje ve starých pracovních seznamech. Migrace `0012_mail_brain.sql` je
 aditivní. Produkční konfigurace této větve zapíná pouze ručně spouštěný pilot

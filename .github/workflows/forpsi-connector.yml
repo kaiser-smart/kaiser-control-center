@@ -14,6 +14,7 @@ on:
       - 'functions/_lib/users-store.js'
       - 'src/components/ForpsiAdminPanel.js'
       - 'src/components/ForpsiMailPanel.js'
+      - 'src/components/ForpsiWorkPanel.js'
       - 'src/components/ForpsiComposer.js'
       - 'src/app.js'
       - 'scripts/forpsi-admin.test.mjs'
@@ -22,6 +23,8 @@ on:
       - 'scripts/forpsi-oauth-pages.test.mjs'
       - 'scripts/forpsi-send.test.mjs'
       - 'scripts/forpsi-personal-settings.test.mjs'
+      - 'scripts/forpsi-analysis-proxy.test.mjs'
+      - 'scripts/forpsi-analysis-eval-auth.test.mjs'
       - 'public/forpsi-setup/**'
       - 'public/forpsi-access/**'
       - 'public/forpsi-send/**'
@@ -42,7 +45,7 @@ jobs:
         with:
           version: 11.19.0
       - run: pnpm --dir services/forpsi-connector install --frozen-lockfile --ignore-scripts
-      - run: node --test scripts/forpsi-admin.test.mjs scripts/forpsi-mail.test.mjs scripts/forpsi-setup.test.mjs scripts/forpsi-oauth-pages.test.mjs scripts/forpsi-send.test.mjs scripts/forpsi-personal-settings.test.mjs services/forpsi-connector/test/*.test.mjs
+      - run: node --test scripts/forpsi-*.test.mjs services/forpsi-connector/test/*.test.mjs
       - run: node scripts/check-syntax.mjs
       - run: node scripts/build.mjs
       - run: pnpm --dir services/forpsi-connector build

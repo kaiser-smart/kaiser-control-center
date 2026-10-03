@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {handleAnalysisProxy} from '../functions/api/forpsi/analysis.js';
 import {openAiBrainAnalyzer} from '../services/forpsi-connector/src/brain-analyzer.mjs';
+import {workAnalysisRequest,analyzeWorkCase} from '../services/forpsi-connector/src/work-v2-extraction.mjs';
 
 const secret='s'.repeat(40);
 const env={FORPSI_ADMIN_TOKEN:secret,OPENAI_API_KEY:'private-server-key'};
@@ -62,4 +63,34 @@ test('analysis proxy hides upstream failures',async()=>{
     handleAnalysisProxy({request:new Request(url,init),env,
       fetcher:async()=>new Response('private provider diagnostic',{status:429})})}),
   /MODEL_ANALYSIS_HTTP_429/);
+});
+
+test('V2 request passes the real proxy with recursively strict schema and bounded output',async()=>{
+  const input={contract:'work-items.v2.2',messages:[],knownItems:[],entities:[]};
+  const requestBody=workAnalysisRequest(input);
+  const inspect=value=>{if(!value||typeof value!=='object')return;
+    if(value.type==='object'){assert.equal(value.additionalProperties,false);
+      assert.deepEqual([...value.required].sort(),Object.keys(value.properties).sort());}
+    assert.equal(Object.hasOwn(value,'default'),false);
+    Object.values(value).forEach(v=>Array.isArray(v)?v.forEach(inspect):inspect(v));};
+  inspect(requestBody.text.format.schema);
+  const workerEnv={FORPSI_ANALYSIS_PROXY_URL:'https://smart-odpady.ai/api/forpsi/analysis',
+    CONNECTOR_ADMIN_TOKEN:secret,FORPSI_ANALYSIS_MODEL:'gpt-5-mini'};
+  let forwarded;
+  const output=await analyzeWorkCase(input,workerEnv,{fetcher:async(url,init)=>handleAnalysisProxy({
+    request:new Request(url,init),env,fetcher:async(_url,upstream)=>{
+      forwarded=JSON.parse(upstream.body);assert.equal(upstream.redirect,'manual');
+      return Response.json({output:[{content:[{type:'output_text',text:'{"events":[],"signals":[]}'}]}]});}})});
+  assert.deepEqual(output,{events:[],signals:[]});assert.equal(forwarded.max_output_tokens,7000);
+  const request=body=>new Request(workerEnv.FORPSI_ANALYSIS_PROXY_URL,{method:'POST',
+    headers:{authorization:`Bearer ${secret}`,'content-type':'application/json'},body});
+  let calls=0;
+  assert.equal((await handleAnalysisProxy({request:request(JSON.stringify({...requestBody,padding:'x'.repeat(100000)})),env,
+    fetcher:async()=>{calls++;throw Error();}})).status,400);
+  assert.equal(calls,0);
+  for(const response of [new Response(null,{status:302,headers:{location:'https://untrusted.example'}}),
+    new Response('x'.repeat(170000))]){
+    assert.equal((await handleAnalysisProxy({request:request(JSON.stringify(requestBody)),env,
+      fetcher:async()=>response})).status,503);
+  }
 });

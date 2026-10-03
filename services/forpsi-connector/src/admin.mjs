@@ -40,7 +40,9 @@ const schemas = { overview: z.object({}).strict(), save,
   composition_get: profileSelection, composition_save: profileInput,
   access_list: z.object({id}).strict(),
   access_save: selection.extend({userId:id,actions:z.array(z.enum(ACTIONS)).max(5)
-    .refine(a=>new Set(a).size===a.length && (!a.includes('schedule') || a.includes('send')))}).strict(),
+    .refine(a=>new Set(a).size===a.length && (!a.includes('schedule') || a.includes('send'))),
+    workCapabilities:z.array(z.enum(['facts.review','work.manage','signals.manage_shared'])).max(3).optional(),
+    workIdentity:z.object({label:z.string().min(1).max(240),address:z.email()}).strict().optional()}).strict(),
   verify: selection, resources: z.union([selection,diagnosticSelection]),
   set_active: selection.extend({ active: z.boolean() }) };
 const publicColumns = `m.id,m.address,m.display_name,m.active,m.revision,m.drafts_folder,m.sent_folder,m.trash_folder,
@@ -88,6 +90,7 @@ export async function executeAdmin(operation, raw, ctx) {
     return { mailboxes: mailboxes.map(publicMailbox), grants: grants.slice(0,500), audit, queue,
       rules: rules.slice(0,200), labels: labels.slice(0,200),
       brainRules:brainRules.slice(0,200),brainEnabled:env.MAIL_BRAIN_ENABLED==='true',
+      brainV2Enabled:env.MAIL_BRAIN_V2_ENABLED==='true',
       brainPilotReadOnly:env.MAIL_BRAIN_PILOT_READ_ONLY==='true',
       brainDiagnosticEnabled:env.MAIL_BRAIN_DIAGNOSTIC_ENABLED==='true'&&
         env.MAIL_BRAIN_PILOT_READ_ONLY==='true'&&

@@ -46,6 +46,21 @@ test('SO.ai session and settings:manage are required before contacting connector
   assert.equal((await forwardForpsiAdmin({env,request:await req(env,user)})).status,403);
   assert.equal(calls,0);
 });
+
+test('V2 business authority is explicit and its verified identity comes only from the current SO.ai directory',async()=>{
+  const {env,f}=setup();f.env.MAIL_BRAIN_V2_ENABLED='true';
+  const payload={id:'mail-a',revision:1,userId:user.id,actions:['read','write'],
+    workCapabilities:['facts.review','work.manage'],verifyWorkIdentity:true};
+  const injected=await forwardForpsiAdmin({env,request:await req(env,admin,{operation:'access_save',
+    payload:{...payload,workIdentity:{address:'forged@example.test',label:'Forged'}}})});
+  assert.equal(injected.status,400);
+  assert.equal((await f.store.first('SELECT COUNT(*) n FROM brain_entities_v2')).n,0);
+  const response=await forwardForpsiAdmin({env,request:await req(env,admin,{operation:'access_save',payload})});
+  assert.equal(response.status,200);
+  const saved=await f.store.first('SELECT * FROM brain_entities_v2');
+  assert.equal(saved.address,user.email);assert.equal(saved.label,user.name);assert.equal(saved.verified_by,admin.id);
+  assert.equal((await response.json()).access.entries.find(e=>e.userId===user.id).workCapabilities.length,2);
+});
 test('SO.ai → Worker → SQLite saves and reads actual settings through authenticated endpoints',async()=>{
   const {env,f}=setup();const request=await req(env,admin,{operation:'save',payload:{requestId:crypto.randomUUID(),address:'ui@example.test',displayName:'UI TEST',password:'test-only-password'}});
   const result=await forwardForpsiAdmin({env,request});assert.equal(result.status,200);

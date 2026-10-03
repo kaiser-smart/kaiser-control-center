@@ -28,7 +28,7 @@ function evaluationAccess(request,env,supplied){
   }catch{return null;}
 }
 
-async function evaluationBody(request){
+async function boundedBody(request,limit){
   const reader=request.body?.getReader();
   if(!reader)throw Error();
   const chunks=[];let length=0;
@@ -36,7 +36,7 @@ async function evaluationBody(request){
     for(;;){
       const {value,done}=await reader.read();if(done)break;
       length+=value.byteLength;
-      if(length>16000){await reader.cancel();throw Error();}
+      if(length>limit){await reader.cancel();throw Error();}
       chunks.push(value);
     }
   }finally{reader.releaseLock();}
@@ -56,41 +56,44 @@ export async function handleAnalysisProxy({request,env,fetcher=fetch}){
   if(!env.OPENAI_API_KEY)return reply('ANALYSIS_UNAVAILABLE',503);
   if(request.headers.get('content-type')?.split(';')[0]!=='application/json')
     return reply('INVALID_ARGUMENTS',415);
-  if(Number(request.headers.get('content-length')??0)>16000)return reply('INVALID_ARGUMENTS',413);
+  if(Number(request.headers.get('content-length')??0)>(evaluation?16000:96000))return reply('INVALID_ARGUMENTS',413);
   let body;
   try{
     let source;
     if(evaluation){
-      const bytes=await evaluationBody(request);
+      const bytes=await boundedBody(request,16000);
       const digest=await crypto.subtle.digest('SHA-256',bytes);
       const hash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
       // Pin the whole approved request, including prompt, nested schema and case input.
       if(!evaluation.has(hash))return reply('INVALID_ARGUMENTS',400);
       source=new TextDecoder('utf-8',{fatal:true}).decode(bytes);
-    }else source=await request.text();
-    if(source.length>12000)throw Error();
+    }else source=new TextDecoder('utf-8',{fatal:true}).decode(await boundedBody(request,96000));
+    if(source.length>(evaluation?12000:96000))throw Error();
     body=JSON.parse(source);
-    if(body.model!=='gpt-5-mini'||body.store!==false||body.max_output_tokens!==2400||
+    const v2=!evaluation&&body.text?.format?.name==='mail_brain_work_v2';
+    if(body.model!=='gpt-5-mini'||body.store!==false||body.max_output_tokens!==(v2?7000:2400)||
       body.reasoning?.effort!=='minimal'||
       body.input?.length!==2||body.input[0]?.role!=='system'||
       body.input[1]?.role!=='user'||body.text?.format?.type!=='json_schema'||
-      body.text.format.name!=='mail_brain_analysis'||body.text.format.strict!==true)
+      body.text.format.name!==(v2?'mail_brain_work_v2':'mail_brain_analysis')||body.text.format.strict!==true||
+      (!v2&&source.length>12000))
       throw Error();
   }catch{return reply('INVALID_ARGUMENTS',400);}
   try{
     const response=await fetcher('https://api.openai.com/v1/responses',{
       method:'POST',headers:{authorization:`Bearer ${env.OPENAI_API_KEY}`,
         'content-type':'application/json'},body:JSON.stringify(body),
-      signal:AbortSignal.timeout(35000),...(evaluation?{redirect:'manual'}:{})});
+      signal:AbortSignal.timeout(body.text.format.name==='mail_brain_work_v2'?45000:35000),redirect:'manual'});
     // Workers fetch supports manual redirects; reject instead of following Location.
-    if(evaluation&&(response.redirected||(response.status>=300&&response.status<400)||
-      (response.url&&response.url!=='https://api.openai.com/v1/responses')))
+    if(response.redirected||(response.status>=300&&response.status<400)||
+      (response.url&&response.url!=='https://api.openai.com/v1/responses'))
       return reply('ANALYSIS_UNAVAILABLE',503);
     if(!response.ok)return Response.json({error:'ANALYSIS_UNAVAILABLE',
       upstreamStatus:response.status},{status:503,headers:{'Cache-Control':'no-store'}});
-    const result=await response.json();
+    const result=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(await boundedBody(response,
+      body.text.format.name==='mail_brain_work_v2'?160000:100000)));
     const serialized=JSON.stringify(result);
-    if(serialized.length>100000)return reply('ANALYSIS_UNAVAILABLE',503);
+    if(serialized.length>(body.text.format.name==='mail_brain_work_v2'?160000:100000))return reply('ANALYSIS_UNAVAILABLE',503);
     return new Response(serialized,{status:200,headers:{'Content-Type':'application/json',
       'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
   }catch{return reply('ANALYSIS_UNAVAILABLE',503);}
