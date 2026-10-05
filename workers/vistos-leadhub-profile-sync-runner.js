@@ -2,10 +2,11 @@ const CRON = "*/5 * * * *";
 const PREPARATION_CRON = "* * * * *";
 const INTERNAL_REQUEST_TIMEOUT_MS = 120000;
 const ALARM_STALE_AFTER_MS = 60000;
+const PIPELINE_VERSION = "recoverable-writer-v2";
 
 function csvConfig(env) {
   return [env.CSV_BATCH_ID, env.CSV_SCOPE, env.CSV_ARM_BATCH_ID, env.CSV_SUBMITTED_BATCH_ID,
-    env.CSV_IMPORT_RECEIPT, env.CSV_QUARANTINE_BATCH_ID, env.RECOVERY_OWNER].join("|");
+    env.CSV_IMPORT_RECEIPT, env.CSV_QUARANTINE_BATCH_ID, PIPELINE_VERSION].join("|");
 }
 
 function baseUrl(env) {
@@ -23,7 +24,6 @@ export async function runScheduledSync(env, scheduledTime, requestedMode) {
       scheduledAt: new Date(scheduledTime).toISOString(),
       mode: requestedMode || (env.BUSINESS_READ_ENABLED === "true" && new Date(scheduledTime).getUTCMinutes() % 5 === 4
         ? "business-read" : env.RUN_MODE || (env.READ_PREFLIGHT_ONLY === "true" ? "read-preflight" : "sync")),
-      recoveryOwner: env.RECOVERY_OWNER || undefined,
       ...(requestedMode === "csv-step" ? { batchId: env.CSV_BATCH_ID, batchSize: Number(env.CSV_BATCH_SIZE) || 5,
         scope: env.CSV_SCOPE,
         quarantineBatchId: env.CSV_QUARANTINE_BATCH_ID,
@@ -54,6 +54,7 @@ export async function runScheduledSync(env, scheduledTime, requestedMode) {
 export class VistosContinuationController {
   constructor(storage, env) { this.storage = storage; this.env = env; }
   async ensureScheduled() {
+    if (this.running) return { scheduled: true, inFlight: true };
     const [alarm, state] = await Promise.all([this.storage.getAlarm(), this.storage.get("continuation")]);
     const deployedConfig = csvConfig(this.env);
     const alarmAt = Number(alarm);
@@ -66,8 +67,19 @@ export class VistosContinuationController {
     return { scheduled: true };
   }
   async alarm() {
+    if (this.running) return this.running;
+    this.running = this.runAlarm().finally(() => { this.running = null; });
+    return this.running;
+  }
+  async runAlarm() {
     const state = await this.storage.get("continuation") || { steps: 0, failures: 0, lastBusinessAt: 0 };
     const startedAt = Date.now();
+    // A restarted instance waits out the previous request's bounded lifetime.
+    // It still schedules its successor before returning (alarms are one-shot).
+    if (state.inFlightAt && startedAt < state.inFlightAt + 180000) {
+      await this.storage.setAlarm(state.inFlightAt + 180000);
+      return;
+    }
     // Never two business blocks consecutively: delta reconciliation and its
     // priority queue run between blocks even while the historical backlog grows.
     const currentCsvConfig = csvConfig(this.env);
@@ -91,6 +103,7 @@ export class VistosContinuationController {
       const businessDue = this.env.BUSINESS_READ_ENABLED === "true" && startedAt - state.lastBusinessAt >= 300000;
       mode = writerDue ? "execute-import" : businessDue ? "business-read" : "csv-step";
     }
+    if (state.needsWriter) mode = "execute-import";
     state.lastMode = mode;
     if (mode !== "execute-import") state.lastAuxiliary = mode;
     if (mode === "business-read") state.lastBusinessAt = startedAt;
@@ -103,13 +116,17 @@ export class VistosContinuationController {
       const summary = await runScheduledSync(this.env, startedAt, mode);
       state.failures = 0;
       state.steps++;
-      state.lastSuccessAt = new Date().toISOString();
+      state.lastResponseAt = new Date().toISOString();
+      if (mode === "execute-import" && summary.status === "completed") state.lastSuccessAt = state.lastResponseAt;
+      state.needsWriter = Boolean(summary.lockReleased);
       state.lastSummary = summary;
       if (mode === "execute-import") { state.lastWriterAt = startedAt; state.csvSinceWriter = 0; }
       if (mode === "csv-step") state.csvSinceWriter = (state.csvSinceWriter || 0) + 1;
       if (mode === "csv-step") { state.csvConfig = currentCsvConfig; state.csvStatus = summary.status; }
       if (summary.status === "RECONCILIATION_REQUIRED") nextDelay = 60000;
       else if (mode === "execute-import" && !summary.pending && !summary.historicalImport?.remaining) nextDelay = 60000;
+      if (summary.failed || (summary.pending && summary.batchSize === 0)) nextDelay = 60000;
+      if (summary.lockReleased) nextDelay = 2500;
       const reconciliation = Array.isArray(summary.checks) ? {
         total: summary.checks.length,
         noProviderWrite: summary.checks.filter(check => check.stage === "NO_PROVIDER_WRITE").length,
@@ -125,6 +142,9 @@ export class VistosContinuationController {
         integrationTagMissing: summary.checks.filter(check => Number(check.integrationTagCount) === 0).length
       } : undefined;
       console.log("vistos_leadhub_profile_sync.continuation", { mode, durationMs: Date.now() - startedAt,
+        batchId: summary.batchId || summary.writerOwner || null, retryCount: summary.retryCount || 0,
+        found: summary.batchSize ?? summary.sourceRows ?? null, successful: summary.readbackConfirmed || summary.profilesConfirmed || 0,
+        skipped: summary.skipped || 0, failed: summary.failed || 0, lastSuccessAt: state.lastSuccessAt || null,
         pending: summary.pending ?? summary.historicalImport?.remaining ?? null,
         created: summary.created || 0, updated: summary.updated || 0, status: summary.status || summary.syncStatus,
         ...(reconciliation ? { reconciliation } : {}) });
@@ -132,6 +152,8 @@ export class VistosContinuationController {
       state.failures++;
       state.lastError = { code: error.code || "continuation_request_failed", status: error.status || 0,
         upstreamStatus: error.upstreamStatus || 0, at: new Date().toISOString() };
+      // A writer/recovery failure returns to the writer before auxiliary work.
+      state.needsWriter = true;
       nextDelay = Math.max(60000, Math.min(900000, 60000 * 2 ** Math.min(state.failures - 1, 4)), (error.retryAfterSeconds || 0) * 1000);
       console.error("vistos_leadhub_profile_sync.continuation_failed", state.lastError);
     }

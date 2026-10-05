@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import worker, { runScheduledSync, VistosContinuationController } from "../workers/vistos-leadhub-profile-sync-runner.js";
-import { __test, buildLeadHubImportManifest, runVistosLeadHubProfileSync, withVistosLeadHubWriter, prepareVistosLeadHubHistoricalImport, executeVistosLeadHubHistoricalImport, verifyCompleteContactCapture, refreshVistosBusinessRelations } from "../functions/_lib/vistos-leadhub-profile-sync.js";
+import { __test, buildLeadHubImportManifest, runVistosLeadHubProfileSync, withVistosLeadHubWriter, prepareVistosLeadHubHistoricalImport, executeVistosLeadHubHistoricalImport as executeImport, verifyCompleteContactCapture, refreshVistosBusinessRelations } from "../functions/_lib/vistos-leadhub-profile-sync.js";
 import { onRequestGet, onRequestPost } from "../functions/api/receivables/vistos/leadhub-sync-internal.js";
+
+// The recovery matrix tests journal semantics; pacing has independent fake-clock tests below.
+const recoveryLimiter = Object.assign(async () => {}, { persist: async () => {} });
+const executeVistosLeadHubHistoricalImport = (env, options) => executeImport({ ...env, syncApiLimiter: recoveryLimiter }, options);
 
 class MemoryR2 {
   constructor(seed = {}) { this.values = new Map(Object.entries(seed)); }
@@ -16,7 +20,7 @@ class MemoryR2 {
     if (options.onlyIf?.get("If-None-Match") === "*" && this.values.has(key)) return null;
     if (options.onlyIf?.get("If-Match") && options.onlyIf.get("If-Match") !== `"${__test.fingerprint(this.values.get(key))}"`) return null;
     this.values.set(key, String(value));
-    return { key };
+    return { key, httpEtag: `"${__test.fingerprint(String(value))}"` };
   }
   async delete(key) { this.values.delete(key); }
   async list({ prefix, limit }) {
@@ -41,7 +45,7 @@ await withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async context => {
   assert.equal(context.startedAt, lock.startedAt, "HTTP budget starts at lock acquisition, not after outer ledger reads");
 });
 await assert.rejects(() => withVistosLeadHubWriter({ R2_ARCHIVE: lockR2 }, async () => { throw new Error("read failed"); }), /read failed/);
-assert.equal(lockR2.values.size, 0, "read-only failures release the writer");
+assert.equal(JSON.parse(lockR2.values.get("protected-sync/vistos-leadhub-profiles/writer-lock.json")).phase, "RELEASED", "read-only failures release the writer");
 const claimedCleanupR2 = new MemoryR2();
 await withVistosLeadHubWriter({ R2_ARCHIVE: claimedCleanupR2 }, async context => {
   const key = "protected-sync/vistos-leadhub-profiles/writer-lock.json";
@@ -282,7 +286,7 @@ assert.match(config, /crons = \["\* \* \* \* \*"\]/);
 assert.match(config, /RUN_MODE = "execute-import"/);
 assert.match(config, /CSV_SUBMITTED_BATCH_ID = "csv-20260918-whole"/);
 assert.match(config, /CSV_IMPORT_RECEIPT = "LEADHUB_UI_CONFIRMED_9374_IMPORTED_20260920"/);
-assert.match(config, /RECOVERY_OWNER = "8ae3c4b2-9e56-4902-ad9e-77f2573f511e"/);
+assert.doesNotMatch(config, /RECOVERY_OWNER\s*=/, "automatic recovery cannot depend on an incident UUID");
 
 const unauthorized = await onRequestPost({
   request: new Request("https://example.test/api/receivables/vistos/leadhub-sync-internal", {
@@ -545,10 +549,16 @@ try {
   assert.ok(adopted.snapshotKey.includes("/imports/"));
   const runAt = new Date(Date.parse(adopted.checkpoint) + 60000).toISOString();
   currentSourceRow = { ...preparationRow, FirstName: "Changed" };
-  await assert.rejects(() => executeVistosLeadHubHistoricalImport(preparationEnv, { scheduledAt: runAt }), error => error.code === "contact_changed_before_write");
+  const changed = await executeVistosLeadHubHistoricalImport(preparationEnv, { scheduledAt: runAt });
+  assert.equal(changed.status, "partial"); assert.equal(changed.failed, 1);
+  const deferred = JSON.parse(preparationR2.values.get(syncStateKey));
+  assert.equal(deferred.recordRetries[preparationRow.Id].reason, "contact_changed_before_write");
+  assert.equal(deferred.appliedCheckpoint, undefined);
+  deferred.recordRetries[preparationRow.Id].nextAttemptAt = "2026-01-01T00:00:00Z";
+  preparationR2.values.set(syncStateKey, JSON.stringify(deferred));
   assert.equal(providerWrites, 0, "current source change cannot be overwritten by the old manifest");
   assert.equal(JSON.parse(preparationR2.values.get(syncStateKey)).pending.length, 1, "rejected source read retains the queue");
-  assert.equal(preparationR2.values.has("protected-sync/vistos-leadhub-profiles/writer-lock.json"), false);
+  assert.equal(JSON.parse(preparationR2.values.get("protected-sync/vistos-leadhub-profiles/writer-lock.json")).phase, "RELEASED");
   currentSourceRow = preparationRow;
   // A real coordinator pass durably isolates only a rejected pre-write GET.
   // Re-instantiation keeps the rejection; it must not be retried every tick.
@@ -572,7 +582,7 @@ try {
     assert.equal(saved.pending.length, 0);
     assert.equal(saved.profileReadRejections[preparationRow.Id].reason, "PROFILE_READ_REJECTED_422");
     assert.equal(saved.profiles[preparationRow.Id], undefined, "SKIP is not a completed profile");
-    assert.equal(rejectionStorage.values.has("protected-sync/vistos-leadhub-profiles/writer-lock.json"), false);
+    assert.equal(JSON.parse(rejectionStorage.values.get("protected-sync/vistos-leadhub-profiles/writer-lock.json")).phase, "RELEASED");
     assert.ok([...rejectionStorage.values].some(([key, value]) => key.includes("/operations/")
       && JSON.parse(value).status === "SKIP" && JSON.parse(value).profileWrites === 0));
     await executeVistosLeadHubHistoricalImport({ ...preparationEnv, R2_ARCHIVE: rejectionStorage },
@@ -642,32 +652,13 @@ const retainedR2 = new MemoryR2({
     beforeSafety: { subscriptions: [], suppressed: false }
   })
 });
-const retainedPut = retainedR2.put.bind(retainedR2);
-retainedR2.put = async (key, value, options) => {
-  assert.ok(key.includes("/reconciliation/"), "read reconciliation may only store protected evidence");
-  return retainedPut(key, value, options);
-};
-retainedR2.delete = async () => assert.fail("read reconciliation must never release a retained lock");
 globalThis.fetch = async (url, options) => {
   assert.equal(options.method, "GET", "accepted writes cannot be retried by read reconciliation");
   if (url.includes("/subscriptions/")) return Response.json(url.endsWith("/suppressed") ? { is_suppressed: false } : { subscriptions: [] });
   return Response.json({ ...owned, tags: [] });
 };
 try {
-  const read = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: retainedR2, LEADHUB_API_TOKEN: "synthetic" });
-  assert.equal(read.status, "RECONCILIATION_REQUIRED");
-  assert.equal(read.profileWrites, 0);
-  assert.equal(read.checks[0].identityMatches, true);
-  assert.equal(read.checks[0].namesMatch, true);
-  assert.equal(read.checks[0].tagMatches, false);
-  assert.equal(read.checks[0].safetyUnchanged, true);
-  assert.equal(retainedR2.values.get(retainedLockKey), JSON.stringify(retainedLock));
-  assert.equal(retainedR2.values.get(syncStateKey), JSON.stringify(retainedState));
-  assert.ok(!JSON.stringify(read).includes(selected.normalizedEmail));
-  assert.ok(!JSON.stringify(read).includes(selected.firstName));
-  retainedR2.put = retainedPut;
-  retainedR2.delete = MemoryR2.prototype.delete.bind(retainedR2);
-  const settled = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: retainedR2, LEADHUB_API_TOKEN: "synthetic" }, { recoveryOwner: retainedLock.owner });
+  const settled = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: retainedR2, LEADHUB_API_TOKEN: "synthetic" });
   assert.equal(settled.status, "READBACK_ADOPTED");
   assert.equal(settled.profileWrites, 0);
   assert.equal(settled.lockReleased, true);
@@ -677,7 +668,7 @@ try {
   assert.equal(adoptedProfile.pending.length, 1, "the missing tag remains queued for fresh source checks");
   assert.equal(adoptedProfile.pending[0].manifestAction, "UPDATE");
   assert.equal(adoptedProfile.checkpoint, retainedState.checkpoint);
-  // Simulate failure after the state commit but before lock deletion.
+  // Simulate failure after the state commit but before conditional lock release.
   retainedR2.values.set(retainedLockKey, JSON.stringify(retainedLock));
   await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: retainedR2, LEADHUB_API_TOKEN: "synthetic" }, { recoveryOwner: retainedLock.owner });
   assert.equal(JSON.parse(retainedR2.values.get(syncStateKey)).totals.created, 1, "retrying settlement cannot count or create a second profile");
@@ -709,17 +700,11 @@ globalThis.fetch = async (url, options) => {
     tags: [__test.tagPayload(selected, true, "", { subscriptions: [], suppressed: false }).tag] });
 };
 try {
-  const live = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: intentStorage, LEADHUB_API_TOKEN: "synthetic" });
-  assert.equal(live.status, "RECONCILIATION_REQUIRED");
-  assert.equal(intentStorage.values.get(syncStateKey), JSON.stringify(intentState));
-  intentStorage.values.set(retainedLockKey, JSON.stringify({ ...intentLock, terminal: true }));
-  intentSafetyChanged = true;
-  assert.equal((await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: intentStorage, LEADHUB_API_TOKEN: "synthetic" })).status,
-    "RECONCILIATION_REQUIRED", "a changed suppression blocks settlement");
-  intentSafetyChanged = false; intentIdentityChanged = true;
-  assert.equal((await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: intentStorage, LEADHUB_API_TOKEN: "synthetic" })).status,
-    "RECONCILIATION_REQUIRED", "a different identity blocks settlement");
-  intentIdentityChanged = false;
+  // Live leases are never stolen; an expired intent is verified automatically.
+  intentStorage.values.set(retainedLockKey, JSON.stringify({ ...intentLock, startedAt: new Date().toISOString() }));
+  await assert.rejects(() => executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: intentStorage }),
+    error => error.code === "vistos_leadhub_writer_locked");
+  intentStorage.values.set(retainedLockKey, JSON.stringify(intentLock));
   const settled = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: intentStorage, LEADHUB_API_TOKEN: "synthetic" });
   assert.equal(settled.status, "READBACK_ADOPTED");
   assert.equal(settled.profileWrites, 0);
@@ -763,14 +748,14 @@ for (const scenario of ["empty", "proven-empty", "no-approval", "wrong-owner", "
     const run = executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: storage }, {
       recoveryOwner: ["no-approval", "proven-empty"].includes(scenario) ? undefined : scenario === "wrong-owner" ? "other" : lock.owner
     });
-    if (["truncated", "cas-race", "late-journal"].includes(scenario)) {
-      await assert.rejects(run, error => ["writer_journal_incomplete", "writer_reconciliation_changed"].includes(error.code));
+    if (["truncated", "cas-race", "late-journal", "journal", "young"].includes(scenario)) {
+      await assert.rejects(run, error => ["writer_journal_incomplete", "writer_reconciliation_changed", "writer_journal_invalid", "vistos_leadhub_writer_locked"].includes(error.code));
       assert.ok(storage.values.has(retainedLockKey));
     } else {
       const result = await run;
-      const recovered = ["empty", "proven-empty", "resume-claim"].includes(scenario);
+      const recovered = ["empty", "proven-empty", "resume-claim", "no-approval", "wrong-owner"].includes(scenario);
       assert.equal(result.status, recovered ? "READ_ONLY_INTERRUPTION_RECOVERED" : "RECONCILIATION_REQUIRED");
-      assert.equal(storage.values.has(retainedLockKey), !recovered);
+      assert.equal(JSON.parse(storage.values.get(retainedLockKey)).phase === "RELEASED", recovered);
       assert.equal(result.profileWrites, 0);
     }
     assert.equal(storage.values.get(syncStateKey), JSON.stringify(state), "checkpoint, CSV reservations and ledger must remain identical");
@@ -812,8 +797,9 @@ globalThis.fetch = async (url, options) => {
 try {
   changedCommittedSafety = true;
   const rejected = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: mixedR2, LEADHUB_API_TOKEN: "synthetic" });
-  assert.equal(rejected.lockReleased, false, "previously committed operations still require unchanged live safety");
-  assert.equal(mixedR2.values.get(syncStateKey), mixedSeed[syncStateKey]);
+  assert.equal(rejected.lockReleased, true, "one changed contact cannot trap independently confirmed work");
+  assert.equal(JSON.parse(mixedR2.values.get(syncStateKey)).quarantinedIdentities["41"].reason, "RECOVERY_CONSENT_CHANGED");
+  mixedR2.values = new Map(Object.entries(mixedSeed));
   changedCommittedSafety = false;
   const settled = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: mixedR2, LEADHUB_API_TOKEN: "synthetic" });
   assert.equal(settled.status, "READBACK_ADOPTED");
@@ -1081,6 +1067,7 @@ for (const scenario of ["unchanged", "safety-changed", "foreign-id", "live-write
   const owner = `quarantine-${scenario}`;
   const lock = { owner, startedAt: "2026-01-01T00:00:00Z",
     terminal: !["live-writer", "explicit-owner-tag-present"].includes(scenario) };
+  if (scenario === "live-writer") lock.startedAt = new Date().toISOString();
   const item = { ...linkedItem, historical: true, desired: "active", manifestAction: "UPDATE" };
   const seedState = { checkpoint: "2026-01-01T00:00:00Z", profiles: {}, pending: [item],
     historicalImport: { skipped: 55 }, manifestIdentityChecks: { "42": { action: "UPDATE" } } };
@@ -1099,17 +1086,22 @@ for (const scenario of ["unchanged", "safety-changed", "foreign-id", "live-write
         ? [{ name: __test.TAG_NAME, data: { unknown: true } }] : [] });
   };
   try {
-    const result = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: storage, LEADHUB_API_TOKEN: "synthetic" },
-      { recoveryOwner: scenario === "explicit-owner-tag-present" ? owner : undefined });
+    if (scenario === "live-writer") {
+      await assert.rejects(() => executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: storage }),
+        error => error.code === "vistos_leadhub_writer_locked");
+      continue;
+    }
+    const result = await executeVistosLeadHubHistoricalImport({ R2_ARCHIVE: storage, LEADHUB_API_TOKEN: "synthetic" });
     assert.equal(result.profileWrites, 0);
-    if (["unchanged", "accepted-tag", "tag-present", "explicit-owner-tag-present"].includes(scenario)) {
+    if (["unchanged", "accepted-tag", "tag-present", "explicit-owner-tag-present", "foreign-id", "safety-changed"].includes(scenario)) {
       assert.equal(result.status, "AMBIGUOUS_INTENT_SKIPPED");
       assert.equal(result.profilesConfirmed, 0); assert.equal(result.profilesQuarantined, 1);
       assert.equal(result.lockReleased, true);
       const saved = JSON.parse(storage.values.get(syncStateKey));
       assert.equal(saved.pending.length, 0); assert.deepEqual(saved.profiles, {});
       assert.equal(saved.manifestIdentityChecks["42"].reason,
-        scenario === "accepted-tag" ? "ACCEPTED_TAG_OUTCOME_UNVERIFIED" : "UNACKNOWLEDGED_TAG_INTENT");
+        scenario === "accepted-tag" ? "ACCEPTED_TAG_OUTCOME_UNVERIFIED" : scenario === "foreign-id" ? "RECOVERY_IDENTITY_MISMATCH"
+          : scenario === "safety-changed" ? "RECOVERY_CONSENT_CHANGED" : "UNACKNOWLEDGED_TAG_INTENT");
       assert.equal(saved.quarantinedIdentities["42"].operationOutcome, "UNVERIFIED");
       assert.equal(saved.historicalImport.skipped, 56);
       assert.equal(saved.checkpoint, seedState.checkpoint);
@@ -1144,10 +1136,6 @@ try {
   const recoveredAlarm = nextAlarm;
   await c.ensureScheduled(); assert.equal(nextAlarm, recoveredAlarm,
     "cron watchdog must not keep moving a healthy future alarm");
-  continuationEnv.RECOVERY_OWNER = "current-read-lock";
-  await c.ensureScheduled();
-  assert.match(continuationData.get("continuation").scheduledConfig, /current-read-lock/,
-    "changing the incident recovery owner must wake the durable coordinator");
   await c.alarm();
   await new VistosContinuationController(continuationStorage, continuationEnv).alarm();
   assert.deepEqual(modes, ["business-read", "execute-import"]);
@@ -1259,7 +1247,7 @@ assert.equal(__test.retryAfterSeconds(null), 60);
 assert.equal(__test.retryAfterSeconds("nonsense"), 60);
 const pausedR2 = new MemoryR2(); let pausedClock = 0, limitedCalls = 0;
 const pausedLimiter = __test.createApiLimiter(pausedR2, {}, () => pausedClock, async ms => { pausedClock += ms; });
-const pausedWriter = { halted: false };
+const pausedWriter = { halted: false, checkDeadline() {}, async assertActive() {} };
 globalThis.fetch = async () => { limitedCalls++; return new Response(null, { status: 429, headers: { "Retry-After": "125" } }); };
 try {
   await assert.rejects(() => __test.leadHubRequest({ LEADHUB_API_TOKEN: "synthetic", syncApiLimiter: pausedLimiter, syncWriter: pausedWriter },
@@ -1327,7 +1315,7 @@ for (const count of [3, 4]) {
 }
 let haltedWrites = 0;
 const haltedJournalEvents = [];
-const sharedHalt = { halted: false };
+const sharedHalt = { halted: false, checkDeadline() {}, async assertActive() {} };
 globalThis.fetch = async (url, options) => {
   if (options.method !== "GET") { haltedWrites++; assert.fail("incident must block provider dispatch"); }
   if (url.includes("/subscriptions/")) return Response.json(url.endsWith("/suppressed") ? { is_suppressed: false } : { subscriptions: [] });
@@ -1421,7 +1409,7 @@ try {
     const persisted = JSON.parse(slowSourceR2.values.get(syncStateKey));
     assert.equal(persisted.pending.length, 4);
     assert.equal(persisted.checkpoint, "2026-09-11T01:01:00.000Z");
-    assert.equal(slowSourceR2.values.has(retainedLockKey), false, "slow preparation yields before any provider dispatch");
+    assert.equal(JSON.parse(slowSourceR2.values.get(retainedLockKey)).phase, "RELEASED", "slow preparation yields before any provider dispatch");
   } finally { Date.now = beforeSlowSourceNow; }
   const batch = await runVistosLeadHubProfileSync(batchEnv, { scheduledAt: "2026-09-11T01:01:00Z", batchLimit: 4 });
   assert.equal(batch.concurrency, 4);
@@ -1431,7 +1419,7 @@ try {
   assert.equal(saved.totals.created, 4); assert.equal(batchWrites, 8);
   assert.equal(batchLedgerCommits, 2, "one pre-write queue commit and one confirmed batch ledger commit, not one large state per profile");
   assert.ok(Object.values(saved.profiles).every(profile => JSON.stringify(profile.subscriptions) === JSON.stringify(twoStates)));
-  assert.equal(batchR2.values.has(retainedLockKey), false);
+  assert.equal(JSON.parse(batchR2.values.get(retainedLockKey)).phase, "RELEASED");
 
   // Reproduce termination after the complete batch commit, before finally
   // releases its non-terminal lock. Recovery performs fresh GETs only and
@@ -1445,7 +1433,7 @@ try {
   const receiptKey = `protected-sync/vistos-leadhub-profiles/runs/${saved.lastRun.sourceThrough.replace(/[:.]/g, "-")}.json`;
   const nowBeforeRecovery = Date.now;
   const recoveryFetch = globalThis.fetch;
-  Date.now = () => nowBeforeRecovery() + 180000;
+  Date.now = () => nowBeforeRecovery() + 900000;
   try {
     for (const scenario of ["complete", "legacy", "missing-journal", "unknown-intent", "ledger-mismatch",
       "business-mismatch", "missing-receipt", "wrong-owner", "safety-changed", "identity-changed", "tag-changed",
@@ -1464,24 +1452,24 @@ try {
       if (scenario === "wrong-owner") update(syncStateKey, value => { value.lastRun.writerOwner = "other-writer"; });
       if (["active-claim", "stale-claim"].includes(scenario)) update(retainedLockKey, value => {
         value.phase = "COMMITTED_RELEASING"; value.claimId = "previous-attempt";
-        value.claimedAt = new Date(Date.now() - (scenario === "stale-claim" ? 180000 : 0)).toISOString();
+        value.claimedAt = new Date(Date.now() - (scenario === "stale-claim" ? 900000 : 0)).toISOString();
       });
       const ledgerBefore = storage.values.get(syncStateKey);
-      const put = storage.put.bind(storage), remove = storage.delete.bind(storage);
+      const put = storage.put.bind(storage);
       let failOnce = true;
       storage.put = async (key, ...args) => {
-        assert.notEqual(key, syncStateKey, "completed batch recovery never rewrites the global ledger");
+        if (!["unknown-intent", "ledger-mismatch", "business-mismatch", "safety-changed", "identity-changed", "tag-changed"].includes(scenario))
+          assert.notEqual(key, syncStateKey, "fully committed batches need no ledger mutation");
         if (key === retainedLockKey && scenario === "cas-race") {
           storage.values.set(key, JSON.stringify({ owner: "new-writer" })); return null;
         }
         if (key.endsWith("/settled.json") && scenario === "receipt-failure" && failOnce) {
           failOnce = false; throw new Error("synthetic recovery receipt failed");
         }
+        if (key === retainedLockKey && JSON.parse(args[0]).phase === "RELEASED" && scenario === "cleanup-failure" && failOnce) {
+          failOnce = false; throw new Error("synthetic cleanup failed");
+        }
         return put(key, ...args);
-      };
-      storage.delete = async key => {
-        if (scenario === "cleanup-failure" && failOnce) { failOnce = false; throw new Error("synthetic cleanup failed"); }
-        return remove(key);
       };
       globalThis.fetch = async (url, options) => {
         assert.equal(options.method, "GET", `${scenario}: recovery cannot replay a provider mutation`);
@@ -1494,21 +1482,24 @@ try {
       };
       const recover = () => executeVistosLeadHubHistoricalImport({ ...batchEnv, R2_ARCHIVE: storage });
       if (["cas-race", "active-claim"].includes(scenario)) {
-        await assert.rejects(recover, error => error.code === "writer_reconciliation_changed");
+        await assert.rejects(recover, error => ["writer_reconciliation_changed", "vistos_leadhub_writer_locked"].includes(error.code));
         assert.equal(storage.values.has(retainedLockKey), true);
       } else if (["receipt-failure", "cleanup-failure"].includes(scenario)) {
         await assert.rejects(recover, /synthetic/);
         assert.equal(storage.values.has(retainedLockKey), true);
-        update(retainedLockKey, value => { value.claimedAt = new Date(Date.now() - 180000).toISOString(); });
+        update(retainedLockKey, value => { value.expiresAt = new Date(Date.now() - 180000).toISOString(); value.nextAttemptAt = new Date(Date.now() - 1).toISOString(); });
         assert.equal((await recover()).status, "COMMITTED_BATCH_RECOVERED", "restart retries only cleanup with fresh readback");
       } else {
         const result = await recover();
-        const allowed = ["complete", "legacy", "stale-claim"].includes(scenario);
-        assert.equal(result.status, allowed ? "COMMITTED_BATCH_RECOVERED" : "RECONCILIATION_REQUIRED", `${scenario}: ${JSON.stringify(result.checks)}`);
-        assert.equal(result.lockReleased, allowed, scenario);
+        const complete = ["complete", "legacy", "stale-claim"].includes(scenario);
+        const isolated = ["unknown-intent", "ledger-mismatch", "business-mismatch", "safety-changed", "identity-changed", "tag-changed"].includes(scenario);
+        assert.equal(result.status, complete ? "COMMITTED_BATCH_RECOVERED" : isolated ? "AMBIGUOUS_INTENT_SKIPPED" : "READBACK_ADOPTED", scenario);
+        assert.equal(result.lockReleased, true, scenario);
         assert.equal(result.profileWrites, 0);
+        assert.equal(JSON.parse(storage.values.get(syncStateKey)).totals.created, 4, "recovery never recounts confirmed profiles");
       }
-      assert.equal(storage.values.get(syncStateKey), ledgerBefore, scenario);
+      if (!["unknown-intent", "ledger-mismatch", "business-mismatch", "safety-changed", "identity-changed", "tag-changed"].includes(scenario))
+        assert.equal(storage.values.get(syncStateKey), ledgerBefore, scenario);
       assert.equal(batchWrites, 8, scenario);
     }
   } finally { Date.now = nowBeforeRecovery; globalThis.fetch = recoveryFetch; }
@@ -1530,14 +1521,14 @@ try {
   assert.equal(Object.keys(JSON.parse(faultR2.values.get(syncStateKey)).profiles).length, 0);
   const failedLock = JSON.parse(faultR2.values.get(retainedLockKey));
   assert.equal(failedLock.terminal, true);
-  faultR2.values.set(retainedLockKey, JSON.stringify({ ...failedLock, startedAt: "2026-01-01T00:00:00Z" }));
+  faultR2.values.set(retainedLockKey, JSON.stringify({ ...failedLock, startedAt: "2026-01-01T00:00:00Z", expiresAt: "2026-01-01T00:02:00Z" }));
   faultR2.values.set(`protected-sync/vistos-leadhub-profiles/operations/${failedLock.owner}/read-only.json`,
     JSON.stringify({ status: "INTENT", contactId: "999", desired: "active" }));
   faultR2.put = faultPut;
   const recovered = await executeVistosLeadHubHistoricalImport({ ...batchEnv, R2_ARCHIVE: faultR2 });
   assert.equal(recovered.profileWrites, 0); assert.equal(batchWrites, 8);
   assert.equal(Object.keys(JSON.parse(faultR2.values.get(syncStateKey)).profiles).length, 4);
-  assert.equal(faultR2.values.has(retainedLockKey), false, "read-only sibling intent cannot trap safely confirmed operations");
+  assert.equal(JSON.parse(faultR2.values.get(retainedLockKey)).phase, "RELEASED", "read-only sibling intent cannot trap safely confirmed operations");
   const isolatedState = JSON.parse(batchInitial[syncStateKey]);
   isolatedState.quarantinedIdentities = {
     "701": { email: "previous-address@example.test", reason: "UNACKNOWLEDGED_TAG_INTENT" },

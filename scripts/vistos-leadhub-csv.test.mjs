@@ -7,10 +7,11 @@ import { onRequestPost } from "../functions/api/receivables/vistos/leadhub-sync-
 const prefix = "protected-sync/vistos-leadhub-profiles", key = `${prefix}/state.json`;
 class MemoryR2 {
   constructor(seed) { this.values = new Map(Object.entries(seed).map(([k,v]) => [k, JSON.stringify(v)])); }
-  async get(k) { const value = this.values.get(k); return value === undefined ? null : { json: async () => JSON.parse(value) }; }
+  async get(k) { const value = this.values.get(k); return value === undefined ? null : { json: async () => JSON.parse(value), httpEtag: `"${__test.fingerprint(value)}"` }; }
   async put(k,v,options = {}) {
     if (options.onlyIf?.get("If-None-Match") === "*" && this.values.has(k)) return null;
-    this.values.set(k,String(v)); return { key:k };
+    if (options.onlyIf?.get("If-Match") && options.onlyIf.get("If-Match") !== `"${__test.fingerprint(this.values.get(k))}"`) return null;
+    this.values.set(k,String(v)); return { key:k, httpEtag: `"${__test.fingerprint(String(v))}"` };
   }
   async delete(k) { this.values.delete(k); }
   read(k = key) { return JSON.parse(this.values.get(k)); }

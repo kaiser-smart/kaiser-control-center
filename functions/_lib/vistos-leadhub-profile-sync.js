@@ -11,6 +11,8 @@ import {
   normalizeContactEmail,
   vistosSchemaColumnMetadata
 } from "./vistos-contacts-audit.js";
+import { WRITER_BUDGET_MS, recoveryDue, writerContext, fencedWriterEnv, writeAttempt, releaseWriter,
+  attemptSummary, LAST_ATTEMPT_KEY } from "./vistos-leadhub-writer.js";
 
 const AUDIT_PREFIX = "protected-audits/vistos-contact-cleanup-v4";
 const AUDIT_LATEST_KEY = `${AUDIT_PREFIX}/latest.json`;
@@ -123,7 +125,8 @@ function verifyBusinessPasses(first, second, definition) {
 // subscription, document or checkpoint writes. The shared lock serializes
 // publication of relation evidence with profile selection.
 export async function refreshVistosBusinessRelations(env) {
-  return withVistosLeadHubWriter(env, async () => {
+  return withVistosLeadHubWriter(env, async (writer, scopedEnv) => {
+    env = scopedEnv;
     const storage = bucket(env);
     let state = await getJson(storage, BUSINESS_STATE_KEY);
     if (state && state.cursorVersion !== 2) {
@@ -537,7 +540,8 @@ export function verifyCompleteContactCapture(pages, expectedRows) {
 // Preparation never calls a profile/tag/subscription write endpoint and never
 // advances the production delta checkpoint. All pages and manifests are private.
 export async function prepareVistosLeadHubHistoricalImport(env) {
-  return withVistosLeadHubWriter(env, async () => {
+  return withVistosLeadHubWriter(env, async (writer, scopedEnv) => {
+    env = scopedEnv;
     const storage = bucket(env);
     let state = await getJson(storage, IMPORT_STATE_KEY);
     if (state?.phase === "MANIFEST_READY") return importSummary(state);
@@ -736,10 +740,15 @@ function leadHubConfig(env) {
 
 async function leadHubRequest(env, path, options = {}) {
   const family = apiFamily(path);
+  if (path.startsWith("/subscriptions/") && options.method && options.method !== "GET") {
+    throw syncError("subscription_write_forbidden", "Import nesmí měnit odběry.");
+  }
   if (family === "campaignRead" && env.syncApiLimiter?.runCampaign && !env.syncCampaignGated) {
     return env.syncApiLimiter.runCampaign(() => leadHubRequest({ ...env, syncCampaignGated: true }, path, options), env);
   }
   if (env.syncApiLimiter) await env.syncApiLimiter(family, env);
+  env.syncWriter?.checkDeadline();
+  if (options.method && options.method !== "GET") await env.syncWriter?.assertActive();
   if (env.syncWriter?.halted && options.method && options.method !== "GET") {
     const error = syncError("coordinator_halted", "Zapisovatel zastavil zahajování dalších zápisů.");
     error.requestNotDispatched = true;
@@ -748,7 +757,7 @@ async function leadHubRequest(env, path, options = {}) {
   const startedAt = Date.now();
   const config = leadHubConfig(env);
   const response = await fetch(`${config.baseUrl}${path}`, {
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(Math.max(1, Math.min(20000, (env.syncRequestDeadline || Infinity) - Date.now()))),
     method: options.method || "GET",
     headers: {
       Accept: "application/json",
@@ -791,7 +800,11 @@ async function assertLeadHubWorkspace(env) {
 
 async function delay(milliseconds, env, reason = "fixedWait") {
   const started = Date.now();
+  if (env?.syncRequestDeadline && started + milliseconds >= env.syncRequestDeadline) {
+    throw syncError("writer_deadline_exceeded", "Vypršel čas běhu synchronizace.");
+  }
   await new Promise((resolve) => setTimeout(resolve, milliseconds));
+  env?.syncWriter?.checkDeadline();
   addTiming(env?.syncMetrics, reason, Date.now() - started);
 }
 
@@ -1317,14 +1330,19 @@ async function initializeState(env, scheduledAt) {
   return { ...state.lastRun, syncStatus: "ACTIVE", checkpoint, historicalProfilesImported: 0, apiReadValidation: state.apiReadValidation };
 }
 
-// No TTL takeover: a timed-out writer may still have an accepted provider job.
-// An unresolved write retains the lock until its journal is reconciled.
-export async function withVistosLeadHubWriter(env, operation) {
+// A lease fences late writes; expiry only enables READ reconciliation.
+// Unknown provider outcomes are never retried merely because time elapsed.
+export async function withVistosLeadHubWriter(env, operation, kind) {
   const storage = bucket(env);
   const owner = crypto.randomUUID();
   const startedAt = new Date().toISOString();
-  const acquired = await storage.put(WRITER_LOCK_KEY, JSON.stringify({ owner, startedAt }), {
-    onlyIf: new Headers({ "If-None-Match": "*" }),
+  const lockRecord = { owner, startedAt, leaseVersion: 2,
+    expiresAt: new Date(Date.now() + WRITER_BUDGET_MS).toISOString() };
+  const previousObject = await storage.get(WRITER_LOCK_KEY);
+  const previous = previousObject && await previousObject.json();
+  const acquired = await storage.put(WRITER_LOCK_KEY, JSON.stringify(lockRecord), {
+    onlyIf: new Headers(previous?.phase === "RELEASED"
+      ? { "If-Match": previousObject.httpEtag } : { "If-None-Match": "*" }),
     httpMetadata: { contentType: "application/json" },
     customMetadata: { protected: "true", integration: "vistos-leadhub-profiles" }
   });
@@ -1334,27 +1352,43 @@ export async function withVistosLeadHubWriter(env, operation) {
     error.code = "vistos_leadhub_writer_locked";
     throw error;
   }
-  const context = { owner, startedAt, sideEffectsStarted: false, unsettled: new Set(), halted: false };
+  const context = writerContext(storage, lockRecord);
+  context.kind = kind;
+  const scopedEnv = fencedWriterEnv(env, context);
   let completed = false;
+  let result, failure;
   try {
-    const result = await operation(context);
+    if (kind) await writeAttempt(scopedEnv.R2_ARCHIVE, { batchId: owner, kind, startedAt,
+      expiresAt: lockRecord.expiresAt, status: "PROCESSING", retryCount: 0 });
+    result = await operation(context, scopedEnv);
     completed = true;
     return result;
+  } catch (error) {
+    failure = error;
+    throw error;
   } finally {
-    if (completed || !context.sideEffectsStarted) {
-      const lock = await getJson(storage, WRITER_LOCK_KEY);
-      if (lock?.owner === owner && !lock.phase) await storage.delete(WRITER_LOCK_KEY);
-    } else {
-      const lock = await getJson(storage, WRITER_LOCK_KEY);
-      if (lock?.owner === owner && !lock.phase) await putJson(storage, WRITER_LOCK_KEY, {
-        ...lock, terminal: true, terminalAt: new Date().toISOString()
-      });
+    // Diagnostics must not turn a confirmed batch into a replay, or prevent
+    // cleanup. A killed process leaves the durable PROCESSING attempt + lease.
+    if (kind) try { await writeAttempt(scopedEnv.R2_ARCHIVE, attemptSummary(context, result, failure)); }
+    catch { console.error("vistos_leadhub_profile_sync.attempt_persist_failed", { batchId: owner }); }
+    if (Date.now() < context.deadline) {
+      const object = await storage.get(WRITER_LOCK_KEY);
+      const lock = object && await object.json();
+      if (lock?.owner === owner && !lock.phase && Date.now() < context.deadline) {
+        if (completed || !context.sideEffectsStarted) await releaseWriter(storage, context, object);
+        else await storage.put(WRITER_LOCK_KEY, JSON.stringify({ ...lock,
+          terminal: true, terminalAt: new Date().toISOString() }), {
+          onlyIf: new Headers({ "If-Match": object.httpEtag }), httpMetadata: { contentType: "application/json" }
+        });
+      }
     }
   }
 }
 
 export async function runVistosLeadHubProfileSync(env, options = {}) {
-  return withVistosLeadHubWriter(env, (writer) => runProfileSyncUnlocked(env, options, writer));
+  const heldLock = await getJson(bucket(env), WRITER_LOCK_KEY);
+  if (heldLock && recoveryDue(heldLock)) return recoverVistosWriter(env, heldLock);
+  return withVistosLeadHubWriter(env, (writer, scopedEnv) => runProfileSyncUnlocked(scopedEnv, options, writer), "sync");
 }
 
 // CSV uses the SAME identity reservations, source snapshot, limiter and ledger.
@@ -1484,7 +1518,8 @@ function adoptCsvItem(state, batch, item, profile, safety, now) {
 export async function stepVistosLeadHubCsvImport(env, options = {}) {
   const id = clean(options.batchId);
   if (!/^[a-zA-Z0-9-]{8,80}$/.test(id)) throw syncError("csv_batch_id_invalid", "Chybí jednoznačné ID CSV dávky.");
-  return withVistosLeadHubWriter(env, async writer => {
+  return withVistosLeadHubWriter(env, async (writer, scopedEnv) => {
+    env = scopedEnv;
     const storage = bucket(env);
     const state = await getJson(storage, SYNC_STATE_KEY);
     if (!state?.historicalImport || !state.snapshotKey || state.safetyIncident) {
@@ -1680,10 +1715,9 @@ export async function stepVistosLeadHubCsvImport(env, options = {}) {
 // only after its complete ID set and the capture-time changes were verified.
 export async function executeVistosLeadHubHistoricalImport(env, options = {}) {
   const heldLock = await getJson(bucket(env), WRITER_LOCK_KEY);
-  if (heldLock && Date.now() - Date.parse(heldLock.startedAt) > 120000) {
-    return inspectRetainedWriter(env, heldLock, { recoveryOwner: options.recoveryOwner });
-  }
-  return withVistosLeadHubWriter(env, async writer => {
+  if (heldLock && recoveryDue(heldLock)) return recoverVistosWriter(env, heldLock);
+  return withVistosLeadHubWriter(env, async (writer, scopedEnv) => {
+    env = scopedEnv;
     const storage = bucket(env);
     const prepared = await getJson(storage, IMPORT_STATE_KEY);
     if (prepared?.phase !== "MANIFEST_READY") throw syncError("historical_manifest_not_ready", "Úplný manifest zatím není připraven.");
@@ -1731,7 +1765,7 @@ export async function executeVistosLeadHubHistoricalImport(env, options = {}) {
     // The same exclusive writer already committed this exact in-memory state.
     // Do not download the large ledger again before releasing its lock.
     return { ...summary, mode: "execute-import", historicalImport: state.historicalImport, sendAllowed: false };
-  });
+  }, "execute-import");
 }
 
 // A complete committed batch may lose its final lock cleanup. Prove the whole
@@ -1769,70 +1803,89 @@ async function committedBatchReceipt(storage, state, lock, verified, listedCount
   return recorded && fields.every(field => JSON.stringify(recorded[field]) === JSON.stringify(run[field])) ? run : null;
 }
 
-// READ reconciliation never retries provider writes. A fully committed batch
-// only needs a fenced audit receipt and lock cleanup, not another ledger write.
-async function inspectRetainedWriter(env, lock, options = {}) {
+// Recovery itself has a lease and a CAS claim. Crashing before/after the
+// ledger commit or the receipt is safe: the next claim repeats GETs and uses
+// reconciledOperations to avoid double adoption. No incident-specific owner.
+async function recoverVistosWriter(env, lock) {
+  const storage = bucket(env);
+  const object = await storage.get(WRITER_LOCK_KEY);
+  const live = object && await object.json();
+  if (!live || JSON.stringify(live) !== JSON.stringify(lock) || !recoveryDue(live)) {
+    throw syncError("writer_reconciliation_changed", "Dávku již převzal jiný běh.");
+  }
+  const claim = { ...live, phase: "RECONCILING", claimId: crypto.randomUUID(),
+    claimedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + WRITER_BUDGET_MS).toISOString(),
+    nextAttemptAt: null, retryCount: (live.retryCount || 0) + 1 };
+  const acquired = await storage.put(WRITER_LOCK_KEY, JSON.stringify(claim), {
+    onlyIf: new Headers({ "If-Match": object.httpEtag }), httpMetadata: { contentType: "application/json" }
+  });
+  if (!acquired) throw syncError("writer_reconciliation_changed", "Dávku již převzal jiný běh.");
+  const writer = writerContext(storage, claim);
+  writer.kind = "recovery";
+  const scopedEnv = fencedWriterEnv(env, writer);
+  scopedEnv.syncApiLimiter = env.syncApiLimiter || createApiLimiter(scopedEnv.R2_ARCHIVE,
+    await getJson(scopedEnv.R2_ARCHIVE, RATE_STATE_KEY) || {});
+  try {
+    await writeAttempt(scopedEnv.R2_ARCHIVE, { batchId: lock.owner, kind: "recovery", status: "RECONCILING",
+      startedAt: lock.startedAt, retryCount: claim.retryCount, claimedAt: claim.claimedAt, expiresAt: claim.expiresAt });
+    const result = await inspectRetainedWriter(scopedEnv, claim);
+    result.batchId = lock.owner;
+    result.batchSize = result.checks?.length || 0;
+    result.retryCount = claim.retryCount;
+    // Record diagnostics BEFORE releasing the claim; no stale completion can
+    // overwrite a newer batch's status afterwards.
+    await scopedEnv.syncApiLimiter.persist();
+    await writeAttempt(scopedEnv.R2_ARCHIVE, attemptSummary(writer, result));
+    await releaseWriter(storage, writer);
+    return { ...result, lockReleased: true };
+  } catch (error) {
+    // Only transient READ/storage errors retain the batch for bounded backoff.
+    // Identity/data mismatches are durable per-record quarantine below.
+    try {
+      await writeAttempt(scopedEnv.R2_ARCHIVE, { ...attemptSummary(writer, {}, error), retryCount: claim.retryCount });
+      await writer.assertActive();
+      const current = await storage.get(WRITER_LOCK_KEY);
+      const retryMs = Math.max(60000, Math.min(900000, 60000 * 2 ** Math.min(claim.retryCount - 1, 4)),
+        (error.retryAfterSeconds || 0) * 1000);
+      await storage.put(WRITER_LOCK_KEY, JSON.stringify({ ...claim, phase: "RECOVERY_RETRY",
+        reason: error.code || "recovery_read_failed", nextAttemptAt: new Date(Date.now() + retryMs).toISOString() }), {
+        onlyIf: new Headers({ "If-Match": current.httpEtag }), httpMetadata: { contentType: "application/json" }
+      });
+    } catch { /* Expired/interrupted claims are recovered after their lease. */ }
+    throw error;
+  }
+}
+
+// READ reconciliation never retries provider writes.
+async function inspectRetainedWriter(env, lock) {
   const storage = bucket(env);
   const state = await getJson(storage, SYNC_STATE_KEY);
   const listed = await storage.list({ prefix: `${SYNC_PREFIX}/operations/${lock.owner}/`, limit: 100 });
   if (listed.truncated) throw syncError("writer_journal_incomplete", "Neuzavřený deník není úplný.");
-  // Explicit incident recovery only, never an automatic TTL takeover. A
-  // terminated read-only/source-preparation request can leave an empty lock.
-  // Every provider mutation has a durable journal BEFORE dispatch; absence
-  // of the complete journal is therefore different from an unknown intent.
-  const explicitOwnerMatched = clean(options.recoveryOwner) === lock.owner;
-  // A request that acquired the lock only after the last fully committed run,
-  // then produced no durable operation journal, cannot have dispatched a
-  // provider mutation: every such mutation is journaled before dispatch. This
-  // lets the coordinator recover recurring transport interruptions without a
-  // deployment for each random owner, while retaining the same CAS + double
-  // empty-journal proof. Any safety incident or overlapping committed run
-  // disables this automatic read-only proof.
-  const automaticReadOnlyProof = !state?.safetyIncident
-    && state?.lastRun?.status === "completed"
-    && validDate(state.lastRun.finishedAt)
-    && Date.parse(state.lastRun.finishedAt) <= Date.parse(lock.startedAt);
-  if ((explicitOwnerMatched || automaticReadOnlyProof) && listed.objects.length === 0
-    && Date.parse(lock.startedAt) < Date.now() - 600000
-    && (!lock.phase || (lock.phase === "READ_ONLY_RELEASING" && Date.parse(lock.claimedAt) < Date.now() - 120000))) {
-    const liveObject = await storage.get(WRITER_LOCK_KEY);
-    const live = liveObject ? await liveObject.json() : null;
-    if (!live || JSON.stringify(live) !== JSON.stringify(lock) || !liveObject.httpEtag) {
-      throw syncError("writer_reconciliation_changed", "Vlastník přerušeného čtení se změnil.");
-    }
-    const claimId = crypto.randomUUID();
-    const claimed = await storage.put(WRITER_LOCK_KEY, JSON.stringify({ ...live,
-      phase: "READ_ONLY_RELEASING", claimId, claimedAt: new Date().toISOString() }), {
-      onlyIf: new Headers({ "If-Match": liveObject.httpEtag }),
-      httpMetadata: { contentType: "application/json" }, customMetadata: { protected: "true" }
-    });
-    if (!claimed) throw syncError("writer_reconciliation_changed", "Přerušené čtení již převzal jiný běh.");
+  if (!state) throw syncError("writer_ledger_missing", "Chybí trvalý stav přerušené dávky.");
+  if (state.safetyIncident) throw syncError("safety_incident_unresolved", "Bezpečnostní incident vyžaduje prověření.");
+  if (!listed.objects.length) {
     const rechecked = await storage.list({ prefix: `${SYNC_PREFIX}/operations/${lock.owner}/`, limit: 100 });
-    if (rechecked.truncated || rechecked.objects.length) {
-      throw syncError("writer_reconciliation_changed", "Objevil se zápisový záměr; zámek zůstává zachován.");
-    }
+    if (rechecked.truncated || rechecked.objects.length) throw syncError("writer_reconciliation_changed", "Deník se během obnovy změnil.");
     await putJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/settled.json`, {
       settledAt: new Date().toISOString(), reason: "OBSERVED_READ_ONLY_INTERRUPTION",
-      profileWrites: 0, ledgerWrites: 0, journalEntries: 0, checkpointChanged: false,
-      csvReservationsChanged: false, explicitOwnerMatched, automaticReadOnlyProof
+      batchId: lock.owner, retryCount: lock.retryCount, profileWrites: 0, ledgerWrites: 0,
+      journalEntries: 0, checkpointChanged: false, csvReservationsChanged: false
     });
-    const current = await getJson(storage, WRITER_LOCK_KEY);
-    if (current?.owner !== lock.owner || current.claimId !== claimId) {
-      throw syncError("writer_reconciliation_changed", "Vlastník přerušeného čtení se během uzavírání změnil.");
-    }
-    await storage.delete(WRITER_LOCK_KEY);
     return { mode: "execute-import", status: "READ_ONLY_INTERRUPTION_RECOVERED",
-      profileWrites: 0, ledgerWrites: 0, lockReleased: true, checkpointChanged: false, sendAllowed: false };
+      profileWrites: 0, ledgerWrites: 0, checkpointChanged: false, sendAllowed: false };
   }
   const checks = [];
   const verified = [];
+  const journalVersions = new Map();
   let noWriteJournals = 0;
   for (const object of listed.objects) {
     const operation = await getJson(storage, object.key);
+    journalVersions.set(object.key, JSON.stringify(operation));
     // WRITE_INTENT is durably recorded before any provider request. These
     // earlier/explicitly rejected stages therefore cannot contain an accepted
     // mutation and must not obstruct recovery of another independent profile.
-    if (["INTENT", "SKIP", "REQUEST_REJECTED"].includes(operation.status)) {
+    if (["INTENT", "SKIP", "REQUEST_REJECTED", "RETRY_SAFE"].includes(operation.status)) {
       noWriteJournals++;
       checks.push({ stage: "NO_PROVIDER_WRITE", status: operation.status });
       continue;
@@ -1844,13 +1897,27 @@ async function inspectRetainedWriter(env, lock, options = {}) {
       && tracked.active === (operation.desired === "active")
       && JSON.stringify(tracked.businessFlags || null) === JSON.stringify(operation.businessFlags || null)
       && JSON.stringify({ subscriptions: tracked.subscriptions, suppressed: tracked.suppressed }) === JSON.stringify(operation.afterSafety);
-    const item = (state.pending || []).find(entry => entry.contactId === operation.contactId)
-      || (alreadyCommitted ? { contactId: operation.contactId, normalizedEmail: operation.normalizedEmail } : null);
-    if (!item || !operation.normalizedEmail) {
-      checks.push({ stage: "NO_WRITE_READBACK_AVAILABLE" }); continue;
+    const pendingItem = (state.pending || []).find(entry => entry.contactId === operation.contactId);
+    const item = pendingItem || { ...operation, firstName: operation.firstName || "", lastName: operation.lastName || "" };
+    if (!item.contactId || !operation.normalizedEmail) throw syncError("writer_journal_invalid", "Deník postrádá identitu kontaktu.");
+    let profile, safety, readError, readFailure;
+    try {
+      profile = await leadHubRequest(env, `/profiles/email-address/${encodeURIComponent(operation.normalizedEmail)}`, { allow404: true });
+      safety = await subscriptionRead(env, operation.normalizedEmail);
+    } catch (error) {
+      // A malformed individual identity is isolated; an outage/auth/rate
+      // failure retries the READ with backoff and never mass-quarantines data.
+      if (![400, 422].includes(error.upstreamStatus)) {
+        if (!(error.upstreamStatus >= 500) && !["TimeoutError", "AbortError"].includes(error.name)) throw error;
+        // Distinguish a bad individual profile read from a provider outage.
+        // If even the independent safety endpoint fails, retry the batch.
+        safety = await subscriptionRead(env, operation.normalizedEmail);
+        const previous = await getJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/${operation.contactId}.json`);
+        readFailure = { code: error.code || error.name, attempts: (previous?.result?.readFailure?.attempts || 0) + 1 };
+      }
+      profile = { status: error.upstreamStatus, payload: null };
+      readError = readFailure ? "RECOVERY_PROFILE_READ_REPEATED_FAILURE" : "RECOVERY_PROFILE_READ_REJECTED";
     }
-    const profile = await leadHubRequest(env, `/profiles/email-address/${encodeURIComponent(operation.normalizedEmail)}`, { allow404: true });
-    const safety = await subscriptionRead(env, operation.normalizedEmail);
     const safetyUnchanged = Boolean(operation.beforeSafety) && JSON.stringify(operation.beforeSafety) === JSON.stringify(safety);
     const credentials = profile.payload?.credentials;
     item.identityBinding ||= operation.identityBinding || tracked?.identityBinding;
@@ -1867,6 +1934,7 @@ async function inspectRetainedWriter(env, lock, options = {}) {
         tags[0].data?.[key] === (operation.desired === "active" ? value : "NO")));
     const allowedFields = new Set(["credentials", "tags", "first_name", "last_name", "user_id", "email_address", "profile", "data"]);
     const result = { profileHttpStatus: profile.status, identityMatches, namesMatch, tagMatches, alreadyCommitted,
+      readFailure,
       safetyUnchanged, integrationTagCount: tags.length,
       knownRootFields: Object.keys(profile.payload || {}).filter(key => allowedFields.has(key)),
       knownCredentialFields: Object.keys(credentials || {}).filter(key => allowedFields.has(key)),
@@ -1877,85 +1945,67 @@ async function inspectRetainedWriter(env, lock, options = {}) {
     // integration tag and unchanged safety can be isolated permanently as SKIP.
     // This is not a successful operation or permission to mutate that profile.
     result.quarantinable = operation.status === "WRITE_INTENT"
-      && (lock.terminal === true || clean(options.recoveryOwner) === lock.owner)
       && identityMatches && namesMatch && safetyUnchanged && !tagMatches;
     // The provider may have applied a tag before the writer could persist its
     // acknowledgement. A terminated intent is settled only by exact live
     // identity, tag and unchanged subscription/suppression readback.
     result.unacknowledgedTagConfirmed = operation.status === "WRITE_INTENT"
-      && (lock.terminal === true || clean(options.recoveryOwner) === lock.owner)
       && identityMatches && namesMatch && safetyUnchanged && tagMatches;
-    // An acknowledged profile/tag request with an exact identity and unchanged
-    // safety, but without the expected final tag, is an ambiguous provider
-    // outcome. Never replay it. The explicitly named retained writer may
-    // quarantine only that identity while releasing independently proven work.
+    // An acknowledged tag with a different live result must never be replayed.
     result.acceptedTagMismatch = ["TAG_ACCEPTED", "READBACK_CONFIRMED"].includes(operation.status)
       && identityMatches && namesMatch && safetyUnchanged && !tagMatches;
+    const confirmed = identityMatches && namesMatch && safetyUnchanged
+      && (tagMatches || (result.profileAccepted && tags.length === 0));
+    result.quarantineReason = readError || (!pendingItem && !alreadyCommitted && !state.reconciledOperations?.[object.key]
+      ? "RECOVERY_INTENT_MISSING" : !identityMatches ? "RECOVERY_IDENTITY_MISMATCH"
+      : !namesMatch ? "RECOVERY_NAMES_MISMATCH" : !safetyUnchanged ? "RECOVERY_CONSENT_CHANGED"
+      : result.acceptedTagMismatch ? "ACCEPTED_TAG_OUTCOME_UNVERIFIED"
+      : !confirmed ? "UNACKNOWLEDGED_TAG_INTENT" : null);
+    result.quarantinable = Boolean(result.quarantineReason);
     await putJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/${operation.contactId}.json`, {
       checkedAt: new Date().toISOString(), operation, expected: item, profile: profile.payload, safety, result
     });
     checks.push(result);
     verified.push({ operationKey: object.key, operation, item, result, safety, alreadyCommitted });
   }
+  const rechecked = await storage.list({ prefix: `${SYNC_PREFIX}/operations/${lock.owner}/`, limit: 100 });
+  if (rechecked.truncated || rechecked.objects.length !== journalVersions.size
+    || rechecked.objects.some(object => !journalVersions.has(object.key))) {
+    throw syncError("writer_reconciliation_changed", "Deník se během obnovy změnil.");
+  }
+  for (const [key, version] of journalVersions) if (JSON.stringify(await getJson(storage, key)) !== version) {
+    throw syncError("writer_reconciliation_changed", "Operace se během obnovy změnila.");
+  }
+  if (verified.some(entry => entry.result.readFailure?.attempts < 3)) {
+    throw syncError("recovery_profile_read_retry", "Ověření jednotlivého kontaktu bude opakováno.", 503);
+  }
   const committed = await committedBatchReceipt(storage, state, lock, verified, listed.objects.length);
-  if (committed && (!lock.phase || lock.phase === "COMMITTED_RELEASING")) {
-    const liveObject = await storage.get(WRITER_LOCK_KEY);
-    const live = liveObject ? await liveObject.json() : null;
-    if (!live || live.owner !== lock.owner || !liveObject.httpEtag
-      || (live.phase && live.phase !== "COMMITTED_RELEASING")
-      || (live.phase === "COMMITTED_RELEASING" && !(Date.parse(live.claimedAt) < Date.now() - 120000))) {
-      throw syncError("writer_reconciliation_changed", "Dokončenou dávku již uzavírá jiný běh.");
-    }
-    const claimId = crypto.randomUUID();
-    const claimed = await storage.put(WRITER_LOCK_KEY, JSON.stringify({ ...live,
-      phase: "COMMITTED_RELEASING", claimId, claimedAt: new Date().toISOString() }), {
-      onlyIf: new Headers({ "If-Match": liveObject.httpEtag }),
-      httpMetadata: { contentType: "application/json" }, customMetadata: { protected: "true" }
-    });
-    if (!claimed) throw syncError("writer_reconciliation_changed", "Vlastník dokončené dávky se změnil.");
+  if (committed) {
     await putJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/settled.json`, {
       settledAt: new Date().toISOString(), reason: "COMMITTED_BATCH_RECOVERED",
       profilesConfirmed: verified.length, profileWrites: 0, ledgerWrites: 0,
       safetyUnchanged: true, checkpointChanged: false, committedRunFinishedAt: committed.finishedAt
     });
-    const current = await getJson(storage, WRITER_LOCK_KEY);
-    if (current?.owner !== lock.owner || current.claimId !== claimId) {
-      throw syncError("writer_reconciliation_changed", "Zámek dokončené dávky se během uzavírání změnil.");
-    }
-    await storage.delete(WRITER_LOCK_KEY);
     return { mode: "execute-import", status: "COMMITTED_BATCH_RECOVERED", checks,
       profilesConfirmed: verified.length, profileWrites: 0, ledgerWrites: 0,
       lockReleased: true, checkpointChanged: false, sendAllowed: false };
   }
-  const explicitlyObservedLegacyFailure = clean(options.recoveryOwner) === lock.owner;
-  if (!lock.phase && (lock.terminal === true || explicitlyObservedLegacyFailure)
-    && verified.length + noWriteJournals === listed.objects.length && verified.length > 0
-    && verified.every(entry => entry.result.identityMatches && entry.result.namesMatch && entry.result.safetyUnchanged
-      && (entry.result.quarantinable || entry.result.acceptedTagMismatch || entry.result.unacknowledgedTagConfirmed
-        || ((entry.result.profileAccepted || entry.result.tagAccepted || entry.result.readbackConfirmed)
-      && (entry.result.tagMatches || (entry.result.profileAccepted && entry.result.integrationTagCount === 0)))))) {
-    const liveObject = await storage.get(WRITER_LOCK_KEY);
-    const live = liveObject ? await liveObject.json() : null;
-    if (!live || live.owner !== lock.owner || live.phase || !liveObject.httpEtag) {
-      throw syncError("writer_reconciliation_changed", "Vlastník neuzavřené operace se změnil.");
-    }
-    // CAS, not a TTL takeover: only the observed terminal operation can be
-    // adopted, after its exact profile and unchanged safety state were read.
-    const claimed = await storage.put(WRITER_LOCK_KEY, JSON.stringify({ ...live, phase: "RECONCILING" }), {
-      onlyIf: new Headers({ "If-Match": liveObject.httpEtag }),
-      httpMetadata: { contentType: "application/json" }, customMetadata: { protected: "true" }
-    });
-    if (!claimed) throw syncError("writer_reconciliation_changed", "Zpětné ověření už převzal jiný běh.");
+  if (verified.length + noWriteJournals !== listed.objects.length) {
+    throw syncError("writer_journal_invalid", "Deník nelze jednoznačně přiřadit ke kontaktům.");
+  }
+  {
     state.reconciledOperations ||= {};
+    let ledgerChanged = false;
     for (const entry of verified) {
       // The operation was committed before the interrupted batch ended. Its
       // live safety/identity/tag readback is still mandatory, but it must not
       // increment counters, recreate a queue item or rewrite a tracked profile.
-      if (entry.alreadyCommitted) continue;
+      if (entry.alreadyCommitted && !entry.result.quarantinable) continue;
       if (state.reconciledOperations[entry.operationKey]) continue;
+      ledgerChanged = true;
       const { item, operation, result, safety } = entry;
       if (result.quarantinable || result.acceptedTagMismatch) {
-        const reason = result.acceptedTagMismatch ? "ACCEPTED_TAG_OUTCOME_UNVERIFIED" : "UNACKNOWLEDGED_TAG_INTENT";
+        const reason = result.quarantineReason;
         state.quarantinedIdentities ||= {};
         state.quarantinedIdentities[item.contactId] = { email: item.normalizedEmail,
           reason, journalKey: entry.operationKey,
@@ -1971,7 +2021,7 @@ async function inspectRetainedWriter(env, lock, options = {}) {
       const action = operation.action || (item.manifestAction === "CREATE" && !state.profiles?.[item.contactId]?.synced ? "created" : "updated");
       if (!["created", "updated", "deactivated", "no_change"].includes(action)) throw syncError("writer_action_unverified", "Neznámý typ již provedené operace.");
       state.profiles ||= {}; state.totals ||= {};
-      state.profiles[item.contactId] = { synced: true, active: result.tagMatches && operation.desired === "active",
+      state.profiles[item.contactId] = { ...state.profiles[item.contactId], synced: true, active: result.tagMatches && operation.desired === "active",
         email: item.normalizedEmail, rowHash: item.rowHash, sourceModified: item.sourceModified,
         businessFlags: operation.businessFlags || item.businessFlags || null,
         identityBinding: item.identityBinding || null,
@@ -1992,21 +2042,19 @@ async function inspectRetainedWriter(env, lock, options = {}) {
     // One state commit makes retrying adoption idempotent. Accepted profile-only
     // work stays queued for fresh source validation and the missing tag only.
     if (state.historicalImport) state.historicalImport.remaining = state.pending.filter(item => item.historical).length;
-    await putJson(storage, SYNC_STATE_KEY, state);
+    if (ledgerChanged) await putJson(storage, SYNC_STATE_KEY, state);
     await putJson(storage, `${SYNC_PREFIX}/reconciliation/${lock.owner}/settled.json`, {
       settledAt: new Date().toISOString(), profilesConfirmed: verified.filter(entry => !entry.result.quarantinable && !entry.result.acceptedTagMismatch).length,
       profilesQuarantined: verified.filter(entry => entry.result.quarantinable || entry.result.acceptedTagMismatch).length,
       profileOnly: verified.filter(entry => !entry.result.quarantinable && !entry.result.acceptedTagMismatch && !entry.result.tagMatches).length,
-      profileWrites: 0, safetyUnchanged: true, legacyTerminalResponseObserved: explicitlyObservedLegacyFailure
+      profileWrites: 0, safetyUnchanged: verified.every(entry => entry.result.safetyUnchanged),
+      batchId: lock.owner, retryCount: lock.retryCount
     });
-    await storage.delete(WRITER_LOCK_KEY);
     return { mode: "execute-import", status: verified.some(entry => entry.result.quarantinable || entry.result.acceptedTagMismatch) ? "AMBIGUOUS_INTENT_SKIPPED" : "READBACK_ADOPTED", checks,
       profilesConfirmed: verified.filter(entry => !entry.result.quarantinable && !entry.result.acceptedTagMismatch).length,
       profilesQuarantined: verified.filter(entry => entry.result.quarantinable || entry.result.acceptedTagMismatch).length,
       profileWrites: 0, lockReleased: true, checkpointChanged: false, sendAllowed: false };
   }
-  return { mode: "execute-import", status: "RECONCILIATION_REQUIRED", checks,
-    profileWrites: 0, lockReleased: false, checkpointChanged: false, sendAllowed: false };
 }
 
 function sourceValues(row, columns) {
@@ -2022,6 +2070,19 @@ function sourceValues(row, columns) {
   }));
 }
 
+function recordRetryReady(retry, item) {
+  const nextAttempt = Date.parse(retry?.nextAttemptAt);
+  return !retry || retry.rowHash !== item.rowHash || retry.email !== item.normalizedEmail
+    || (!retry.quarantined && (!Number.isFinite(nextAttempt) || nextAttempt <= Date.now()));
+}
+
+function canRetryRecord(error) {
+  if ([401, 403, 429].includes(error.upstreamStatus)) return false;
+  return ["contact_changed_before_write", "contact_current_identity_unverified", "vistos_api_execute_failed",
+    "vistos_api_timeout", "vistos_api_invalid_json", "leadhub_api_request_failed"].includes(error.code)
+    || ["TimeoutError", "AbortError"].includes(error.name);
+}
+
 async function commitSourceVersion(storage, state, snapshot, dnsState, owner) {
   const prefix = `${SYNC_PREFIX}/versions/${owner}`;
   // Immutable objects first; one small, strongly consistent R2 pointer last.
@@ -2034,11 +2095,27 @@ async function commitSourceVersion(storage, state, snapshot, dnsState, owner) {
 // New delta identities need the same complete email AND user-id collision
 // check as the historical manifest. Waiting export jobs survive invocations;
 // they never grant profile/subscription write permission by themselves.
+async function retryIdentityExport(storage, state, reason) {
+  const attempts = (state.identityExportRetry?.attempts || 0) + 1;
+  state.identityExportRetry = { attempts, reason, jobId: state.identityExport?.jobId || null,
+    at: new Date().toISOString(), nextAttemptAt: new Date(Date.now() + Math.min(900000, 60000 * 2 ** Math.min(attempts - 1, 4))).toISOString() };
+  // Export jobs are READ-only. Replacing a dead job cannot create a profile;
+  // the complete pending identity set and collision checks remain mandatory.
+  state.identityExport = null;
+  await putJson(storage, SYNC_STATE_KEY, state);
+  return [];
+}
+
 async function refreshDeltaIdentities(env, state, selectedById) {
   const storage = bucket(env);
   const pendingIds = Object.keys(state.identityPending || {});
   if (!pendingIds.length) return [];
+  if (state.identityExport && (!validDate(state.identityExport.requestedAt)
+    || Date.now() - Date.parse(state.identityExport.requestedAt) >= 15 * 60000)) {
+    return retryIdentityExport(storage, state, "identity_export_timeout");
+  }
   if (!state.identityExport) {
+    if (Date.parse(state.identityExportRetry?.nextAttemptAt) > Date.now()) return [];
     await assertLeadHubWorkspace(env);
     const accepted = await leadHubRequest(env, "/segments/query/profiles", {
       method: "POST", body: { segments: [{ targetingBlocks: [] }] }
@@ -2052,10 +2129,10 @@ async function refreshDeltaIdentities(env, state, selectedById) {
     return [];
   }
   const jobId = state.identityExport.jobId;
-  const job = await leadHubRequest(env, `/jobs/${encodeURIComponent(jobId)}`);
-  if (job.payload?.job_id !== jobId || job.payload?.errors?.length
+  const job = await leadHubRequest(env, `/jobs/${encodeURIComponent(jobId)}`, { allow404: true });
+  if (job.status === 404 || job.payload?.job_id !== jobId || job.payload?.errors?.length
     || !["waiting", "processing", "done"].includes(job.payload?.state)) {
-    throw syncError("delta_identity_export_failed", "Export identit neprošel ověřením úlohy.");
+    return retryIdentityExport(storage, state, "identity_export_failed");
   }
   if (job.payload.state !== "done") return [];
   const config = leadHubConfig(env);
@@ -2089,6 +2166,7 @@ async function refreshDeltaIdentities(env, state, selectedById) {
   state.lastIdentityExport = { jobId, completedAt: new Date().toISOString(), profiles: profiles.length,
     counts: manifest.counts, manifestKey: `${prefix}/manifest.json` };
   state.identityExport = null;
+  state.identityExportRetry = null;
   await putJson(storage, SYNC_STATE_KEY, state);
   return ids;
 }
@@ -2382,8 +2460,9 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
   const reservedIds = new Set(reserved.map(item => item.contactId));
   const reservedEmails = new Set(reserved.map(item => item.normalizedEmail));
   const current = pending.filter(item => !item.businessDeferred
-    && !reservedIds.has(item.contactId) && !reservedEmails.has(item.normalizedEmail)).slice(0, batchLimit);
-  const run = { created: 0, updated: 0, deactivated: 0, no_change: 0, skipped: 0, readbackConfirmed: 0,
+    && !reservedIds.has(item.contactId) && !reservedEmails.has(item.normalizedEmail)
+    && recordRetryReady(state.recordRetries?.[item.contactId], item)).slice(0, batchLimit);
+  const run = { created: 0, updated: 0, deactivated: 0, no_change: 0, skipped: 0, failed: 0, retryCount: 0, failureReasons: [], readbackConfirmed: 0,
     newlyCompletedProfiles: 0, newlyCreatedProfiles: 0, newlyLinkedProfiles: 0, repeatedUpdates: 0,
     restoredSubscriptions: 0, messagesSent: 0 };
   state.profiles ||= {};
@@ -2392,6 +2471,7 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
   // Persist the reconciled source and queue before any provider write.
   state.pending = pending;
   state.checkpoint = scheduledAt;
+  state.capturedCheckpoint = scheduledAt;
   if (delta.rows.length || !state.snapshotKey || !state.dnsKey) await commitSourceVersion(storage, state, snapshot, dnsState, writer.owner);
   else await putJson(storage, SYNC_STATE_KEY, state);
   phase("prepareAndPersist");
@@ -2420,6 +2500,7 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
       if (error.code === "leadhub_subscription_or_suppression_changed") state.safetyIncident = { code: error.code, at: new Date().toISOString() };
     }
   }, async item => {
+    try {
     const wasSynced = Boolean(state.profiles?.[item.contactId]?.synced);
     item.identityBinding ||= state.profiles?.[item.contactId]?.identityBinding || state.manifestIdentityChecks?.[item.contactId]?.identityBinding;
     const operationStartedAt = new Date().toISOString();
@@ -2472,17 +2553,18 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
       timings.stages.push({ stage, elapsedMs: Date.now() - Date.parse(operationStartedAt), providerDurationMs: progress.providerDurationMs });
       operationSafety = safety;
       if (progress.action) operationAction = progress.action;
+      if (!progress.rejected || lastAcceptedStage) writer.unsettled.add(item.contactId);
+      else writer.unsettled.delete(item.contactId);
+      writer.sideEffectsStarted = writer.unsettled.size > 0;
       await putJson(storage, operationKey, {
         status: stage, httpStatus: progress.httpStatus || null, action: operationAction,
         contactId: item.contactId, normalizedEmail: item.normalizedEmail, desired: item.desired,
+        firstName: item.firstName || "", lastName: item.lastName || "",
         businessFlags: item.businessFlags || null,
         identityBinding: item.identityBinding || null, timings,
         sourceModified: item.sourceModified || null, rowHash: item.rowHash,
         beforeSafety: safety, startedAt: new Date().toISOString(), writer: writer.owner
       });
-      if (!progress.rejected || lastAcceptedStage) writer.unsettled.add(item.contactId);
-      else writer.unsettled.delete(item.contactId);
-      writer.sideEffectsStarted = writer.unsettled.size > 0;
     };
     let result;
     try {
@@ -2521,6 +2603,7 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
     await putJson(storage, operationKey, {
       status: "READBACK_CONFIRMED", contactId: item.contactId, desired: item.desired,
       normalizedEmail: item.normalizedEmail, beforeSafety: operationSafety,
+      firstName: item.firstName || "", lastName: item.lastName || "",
       businessFlags: item.businessFlags || null,
       identityBinding: item.identityBinding || null,
       timings: { ...timings, completedAt: new Date().toISOString(), durationMs: Date.now() - Date.parse(operationStartedAt) },
@@ -2550,6 +2633,9 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
       firstCompletedAt: state.profiles[item.contactId]?.firstCompletedAt || (!wasSynced ? new Date().toISOString() : null)
     };
     state.pending = state.pending.filter(pendingItem => pendingItem.contactId !== item.contactId);
+    if (state.recordRetries) delete state.recordRetries[item.contactId];
+    state.lastConfirmedContact = { contactId: item.contactId, sourceModified: item.sourceModified || null,
+      confirmedAt: new Date().toISOString() };
     if (item.historical) {
       state.historicalImport[result.action] = (state.historicalImport[result.action] || 0) + 1;
       state.historicalImport.readbackConfirmed += 1;
@@ -2563,12 +2649,33 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
     // do not retransmit the entire 16 MB pending queue for every profile.
     readbackCompleted.add(item.contactId);
     });
+    } catch (error) {
+      if (writer.unsettled.has(item.contactId) || Date.now() >= writer.deadline || !canRetryRecord(error)) throw error;
+      const previous = state.recordRetries?.[item.contactId];
+      const attempts = (previous?.rowHash === item.rowHash ? previous.attempts : 0) + 1;
+      const deterministic = [400, 422].includes(error.upstreamStatus)
+        || ["contact_changed_before_write", "contact_current_identity_unverified"].includes(error.code);
+      const quarantined = deterministic && attempts >= 3;
+      const retry = { rowHash: item.rowHash, email: item.normalizedEmail, attempts, quarantined,
+        reason: error.code || "api_timeout", upstreamStatus: error.upstreamStatus || null,
+        lastFailedAt: new Date().toISOString(),
+        nextAttemptAt: new Date(Date.now() + Math.min(900000, 60000 * 2 ** Math.min(attempts - 1, 4))).toISOString() };
+      await putJson(storage, `${SYNC_PREFIX}/operations/${writer.owner}/${encodeURIComponent(item.contactId)}.json`, {
+        status: "RETRY_SAFE", writer: writer.owner, contactId: item.contactId, ...retry, profileWrites: 0
+      });
+      await commit(async () => {
+        state.recordRetries ||= {}; state.recordRetries[item.contactId] = retry;
+        state.queueCursor = dispatchedCursor;
+        run.failed++; run.retryCount += attempts;
+        if (!run.failureReasons.includes(retry.reason)) run.failureReasons.push(retry.reason);
+      });
+    }
   });
   } catch (error) {
     // Every dispatched lane has settled here. Preserve both completed ledger
     // commits and all remaining intents; never discard the undispatched tail.
     recordThroughputControl(state, concurrency, metrics, run, Date.now() - Date.parse(runStartedAt), error);
-    state.lastFailure = { code: error.code || "unknown", endpointFamily: error.endpointFamily || null,
+    state.lastFailure = { batchId: writer.owner, code: error.code || error.name || "unknown", endpointFamily: error.endpointFamily || null,
       upstreamStatus: error.upstreamStatus || null, retryAfterSeconds: error.retryAfterSeconds || 0,
       at: new Date().toISOString(), metrics, ...run };
     await putJson(storage, SYNC_STATE_KEY, state);
@@ -2589,14 +2696,21 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
   const remaining = state.pending;
   state.checkpoint = scheduledAt;
   state.status = "ACTIVE";
+  // checkpoint/capturedCheckpoint is an inbox cursor, committed together with
+  // the durable pending queue. The destination watermark only advances when
+  // that queue (and identity resolution) is fully drained without failures.
+  if (!remaining.length && !Object.keys(state.identityPending || {}).length
+    && !Object.keys(state.quarantinedIdentities || {}).length && !run.failed) state.appliedCheckpoint = scheduledAt;
   state.totals ||= { created: 0, updated: 0, deactivated: 0, subscriptionChanges: 0, messagesSent: 0 };
   if (state.historicalImport) {
     state.historicalImport.remaining = remaining.filter(item => item.historical).length;
     state.historicalImport.processedUniqueProfiles = [...historicalIds].filter(id => state.profiles[id]?.synced).length;
     state.historicalImport.status = state.historicalImport.remaining ? "IMPORTING" : "COMPLETED_WITH_SKIPS";
   }
+  if (state.lastRun?.status === "completed") state.lastSuccessfulRun = state.lastRun;
   state.lastRun = {
-    status: "completed",
+    status: run.failed ? "partial" : "completed",
+    batchId: writer.owner,
     writerOwner: writer.owner,
     committedContactIds: [...readbackCompleted].sort(),
     startedFrom: delta.periodFrom,
@@ -2607,6 +2721,7 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
     concurrency,
     sourceThrough: scheduledAt,
     sourceRows: delta.rows.length,
+    batchSize: current.length,
     changedContacts: changedIds.size,
     coalescedPending,
     pagesRead: delta.pages,
@@ -2615,6 +2730,9 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
     deactivated: run.deactivated,
     no_change: run.no_change,
     skipped: run.skipped,
+    failed: run.failed,
+    retryCount: run.retryCount,
+    failureReasons: run.failureReasons,
     pending: remaining.length,
     readbackConfirmed: run.readbackConfirmed,
     newlyCompletedProfiles: run.newlyCompletedProfiles,
@@ -2626,6 +2744,7 @@ async function runProfileSyncUnlocked(env, options, writer, initialState) {
     restoredSubscriptions: 0,
     messagesSent: 0
   };
+  if (state.lastRun.status === "completed") state.lastSuccessfulRun = state.lastRun;
   state.throughputRuns = [...(state.throughputRuns || []), state.lastRun].slice(-120);
   await putJson(storage, `${SYNC_PREFIX}/runs/${scheduledAt.replace(/[:.]/g, "-")}.json`, state.lastRun);
   await putJson(storage, SYNC_STATE_KEY, state);
@@ -2639,8 +2758,12 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
   if (!state) return { syncStatus: "BLOCKED", reason: "not_initialized" };
   const lock = await getJson(bucket(env), WRITER_LOCK_KEY);
   const business = await getJson(bucket(env), BUSINESS_STATE_KEY);
+  const attempt = await getJson(bucket(env), LAST_ATTEMPT_KEY);
   const lastRun = validDate(state.lastRun?.finishedAt);
-  const failureAfterSuccess = state.lastFailure && (!lastRun || Date.parse(state.lastFailure.at) > lastRun.getTime());
+  const latestFailure = attempt?.status === "RETRY_WAIT" && (!state.lastFailure || Date.parse(attempt.finishedAt) > Date.parse(state.lastFailure.at))
+    ? { batchId: attempt.batchId, code: attempt.reason, at: attempt.finishedAt,
+      retryCount: attempt.retryCount, upstreamStatus: attempt.upstreamStatus } : state.lastFailure;
+  const failureAfterSuccess = latestFailure && (!lastRun || Date.parse(latestFailure.at) > lastRun.getTime());
   const current = !state.safetyIncident && !failureAfterSuccess && lastRun && Date.now() - lastRun.getTime() < 15 * 60 * 1000 && state.lastRun?.status === "completed";
   const csvItems = Array.isArray(state.csvBatch?.items) ? state.csvBatch.items : [];
   const csvCounts = csvItems.reduce((counts, item) => {
@@ -2662,13 +2785,24 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
     finalIdentityCheckedAt: state.csvBatch.finalIdentityCheckedAt || state.csvBatch.exportCompletedAt || null
   } : null;
   const lockStartedAt = validDate(lock?.startedAt);
+  const lockActive = Boolean(lock && lock.phase !== "RELEASED");
   return {
-    syncStatus: lock ? "WRITER_BUSY_OR_RECONCILIATION_REQUIRED" : current ? state.status : "BLOCKED",
+    syncStatus: lockActive ? "WRITER_BUSY_OR_RECONCILIATION_REQUIRED" : current ? state.status : "BLOCKED",
     storedStatus: state.status,
     lastRunCurrent: Boolean(current),
-    trigger: "Cloudflare Cron",
-    intervalMinutes: 5,
+    trigger: "Cloudflare Cron + Durable Object",
+    intervalMinutes: 1,
     checkpoint: state.checkpoint,
+    capturedCheckpoint: state.capturedCheckpoint || state.checkpoint,
+    appliedCheckpoint: state.appliedCheckpoint || null,
+    lastConfirmedContact: state.lastConfirmedContact || null,
+    lastSuccessfulAt: state.lastSuccessfulRun?.finishedAt || (state.lastRun?.status === "completed" ? state.lastRun.finishedAt : null),
+    lastAttempt: attempt,
+    recordRetries: {
+      pending: Object.values(state.recordRetries || {}).filter(item => !item.quarantined).length,
+      quarantined: Object.values(state.recordRetries || {}).filter(item => item.quarantined).length,
+      attempts: Object.values(state.recordRetries || {}).reduce((sum, item) => sum + item.attempts, 0)
+    },
     initializedAt: state.initializedAt,
     baselineRunId: state.baselineRunId,
     apiReadValidation: state.apiReadValidation,
@@ -2685,6 +2819,8 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
       deactivated: Number(state.lastRun.deactivated || 0),
       noChange: Number(state.lastRun.no_change || 0),
       skipped: Number(state.lastRun.skipped || 0),
+      failed: Number(state.lastRun.failed || 0),
+      retryCount: Number(state.lastRun.retryCount || 0),
       readbackConfirmed: Number(state.lastRun.readbackConfirmed || 0),
       newlyCompletedProfiles: Number(state.lastRun.newlyCompletedProfiles || 0),
       repeatedUpdates: Number(state.lastRun.repeatedUpdates || 0),
@@ -2692,7 +2828,7 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
       restoredSubscriptions: Number(state.lastRun.restoredSubscriptions || 0),
       messagesSent: Number(state.lastRun.messagesSent || 0)
     } : null,
-    lastFailure: state.lastFailure || null,
+    lastFailure: latestFailure || null,
     lastFailureCurrent: Boolean(failureAfterSuccess),
     safetyIncident: state.safetyIncident || null,
     quarantinedProfiles: Object.keys(state.quarantinedIdentities || {}).length,
@@ -2700,10 +2836,18 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
     historicalImport: state.historicalImport || null,
     identityChecksPending: Object.keys(state.identityPending || {}).length,
     identityExport: state.identityExport ? { status: state.identityExport.status, requestedAt: state.identityExport.requestedAt } : null,
+    identityExportRetry: state.identityExportRetry || null,
     lastIdentityExport: state.lastIdentityExport || null,
     csvBatch,
     writerLock: {
-      active: Boolean(lock),
+      active: lockActive,
+      batchId: lock?.owner || null,
+      phase: lock?.phase || (lock ? "PROCESSING" : null),
+      expiresAt: lock?.expiresAt || null,
+      recoveryDue: recoveryDue(lock),
+      retryCount: lock?.retryCount || 0,
+      reason: lock?.reason || null,
+      nextAttemptAt: lock?.nextAttemptAt || null,
       startedAt: lock?.startedAt || null,
       ageSeconds: lockStartedAt ? Math.max(0, Math.floor((Date.now() - lockStartedAt.getTime()) / 1000)) : null
     },
@@ -2716,6 +2860,8 @@ export async function readVistosLeadHubProfileSyncStatus(env) {
 }
 
 export const __test = {
+  recordRetryReady,
+  canRetryRecord,
   csvExportProfiles,
   csvFirstName,
   csvReservationMatches,
