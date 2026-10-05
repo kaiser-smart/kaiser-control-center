@@ -43,7 +43,7 @@ class MemoryR2 {
   constructor() {
     this.values = new Map([
       [stateKey, state],
-      [lockKey, { owner: "SECRET OWNER", startedAt }]
+      [lockKey, { owner: "synthetic-batch-owner", startedAt }]
     ]);
   }
   async get(key) {
@@ -70,7 +70,7 @@ assert.equal(result.lastRunSummary.rateLimits, 1);
 assert.equal(result.writerLock.active, true);
 const serialized = JSON.stringify(result);
 assert.ok(!serialized.includes("SECRET RECEIPT"));
-assert.ok(!serialized.includes("SECRET OWNER"));
+assert.equal(result.writerLock.batchId, "synthetic-batch-owner");
 assert.ok(!serialized.includes("private@example.test"));
 assert.ok(!serialized.includes("contactId"));
 

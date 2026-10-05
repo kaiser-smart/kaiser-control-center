@@ -41356,7 +41356,9 @@ function vistosLeadHubStatusPanel() {
       <p>Načteno ${escapeHtml(formatDateTime(state.loadedAt))}. Tato karta nic nespouští, nemění checkpoint ani neposílá zprávy.</p>
       <dl>
         <div><dt>Synchronizace</dt><dd><strong>${escapeHtml(data.syncStatus || "NEOVĚŘENO")}</strong> · uložený stav ${escapeHtml(data.storedStatus || "NEOVĚŘENO")}</dd></div>
-        <div><dt>Checkpoint</dt><dd>${escapeHtml(formatDateTime(data.checkpoint))}</dd></div>
+        <div><dt>Změny načtené do fronty</dt><dd>${escapeHtml(formatDateTime(data.capturedCheckpoint || data.checkpoint))}</dd></div>
+        <div><dt>Fronta dokončená do</dt><dd>${escapeHtml(formatDateTime(data.appliedCheckpoint))}</dd></div>
+        <div><dt>Poslední úspěšný automatický běh</dt><dd>${escapeHtml(formatDateTime(data.lastSuccessfulAt))}</dd></div>
         <div><dt>Poslední běh</dt><dd>${escapeHtml(run.status || "NEOVĚŘENO")} · ${escapeHtml(formatDateTime(run.finishedAt))} · potvrzeno ${vistosLeadHubStatusNumber(run.readbackConfirmed)} profilů</dd></div>
         <div><dt>Chyby a limity</dt><dd>${data.lastFailure ? `${data.lastFailureCurrent ? "Aktuální" : "Historická"} chyba ${escapeHtml(formatDateTime(data.lastFailure.at))}: ${escapeHtml(data.lastFailure.code || data.lastFailure.message || "bez kódu")}` : "Bez evidované chyby"} · HTTP 429 v posledním běhu ${vistosLeadHubStatusNumber(run.rateLimits)}</dd></div>
         <div><dt>Zámek zapisovatele</dt><dd>${data.writerLock?.active ? `Aktivní od ${escapeHtml(formatDateTime(data.writerLock.startedAt))}` : "Neaktivní"}</dd></div>
@@ -41364,6 +41366,13 @@ function vistosLeadHubStatusPanel() {
         <div><dt>CSV potvrzení</dt><dd>${csv ? `receipt ${csv.receiptStored ? "uložen" : "neuložen"} · odeslání ${csv.importSubmitted ? "pozorováno" : "nepotvrzeno"} · import ${csv.importConfirmed ? "potvrzen" : "nepotvrzen"}` : "Nevztahuje se"}</dd></div>
         <div><dt>Bezpečnost</dt><dd>Změny odběrů ${vistosLeadHubStatusNumber(totals.subscriptionChanges)} · obnovené odběry ${vistosLeadHubStatusNumber(run.restoredSubscriptions)} · odeslané zprávy ${vistosLeadHubStatusNumber(totals.messagesSent)}</dd></div>
       </dl>
+      <details><summary>Diagnostika synchronizace</summary><dl style="overflow-wrap:anywhere">
+        <div><dt>ID dávky</dt><dd>${escapeHtml(data.writerLock?.batchId || data.lastAttempt?.batchId || "NEOVĚŘENO")}</dd></div>
+        <div><dt>Stav dávky</dt><dd>${escapeHtml(data.writerLock?.phase || data.lastAttempt?.status || "NEOVĚŘENO")}</dd></div>
+        <div><dt>Výsledek posledního pokusu</dt><dd>Nalezeno ${data.lastAttempt?.found == null ? "neověřeno" : vistosLeadHubStatusNumber(data.lastAttempt.found)} · potvrzeno ${vistosLeadHubStatusNumber(data.lastAttempt?.successful)} · přeskočeno ${vistosLeadHubStatusNumber(data.lastAttempt?.skipped)} · chybných ${vistosLeadHubStatusNumber(data.lastAttempt?.failed)}</dd></div>
+        <div><dt>Opakování a obnova</dt><dd>Pokusy ${vistosLeadHubStatusNumber(data.writerLock?.retryCount || data.lastAttempt?.retryCount)} · důvod ${escapeHtml(data.writerLock?.reason || data.lastAttempt?.reason || "bez chyby")} · další pokus ${escapeHtml(formatDateTime(data.writerLock?.nextAttemptAt))}</dd></div>
+        <div><dt>Odložené kontakty</dt><dd>Čekají na opakování ${vistosLeadHubStatusNumber(data.recordRetries?.pending)} · k prověření ${vistosLeadHubStatusNumber((data.recordRetries?.quarantined || 0) + (data.quarantinedProfiles || 0))}</dd></div>
+      </dl></details>
       <button class="secondary-link" type="button" data-vistos-leadhub-status-refresh ${state.loading ? "disabled" : ""}>${state.loading ? "Načítám…" : "Obnovit stav"}</button>
       ${state.error ? `<p class="module-feedback__error" role="alert">Poslední obnovení selhalo: ${escapeHtml(state.error)}</p>` : ""}
     </section>

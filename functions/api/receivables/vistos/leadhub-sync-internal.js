@@ -34,7 +34,7 @@ export async function onRequestPost({ request, env }) {
     if (body.mode === "business-read") return json(await refreshVistosBusinessRelations(env));
     if (body.mode === "prepare-import") return json(await prepareVistosLeadHubHistoricalImport(env));
     if (body.mode === "execute-import") return json(await executeVistosLeadHubHistoricalImport(env, {
-      scheduledAt: clean(body.scheduledAt) || new Date().toISOString(), recoveryOwner: clean(body.recoveryOwner)
+      scheduledAt: clean(body.scheduledAt) || new Date().toISOString()
     }));
     if (body.mode && body.mode !== "sync") return json({ code: "vistos_leadhub_invalid_mode" }, 400);
     return json(await runVistosLeadHubProfileSync(env, {

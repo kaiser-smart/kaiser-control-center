@@ -205,7 +205,12 @@ export async function fetchVistosExecute(env, methodName, payload, cookieHeader 
   }
 
   const controller = typeof AbortController === "function" ? new AbortController() : null;
-  const timeoutMs = Math.max(5000, Math.min(Number(env?.VISTOS_API_TIMEOUT_MS) || 20000, 45000));
+  if (env?.syncRequestDeadline && Date.now() >= env.syncRequestDeadline) {
+    throw new VistosExecuteError("Vypršel čas běhu synchronizace.", 503, "writer_deadline_exceeded");
+  }
+  const timeoutMs = Math.max(1, Math.min(
+    Math.max(5000, Math.min(Number(env?.VISTOS_API_TIMEOUT_MS) || 20000, 45000)),
+    (env?.syncRequestDeadline || Infinity) - Date.now()));
   const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
 
   try {
