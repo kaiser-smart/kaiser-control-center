@@ -6,6 +6,8 @@ Zámek R2 původně neměl lhůtu ani kontrolu vlastníka před dalším zápise
 
 Při auditu 5. 10. byl v deníku přerušené dávky doložen stav pěti `READBACK_CONFIRMED` a jednoho `TAG_ACCEPTED`. To dokládá přerušení před závěrečným potvrzením/commitem, nikoli přesnou příčinu ukončení procesu. Historický log infrastruktury nebyl k dispozici; konkrétní timeout či překročení paměti nelze vydávat za prokázaný fakt.
 
+Produkční ověření 6. 10. navíc odhalilo chybu nového úklidu: `finally` předával do `releaseWriter` již přečtený `R2ObjectBody`, jehož `.json()` nelze zavolat podruhé. Dávka mohla být úspěšně potvrzená, ale zámek zůstal až do automatické obnovy. Uvolnění nyní načítá vlastní čerstvé tělo, znovu ověřuje generaci a používá jeho ETag. Testovací R2 používá skutečně jednorázové tělo `Response`; před opravou test selhal na `Body has already been read`, po opravě ověřuje okamžité uvolnění úspěšné i prázdné dávky a bezpečnost souběhu.
+
 ## Hranice změny
 
 Zůstává jeden Durable Object, stávající R2 ledger, zdrojové snímky, deník operací, kontrola identity a limitování API. Není zavedena nová databáze ani druhý importér. Velký společný stav zůstává výkonovým rizikem, které je vhodné měřit před případným samostatným návrhem rozdělení dat.

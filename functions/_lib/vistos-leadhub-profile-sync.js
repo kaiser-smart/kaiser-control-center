@@ -1375,7 +1375,7 @@ export async function withVistosLeadHubWriter(env, operation, kind) {
       const object = await storage.get(WRITER_LOCK_KEY);
       const lock = object && await object.json();
       if (lock?.owner === owner && !lock.phase && Date.now() < context.deadline) {
-        if (completed || !context.sideEffectsStarted) await releaseWriter(storage, context, object);
+        if (completed || !context.sideEffectsStarted) await releaseWriter(storage, context);
         else await storage.put(WRITER_LOCK_KEY, JSON.stringify({ ...lock,
           terminal: true, terminalAt: new Date().toISOString() }), {
           onlyIf: new Headers({ "If-Match": object.httpEtag }), httpMetadata: { contentType: "application/json" }

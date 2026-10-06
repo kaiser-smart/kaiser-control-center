@@ -10,7 +10,13 @@ class R2 {
   constructor(seed = {}) { this.values = new Map(Object.entries(seed).map(([key, value]) => [key, JSON.stringify(value)])); }
   read(key = stateKey) { const text = this.values.get(key); return text === undefined ? null : JSON.parse(text); }
   etag(key) { return `"${__test.fingerprint(this.values.get(key))}"`; }
-  async get(key) { return this.values.has(key) ? { json: async () => this.read(key), httpEtag: this.etag(key) } : null; }
+  async get(key) {
+    if (!this.values.has(key)) return null;
+    // R2ObjectBody is a snapshot with a single-use body, like Response.
+    // Re-reading a consumed lock must fail here just as it does in production.
+    const body = new Response(this.values.get(key));
+    return { json: () => body.json(), httpEtag: this.etag(key) };
+  }
   async head(key) { return this.values.has(key) ? { key } : null; }
   async put(key, value, options = {}) {
     if (options.onlyIf?.get("If-None-Match") === "*" && this.values.has(key)) return null;
@@ -96,11 +102,13 @@ try {
   let f = fixture();
   let result = await runVistosLeadHubProfileSync(f.env, { scheduledAt: schedule(1) });
   assert.equal(result.readbackConfirmed, 3); assert.equal(f.writes.length, 6);
+  assert.equal(f.storage.read(WRITER_LOCK_KEY).phase, "RELEASED", "successful single-use R2 readback releases the writer immediately");
   assert.equal(f.storage.read().appliedCheckpoint, schedule(1));
   assert.ok(Object.values(f.storage.read().profiles).every(profile => JSON.stringify(profile.subscriptions) === JSON.stringify(subs) && profile.suppressed));
   await runVistosLeadHubProfileSync(f.env, { scheduledAt: schedule(2) });
   assert.equal(f.writes.length, 6, "worker restart and repeated source capture are idempotent");
   assert.equal(f.storage.read().lastRun.readbackConfirmed, 0, "empty batch completes and schedules further work");
+  assert.equal(f.storage.read(WRITER_LOCK_KEY).phase, "RELEASED", "empty successor releases without waiting for recovery");
   assert.equal(f.storage.read().appliedCheckpoint, schedule(2));
   assert.ok(JSON.stringify(f.requestedFilters.at(-1)).includes("2026-09-10T23:51:00Z"), "next capture uses persisted cursor with overlap");
 
