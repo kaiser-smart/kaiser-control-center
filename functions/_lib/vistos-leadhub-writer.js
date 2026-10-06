@@ -43,8 +43,10 @@ export function writerContext(storage, lock) {
 // R2 delete has no conditional ETag. Keep a released tombstone instead:
 // delayed cleanup cannot erase a replacement owner, and the next acquisition
 // changes this exact version atomically. No timer-based deletion is safe here.
-export async function releaseWriter(storage, writer, observed) {
-  const object = observed || await storage.get(WRITER_LOCK_KEY);
+export async function releaseWriter(storage, writer) {
+  // Always own this fresh body: callers may already have consumed their read.
+  // Recheck its generation and CAS this exact ETag before releasing it.
+  const object = await storage.get(WRITER_LOCK_KEY);
   const lock = object && await object.json();
   if (lock?.owner !== writer.owner || lock.claimId !== writer.claimId || lock.phase !== writer.phase) {
     throw writerError("writer_fence_lost");
