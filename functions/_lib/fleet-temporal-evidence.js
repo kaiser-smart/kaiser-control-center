@@ -9,7 +9,7 @@ function key(system, value) {
   if (system === "orwii_fuel_chip") return raw.toLowerCase().replace(/[^a-z0-9]/g, "");
   return raw;
 }
-function instant(value) { return text(value) ? Date.parse(value) : NaN; }
+function instant(value) { return typeof value === "string" && /T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? Date.parse(value) : NaN; }
 function aliasAt(alias, time) {
   const from = instant(alias.valid_from);
   const to = alias.valid_to ? instant(alias.valid_to) : Infinity;
@@ -40,13 +40,14 @@ export function resolveFleetVehicleIdentityAt(aliases = [], signals = [], occurr
 export function validateJobAssignmentSegments(input = []) {
   const segments = [];
   const issues = [];
-  const seen = new Set();
+  const seen = new Map();
   for (const row of input) {
     const id = text(row.id);
     const jobId = text(row.jobId);
     const reasons = [];
     if (!id || seen.has(id)) reasons.push("assignment_id_missing_or_duplicate");
-    seen.add(id);
+    if (seen.has(id)) issues.push({ id, jobId: seen.get(id), reasons: ["assignment_id_missing_or_duplicate"] });
+    else seen.set(id, jobId);
     if (!jobId) reasons.push("job_id_missing");
     if (row.sourceSystem !== "vistos" || !text(row.sourceId)) reasons.push("vistos_assignment_evidence_missing");
     if (!text(row.vehicleId) || row.vehicleVerified !== true) reasons.push("vehicle_identity_unverified");
