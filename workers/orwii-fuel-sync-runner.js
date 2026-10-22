@@ -1,4 +1,4 @@
-import { runOrwiiFuelSyncAutomation } from "../functions/_lib/orwii-fuel-store.js";
+import { runOrwiiFuelSyncAutomation, verifyOrwiiFuelRecoveryHistory } from "../functions/_lib/orwii-fuel-store.js";
 
 const ORWII_FUEL_SYNC_CRON = "17 * * * *";
 
@@ -19,6 +19,9 @@ export default {
             triggeredBy: "cloudflare-cron"
           });
           console.log("orwii_fuel_sync.completed", summary);
+          if (recoveryOnly && summary.reason === "recovery_caught_up") {
+            console.log("orwii_fuel_sync.historical_verification", await verifyOrwiiFuelRecoveryHistory(env));
+          }
           if (summary.status !== "completed") break;
         }
       } catch (error) {
