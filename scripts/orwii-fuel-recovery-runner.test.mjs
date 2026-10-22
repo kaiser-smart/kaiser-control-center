@@ -1,14 +1,15 @@
 import assert from "node:assert/strict";
 import worker from "../workers/orwii-fuel-sync-runner.js";
-import { runOrwiiFuelSyncAutomation } from "../functions/_lib/orwii-fuel-store.js";
+import { runOrwiiFuelSyncAutomation, verifyOrwiiFuelMirror, verifyOrwiiFuelRecoveryHistory } from "../functions/_lib/orwii-fuel-store.js";
 let checkpoint = "2026-09-16", active = false, pendingTo = "", failSecondWrite = true, writes = 0, sourceCalls = 0;
-const rows = new Map();
+const rows = new Map(), proofs = [], proofIds = new Map();
 const db = {
   prepare(sql) {
     return { sql, params: [], bind(...params) { this.params = params; return this; },
-      async first() { if (sql.includes("SELECT requested_to")) return { requested_to: checkpoint }; throw new Error("Unexpected first query"); },
-      async all() { return { results: sql.includes("FROM fleet_orwii_fuel_transactions") ? [...rows.values()] : [] }; },
+      async first() { if (sql.includes("SELECT requested_to")) return { requested_to: checkpoint }; if (sql.includes("FROM audit_events")) return proofIds.has(this.params[0]) ? { id: this.params[0] } : null; throw new Error("Unexpected first query"); },
+      async all() { let results = sql.includes("FROM fleet_orwii_fuel_transactions") ? [...rows.values()] : []; if (sql.includes("WHERE occurred_at >=")) results = results.filter(row => row.occurred_at >= this.params[0] && row.occurred_at < this.params[1]); return { results }; },
       async run() {
+        if (sql.includes("INTO audit_events")) { const proof = JSON.parse(this.params[6]); proofs.push(proof); proofIds.set(this.params[0], proof); }
         if (sql.includes("INSERT INTO fleet_orwii_fuel_sync_runs")) {
           if (active) throw new Error("UNIQUE constraint failed: idx_fleet_orwii_fuel_single_running");
           active = true; pendingTo = this.params[3];
@@ -81,5 +82,25 @@ try {
   assert.equal(sourceCalls, callsBefore);
   await worker.scheduled({ cron: "* * * * *", scheduledTime }, env, ctx);
   assert.equal(promises.length, 1, "an unknown schedule cannot start a write");
+  assert.ok(proofs.some(proof => proof.matched && proof.expectedCount === 60 && proof.expectedSha256 === proof.storedSha256));
+  const verificationEnv = { ...env, ORWII_VERIFY_FROM: "2026-09-16", ORWII_VERIFY_TO: "2026-10-22" };
+  const history = await verifyOrwiiFuelRecoveryHistory(verificationEnv);
+  assert.equal(history.status, "completed"); assert.equal(history.verifiedWindows, 6);
+  const callsAfterHistory = sourceCalls;
+  const repeated = await verifyOrwiiFuelRecoveryHistory(verificationEnv);
+  assert.equal(repeated.reusedWindows, 6); assert.equal(sourceCalls, callsAfterHistory);
 } finally { globalThis.fetch = originalFetch; }
+const expected = [...rows.values()].map(row => ({ externalId: row.external_id, timestamp: row.occurred_at, liters: row.liters, unitPrice: row.unit_price, totalPrice: row.total_price }));
+const verify = () => verifyOrwiiFuelMirror(db, expected, { from: "2026-09-13", to: "2026-09-19" });
+const original = { ...rows.get("tx-0") };
+rows.set("tx-0", { ...original, liters: 2 });
+await assert.rejects(verify, error => error.code === "orwii_source_mirror_mismatch");
+assert.equal(proofs.at(-1).changedCount, 1); assert.equal(proofs.at(-1).matched, false);
+rows.delete("tx-0");
+await assert.rejects(verify, error => error.code === "orwii_source_mirror_mismatch");
+assert.equal(proofs.at(-1).missingCount, 1);
+rows.set("tx-0", original); rows.set("unexpected", { ...original, external_id: "unexpected" });
+await assert.rejects(verify, error => error.code === "orwii_source_mirror_mismatch");
+assert.equal(proofs.at(-1).unexpectedCount, 1);
+rows.delete("unexpected");
 console.log("ORWII interrupted writes, retry, checkpoint and recovery schedule tests passed");
