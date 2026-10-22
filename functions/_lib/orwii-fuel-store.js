@@ -554,6 +554,72 @@ export async function reconcileStoredOrwiiFuelTransactions(db, options = {}) {
   };
 }
 
+
+function verificationRows(rows, stored = false) {
+  return rows.map(row => ({
+    id: cleanString(stored ? row.external_id : row.externalId),
+    at: cleanString(stored ? row.occurred_at : row.timestamp),
+    liters: finiteNumber(row.liters),
+    unitPrice: finiteNumber(stored ? row.unit_price : row.unitPrice),
+    totalPrice: finiteNumber(stored ? row.total_price : row.totalPrice)
+  })).sort((a, b) => a.id.localeCompare(b.id));
+}
+async function verificationDigest(rows) {
+  const cryptoApi = Reflect.get(globalThis, "crypto");
+  const digest = await cryptoApi.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(rows)));
+  return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, "0")).join("");
+}
+export async function verifyOrwiiFuelMirror(db, transactions, { from = "", to = "", proofId = "", phase = "sync" } = {}) {
+  const nextDay = isoDateDaysAgo(-1, new Date(to + "T00:00:00Z"));
+  const result = await db.prepare(`SELECT external_id, occurred_at, liters, unit_price, total_price
+    FROM fleet_orwii_fuel_transactions WHERE occurred_at >= ? AND occurred_at < ? ORDER BY external_id`)
+    .bind(from + "T00:00:00.000Z", nextDay + "T00:00:00.000Z").all();
+  const expected = verificationRows(transactions), stored = verificationRows(result.results || [], true);
+  const expectedById = new Map(expected.map(row => [row.id, row])), storedById = new Map(stored.map(row => [row.id, row]));
+  const missing = expected.filter(row => !storedById.has(row.id)).map(row => row.id);
+  const unexpected = stored.filter(row => !expectedById.has(row.id)).map(row => row.id);
+  const changed = expected.filter(row => storedById.has(row.id) && JSON.stringify(row) !== JSON.stringify(storedById.get(row.id))).map(row => row.id);
+  const matched = missing.length === 0 && unexpected.length === 0 && changed.length === 0 && expected.length === stored.length;
+  const metadata = {
+    version: 1, phase, from, to, matched, expectedCount: expected.length, storedCount: stored.length,
+    expectedLiters: expected.reduce((sum, row) => sum + (row.liters ?? 0), 0),
+    storedLiters: stored.reduce((sum, row) => sum + (row.liters ?? 0), 0),
+    expectedSha256: await verificationDigest(expected), storedSha256: await verificationDigest(stored),
+    missingCount: missing.length, unexpectedCount: unexpected.length, changedCount: changed.length,
+    missingIdSample: missing.slice(0, 20), unexpectedIdSample: unexpected.slice(0, 20), changedIdSample: changed.slice(0, 20)
+  };
+  const id = matched && proofId ? proofId : randomId("orwii-verification");
+  await db.prepare(`INSERT OR IGNORE INTO audit_events (
+    id, event_type, module_key, severity, actor_type, actor_id, entity_type, entity_id, idempotency_key, detail, metadata_json, created_at
+  ) VALUES (?, 'orwii_fuel_source_verification', 'fleet', ?, 'system', ?, 'orwii_fuel_window', ?, ?, ?, ?, ?)`)
+    .bind(id, matched ? "info" : "error", SYNC_RUNNER_NAME, from + "/" + to, id,
+      matched ? "ORWII ID, litry a cenové hodnoty odpovídají uloženým datům." : "Zdroj ORWII se liší od uložených dat; období nebylo potvrzeno.",
+      JSON.stringify(metadata), new Date().toISOString()).run();
+  if (!matched) throw new OrwiiFuelStoreError("Zdroj ORWII neodpovídá uloženým ID, litrům nebo cenám. Období nebylo potvrzeno.", 502, "orwii_source_mirror_mismatch");
+  return metadata;
+}
+export async function verifyOrwiiFuelRecoveryHistory(env) {
+  const from = dateValue(env.ORWII_VERIFY_FROM, "Začátek ověření");
+  const to = dateValue(env.ORWII_VERIFY_TO, "Konec ověření");
+  if (!from || !to) return { status: "skipped", reason: "historical_verification_not_configured" };
+  if (from > to || !Number.isFinite(Date.parse(from)) || !Number.isFinite(Date.parse(to)) || to > isoDateDaysAgo(0)) throw new OrwiiFuelStoreError("Neplatné období kontrolního ověření.", 400, "orwii_verification_range_invalid");
+  const db = database(env, true), deadline = Date.now() + 120_000;
+  let verifiedWindows = 0, reusedWindows = 0;
+  for (let start = Date.parse(from); start <= Date.parse(to); start += MAX_SYNC_DAYS * 86_400_000) {
+    const windowFrom = new Date(start).toISOString().slice(0, 10);
+    const windowTo = new Date(Math.min(Date.parse(to), start + (MAX_SYNC_DAYS - 1) * 86_400_000)).toISOString().slice(0, 10);
+    const proofId = "orwii-history-proof:" + from + ":" + to + ":" + windowFrom;
+    const previous = await db.prepare("SELECT id FROM audit_events WHERE id = ? LIMIT 1").bind(proofId).first();
+    if (previous) { reusedWindows++; continue; }
+    if (Date.now() >= deadline) return { status: "pending", from, to, verifiedWindows, reusedWindows, nextFrom: windowFrom };
+    const rows = await fetchTransactions(env, { from: windowFrom, to: windowTo });
+    const transactions = rows.map(normalizeOrwiiFuelTransaction);
+    await verifyOrwiiFuelMirror(db, transactions, { from: windowFrom, to: windowTo, proofId, phase: "historical" });
+    verifiedWindows++;
+  }
+  return { status: "completed", from, to, verifiedWindows, reusedWindows };
+}
+
 /**
  * Cloudflare Worker entry point. It only reads ORWII and upserts an auditable
  * D1 mirror; it never creates fuel transactions in an external system.
@@ -600,6 +666,7 @@ export async function runOrwiiFuelSyncAutomation(env, options = {}) {
     });
     await upsertTransactions(db, transactions);
     const reconciliation = await reconcileStoredOrwiiFuelTransactions(db);
+    await verifyOrwiiFuelMirror(db, transactions, { from, to, proofId: run.id + ":source-proof" });
     const fetchedIds = new Set(transactions.map((transaction) => transaction.externalId));
     const fetchedTransactions = reconciliation.transactions.filter((transaction) => fetchedIds.has(transaction.externalId));
     const summary = matchSummary(fetchedTransactions);
