@@ -1,0 +1,25 @@
+name: Fleet job economics cloud checks
+on:
+  push:
+    branches: ["codex/cloud-fuel-recovery-20261022"]
+  pull_request:
+    paths:
+      - "functions/_lib/fleet-temporal-evidence.js"
+      - "functions/_lib/fleet-job-fuel-economics.js"
+      - "scripts/fleet-job-fuel-economics.test.mjs"
+      - ".github/workflows/fleet-job-economics-cloud.yml"
+permissions:
+  contents: read
+jobs:
+  economics-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: JavaScript syntax
+        run: npm run lint
+      - name: Isolated temporal evidence and contribution tests
+        run: node scripts/fleet-job-fuel-economics.test.mjs
