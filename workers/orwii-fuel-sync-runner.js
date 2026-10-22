@@ -4,7 +4,8 @@ const ORWII_FUEL_SYNC_CRON = "17 * * * *";
 
 export default {
   async scheduled(controller, env, ctx) {
-    if (controller.cron !== ORWII_FUEL_SYNC_CRON) {
+    const recoveryOnly = controller.cron === "*/5 * * * *";
+    if (controller.cron !== ORWII_FUEL_SYNC_CRON && !(recoveryOnly && env.ORWII_RECOVERY_MODE === "enabled")) {
       console.log("orwii_fuel_sync.skipped_unknown_cron", { cron: controller.cron });
       return;
     }
@@ -12,6 +13,7 @@ export default {
       try {
         const summary = await runOrwiiFuelSyncAutomation(env, {
           scheduledTime: controller.scheduledTime,
+          recoveryOnly,
           triggeredBy: "cloudflare-cron"
         });
         console.log("orwii_fuel_sync.completed", summary);
