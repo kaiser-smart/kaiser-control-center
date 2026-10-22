@@ -388,6 +388,18 @@ export function orwiiFuelSyncRange(previous, now = new Date(), recoveryFrom = ""
   return { from, to: boundedTo < today ? boundedTo : today };
 }
 
+// Scheduled Workers have a bounded lifetime. A 30-minute lease cannot overlap
+// a previous scheduled invocation; retain the failed row for the audit trail.
+export async function expireAbandonedOrwiiRuns(db, now = new Date()) {
+  const cutoff = new Date(now.getTime() - 30 * 60_000).toISOString();
+  return db.prepare(`
+    UPDATE fleet_orwii_fuel_sync_runs
+    SET status = 'error', finished_at = ?, error_code = 'orwii_run_abandoned',
+        error_message = 'Předchozí běh nedokončil zápis v časovém limitu. Období nebylo potvrzeno; následuje bezpečné opakování.'
+    WHERE status = 'running' AND julianday(started_at) < julianday(?)
+  `).bind(now.toISOString(), cutoff).run();
+}
+
 function isUniqueRunningSyncError(error) {
   const message = cleanString(error?.message);
   return message.includes("UNIQUE constraint failed") || message.includes("idx_fleet_orwii_fuel_single_running");
@@ -550,6 +562,7 @@ export async function runOrwiiFuelSyncAutomation(env, options = {}) {
   const db = database(env, true);
   const now = new Date(Number(options.scheduledTime || Date.now()));
   const startedAt = new Date().toISOString();
+  await expireAbandonedOrwiiRuns(db, new Date(startedAt));
   const previous = await lastSuccessfulSync(db);
   const { from, to } = orwiiFuelSyncRange(previous, now, env.ORWII_RECOVERY_FROM);
   const run = {
