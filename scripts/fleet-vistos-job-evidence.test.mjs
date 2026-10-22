@@ -37,8 +37,13 @@ try {
     assert.equal(entity.page.limit, 5);
     assert.equal(entity.page.total, 12);
     assert.equal(entity.page.completeImport, false);
-    assert.equal(entity.rows[0].RidicContact_FK.recordId, 81);
-    assert.equal(entity.rows[0].Auto_FK.recordId, 42);
+    if (entity.entityName === "ServiceList") {
+      assert.equal(entity.rows[0].RidicContact_FK.recordId, 81);
+      assert.equal(entity.rows[0].Auto_FK.recordId, 42);
+    } else {
+      assert.equal(entity.rows[0].RidicContact_FK, undefined, "item evidence does not invent a driver field");
+      assert.equal(entity.rows[0].Auto_FK, undefined, "item evidence does not invent a vehicle field");
+    }
     assert.equal(entity.rows[0].PriceWithoutTax, null);
     assert.equal(entity.rows[0].DateOfRealization, null);
     assert.equal(entity.sampleIsNotMappingProof, true);
