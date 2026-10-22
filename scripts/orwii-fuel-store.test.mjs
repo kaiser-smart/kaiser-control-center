@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import {
   buildOrwiiFuelAnalytics,
+  expireAbandonedOrwiiRuns,
   getOrwiiFuelAnalytics,
   matchFuelTransactionToVehicle,
   normalizeOrwiiFuelTransaction,
   orwiiFuelStatus,
+  orwiiFuelSyncRange,
   previewOrwiiFuelTransactions
 } from "../functions/_lib/orwii-fuel-store.js";
 const transaction = normalizeOrwiiFuelTransaction({ transactionId: 101, from: 1784017800000, volumeInLitres: "45,5", vehicleIdentifierValue: "CHIP-7", price: { value: 1800 }, pricePerUnit: { value: 39.56 }, vehicle: { id: "orwii-vehicle-1", registrationNumber: "1AB 2345", counterType: "OdometerInMeters", currentCounterState: 183400 } });
@@ -29,7 +31,7 @@ globalThis.fetch = async (url, init = {}) => {
   requests.push({ url: requestUrl, init });
   if (requestUrl.endsWith("/getShortLivedToken")) return new Response(JSON.stringify({ token: "short-lived-token" }), { status: 200, headers: { "Content-Type": "application/json" } });
   if (requestUrl.includes("/getFillingStations")) return new Response(JSON.stringify([{ id: "station-1" }]), { status: 200, headers: { "Content-Type": "application/json" } });
-  if (requestUrl.includes("/getRefuellings")) return new Response(JSON.stringify([{ transactionId: "tx-1", from: 1784017800000, volumeInLitres: 20, vehicle: { registrationNumber: "1AB2345" } }]), { status: 200, headers: { "Content-Type": "application/json" } });
+  if (requestUrl.includes("/getRefuellings")) return new Response(JSON.stringify([{ transactionId: "tx-1", from: Date.parse("2026-07-01T08:00:00.000Z"), volumeInLitres: 20, vehicle: { registrationNumber: "1AB2345" } }]), { status: 200, headers: { "Content-Type": "application/json" } });
   throw new Error(`Unexpected request ${requestUrl}`);
 };
 try {
@@ -89,3 +91,67 @@ assert.deepEqual(d1Calls[0].params, ["2026-07-09T00:00:00.000Z", "2026-07-16T00:
 assert.match(d1Calls[0].sql, /json_extract\(source_payload_json, '\$\.vehicle\.name'\) AS vehicle_name/);
 await assert.rejects(() => getOrwiiFuelAnalytics(modularEnv, { period: "invalid" }), /Neplatné období/);
 console.log("orwii-fuel-store tests passed");
+
+// Recovery must advance from the persisted checkpoint, not from today's date.
+const recoveryNow = new Date("2026-10-22T12:00:00.000Z");
+assert.deepEqual(orwiiFuelSyncRange({ requested_to: "2026-09-16" }, recoveryNow), { from: "2026-09-13", to: "2026-09-19" });
+assert.deepEqual(orwiiFuelSyncRange(null, recoveryNow, "2026-09-16"), { from: "2026-09-16", to: "2026-09-22" });
+let checkpoint = { requested_to: "2026-09-16" };
+const covered = new Set();
+for (let attempt = 0; attempt < 20; attempt++) {
+  const window = orwiiFuelSyncRange(checkpoint, recoveryNow);
+  for (let date = Date.parse(window.from); date <= Date.parse(window.to); date += 86400000) covered.add(new Date(date).toISOString().slice(0, 10));
+  checkpoint = { requested_to: window.to };
+  if (window.to === "2026-10-22") break;
+}
+assert.equal(checkpoint.requested_to, "2026-10-22");
+for (let day = Date.parse("2026-09-16"); day <= Date.parse("2026-10-22"); day += 86400000) assert.ok(covered.has(new Date(day).toISOString().slice(0, 10)));
+assert.throws(() => orwiiFuelSyncRange(null, recoveryNow, "2026-12-01"), /začátek obnovy/);
+const testEnv = { APP_ENV: "test", ORWII_API_USERNAME: "test@example.invalid", ORWII_API_PASSWORD: "test-only", SARLOTA_DRIVER_REPORTS_TEST_FLEET_JSON: JSON.stringify({ vehicles: [] }) };
+const sourceStart = Date.parse("2026-10-01T00:00:00.000Z");
+const sourceRows = Array.from({ length: 4201 }, (_, i) => ({ transactionId: "recovery-" + i, from: sourceStart + i * 10000, volumeInLitres: 1 }));
+let stationCount = 1;
+let corruptFilter = false;
+let saturated = false;
+let failSecondStation = false;
+let sourceRequests = 0;
+globalThis.fetch = async (url) => {
+  const target = new URL(String(url));
+  if (target.pathname === "/getShortLivedToken") return Response.json({ token: "test-token" });
+  if (target.pathname === "/getFillingStations") return Response.json(Array.from({ length: stationCount }, (_, i) => ({ id: "station-" + i })));
+  if (target.pathname !== "/getRefuellings") throw new Error("unexpected source request");
+  sourceRequests++;
+  if (failSecondStation && target.searchParams.get("fillingStationId") === "station-1") return new Response("source unavailable", { status: 503 });
+  if (saturated) return Response.json({ items: [], hasMore: true });
+  if (corruptFilter) return Response.json([{ transactionId: "wrong-window", from: sourceStart - 1, volumeInLitres: 1 }]);
+  const from = Number(target.searchParams.get("from"));
+  const to = Number(target.searchParams.get("to"));
+  return Response.json(sourceRows.filter(row => row.from >= from && row.from <= to).slice(0, 2000));
+};
+try {
+  const result = await previewOrwiiFuelTransactions(testEnv, {}, { from: "2026-10-01", to: "2026-10-01" });
+  assert.equal(result.summary.total, sourceRows.length, "all 4201 IDs survive a source cap of 2000");
+  assert.equal(new Set(result.transactions.map(row => row.externalId)).size, sourceRows.length);
+  assert.equal(result.transactions.reduce((sum, row) => sum + row.liters, 0), 4201);
+  assert.ok(sourceRequests > 1, "saturated windows are subdivided");
+  stationCount = 2;
+  const duplicated = await previewOrwiiFuelTransactions(testEnv, {}, { from: "2026-10-01", to: "2026-10-01" });
+  assert.equal(duplicated.summary.total, 4201, "the same source ID is not counted twice across stations");
+  failSecondStation = true;
+  await assert.rejects(() => previewOrwiiFuelTransactions(testEnv, {}, { from: "2026-10-01", to: "2026-10-01" }), error => error.code === "orwii_http_error");
+  stationCount = 1; failSecondStation = false; corruptFilter = true;
+  await assert.rejects(() => previewOrwiiFuelTransactions(testEnv, {}, { from: "2026-10-01", to: "2026-10-01" }), error => error.code === "orwii_window_filter_not_applied");
+  corruptFilter = false; saturated = true;
+  await assert.rejects(() => previewOrwiiFuelTransactions(testEnv, {}, { from: "2026-10-01", to: "2026-10-01" }), error => error.code === "orwii_window_incomplete");
+} finally { globalThis.fetch = originalFetch; }
+console.log("ORWII bounded recovery and completeness regressions passed");
+
+// Expiry preserves audit history and never marks an incomplete window completed.
+let abandonedSql = "";
+let abandonedParams = [];
+await expireAbandonedOrwiiRuns({ prepare(sql) { abandonedSql = sql; return { bind(...params) { abandonedParams = params; return this; }, async run() { return { meta: { changes: 1 } }; } }; } }, recoveryNow);
+assert.match(abandonedSql, /status = 'error'/);
+assert.match(abandonedSql, /WHERE status = 'running' AND julianday\(started_at\) < julianday\(\?\)/);
+assert.doesNotMatch(abandonedSql, /requested_to\s*=/);
+assert.deepEqual(abandonedParams, ["2026-10-22T12:00:00.000Z", "2026-10-22T11:30:00.000Z"]);
+console.log("ORWII abandoned-run lease regression passed");

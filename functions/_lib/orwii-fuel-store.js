@@ -7,7 +7,9 @@ import {
 import { licensePlateKey, normalizeLicensePlate, vehicleLicensePlateValue } from "../../src/data/licensePlate.js";
 
 const ORWII_API_BASE_URL = "https://api007.orwii.com:7080";
-const MAX_TRANSACTIONS = 2_000;
+const SOURCE_WINDOW_LIMIT = 2_000;
+const MAX_SOURCE_REQUESTS = 120;
+const MAX_SYNC_DAYS = 7;
 const SYNC_LOOKBACK_DAYS = 3;
 const INITIAL_SYNC_LOOKBACK_DAYS = 31;
 const SYNC_RUNNER_NAME = "orwii-fuel-cloud-sync";
@@ -153,8 +155,39 @@ async function fetchTransactions(env, { from = "", to = "" } = {}) {
   if (!from || !to) throw new OrwiiFuelStoreError("Pro ORWII vyplňte datum od i do.", 400, "orwii_date_range_required");
   const token = await fetchOrwiiBearerToken(config);
   const stations = transactionRows(await fetchOrwiiJson(config, token, "/getFillingStations"));
-  const results = await Promise.all(stations.map((station) => fetchOrwiiJson(config, token, "/getRefuellings", { fillingStationId: station.id, from: asUnixMilliseconds(from), to: asUnixMilliseconds(to, true) })));
-  return results.flatMap(transactionRows).slice(0, MAX_TRANSACTIONS);
+  if (!stations.length) throw new OrwiiFuelStoreError("ORWII nevrátilo žádnou čerpací stanici. Úplnost nelze potvrdit.", 422, "orwii_stations_empty");
+  const collected = new Map();
+  let requests = 0;
+  async function readWindow(stationId, start, end) {
+    if (++requests > MAX_SOURCE_REQUESTS) throw new OrwiiFuelStoreError("Dávka ORWII překročila bezpečný počet dotazů. Období nebylo potvrzeno.", 503, "orwii_window_budget_exceeded");
+    const payload = await fetchOrwiiJson(config, token, "/getRefuellings", { fillingStationId: stationId, from: String(start), to: String(end) });
+    const rows = transactionRows(payload);
+    const declaredTotal = Number(payload?.totalCount ?? payload?.recordsTotal ?? payload?.total);
+    const incomplete = rows.length >= SOURCE_WINDOW_LIMIT || payload?.hasMore === true || (Number.isFinite(declaredTotal) && declaredTotal > rows.length);
+    if (incomplete) {
+      if (end - start < 60_000) throw new OrwiiFuelStoreError("Úplnost odpovědi ORWII nelze potvrdit ani v minutovém okně.", 422, "orwii_window_incomplete");
+      const middle = Math.floor((start + end) / 2);
+      await readWindow(stationId, start, middle);
+      await readWindow(stationId, middle + 1, end);
+      return;
+    }
+    for (const row of rows) {
+      const normalized = normalizeOrwiiFuelTransaction(row);
+      const timestamp = Date.parse(normalized.timestamp);
+      if (!Number.isFinite(timestamp) || timestamp < start || timestamp > end) throw new OrwiiFuelStoreError("ORWII vrátilo transakci mimo požadované časové okno.", 422, "orwii_window_filter_not_applied");
+      const existing = collected.get(normalized.externalId);
+      const fingerprint = JSON.stringify({ ...normalized, raw: undefined });
+      if (existing && existing.fingerprint !== fingerprint) throw new OrwiiFuelStoreError("Stejné ORWII ID má v jedné dávce rozdílné hodnoty.", 422, "orwii_transaction_id_conflict");
+      collected.set(normalized.externalId, { row, fingerprint });
+    }
+  }
+  const start = Number(asUnixMilliseconds(from));
+  const end = Number(asUnixMilliseconds(to, true));
+  for (const station of stations) {
+    if (station?.id === undefined || station?.id === null || !cleanString(station.id)) throw new OrwiiFuelStoreError("ORWII stanice nemá ID.", 422, "orwii_station_id_missing");
+    for (let day = start; day <= end; day += 86_400_000) await readWindow(station.id, day, Math.min(day + 86_400_000 - 1, end));
+  }
+  return [...collected.values()].map(({ row }) => row);
 }
 export async function previewOrwiiFuelTransactions(env, user, input = {}) {
   const from = dateValue(input.from, "Datum od"); const to = dateValue(input.to, "Datum do");
@@ -339,6 +372,34 @@ function isoDateDaysAgo(days, now = new Date()) {
   return date.toISOString().slice(0, 10);
 }
 
+export function orwiiFuelSyncRange(previous, now = new Date(), recoveryFrom = "") {
+  if (!Number.isFinite(now.getTime())) throw new OrwiiFuelStoreError("Neplatný čas synchronizace.", 400, "orwii_sync_time_invalid");
+  const today = isoDateDaysAgo(0, now);
+  const checkpoint = cleanString(previous?.requested_to);
+  if (checkpoint && (!/^\d{4}-\d{2}-\d{2}$/.test(checkpoint) || !Number.isFinite(Date.parse(checkpoint)))) throw new OrwiiFuelStoreError("Neplatný potvrzený checkpoint ORWII.", 422, "orwii_checkpoint_invalid");
+  const floor = dateValue(recoveryFrom, "Začátek obnovy");
+  if (floor && (!Number.isFinite(Date.parse(floor)) || floor > today)) throw new OrwiiFuelStoreError("Neplatný začátek obnovy ORWII.", 400, "orwii_recovery_date_invalid");
+  let from = checkpoint
+    ? isoDateDaysAgo(SYNC_LOOKBACK_DAYS, new Date(checkpoint + "T00:00:00.000Z"))
+    : (floor || isoDateDaysAgo(INITIAL_SYNC_LOOKBACK_DAYS, now));
+  if (floor && from < floor) from = floor;
+  if (from > today) throw new OrwiiFuelStoreError("Checkpoint ORWII je v budoucnosti.", 422, "orwii_checkpoint_invalid");
+  const boundedTo = isoDateDaysAgo(-(MAX_SYNC_DAYS - 1), new Date(from + "T00:00:00.000Z"));
+  return { from, to: boundedTo < today ? boundedTo : today };
+}
+
+// Scheduled Workers have a bounded lifetime. A 30-minute lease cannot overlap
+// a previous scheduled invocation; retain the failed row for the audit trail.
+export async function expireAbandonedOrwiiRuns(db, now = new Date()) {
+  const cutoff = new Date(now.getTime() - 30 * 60_000).toISOString();
+  return db.prepare(`
+    UPDATE fleet_orwii_fuel_sync_runs
+    SET status = 'error', finished_at = ?, error_code = 'orwii_run_abandoned',
+        error_message = 'Předchozí běh nedokončil zápis v časovém limitu. Období nebylo potvrzeno; následuje bezpečné opakování.'
+    WHERE status = 'running' AND julianday(started_at) < julianday(?)
+  `).bind(now.toISOString(), cutoff).run();
+}
+
 function isUniqueRunningSyncError(error) {
   const message = cleanString(error?.message);
   return message.includes("UNIQUE constraint failed") || message.includes("idx_fleet_orwii_fuel_single_running");
@@ -501,9 +562,9 @@ export async function runOrwiiFuelSyncAutomation(env, options = {}) {
   const db = database(env, true);
   const now = new Date(Number(options.scheduledTime || Date.now()));
   const startedAt = new Date().toISOString();
+  await expireAbandonedOrwiiRuns(db, new Date(startedAt));
   const previous = await lastSuccessfulSync(db);
-  const from = isoDateDaysAgo(previous?.requested_to ? SYNC_LOOKBACK_DAYS : INITIAL_SYNC_LOOKBACK_DAYS, now);
-  const to = isoDateDaysAgo(0, now);
+  const { from, to } = orwiiFuelSyncRange(previous, now, env.ORWII_RECOVERY_FROM);
   const run = {
     id: randomId("orwii-fuel-sync-run"),
     startedAt,
