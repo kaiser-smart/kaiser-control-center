@@ -11,12 +11,16 @@ export default {
     }
     ctx.waitUntil((async () => {
       try {
-        const summary = await runOrwiiFuelSyncAutomation(env, {
-          scheduledTime: controller.scheduledTime,
-          recoveryOnly,
-          triggeredBy: "cloudflare-cron"
-        });
-        console.log("orwii_fuel_sync.completed", summary);
+        const deadline = Date.now() + 120_000;
+        for (let batch = 0; batch < (recoveryOnly ? 4 : 1) && Date.now() < deadline; batch++) {
+          const summary = await runOrwiiFuelSyncAutomation(env, {
+            scheduledTime: controller.scheduledTime,
+            recoveryOnly,
+            triggeredBy: "cloudflare-cron"
+          });
+          console.log("orwii_fuel_sync.completed", summary);
+          if (summary.status !== "completed") break;
+        }
       } catch (error) {
         console.error("orwii_fuel_sync.failed", {
           code: String(error?.code || "orwii_sync_failed"),

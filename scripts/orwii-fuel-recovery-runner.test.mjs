@@ -54,6 +54,18 @@ try {
   assert.equal(checkpoint, "2026-09-19");
   assert.equal(rows.size, 60, "retry upserts the same IDs without duplicates");
   assert.equal([...rows.values()].reduce((sum, row) => sum + row.liters, 0), 60);
+  checkpoint = "2026-09-16";
+  const recoveryPromises = [];
+  await worker.scheduled({ cron: "*/5 * * * *", scheduledTime }, { ...env, ORWII_RECOVERY_MODE: "enabled" }, { waitUntil(promise) { recoveryPromises.push(promise); } });
+  await Promise.all(recoveryPromises);
+  assert.equal(checkpoint, "2026-09-28", "exactly four independent recovery batches advance twelve days");
+  active = true; checkpoint = "2026-09-16";
+  const concurrentCalls = sourceCalls;
+  const lockedPromises = [];
+  await worker.scheduled({ cron: "*/5 * * * *", scheduledTime }, { ...env, ORWII_RECOVERY_MODE: "enabled" }, { waitUntil(promise) { lockedPromises.push(promise); } });
+  await Promise.all(lockedPromises);
+  assert.equal(sourceCalls, concurrentCalls, "a concurrent recovery does not read or duplicate the source");
+  active = false;
   checkpoint = "2026-10-22";
   const callsBefore = sourceCalls;
   const caughtUp = await runOrwiiFuelSyncAutomation(env, { scheduledTime, recoveryOnly: true });
