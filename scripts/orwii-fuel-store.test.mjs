@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   buildOrwiiFuelAnalytics,
+  expireAbandonedOrwiiRuns,
   getOrwiiFuelAnalytics,
   matchFuelTransactionToVehicle,
   normalizeOrwiiFuelTransaction,
@@ -144,3 +145,13 @@ try {
   await assert.rejects(() => previewOrwiiFuelTransactions(testEnv, {}, { from: "2026-10-01", to: "2026-10-01" }), error => error.code === "orwii_window_incomplete");
 } finally { globalThis.fetch = originalFetch; }
 console.log("ORWII bounded recovery and completeness regressions passed");
+
+// Expiry preserves audit history and never marks an incomplete window completed.
+let abandonedSql = "";
+let abandonedParams = [];
+await expireAbandonedOrwiiRuns({ prepare(sql) { abandonedSql = sql; return { bind(...params) { abandonedParams = params; return this; }, async run() { return { meta: { changes: 1 } }; } }; } }, recoveryNow);
+assert.match(abandonedSql, /status = 'error'/);
+assert.match(abandonedSql, /WHERE status = 'running' AND julianday\(started_at\) < julianday\(\?\)/);
+assert.doesNotMatch(abandonedSql, /requested_to\s*=/);
+assert.deepEqual(abandonedParams, ["2026-10-22T12:00:00.000Z", "2026-10-22T11:30:00.000Z"]);
+console.log("ORWII abandoned-run lease regression passed");
