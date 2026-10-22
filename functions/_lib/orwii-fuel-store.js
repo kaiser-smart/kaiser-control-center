@@ -564,6 +564,9 @@ export async function runOrwiiFuelSyncAutomation(env, options = {}) {
   const startedAt = new Date().toISOString();
   await expireAbandonedOrwiiRuns(db, new Date(startedAt));
   const previous = await lastSuccessfulSync(db);
+  if (options.recoveryOnly && previous?.requested_to >= isoDateDaysAgo(0, now)) {
+    return { mode: "cloud-scheduled-sync", status: "skipped", reason: "recovery_caught_up", runner: SYNC_RUNNER_NAME };
+  }
   const { from, to } = orwiiFuelSyncRange(previous, now, env.ORWII_RECOVERY_FROM);
   const run = {
     id: randomId("orwii-fuel-sync-run"),
