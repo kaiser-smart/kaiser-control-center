@@ -5,6 +5,9 @@ on:
   pull_request:
     paths:
       - "functions/_lib/fleet-temporal-evidence.js"
+      - "functions/_lib/fleet-vistos-job-evidence.js"
+      - "functions/api/fleet/vistos-job-evidence.js"
+      - "scripts/fleet-vistos-job-evidence.test.mjs"
       - "functions/_lib/fleet-job-fuel-economics.js"
       - "scripts/fleet-job-fuel-economics.test.mjs"
       - ".github/workflows/fleet-job-economics-cloud.yml"
@@ -23,3 +26,5 @@ jobs:
         run: npm run lint
       - name: Isolated temporal evidence and contribution tests
         run: node scripts/fleet-job-fuel-economics.test.mjs
+      - name: Read-only Vistos job evidence tests
+        run: node scripts/fleet-vistos-job-evidence.test.mjs
