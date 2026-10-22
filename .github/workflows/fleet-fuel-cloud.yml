@@ -29,3 +29,12 @@ jobs:
         run: npm run test:orwii-fuel
       - name: Build application
         run: npm run build
+      - name: Bundle ORWII Worker in cloud
+        run: |
+          npx --yes esbuild@0.25.12 workers/orwii-fuel-sync-runner.js --bundle --format=esm --platform=browser --target=es2022 --minify --outfile=/tmp/orwii-fuel-cloud.mjs
+          node --check /tmp/orwii-fuel-cloud.mjs
+          sha256sum /tmp/orwii-fuel-cloud.mjs
+          printf 'ORWII worker built and checked exclusively in GitHub Actions. Source: %s\n\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          printf '```javascript\n' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/orwii-fuel-cloud.mjs >> "$GITHUB_STEP_SUMMARY"
+          printf '\n```\n' >> "$GITHUB_STEP_SUMMARY"
