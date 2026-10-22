@@ -104,9 +104,11 @@ export function calculateFleetJobContribution(input = {}) {
   const unknownVehicle = fuel.some(row => !text(row.vehicleId));
   const jobResults = jobs.map(job => {
     const issues = [];
-    const segments = validated.segments.filter(row => row.jobId === job.id);
+    const segments = validated.segments.filter(row => row.jobId === job.id && row.endMs > period.startMs && row.startMs < period.endMs);
     if (duplicateJobs.has(job.id)) issues.push("job_id_missing_or_duplicate");
     if (job.sourceSystem !== "vistos" || !text(job.sourceId) || job.state !== "performed" || job.priceVerified !== true || !money(job.amountMinor)) issues.push("performed_vistos_price_unverified");
+    const performedAt = ms(job.performedAt);
+    if (!Number.isFinite(performedAt) || performedAt < period.startMs || performedAt >= period.endMs) issues.push("job_realization_outside_period_or_missing");
     if (job.currency !== currency || job.vatBasis !== vatBasis) issues.push("job_currency_or_vat_basis_unverified");
     if (job.assignmentsComplete !== true || !segments.length || blockedJobs.has(job.id) || segments.some(row => unavailableVehicles.has(row.vehicleId))) issues.push("job_assignment_time_incomplete_or_conflicting");
     if (unknownVehicle) issues.push("unmatched_fuel_may_affect_job");
