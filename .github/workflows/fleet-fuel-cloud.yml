@@ -1,0 +1,31 @@
+name: Fleet fuel cloud checks
+on:
+  pull_request:
+    paths:
+      - "functions/_lib/orwii-fuel-store.js"
+      - "functions/_lib/fleet-vehicle-aliases.js"
+      - "scripts/*fuel*.test.mjs"
+      - ".github/workflows/fleet-fuel-cloud.yml"
+  push:
+    branches: ["codex/cloud-fuel-recovery-20261022"]
+permissions:
+  contents: read
+jobs:
+  fuel-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check patch whitespace
+        run: git diff --check origin/main...HEAD
+      - name: Check JavaScript syntax
+        run: npm run lint
+      - name: Isolated fuel regression tests
+        run: npm run test:orwii-fuel
+      - name: Build application
+        run: npm run build
