@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.827"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.828"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Tankování: shodný detail a souhrn vozidla", text: "Detail nákladů využívá explicitní ID vozidla z Vistosu a T-Cars pro výběr jediné uložené skupiny tankování. Konfliktní skupiny se neslučují a firemní součty se nemění. Historická platnost identity zatím není ověřená." },
   { title: "Sledování vozidel: čtení SOAP polí T-Cars", text: "Parser podporuje i inline položky item v odpovědích seznamu vozidel a aktuálních poloh. Ověřuje typ a strukturu záznamu; původní formáty zůstávají zachované. Změna sama nepřepisuje identity ani historické tankování." },
   { title: "Sledování vozidel: ověření odpovědi T-Cars", text: "Chráněná čtecí diagnostika rozlišuje očekávanou SOAP odpověď, HTML a prázdný výsledek zpracování. Nezobrazuje surová data, polohy ani přihlašovací údaje a nepřiřazuje vozidla odhadem." },
   { title: "Vozový park: přesné zdrojové vazby zakázek", text: "Čtecí diagnostika umí ověřit konkrétní zakázkový list i položku podle Vistos ID a rozlišuje číselné a seznamové vazby. Neověřené časy, přiřazení a cenové podklady dál blokují úplný příspěvek po PHM." },

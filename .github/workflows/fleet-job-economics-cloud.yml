@@ -24,6 +24,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Prepare reviewed fuel detail patch in isolated cloud workspace
+        run: |
+          node scripts/prepare-fuel-detail-patch.mjs --apply
+          node scripts/prepare-fuel-detail-patch.mjs --apply
+          node scripts/fleet-fuel-identity-view.test.mjs
+          git diff --check
+          git diff -- src/app.js
       - name: T-Cars inline SOAP arrays
         run: node scripts/tcars-inline-array.test.mjs
       - name: JavaScript syntax

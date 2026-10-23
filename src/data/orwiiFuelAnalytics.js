@@ -28,10 +28,13 @@ export function orwiiFuelSummary(analytics = {}) {
 }
 
 export function orwiiFuelVehicleSummary(analytics = {}, vehicleId = "") {
-  const id = String(vehicleId || "").trim();
-  if (!id) return null;
-  return (Array.isArray(analytics?.byVehicle) ? analytics.byVehicle : [])
-    .find((row) => String(row?.key || "").trim() === id) || null;
+  const vehicle = vehicleId && typeof vehicleId === "object" ? vehicleId : null;
+  const ids = new Set((vehicle ? [vehicle.id, vehicle.vehicleId, vehicle.tcarsVehicleId] : [vehicleId]).map(value => String(value || "").trim()).filter(Boolean));
+  if (!ids.size) return null;
+  const rows = (Array.isArray(analytics?.byVehicle) ? analytics.byVehicle : []).filter(row => ids.has(String(row?.key || "").trim()));
+  if (rows.length !== 1) return null;
+  if (!vehicle) return rows[0];
+  return { ...rows[0], identityScope: "stored_transaction_group", viewVehicleId: String(vehicle.id || vehicle.vehicleId || "").trim(), historicalIdentityVerified: false };
 }
 
 export function filterOrwiiFuelTransactions(transactions = [], filters = {}) {
