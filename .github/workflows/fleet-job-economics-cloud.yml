@@ -75,3 +75,6 @@ jobs:
           node scripts/data-box-plus-sync-runner.test.mjs
       - name: Build application without deployment
         run: npm run build
+
+      - name: Cloudflare production build safety
+        run: node scripts/pages-cloud-build.test.mjs
