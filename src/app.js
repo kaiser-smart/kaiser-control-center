@@ -12936,7 +12936,7 @@ function fuelAnalyticsPanel(options = {}) {
 }
 
 function fleetCostsDetail(vehicle = {}) {
-  const fuel = orwiiFuelVehicleSummary(fleetFuelState.analytics || {}, vehicle.id);
+  const fuel = orwiiFuelVehicleSummary(fleetFuelState.analytics || {}, vehicle);
   const rows = [
     ["Náklady tento měsíc", vehicle.costsThisMonth],
     ["Náklady za 12 měsíců", vehicle.costsLast12Months],
@@ -12960,6 +12960,7 @@ function fleetCostsDetail(vehicle = {}) {
         </div>
       </div>
       ${hasCosts ? `
+        ${fuel?.identityScope === "stored_transaction_group" ? `<p class="fuel-source-note">Částky odpovídají uloženému spárování tankování. Historie změn identity zatím není ověřená.</p>` : ""}
         <div class="fleet-cost-grid">
           ${rows.map(([label, value]) => `
             <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(fleetVehicleDisplayValue(value))}</strong></div>
