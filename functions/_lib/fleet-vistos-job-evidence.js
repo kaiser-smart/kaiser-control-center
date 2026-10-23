@@ -8,7 +8,8 @@ function scalar(value) { return value === null || ["string", "number", "boolean"
 function evidenceValue(row, field) {
   if (field.endsWith("_FK") || field === "AllocatedVehicle") {
     const direct = row[field];
-    return { recordId: scalar(row[field + "_RecordId"] ?? direct?.Id ?? direct?.id ?? (Number.isSafeInteger(direct) && direct > 0 ? direct : null)), valueShape: Array.isArray(direct) ? "array" : direct === null ? "null" : typeof direct };
+    const recordIds = Array.isArray(direct) ? direct.map(value => scalar(value?.Id ?? value?.id ?? (Number.isSafeInteger(value) && value > 0 ? value : null))) : null;
+    return { ...(recordIds ? { arrayLength: direct.length, recordIds: [...new Set(recordIds.filter(value => value !== null))], unresolvedArrayItems: recordIds.filter(value => value === null).length } : {}), recordId: scalar(row[field + "_RecordId"] ?? direct?.Id ?? direct?.id ?? (Number.isSafeInteger(direct) && direct > 0 ? direct : null)), valueShape: Array.isArray(direct) ? "array" : direct === null ? "null" : typeof direct };
   }
   return scalar(row[field] ?? null);
 }

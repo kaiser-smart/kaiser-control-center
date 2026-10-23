@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.824"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.825"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Vozový park: přesné zdrojové vazby zakázek", text: "Čtecí diagnostika umí ověřit konkrétní zakázkový list i položku podle Vistos ID a rozlišuje číselné a seznamové vazby. Neověřené časy, přiřazení a cenové podklady dál blokují úplný příspěvek po PHM." },
   { title: "Vozový park: ověření podkladů pro zakázky", text: "Chráněná čtecí diagnostika ověřuje dostupná pole zakázkových listů a položek Vistosu. Propojení vozidel a řidičů i příspěvek po PHM čekají na doložení skutečných vazeb, času a cenového základu; zatím se nepočítají v ostré evidenci." },
   { title: "Vistos: plynulé navázání po dokončení dávky", text: "Dokončená dávka ihned uvolní přenos pro další kontakty. Zpětné ověření, ochrana souhlasů i automatická obnova přerušených běhů zůstávají zachované." },
   { title: "Vistos: automatická obnova přenosu kontaktů", text: "Přerušený přenos se znovu ověří a bezpečně naváže. Chybné kontakty mají vlastní opakování a diagnostiku; import nemění odběr newsletteru ani svátků." },
