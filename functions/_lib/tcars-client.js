@@ -624,14 +624,39 @@ export function parseTcarsRoadTaxXml(xml) {
   return typedBlocks(xml, "result", "tPodkladProSilnicniDan").map(parseTcarsRoadTax);
 }
 
+// SOAP encoded arrays may use inline item elements instead of WSDL tagName.
+// Accept them only inside the known vozidla result and with matching type or
+// required record structure. Legacy direct tags and multiRef remain unchanged.
+function inlineTcarsArrayBlocks(xml, typeName, requiredFields) {
+  const blocks = [];
+  for (const array of String(xml || "").matchAll(tagRegExp("vozidla", "gi"))) {
+    const opening = /<(?:[\w.-]+:)?vozidla\b([^>]*)>/i.exec(array[0]);
+    const declaredType = attributeValue(opening?.[1] || "", "arrayType").split("[")[0];
+    if (declaredType && !blockTypeMatches(declaredType, typeName)) continue;
+    for (const item of array[1].matchAll(tagRegExp("item", "gi"))) {
+      const itemOpening = /<(?:[\w.-]+:)?item\b([^>]*)>/i.exec(item[0]);
+      const itemType = attributeValue(itemOpening?.[1] || "", "type");
+      if (itemType && !blockTypeMatches(itemType, typeName)) continue;
+      const body = item[1];
+      if (!requiredFields.every(field => new RegExp("<(?:[\\w.-]+:)?" + field + "\\b", "i").test(body))) continue;
+      blocks.push(body);
+    }
+  }
+  return blocks;
+}
+
 export function parseTcarsVehiclesXml(xml) {
   const refs = multiRefMap(xml);
-  return typedBlocks(xml, "vozidlo", "tVozidlo").map((block) => parseTcarsVehicle(block, refs));
+  const legacy = typedBlocks(xml, "vozidlo", "tVozidlo");
+  const blocks = legacy.length ? legacy : inlineTcarsArrayBlocks(xml, "tVozidlo", ["vozidloId", "vozidloRz"]);
+  return blocks.map((block) => parseTcarsVehicle(block, refs));
 }
 
 export function parseTcarsPositionsXml(xml) {
   const refs = multiRefMap(xml);
-  return typedBlocks(xml, "pozice", "tPozice").map((block) => parseTcarsPosition(block, refs));
+  const legacy = typedBlocks(xml, "pozice", "tPozice");
+  const blocks = legacy.length ? legacy : inlineTcarsArrayBlocks(xml, "tPozice", ["vozidlo", "gpsData"]);
+  return blocks.map((block) => parseTcarsPosition(block, refs));
 }
 
 function normalizeRegistration(value) {

@@ -24,6 +24,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: T-Cars inline SOAP arrays
+        run: node scripts/tcars-inline-array.test.mjs
       - name: JavaScript syntax
         run: npm run lint
       - name: Isolated temporal evidence and contribution tests
