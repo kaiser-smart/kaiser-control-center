@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.823"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.824"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Vozový park: ověření podkladů pro zakázky", text: "Chráněná čtecí diagnostika ověřuje dostupná pole zakázkových listů a položek Vistosu. Propojení vozidel a řidičů i příspěvek po PHM čekají na doložení skutečných vazeb, času a cenového základu; zatím se nepočítají v ostré evidenci." },
   { title: "Vistos: plynulé navázání po dokončení dávky", text: "Dokončená dávka ihned uvolní přenos pro další kontakty. Zpětné ověření, ochrana souhlasů i automatická obnova přerušených běhů zůstávají zachované." },
   { title: "Vistos: automatická obnova přenosu kontaktů", text: "Přerušený přenos se znovu ověří a bezpečně naváže. Chybné kontakty mají vlastní opakování a diagnostiku; import nemění odběr newsletteru ani svátků." },
   { title: "Pošta: ověřené úkoly a upozornění", text: "Povolený pilot TEĎ vyhodnocuje komunikaci přímo v ChatGPT. Konektor ověřuje podklady a ukládá výklady; potvrzené povinnosti, čekání a upozornění zůstávají oddělené. Osobní odložení nemění práci kolegů." },

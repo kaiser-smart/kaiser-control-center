@@ -1,0 +1,80 @@
+name: Fleet job economics cloud checks
+on:
+  push:
+    branches: ["codex/cloud-fuel-recovery-20261022"]
+  pull_request:
+    paths:
+      - "functions/_lib/fleet-temporal-evidence.js"
+      - "functions/_lib/fleet-vistos-job-evidence.js"
+      - "functions/api/fleet/vistos-job-evidence.js"
+      - "scripts/fleet-vistos-job-evidence.test.mjs"
+      - "functions/_lib/fleet-job-fuel-economics.js"
+      - "scripts/fleet-job-fuel-economics.test.mjs"
+      - ".github/workflows/fleet-job-economics-cloud.yml"
+permissions:
+  contents: read
+jobs:
+  economics-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: JavaScript syntax
+        run: npm run lint
+      - name: Isolated temporal evidence and contribution tests
+        run: node scripts/fleet-job-fuel-economics.test.mjs
+      - name: Read-only Vistos job evidence tests
+        run: node scripts/fleet-vistos-job-evidence.test.mjs
+
+      - name: Review diff whitespace
+        run: git diff --check origin/main...HEAD
+      - name: Full application regressions required by production guard
+        run: |
+          node --test scripts/theme-settings.test.mjs
+          node scripts/version-module-imports.test.mjs
+          node scripts/sarlota-mandatory-reading.test.mjs
+          node scripts/kso-test-mode-contract.test.mjs
+          node scripts/collection-route-source-parser.test.mjs
+          node scripts/collection-daily-routes.test.mjs
+          node scripts/collection-routes-driver-outputs.test.mjs
+          node scripts/collection-routes-admin-tablet-test.test.mjs
+          node scripts/driver-tablet-audio.test.mjs
+          node scripts/driver-tablet-audio-store.test.mjs
+          node scripts/collection-daily-routes-scale.test.mjs
+          node scripts/collection-routes-test-data.test.mjs
+          node scripts/collection-routes-test-store.test.mjs
+          node scripts/collection-routes-readonly-calculator.test.mjs
+          node scripts/collection-routes-here-map-image.test.mjs
+          node scripts/collection-routes-test-incidents.test.mjs
+          node scripts/collection-routes-incident-reminder-runner.test.mjs
+          node scripts/collection-routes-test-ui.test.mjs
+          node scripts/elevenlabs-signed-url-options.test.mjs
+          node scripts/sarlota-collection-route-gps.test.mjs
+          node scripts/collection-routes-sarlota-context.test.mjs
+          node scripts/sarlota-tools-sync-plan.test.mjs
+          node scripts/sarlota-prompt-sync-plan.test.mjs
+          node scripts/sarlota-voice-smoke.test.mjs
+          node scripts/customer-messaging.test.mjs
+          node scripts/vistos-contacts-audit.test.mjs
+          node scripts/vistos-leadhub-profile-sync.test.mjs
+          node scripts/vistos-leadhub-csv.test.mjs
+          node scripts/vistos-leadhub-status-readback.test.mjs
+          node scripts/vistos-leadhub-reliability.test.mjs
+          node scripts/rcs-consent.test.mjs
+          node scripts/rcs-template-assets.test.mjs
+          node scripts/rcs-template-center.test.mjs
+          node scripts/data-box-plus-triage.test.mjs
+          node scripts/data-box-plus-triage-ui.test.mjs
+          node scripts/data-box-plus-compose-save-race.test.mjs
+          node scripts/data-box-plus-workflows.test.mjs
+          node scripts/data-box-plus-sync-runner.test.mjs
+      - name: Build application without deployment
+        run: npm run build
+
+      - name: Cloudflare production build safety
+        run: node scripts/pages-cloud-build.test.mjs
