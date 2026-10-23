@@ -6,21 +6,27 @@ assert.equal(noConfig.errorCode, "vistos_api_not_configured");
 const originalFetch = globalThis.fetch;
 const requests = [];
 let denied = false;
+let wrongRecord = false;
 globalThis.fetch = async (url, init) => {
   assert.match(String(url), /^https:\/\/vistos\.example\.test\/API\/VistosAPI\/Execute\?/);
   const body = JSON.parse(init.body);
-  const method = Object.keys(body).find(key => ["LoginParam", "GetSchemaEntity", "GetPageParam"].includes(key));
+  const method = Object.keys(body).find(key => ["LoginParam", "GetSchemaEntity", "GetPageParam", "GetByIdParam"].includes(key));
   assert.ok(method, "only documented authentication and read operations are used");
   requests.push({ method, input: body[method] });
   if (method === "LoginParam") return Response.json({ status: "OK" }, { headers: { "set-cookie": "VistosAccessToken=test-only; Path=/" } });
   assert.equal(init.headers.Cookie, "VistosAccessToken=test-only");
   assert.ok(["ServiceList", "ServiceListItem"].includes(body[method].EntityName));
   if (denied) return Response.json({ status: "Unauthorized" }, { status: 403 });
-  if (method === "GetSchemaEntity") return Response.json({ status: "OK", data: { Columns: ["Id", "Auto_FK", "RidicContact_FK", "DateOfRealization", "PriceWithoutTax"].map(ColumnName => ({ ColumnName, DataType: "test-type", Caption: ColumnName })) } });
+  if (method === "GetByIdParam") {
+    assert.equal(body.GetByIdParam.MethodMode, "HeaderColumns");
+    assert.ok(Array.isArray(body.GetByIdParam.ColNameToRead));
+    return Response.json({ status: "OK", data: { Id: wrongRecord ? 999 : body.GetByIdParam.EntityId, Auto_FK: 43, RidicContact_FK: 82, Status_FK: 7, UnexpectedPrivateField: "DO_NOT_EXPOSE_DETAIL" } });
+  }
+  if (method === "GetSchemaEntity") return Response.json({ status: "OK", data: { Columns: ["Id", "Auto_FK", "RidicContact_FK", "Status_FK", "DateOfRealization", "PriceWithoutTax"].map(ColumnName => ({ ColumnName, DataType: "test-type", Caption: ColumnName })) } });
   assert.equal(body.GetPageParam.Length, 5);
   assert.equal(body.GetPageParam.Start, 0);
   assert.ok(body.GetPageParam.Columns.every(column => column.Status === 1));
-  return Response.json({ status: "OK", data: { recordsTotal: 12, recordsFiltered: 12, data: [{ Id: 7, Auto_FK_RecordId: 42, RidicContact_FK_RecordId: 81, RidicContact_FK: "DO_NOT_EXPOSE_DRIVER_NAME", DateOfRealization: null, PriceWithoutTax: null }] } });
+  return Response.json({ status: "OK", data: { recordsTotal: 12, recordsFiltered: 12, data: [{ Id: 7, Auto_FK_RecordId: 42, RidicContact_FK_RecordId: 81, RidicContact_FK: "DO_NOT_EXPOSE_DRIVER_NAME", DateOfRealization: null, PriceWithoutTax: null }, { Id: 8, Auto_FK: 43, RidicContact_FK: 82, Status_FK: 7 }, { Id: 9, Auto_FK: "3BI2007", RidicContact_FK: "81", Status_FK: 0 }, { Id: 10, Auto_FK: -1, RidicContact_FK: 1.5, Status_FK: false }] } });
 };
 try {
   const env = { VISTOS_API_BASE_URL: "https://vistos.example.test", VISTOS_API_USERNAME: "test-only", VISTOS_API_PASSWORD: "test-only" };
@@ -40,6 +46,14 @@ try {
     if (entity.entityName === "ServiceList") {
       assert.equal(entity.rows[0].RidicContact_FK.recordId, 81);
       assert.equal(entity.rows[0].Auto_FK.recordId, 42);
+      assert.equal(entity.rows[1].Auto_FK.recordId, 43);
+      assert.equal(entity.rows[1].RidicContact_FK.recordId, 82);
+      assert.equal(entity.rows[1].Status_FK.recordId, 7);
+      for (const row of entity.rows.slice(2)) {
+        assert.equal(row.Auto_FK.recordId, null);
+        assert.equal(row.RidicContact_FK.recordId, null);
+        assert.equal(row.Status_FK.recordId, null);
+      }
     } else {
       assert.equal(entity.rows[0].RidicContact_FK, undefined, "item evidence does not invent a driver field");
       assert.equal(entity.rows[0].Auto_FK, undefined, "item evidence does not invent a vehicle field");
@@ -51,6 +65,21 @@ try {
   }
   assert.equal(JSON.stringify(sample).includes("DO_NOT_EXPOSE_DRIVER_NAME"), false);
   assert.equal(JSON.stringify(sample).includes("test-only"), false, "credentials and sessions never enter evidence responses");
+  const exact = await auditFleetVistosJobEvidence(env, { jobId: 8 });
+  assert.equal(exact.entities[0].detail.requestedId, 8);
+  assert.equal(exact.entities[0].detail.row.Auto_FK.recordId, 43);
+  assert.equal(exact.entities[0].detail.row.RidicContact_FK.recordId, 82);
+  assert.equal(exact.entities[1].detail, undefined);
+  assert.equal(JSON.stringify(exact).includes("DO_NOT_EXPOSE_DETAIL"), false);
+  const beforeInvalid = requests.length;
+  await assert.rejects(auditFleetVistosJobEvidence(env, { jobId: "wrong" }), RangeError);
+  assert.equal(requests.length, beforeInvalid);
+  wrongRecord = true;
+  const mismatch = await auditFleetVistosJobEvidence(env, { jobId: 8 });
+  assert.equal(mismatch.entities[0].status, "blocked");
+  assert.equal(mismatch.entities[0].errorCode, "vistos_record_identity_mismatch");
+  assert.ok(mismatch.entities[0].requiredReadOperations.includes("GetByIdParam"));
+  wrongRecord = false;
   denied = true;
   const blocked = await auditFleetVistosJobEvidence(env, { sample: true });
   assert.equal(blocked.status, "partial");
