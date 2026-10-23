@@ -1,14 +1,14 @@
 import { getVistosPage, getVistosSchemaEntity, loginVistosExecute } from "./vistos-execute-client.js";
 import { vistosSchemaColumnNames, vistosSchemaColumnMetadata } from "./vistos-contacts-audit.js";
 const CANDIDATES = Object.freeze({
-  ServiceList: ["Id", "Number", "IsDone", "Status_FK", "DateOfRealization", "DateStart", "DateEnd", "StartOfResolution", "EndOfResolution", "Auto_FK", "AllocatedVehicle", "RidicContact_FK", "Currency_FK", "PriceWithoutTax", "PriceTax", "PriceWithTax", "MasterParent_FK", "Created", "Modified"],
-  ServiceListItem: ["Id", "ServiceList_FK", "MasterParent_FK", "ContractRow_FK", "Product_FK", "Quantity", "c_OrderedQuantity", "UnitPrice", "ListPrice", "UnitPriceDiscount", "UnitPriceDiscountPercentage", "PriceWithoutTax", "PriceTax", "PriceWithTax", "Currency_FK", "Status_FK", "IsDone", "DateOfRealization", "Created", "Modified"]
+  ServiceList: ["Id", "Number", "IsDone", "Status_FK", "DateOfRealization", "DateStart", "DateEnd", "StartOfResolution", "EndOfResolution", "Auto_FK", "AllocatedVehicle", "RidicContact_FK", "Currency_FK", "PriceWithoutTax", "PriceTax", "PriceWithTax", "TransferredTaxLiability", "MasterParent_FK", "Created", "Modified"],
+  ServiceListItem: ["Id", "ServiceList_FK", "MasterParent_FK", "ContractRow_FK", "Product_FK", "Quantity", "c_OrderedQuantity", "UnitPrice", "ListPrice", "UnitPriceDiscount", "UnitPriceDiscountPercentage", "TaxIncluded", "TaxRate_FK", "PriceWithoutTax", "PriceTax", "PriceWithTax", "Currency_FK", "Status_FK", "IsDone", "DateOfRealization", "Created", "Modified"]
 });
 function scalar(value) { return value === null || ["string", "number", "boolean"].includes(typeof value) ? value : null; }
 function evidenceValue(row, field) {
   if (field.endsWith("_FK") || field === "AllocatedVehicle") {
     const direct = row[field];
-    return { recordId: scalar(row[field + "_RecordId"] ?? direct?.Id ?? direct?.id ?? null), valueShape: Array.isArray(direct) ? "array" : direct === null ? "null" : typeof direct };
+    return { recordId: scalar(row[field + "_RecordId"] ?? direct?.Id ?? direct?.id ?? (Number.isSafeInteger(direct) && direct > 0 ? direct : null)), valueShape: Array.isArray(direct) ? "array" : direct === null ? "null" : typeof direct };
   }
   return scalar(row[field] ?? null);
 }
