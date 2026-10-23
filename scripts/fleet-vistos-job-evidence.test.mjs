@@ -20,9 +20,9 @@ globalThis.fetch = async (url, init) => {
   if (method === "GetByIdParam") {
     assert.equal(body.GetByIdParam.MethodMode, "HeaderColumns");
     assert.ok(Array.isArray(body.GetByIdParam.ColNameToRead));
-    return Response.json({ status: "OK", data: { Id: wrongRecord ? 999 : body.GetByIdParam.EntityId, Auto_FK: 43, RidicContact_FK: 82, Status_FK: 7, UnexpectedPrivateField: "DO_NOT_EXPOSE_DETAIL" } });
+    return Response.json({ status: "OK", data: { Id: wrongRecord ? 999 : body.GetByIdParam.EntityId, Auto_FK: 43, RidicContact_FK: 82, Status_FK: 7, AllocatedVehicle: [43, { Id: 44 }, "DO_NOT_EXPOSE_ARRAY", {}], UnexpectedPrivateField: "DO_NOT_EXPOSE_DETAIL" } });
   }
-  if (method === "GetSchemaEntity") return Response.json({ status: "OK", data: { Columns: ["Id", "Auto_FK", "RidicContact_FK", "Status_FK", "DateOfRealization", "PriceWithoutTax"].map(ColumnName => ({ ColumnName, DataType: "test-type", Caption: ColumnName })) } });
+  if (method === "GetSchemaEntity") return Response.json({ status: "OK", data: { Columns: ["Id", "Auto_FK", "AllocatedVehicle", "RidicContact_FK", "Status_FK", "DateOfRealization", "PriceWithoutTax"].map(ColumnName => ({ ColumnName, DataType: "test-type", Caption: ColumnName })) } });
   assert.equal(body.GetPageParam.Length, 5);
   assert.equal(body.GetPageParam.Start, 0);
   assert.ok(body.GetPageParam.Columns.every(column => column.Status === 1));
@@ -68,6 +68,10 @@ try {
   const exact = await auditFleetVistosJobEvidence(env, { jobId: 8 });
   assert.equal(exact.entities[0].detail.requestedId, 8);
   assert.equal(exact.entities[0].detail.row.Auto_FK.recordId, 43);
+  assert.equal(exact.entities[0].detail.row.AllocatedVehicle.arrayLength, 4);
+  assert.deepEqual(exact.entities[0].detail.row.AllocatedVehicle.recordIds, [43, 44]);
+  assert.equal(exact.entities[0].detail.row.AllocatedVehicle.unresolvedArrayItems, 2);
+  assert.equal(JSON.stringify(exact).includes("DO_NOT_EXPOSE_ARRAY"), false);
   assert.equal(exact.entities[0].detail.row.RidicContact_FK.recordId, 82);
   assert.equal(exact.entities[1].detail, undefined);
   assert.equal(JSON.stringify(exact).includes("DO_NOT_EXPOSE_DETAIL"), false);
