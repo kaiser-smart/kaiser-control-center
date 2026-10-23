@@ -1370,3 +1370,20 @@ export async function syncTcarsLocations(env = {}) {
     locations
   };
 }
+
+
+// Shape-only source audit: never return XML, credentials, people or locations.
+export async function auditTcarsReadEvidence(env = {}) {
+  const results = [];
+  const config = tcarsConfig(env);
+  for (const method of ["vozidlaSeznam", "vozidlaPozice"]) {
+    try {
+      const params = loginDataXml(config) + '<pouzeAktivni xsi:type="xsd:boolean">true</pouzeAktivni>' + (method === "vozidlaSeznam" ? '<zmenyOd xsi:type="xsd:dateTime">2000-01-01T00:00:00</zmenyOd><zaznamyLimit xsi:type="xsd:int">500</zaznamyLimit>' : "");
+      const xml = await tcarsSoapRequest(env, method, params);
+      const tags = [...new Set([...xml.matchAll(/<(?![!?/])(?:[A-Za-z_][\w.-]*:)?([A-Za-z_][\w.-]*)\b/g)].map(match => match[1]))].sort();
+      const parsed = method === "vozidlaSeznam" ? parseTcarsVehiclesXml(xml) : parseTcarsPositionsXml(xml);
+      results.push({ method, status: "response_received", responseBytes: new TextEncoder().encode(xml).length, hasSoapEnvelope: /<(?:[\w.-]+:)?Envelope\b/i.test(xml), hasSoapBody: /<(?:[\w.-]+:)?Body\b/i.test(xml), hasHtml: /<html\b/i.test(xml), challengeMarkerPresent: /cf-chl-|challenge-platform/i.test(xml), responseElementFound: tags.some(tag => tag.toLowerCase() === (method + "Response").toLowerCase()), elementNames: tags.slice(0, 80), elementNamesTruncated: tags.length > 80, parsedCount: parsed.length, expectedFieldsPresent: Object.fromEntries(["vozidloId", "vozidloRz", "poziceId", "poziceVozidlo", "poziceDatumCas"].map(field => [field, new RegExp("<(?:[\\w.-]+:)?" + field + "\\b", "i").test(xml)])) });
+    } catch (error) { results.push({ method, status: "blocked", errorCode: String(error?.code || "tcars_read_failed"), upstreamStatus: Number(error?.status) || null }); }
+  }
+  return { source: "tcars", readOnly: true, writesData: false, exposesRawResponse: false, generatedAt: new Date().toISOString(), methods: results };
+}

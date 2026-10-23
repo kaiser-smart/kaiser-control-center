@@ -78,3 +78,6 @@ jobs:
 
       - name: Cloudflare production build safety
         run: node scripts/pages-cloud-build.test.mjs
+
+      - name: T-Cars read-only response evidence
+        run: node scripts/tcars-read-evidence.test.mjs
