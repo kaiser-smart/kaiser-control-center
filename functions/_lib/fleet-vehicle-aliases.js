@@ -52,13 +52,12 @@ function tcarsAliasStatement(db, point, updatedAt) {
       status, match_method, confidence, metadata_json, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, 'active', 'tcars_readonly_master', 'high', ?, ?, ?)
     ON CONFLICT(external_system, external_key) DO UPDATE SET
-      vehicle_id = excluded.vehicle_id,
-      normalized_license_plate = excluded.normalized_license_plate,
-      status = 'active',
-      match_method = 'tcars_readonly_master',
-      confidence = 'high',
-      metadata_json = excluded.metadata_json,
       updated_at = excluded.updated_at
+    WHERE fleet_vehicle_external_aliases.vehicle_id = excluded.vehicle_id
+      AND fleet_vehicle_external_aliases.normalized_license_plate = excluded.normalized_license_plate
+      AND fleet_vehicle_external_aliases.status = 'active'
+      AND fleet_vehicle_external_aliases.match_method = 'tcars_readonly_master'
+      AND fleet_vehicle_external_aliases.valid_to IS NULL
   `).bind(
     randomId("fleet-alias-tcars"),
     vehicleKey,
@@ -74,14 +73,19 @@ function tcarsAliasStatement(db, point, updatedAt) {
 export async function upsertFleetVehicleAliasesFromTcars(db, points = [], options = {}) {
   const updatedAt = cleanString(options.updatedAt) || new Date().toISOString();
   const unique = new Map();
+  const conflicts = new Set();
   for (const point of Array.isArray(points) ? points : []) {
     const vehicleKey = cleanString(point?.vehicleKey).toLowerCase();
     const plateKey = licensePlateKey(normalizeLicensePlate(point?.licensePlate));
-    if (vehicleKey && plateKey) unique.set(vehicleKey, point);
+    if (vehicleKey && plateKey) {
+      if (unique.has(vehicleKey) && licensePlateKey(unique.get(vehicleKey).licensePlate) !== plateKey) conflicts.add(vehicleKey);
+      unique.set(vehicleKey, point);
+    }
   }
-  const statements = [...unique.values()].map((point) => tcarsAliasStatement(db, point, updatedAt)).filter(Boolean);
+  const statements = [...unique.entries()].filter(([key]) => !conflicts.has(key)).map(([, point]) => tcarsAliasStatement(db, point, updatedAt)).filter(Boolean);
   const results = statements.length ? await runBatches(db, statements) : [];
-  return { seen: unique.size, written: changesFromResults(results), updatedAt };
+  const written = changesFromResults(results);
+  return { seen: unique.size, written, held: unique.size - written, sourceConflicts: conflicts.size, updatedAt };
 }
 
 function aliasVehicle(row, existing = {}) {
