@@ -13,7 +13,7 @@ assert.equal(reviewFuelIdentityRows([tx("stored", { matched_vehicle_id: "other",
 assert.equal(reviewFuelIdentityRows([tx("plate-only", { fuel_chip_id: "" })], [alias("a", "vistos-1")]).rows[0].reviewStatus, "needs_evidence");
 assert.equal(reviewFuelIdentityRows([tx("time", { occurred_at: "2026-10-01T12:00:00" })], [alias("a", "vistos-1")]).rows[0].reviewStatus, "needs_evidence");
 assert.equal(reviewFuelIdentityRows([tx("unknown", { fuel_chip_id: "", license_plate: "" })], []).rows[0].reviewStatus, "unidentifiable");
-for (const extra of [{ metadata_json: "{}" }, { metadata_json: "invalid" }, { valid_from: null }, { valid_to: "2025-01-01T00:00:00Z" }, { metadata_json: JSON.stringify({ historicalIdentityVerified: true, sourceSystem: "orwii" }) }]) {
+for (const extra of [{ metadata_json: "null" }, { metadata_json: "[]" }, { metadata_json: "false" }, { metadata_json: "{}" }, { metadata_json: "invalid" }, { valid_from: null }, { valid_to: "2025-01-01T00:00:00Z" }, { metadata_json: JSON.stringify({ historicalIdentityVerified: true, sourceSystem: "orwii" }) }]) {
   assert.equal(reviewFuelIdentityRows([tx("unproven")], [alias("a", "vistos-1", extra)]).summary.verified, 0);
 }
 assert.equal(reviewFuelIdentityRows([tx("archived", { occurred_at: "2026-10-01T11:59:59Z" })], [{ ...historical[0], status: "historical" }, historical[1]]).rows[0].proposedVehicleId, "vistos-1");
