@@ -5,7 +5,7 @@ import { reviewFuelIdentityRows, loadFuelIdentityReview } from "../functions/_li
 import { upsertFleetVehicleAliasesFromTcars } from "../functions/_lib/fleet-vehicle-aliases.js";
 const alias = (id, vehicle, extra = {}) => ({ id, vehicle_id: vehicle, external_system: "orwii_fuel_chip", external_key: "CHIP1", normalized_license_plate: "1AB2345", status: "active", valid_from: "2026-01-01T00:00:00Z", valid_to: null, metadata_json: JSON.stringify({ historicalIdentityVerified: true, sourceSystem: "orwii", sourceEvidenceId: "source-" + id }), ...extra });
 const tx = (id, extra = {}) => ({ external_id: id, occurred_at: "2026-10-01T12:00:00Z", license_plate: "1AB 2345", fuel_chip_id: "CHIP-1", orwii_vehicle_id: "", matched_vehicle_id: "", match_status: "unmatched", ...extra });
-const historical = [alias("old", "vistos-1", { status: "historical", valid_to: "2026-10-01T12:00:00Z" }), alias("new", "vistos-2", { valid_from: "2026-10-01T12:00:00Z" })];
+const historical = [alias("old", "vistos-1", { status: "active", valid_to: "2026-10-01T12:00:00Z" }), alias("new", "vistos-2", { valid_from: "2026-10-01T12:00:00Z" })];
 assert.equal(reviewFuelIdentityRows([tx("boundary")], historical).rows[0].proposedVehicleId, "vistos-2");
 assert.equal(reviewFuelIdentityRows([tx("before", { occurred_at: "2026-10-01T11:59:59Z" })], historical).rows[0].proposedVehicleId, "vistos-1");
 assert.equal(reviewFuelIdentityRows([tx("conflict")], [alias("a", "vistos-1"), alias("b", "vistos-2")]).rows[0].reviewStatus, "conflict");
@@ -16,6 +16,7 @@ assert.equal(reviewFuelIdentityRows([tx("unknown", { fuel_chip_id: "", license_p
 for (const extra of [{ metadata_json: "{}" }, { metadata_json: "invalid" }, { valid_from: null }, { valid_to: "2025-01-01T00:00:00Z" }, { metadata_json: JSON.stringify({ historicalIdentityVerified: true, sourceSystem: "orwii" }) }]) {
   assert.equal(reviewFuelIdentityRows([tx("unproven")], [alias("a", "vistos-1", extra)]).summary.verified, 0);
 }
+assert.equal(reviewFuelIdentityRows([tx("archived", { occurred_at: "2026-10-01T11:59:59Z" })], [{ ...historical[0], status: "historical" }, historical[1]]).rows[0].proposedVehicleId, "vistos-1");
 const cohort = reviewFuelIdentityRows([tx("original"), tx("new")], [], new Set(["original", "missing"]));
 assert.equal(cohort.originalCohort.expected, 2); assert.equal(cohort.originalCohort.missing, 1); assert.equal(cohort.originalCohort.summary.total, 1);
 const immutable = [tx("legacy", { match_status: "matched", matched_vehicle_id: "1220" })];
