@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import { target, validateLocalRelease, assertCloudflareTarget, assertLiveBaseline } from "./pwa-release.mjs";
+const release = { schema:1, head:"a".repeat(40), base:"b".repeat(40), account:target.account, project:target.project, version:"1.0.0", rollbackDeployment:"11111111-1111-4111-8111-111111111111" };
+const state = { head:release.head, originMain:release.base, branch:target.branch, version:release.version, configChanged:false, clean:true };
+assert.equal(validateLocalRelease(release,state),release);
+for (const patch of [{head:"c".repeat(40)},{originMain:"c".repeat(40)},{branch:"main"},{version:"old"},{configChanged:true},{clean:false}]) assert.throws(()=>validateLocalRelease(release,{...state,...patch}));
+for (const patch of [{account:"wrong"},{project:"wrong"},{schema:2}]) assert.throws(()=>validateLocalRelease({...release,...patch},state));
+const deployment = { Id:release.rollbackDeployment, Environment:"Production", Branch:"main", Source:release.base.slice(0,7), Status:"1 hour ago", Build:`https://dash.cloudflare.com/${target.account}/pages/view/${target.project}/${release.rollbackDeployment}` };
+assertCloudflareTarget(release,[deployment]);
+for (const patch of [{Environment:"Preview"},{Source:"wrong"},{Status:"Failure"},{Build:"https://example.test"}]) assert.throws(()=>assertCloudflareTarget(release,[{...deployment,...patch}]));
+await assertLiveBaseline(release,async()=>new Response('export const buildMeta = {"commit": "bbbbbbb"};'));
+await assert.rejects(()=>assertLiveBaseline(release,async()=>new Response('wrong')));
+console.log("Local release guards: wrong account/project, dirty/moved source, changed production and invalid rollback rejected.");

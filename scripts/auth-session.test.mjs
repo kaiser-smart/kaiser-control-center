@@ -16,6 +16,8 @@ try {
       body: JSON.stringify({ identifier: user.email, code: '123456', rememberMe })
     }) });
     assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.sessionExpiresAt, issuedAt + ttl * 1000);
     const cookie = response.headers.get('set-cookie');
     assert.ok(cookie.includes(`Max-Age=${ttl}`));
     for (const flag of ['HttpOnly', 'Secure', 'SameSite=Lax', 'Path=/']) assert.ok(cookie.includes(flag));
@@ -23,6 +25,8 @@ try {
     assert.equal(session.exp - session.iat, ttl);
     Date.now = () => issuedAt + (ttl - 1) * 1000;
     assert.ok(await verifySession(env, requestFor(cookie)));
+    Date.now = () => issuedAt + ttl * 1000;
+    assert.equal(await verifySession(env, requestFor(cookie)), null);
     Date.now = () => issuedAt + (ttl + 1) * 1000;
     assert.equal(await verifySession(env, requestFor(cookie)), null);
   }
@@ -33,6 +37,7 @@ try {
   assert.equal(denied.status, 401);
   assert.equal(denied.headers.get('set-cookie'), null);
   const cookie = await createSessionCookie(env, user, true);
+  assert.equal(await verifySession(env, requestFor(cookie.split(";")[0] + ".extra")), null);
   const parts = cookie.split(';')[0].split('=');
   const [encoded, signature] = parts[1].split('.');
   const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString());
