@@ -16,6 +16,13 @@ function matches(row, tx) {
     || (row.external_system === "orwii_fuel_chip" && chip(tx.fuel_chip_id) && chip(row.external_key) === chip(tx.fuel_chip_id))
     || (plate(tx.license_plate) && plate(row.normalized_license_plate) === plate(tx.license_plate));
 }
+function candidateAt(row, occurredAt) {
+  const time = Date.parse(occurredAt);
+  const from = row.valid_from ? Date.parse(row.valid_from) : -Infinity;
+  const to = row.valid_to ? Date.parse(row.valid_to) : Infinity;
+  // Unknown times remain unproven candidates, never verified identities.
+  return !Number.isFinite(time) || Number.isNaN(from) || Number.isNaN(to) || (time >= from && time < to);
+}
 export function reviewFuelIdentityRows(transactions = [], aliases = [], originalIds = null) {
   const verified = aliases.flatMap(row => {
     const meta = metadata(row);
@@ -26,7 +33,7 @@ export function reviewFuelIdentityRows(transactions = [], aliases = [], original
     return [alias, ...(plate(row.normalized_license_plate) ? [{ ...alias, external_system: "license_plate", external_key: plate(row.normalized_license_plate) }] : [])];
   });
   const rows = transactions.map(tx => {
-    const candidates = [...new Set(aliases.filter(row => row.status === "active" && matches(row, tx)).map(row => text(row.vehicle_id)).filter(Boolean))].sort();
+    const candidates = [...new Set(aliases.filter(row => ["active", "historical"].includes(row.status) && candidateAt(row, tx.occurred_at) && matches(row, tx)).map(row => text(row.vehicle_id)).filter(Boolean))].sort();
     const signals = [
       { system: "orwii_vehicle_id", value: tx.orwii_vehicle_id },
       { system: "orwii_fuel_chip", value: tx.fuel_chip_id },
