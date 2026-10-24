@@ -6,7 +6,10 @@ const chip = value => text(value).toLowerCase().replace(/[^a-z0-9]/g, "");
 const MAX_ROWS = 20000;
 export const FUEL_IDENTITY_REVIEW_VERSION = "1";
 function metadata(row) {
-  try { return JSON.parse(row.metadata_json || "{}"); } catch { return {}; }
+  try {
+    const parsed = JSON.parse(row.metadata_json || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch { return {}; }
 }
 function identityError(code, status = 503) {
   return Object.assign(new Error("Podklady pro kontrolu identit nejsou úplné."), { code, status });
