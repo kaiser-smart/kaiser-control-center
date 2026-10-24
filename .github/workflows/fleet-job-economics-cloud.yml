@@ -1,9 +1,13 @@
 name: Fleet job economics cloud checks
 on:
   push:
-    branches: ["codex/cloud-fuel-recovery-20261022"]
+    branches: ["codex/cloud-fuel-recovery-20261022", "codex/fleet-identity-audit-20261024"]
   pull_request:
     paths:
+      - "functions/_lib/fleet-fuel-identity-review.js"
+      - "functions/_lib/fleet-vehicle-aliases.js"
+      - "functions/api/fleet/fuel-identity-review.js"
+      - "scripts/fleet-fuel-identity-review.test.mjs"
       - "functions/_lib/fleet-temporal-evidence.js"
       - "functions/_lib/fleet-vistos-job-evidence.js"
       - "functions/api/fleet/vistos-job-evidence.js"
@@ -33,6 +37,10 @@ jobs:
           git diff -- src/app.js
       - name: T-Cars inline SOAP arrays
         run: node scripts/tcars-inline-array.test.mjs
+      - name: Historical fuel identity and alias preservation
+        run: |
+          node scripts/fleet-fuel-identity-review.test.mjs
+          node scripts/fleet-vehicle-aliases.test.mjs
       - name: JavaScript syntax
         run: npm run lint
       - name: Isolated temporal evidence and contribution tests
