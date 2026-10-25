@@ -1,6 +1,26 @@
 // Derived from the supplied v1.1 registry; candidates are NOT verified mappings.
 export const VISTOS_FIELD_REGISTRY = [
   {
+    "logical_key": "job.issuer",
+    "label_cs": "Výstavce",
+    "source_entity": "ServiceList",
+    "candidate_source_fields": ["Issuer_FK"],
+    "disclosure_class": "operational",
+    "evidence": "Live DbColumn 137 + ServiceList 181458 / UI 2026-10-25",
+    "expected_normalized_type": "reference",
+    "ui_section": "overview"
+  },
+  {
+    "logical_key": "job.vehicle_record",
+    "label_cs": "Vozidlo",
+    "source_entity": "ServiceList",
+    "candidate_source_fields": ["Vozidlo_FK"],
+    "disclosure_class": "operational",
+    "evidence": "Live dbo.Vehicle 172 + ServiceList 181458 / UI 2026-10-25",
+    "expected_normalized_type": "reference",
+    "ui_section": "execution"
+  },
+  {
     "logical_key": "job.id",
     "label_cs": "ID zakázkového listu",
     "source_entity": "ServiceList",

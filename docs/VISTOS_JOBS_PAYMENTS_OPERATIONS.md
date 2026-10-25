@@ -74,3 +74,13 @@ Zbývá živě ověřit firemní a časový kontrakt, velikost detailů/položek
 Chyba oprávnění nebo načtení Zakázek zobrazuje konkrétní důvod a bezpečné opakování GET. Nepředstírá prázdný seznam, nulové počty ani potvrzenou historii. Chyba po změně filtru odstraní staré výsledky, které neodpovídají novému dotazu. Zavření detailu vrací focus na skutečné viditelné tlačítko, včetně mobilních karet.
 
 Izolovaný WebKit test `scripts/vistos-jobs-browser.test.mjs` ověřuje 390 a 1440 px: 403 vs. prázdný úspěšný výsledek, opakované načtení, chybu nového filtru, opožděnou odpověď, bezpečné zobrazení zdrojového HTML jako textu, Escape a návrat focusu, vodorovné přetékání. Používá syntetická data a blokuje externí síť; nedokazuje produkční import ani fyzický iPhone. Spuštění přes `npm run test:vistos-jobs-browser`, s dostupným Playwright/WebKit; alternativní modul/binárky lze určit `PLAYWRIGHT_MODULE_PATH` a `PLAYWRIGHT_BROWSERS_PATH`.
+
+## Živé mapování 2026-10-25 / 0.1.852
+
+Přihlášený read-audit (20:31 UTC) potvrzuje ServiceList 183131 a ServiceListItem 403480; oba stabilní vzorky Id asc. Metadata DbObject 137/138 a všechny rodiče DbColumn byly ověřeny. Issuer_FK odkazuje na dbo.Directory (49), AssignedToCompany_FK na crm.User (35), Vozidlo_FK na dbo.Vehicle (172). Auto_FK a AllocatedVehicle odkazují na crm.Enumeration (11); jejich ID nelze slučovat s ID vozidel.
+
+Nezávislé čtení uživatelského rozhraní Vistos 3.3.9.10, ServiceList 181458, potvrdilo výstavce Company/1, Kaiser servis, IČO 26274906; datum realizace 23.9.2026; Začátek/Konec 23.9.2026 13:03–14:03; vozidlo Vehicle/113. Vistos UI i API ukazují stejné lokální hodnoty. To samo nedokazuje časové pásmo ani skutečnou dobu práce. Status 14525 je v tomto záznamu „Vyfakturovaná“; není bez dalšího důkazem GPS provedení. Produkční zdroj nebyl změněn.
+
+Readiness 20:42 UTC: CORE 267366400 B, ARCHIVE 2361745408 B, AUDIT 1240596480 B. Kontrakty, granty, zdrojové záznamy a checkpointy stále prázdné. Pravidla neaktivní. Kompaktní listové vzorky: hlavičky 5749–5843 B, položky 3472–3574 B. Odhad detailů, ověření filtrů a aktivace stále zbývají.
+
+Audit podporuje omezené čtení podle Modified_From/To (max. 92 dní, doslovné lokální časy) nebo jedné rodičovské zakázky ServiceList_FK. Každý vrácený řádek je kontrolován proti filtru. Prázdná odpověď ani správný vzorek se neoznačují za úplný důkaz filtru. Přibyla velikost sloučeného detailu. Opraven chybějící import časového resolveru při průchodu sousedními zakázkami; integrační test nyní projde skutečnou větví obohacení v izolované databázi.

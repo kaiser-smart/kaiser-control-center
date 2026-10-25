@@ -42,8 +42,22 @@ async function jobFieldMetadata(env,session,entity) {
   }catch(error){return {status:'unavailable',errorCode:/^[a-z0-9_]+$/.test(error.code||'')?error.code:'metadata_unavailable'};}
 }
 function ascending(rows) { return rows.every((r,i) => numericId(r.Id) && (i===0 || BigInt(r.Id)>BigInt(rows[i-1].Id))); }
-export async function auditVistosRead(env,{entity='ServiceList',id=null,start=0}={}) {
+export function jobAuditFilter({entity,modifiedFrom=null,modifiedTo=null,parentId=null}) {
+  if(!modifiedFrom&&!modifiedTo&&!parentId)return null;
+  const invalid=()=>{throw Object.assign(new Error('invalid_job_audit_filter'),{code:'invalid_job_audit_filter',status:400});};
+  if(!['ServiceList','ServiceListItem'].includes(entity))invalid();
+  if(parentId) {
+    if(entity!=='ServiceListItem'||!numericId(parentId)||modifiedFrom||modifiedTo)invalid();
+    return {ServiceList_FK:[Number(parentId)]};
+  }
+  // Preserve source wall-clock syntax. This probe does not assert a time zone.
+  const valid=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)&&Number.isFinite(Date.parse(value+'Z'))&&new Date(value+'Z').toISOString().slice(0,19)===value;
+  if(!valid(modifiedFrom)||!valid(modifiedTo)||modifiedFrom>=modifiedTo||Date.parse(modifiedTo+'Z')-Date.parse(modifiedFrom+'Z')>92*86400000)invalid();
+  return {Modified_From:modifiedFrom,Modified_To:modifiedTo};
+}
+export async function auditVistosRead(env,{entity='ServiceList',id=null,start=0,modifiedFrom=null,modifiedTo=null,parentId=null}={}) {
   if (!AUDIT_ENTITIES.includes(entity)||!Number.isSafeInteger(start)||start<0||start>10000000||(id!==null&&!numericId(id))) throw Object.assign(new Error('invalid_read_audit'),{code:'invalid_read_audit',status:400});
+  const filter=jobAuditFilter({entity,modifiedFrom,modifiedTo,parentId});
   const readEnv={...env,VISTOS_EXACT_DECIMALS:true};
   const session=await loginVistosExecute(readEnv),schema=await getVistosSchemaEntity(readEnv,session,entity);
   const fields=vistosSchemaColumnNames(schema).filter(k=>!EXCLUDE.test(k));
@@ -53,9 +67,16 @@ export async function auditVistosRead(env,{entity='ServiceList',id=null,start=0}
   if (!fields.includes('Id')) return {...result,status:'schema_without_id'};
   // Bounded business read: 3 pages of 5 and one detail, plus at most two metadata reads.
   const order=[{ColumnName:'Id',Direction:'asc'}];
-  const first=await getVistosPage(readEnv,session,entity,fields,null,start,5,{order});
-  const second=await getVistosPage(readEnv,session,entity,fields,null,start+5,5,{order});
-  const repeat=await getVistosPage(readEnv,session,entity,fields,null,start,5,{order});
+  const first=await getVistosPage(readEnv,session,entity,fields,filter,start,5,{order});
+  const second=await getVistosPage(readEnv,session,entity,fields,filter,start+5,5,{order});
+  const repeat=await getVistosPage(readEnv,session,entity,fields,filter,start,5,{order});
+  if(filter) {
+    const rows=[...first.rows,...second.rows,...repeat.rows];
+    const matches=row=>parentId?referenceIds(row,'ServiceList_FK','list').includes(String(parentId)):
+      typeof row.Modified==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(row.Modified)&&row.Modified>=modifiedFrom&&row.Modified<modifiedTo;
+    result.filterEvidence={requested:filter,rowsChecked:rows.length,allObservedRowsMatch:rows.every(matches),nonEmpty:first.rows.length>0,
+      excludedRowsReported:first.countEvidence.totalReported&&first.countEvidence.filteredReported&&first.filtered<first.total,completeProof:false};
+  }
   result.count={total:first.total,filtered:first.filtered,evidence:first.countEvidence};
   result.order={requested:order,ascending:ascending([...first.rows,...second.rows]),repeatStable:JSON.stringify(first.rows.map(r=>r.Id))===JSON.stringify(repeat.rows.map(r=>r.Id)),
     countStable:first.filtered===second.filtered&&first.filtered===repeat.filtered,ids:[...first.rows,...second.rows].map(r=>numericId(r.Id))};
@@ -69,6 +90,8 @@ export async function auditVistosRead(env,{entity='ServiceList',id=null,start=0}
       const {row,diagnostics}=await getVistosById(readEnv,session,entity,detailId,fields);
       if(!row||numericId(row.Id)!==detailId)throw Object.assign(new Error('vistos_record_identity_mismatch'),{code:'vistos_record_identity_mismatch'});
       result.detail={...readAuditRecord(row,'detail',entity),requestedId:detailId};
+      const merged=mergeSourceFields(mergeSourceFields({},first.rows.find(r=>numericId(r.Id)===detailId)||{},{entity,observedAt:result.testedAt}),row,{entity,kind:'detail',observedAt:result.testedAt});
+      result.detail.storage={sourceBytes:new TextEncoder().encode(JSON.stringify(row)).length,mergedCompactFieldBytes:new TextEncoder().encode(encodeSourceFields(merged,entity)).length};
     } catch(error) {result.detail={requestedId:detailId,errorCode:/^[a-z0-9_]+$/.test(error.code||'')?error.code:'detail_unavailable',upstreamStatus:error.upstreamStatus||null};}
   }
   result.metadata=await jobFieldMetadata(readEnv,session,entity);

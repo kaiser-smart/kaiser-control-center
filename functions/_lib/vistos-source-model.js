@@ -8,7 +8,10 @@ export function registryFor(entity) {
   for (const entry of VISTOS_FIELD_REGISTRY.filter(f => f.source_entity === entity)) {
     for (const field of entry.candidate_source_fields) {
       result[field] = {label:entry.label_cs, disclosure:entry.disclosure_class, section:entry.ui_section};
-      if (field.endsWith('_FK')) result[`${field}_RecordId`] = result[field];
+      if (field.endsWith('_FK')) {
+        result[`${field}_RecordId`] = result[field];
+        result[`${field}_Caption`] = result[field];
+      }
     }
   }
   return result;
@@ -93,7 +96,9 @@ export async function normalizeSourceRecord(row, {installation,entity,contract={
   const end=rules.plannedEndField && verified(rules.plannedEndField)?sourceTime(values[rules.plannedEndField]):null;
   const rawStatus=rules.statusField?values[rules.statusField]:null;
   const status=rules.statusMap?.[String(rawStatus)]||'unverified';
-  const vehicles=[...new Set((rules.vehicleFields||['Auto_FK','AllocatedVehicle']).flatMap(refs))];
+  // Live metadata distinguishes dbo.Vehicle from crm.Enumeration. Never combine
+  // their numeric IDs: equal numbers do not identify the same vehicle.
+  const vehicles=[...new Set((rules.vehicleFields||['Vozidlo_FK']).flatMap(refs))];
   const driver=refs('RidicContact_FK')[0]||null;
   const parent=rules.parentField?refs(rules.parentField)[0]||null:null;
   const semanticContent=Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,{value:v.value,availability:v.availability,source:v.source,disclosure:v.disclosure}]));

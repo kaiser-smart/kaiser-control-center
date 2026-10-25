@@ -64,3 +64,25 @@ test('job metadata must name the expected entity and every column must belong to
   wrongParent=true;assert.equal((await auditVistosRead(env)).metadata.status,'metadata_filter_unverified');
  }finally{globalThis.fetch=saved;}
 });
+
+test('bounded job filters preserve wall time, detect ignored filters and reject unrelated entities',async()=>{
+ const {jobAuditFilter}=await import('../functions/_lib/vistos-read-audit.js');
+ const window={entity:'ServiceList',modifiedFrom:'2026-09-24T00:00:00',modifiedTo:'2026-09-25T00:00:00'};
+ assert.deepEqual(jobAuditFilter(window),{Modified_From:window.modifiedFrom,Modified_To:window.modifiedTo});
+ assert.deepEqual(jobAuditFilter({entity:'ServiceListItem',parentId:'22'}),{ServiceList_FK:[22]});
+ for(const change of [{entity:'Payment'},{modifiedTo:'2026-02-30T00:00:00'},{modifiedTo:'2027-09-25T00:00:00'},{parentId:'22'},{modifiedFrom:window.modifiedFrom+'Z'}])assert.throws(()=>jobAuditFilter({...window,...change}));
+ const saved=globalThis.fetch;let ignored=false;
+ globalThis.fetch=async(url,init)=>{
+  const b=JSON.parse(init.body);
+  if(b.LoginParam)return Response.json({status:'OK'},{headers:{'Set-Cookie':'VistosAccessToken=fixture; Path=/'}});
+  if(b.GetSchemaEntity)return Response.json({status:'OK',data:{Columns:['Id','Modified'].map(ColumnName=>({ColumnName}))}});
+  if(b.GetByIdParam)return Response.json({status:'OK',data:{Id:1,Modified:'2026-09-24T12:00:00.123'}});
+  assert.deepEqual(b.GetPageParam.Filter,{Modified_From:window.modifiedFrom,Modified_To:window.modifiedTo});
+  return Response.json({status:'OK',data:{recordsTotal:100,recordsFiltered:1,data:b.GetPageParam.Start?[]:[{Id:1,Modified:ignored?'2014-01-01T00:00:00':'2026-09-24T12:00:00.123'}]}});
+ };
+ try{
+  const env={VISTOS_API_BASE_URL:'https://fixture.invalid',VISTOS_API_USERNAME:'x',VISTOS_API_PASSWORD:'x'};
+  const a=await auditVistosRead(env,window);assert.equal(a.filterEvidence.allObservedRowsMatch,true);assert.equal(a.filterEvidence.excludedRowsReported,true);assert.equal(a.filterEvidence.completeProof,false);assert.ok(a.detail.storage.mergedCompactFieldBytes>0);
+  ignored=true;assert.equal((await auditVistosRead(env,window)).filterEvidence.allObservedRowsMatch,false);
+ }finally{globalThis.fetch=saved;}
+});
