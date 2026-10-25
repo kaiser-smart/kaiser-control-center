@@ -20,9 +20,9 @@ export function fixtureDb(){
  CREATE TABLE receivable_payment_transactions(id TEXT PRIMARY KEY,raw_payload TEXT,bank_transaction_id TEXT,booking_date TEXT,currency TEXT,source TEXT);
  CREATE TABLE receivable_invoices(id TEXT PRIMARY KEY,visto_invoice_id TEXT);`);
  for(const file of ['archive/0003_vistos_jobs_payments.sql','core/0006_vistos_integration_controls.sql','audit/0005_vistos_jobs_payments_audit.sql'])sqlite.exec(readFileSync(new URL('../migrations/modular/'+file,import.meta.url),'utf8'));
- const db={sqlite,failBatch:false,prepare(sql){let values=[];return {sql,bind(...v){assert.ok(v.length<=100);values=v;return this;},async first(){return sqlite.prepare(sql).get(...values)||null;},async all(){return {results:sqlite.prepare(sql).all(...values)};},async run(){const r=sqlite.prepare(sql).run(...values);return {meta:{changes:Number(r.changes)}};}};},async batch(stmts){sqlite.exec('BEGIN');try{const output=[];for(const stmt of stmts){output.push(await stmt.run());if(db.failBatch&&stmt.sql.includes('vistos_sync_checkpoints SET offset')){db.failBatch=false;throw Error('injected checkpoint crash');}}sqlite.exec('COMMIT');return output;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};return db;
+ const db={sqlite,failBatch:false,prepare(sql){let values=[];return {sql,bind(...v){assert.ok(v.length<=100);values=v;return this;},async first(){return sqlite.prepare(sql).get(...values)||null;},async all(){return {results:sqlite.prepare(sql).all(...values),meta:{size_after:1024}};},async run(){const r=sqlite.prepare(sql).run(...values);return {meta:{changes:Number(r.changes)}};}};},async batch(stmts){sqlite.exec('BEGIN');try{const output=[];for(const stmt of stmts){output.push(await stmt.run());if(db.failBatch&&stmt.sql.includes('vistos_sync_checkpoints SET offset')){db.failBatch=false;throw Error('injected checkpoint crash');}}sqlite.exec('COMMIT');return output;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};return db;
 }
-const mapping={apiOrigin:'https://fixture.invalid',installation:'test',revision:'fixture-v1',companyIds:['1'],capacityEvidence:{approvedAt:'2026-10-01'},entities:{ServiceList:{readVerified:true,orderVerified:true,modifiedFilterVerified:true,fixedCompanyId:'1',verifiedFields:['Number','Planned','Customer'],plannedField:'Planned',numberField:'Number',customerField:'Customer',idOrder:'Id asc'}}};
+const mapping={apiOrigin:'https://fixture.invalid',installation:'test',revision:'fixture-v1',companyIds:['1'],capacityEvidence:{approvedAt:'2026-10-01',estimateEvidenceId:'fixture-estimate',domains:Object.fromEntries(['core','archive','audit'].map(d=>[d,{maxSizeBytes:10000000}]))},entities:{ServiceList:{readVerified:true,orderVerified:true,modifiedFilterVerified:true,fixedCompanyId:'1',verifiedFields:['Number','Planned','Customer'],plannedField:'Planned',numberField:'Number',customerField:'Customer',idOrder:'Id asc'}}};
 function environment(db,contract=mapping){db.sqlite.prepare('INSERT OR REPLACE INTO vistos_integration_contracts VALUES(?,?,?,?,?)').run('test',contract.revision,JSON.stringify(contract),'fixture','2026-10-25');return {DB_CORE:db,DB_ARCHIVE:db,DB_AUDIT:db,VISTOS_READ_SYNC_ENABLED:'true',VISTOS_INSTALLATION_ID:'test',VISTOS_API_BASE_URL:'https://fixture.invalid'};}
 
 test('J06-J08/J11/S02: precise decimals, availability, source identities, scoped disclosure',async()=>{
@@ -224,4 +224,37 @@ test('J10/S01: authenticated backend paging/history and forbidden finance/compan
  db.sqlite.prepare('INSERT INTO receivable_payment_transactions VALUES(?,?,?,?,?,?)').run('tx',JSON.stringify({amount:'100.00',currency:'CZK',account:'fixture-bank'}),'bank-id','2026-10-24','CZK','KB');
  user.permissions.push({moduleId:'jobs',action:'view_finance',allowed:true});env.AUTH_USERS_JSON=JSON.stringify([user]);
  const transfers=await call('transfer-list','/api/receivables/vistos/payment-transfers');assert.equal(transfers.status,200);const listed=await transfers.json();assert.equal(listed.candidates.length,1);assert.equal(listed.candidates[0].companyId,'1');assert.equal(listed.candidates[0].transactionAmount,'100.00');db.sqlite.close();
+});
+
+test('Jobs detail-backed import retains list fields, checks identity, and rolls back a failed page',async()=>{
+ const db=fixtureDb(),contract=structuredClone(mapping);
+ contract.entities.ServiceList={...contract.entities.ServiceList,detailOnImport:true,detailVerified:true,companyField:'Issuer_FK'};
+ delete contract.entities.ServiceList.fixedCompanyId;
+ const env=environment(db,contract),source=async()=>({rows:[{Id:1,Number:'Z-1'},{Id:2,Number:'Z-2'}],filtered:2,countEvidence:{filteredReported:true}});
+ let mismatch=true;
+ const detailSource=async id=>({Id:mismatch&&id==='2'?99:Number(id),Issuer_FK:1,Auto_FK:'22',Modified:'2026-10-25T09:00:00Z'});
+ await assert.rejects(syncVistosBatch(env,{installation:'test',entity:'ServiceList',source,detailSource}),e=>e.code==='vistos_detail_identity_mismatch');
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM vistos_source_records').get().n,0);
+ assert.equal(db.sqlite.prepare('SELECT offset FROM vistos_sync_checkpoints').get().offset,0);
+ mismatch=false;await syncVistosBatch(env,{installation:'test',entity:'ServiceList',source,detailSource});
+ const rows=db.sqlite.prepare('SELECT * FROM vistos_source_records ORDER BY source_id').all();
+ assert.equal(rows.length,2);assert.equal(rows[0].company_id,'1');assert.equal(rows[0].number,'Z-1');assert.ok(rows[0].detail_at);assert.equal(rows[0].vehicle_ids_json,'["22"]');
+ const listAgain=await normalizeSourceRecord({Id:1,Number:'Z-1',Modified:'2026-10-25T09:00:00Z'},{installation:'test',entity:'ServiceList',contract,previous:rows[0]});
+ assert.equal(listAgain.company_id,'1');assert.equal(listAgain.vehicle_ids_json,'["22"]');
+ db.sqlite.close();
+});
+
+test('Jobs items inherit company from exact parent in the same installation, never a customer',async()=>{
+ const {normalizeImportedRecord}=await import('../functions/_lib/vistos-integration-store.js');
+ const db=fixtureDb(),contract=structuredClone(mapping);
+ contract.entities.ServiceListItem={parentField:'ServiceList_FK',inheritCompanyFromParent:true,verifiedFields:['ServiceList_FK']};
+ const env=environment(db,contract);
+ await persistVerifiedSourceReadback(db,'other','ServiceList',{Id:8,Number:'foreign'},contract);
+ const options={installation:'test',entity:'ServiceListItem',contract};
+ const unknown=await normalizeImportedRecord(db,{Id:1,ServiceList_FK_RecordId:8,CustomerCompany_FK_RecordId:1},options);
+ assert.equal(unknown.company_id,null);assert.equal(unknown.parent_id,'8');
+ await persistVerifiedSourceReadback(db,'test','ServiceList',{Id:8,Number:'own'},contract);
+ const known=await normalizeImportedRecord(db,{Id:1,ServiceList_FK_RecordId:8},options);
+ assert.equal(known.company_id,'1');assert.notEqual(known.fingerprint,unknown.fingerprint);
+ db.sqlite.close();
 });

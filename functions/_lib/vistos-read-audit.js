@@ -1,7 +1,7 @@
 import {getVistosById, getVistosPage, getVistosSchemaEntity, loginVistosExecute} from './vistos-execute-client.js';
 import {vistosSchemaColumnNames} from './vistos-contacts-audit.js';
 import {numericId, referenceIds} from './vistos-values.js';
-import {mergeSourceFields} from './vistos-source-model.js';
+import {mergeSourceFields,encodeSourceFields} from './vistos-source-model.js';
 
 // Installation diagnosis exposes identifiers and availability, never source financial or personal values.
 // No permissions, contracts, checkpoints or source records are changed by this probe.
@@ -9,7 +9,7 @@ export const AUDIT_ENTITIES = ['ServiceList', 'ServiceListItem', 'InvoiceIssued'
 const EXCLUDE = /password|passwd|secret|token|cookie|authorization|credential/i;
 const ID_FIELDS = ['AssignedToCompany_FK', 'Issuer_FK', 'BusinessUnit_FK', 'Evidovatnafirmu', 'CustomerCompany_FK',
   'CustomerBranch_FK', 'ServiceList_FK', 'MasterParent_FK', 'Contract_FK', 'ContractRow_FK', 'InvoiceIssued_FK',
-  'Auto_FK', 'AllocatedVehicle', 'RidicContact_FK', 'Status_FK', 'Type_FK', 'Currency_FK', 'Product_FK', 'UOM_FK'];
+  'Auto_FK', 'Vozidlo_FK', 'AllocatedVehicle', 'RidicContact_FK', 'Status_FK', 'Type_FK', 'Currency_FK', 'Product_FK', 'UOM_FK'];
 const TIME_FIELDS = ['Created', 'Modified', 'DateOfServiceList', 'DateOfRealization', 'DateStart', 'DateEnd', 'StartOfResolution', 'EndOfResolution'];
 function shape(value) { return value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value; }
 export function readAuditRecord(row, kind, entity) {
@@ -22,6 +22,25 @@ export function readAuditRecord(row, kind, entity) {
   if (entity === 'BusinessUnit') result.company = Object.fromEntries(['Name','CompanyName','IdentificationNumber','ICO'].filter(k=>typeof row[k]==='string').map(k=>[k,row[k].slice(0,160)]));
   return result;
 }
+// Metadata object IDs were previously documented for this installation. Validate the
+// entity name and every parent reference; an ignored metadata filter is not evidence.
+async function jobFieldMetadata(env,session,entity) {
+  const objectId={ServiceList:137,ServiceListItem:138}[entity];
+  if(!objectId)return null;
+  try {
+    const {row:object}=await getVistosById(env,session,'DbObject',String(objectId),['Id','Name','EntityName','TableName','Caption']);
+    if(numericId(object?.Id)!==String(objectId)||!['Name','EntityName','TableName'].some(k=>String(object[k]||'').split('.').at(-1)===entity))return {status:'object_identity_unverified'};
+    const columns=['Id','Name','Caption','ColumnName','DbColumnName','DbObject_FK','Type_FK','DataType','LocalizationString','ReferenceDbObject_FK'];
+    const page=await getVistosPage(env,session,'DbColumn',columns,{DbObject_FK:objectId},0,500,{order:'Id asc'});
+    if(!page.rows.every(r=>referenceIds(r,'DbObject_FK','list').includes(String(objectId))))return {status:'metadata_filter_unverified'};
+    const scalar=v=>typeof v==='string'?v.slice(0,250):typeof v==='number'?v:null;
+    return {status:'read',objectId:String(objectId),complete:page.countEvidence.filteredReported&&page.filtered===page.rows.length,
+      fields:page.rows.filter(r=>!EXCLUDE.test(String(r.ColumnName||r.DbColumnName||r.Name||''))).map(r=>({
+        field:scalar(r.ColumnName||r.DbColumnName||r.Name),caption:scalar(r.LocalizationString||r.Caption),
+        datatype:scalar(r.DataType||r.Type_FK),reference:scalar(r.ReferenceDbObject_FK),referenceIds:referenceIds(r,'ReferenceDbObject_FK','list')
+      }))};
+  }catch(error){return {status:'unavailable',errorCode:/^[a-z0-9_]+$/.test(error.code||'')?error.code:'metadata_unavailable'};}
+}
 function ascending(rows) { return rows.every((r,i) => numericId(r.Id) && (i===0 || BigInt(r.Id)>BigInt(rows[i-1].Id))); }
 export async function auditVistosRead(env,{entity='ServiceList',id=null,start=0}={}) {
   if (!AUDIT_ENTITIES.includes(entity)||!Number.isSafeInteger(start)||start<0||start>10000000||(id!==null&&!numericId(id))) throw Object.assign(new Error('invalid_read_audit'),{code:'invalid_read_audit',status:400});
@@ -32,7 +51,7 @@ export async function auditVistosRead(env,{entity='ServiceList',id=null,start=0}
   const result={testedAt:new Date().toISOString(),entity,apiOrigin:base.origin,installationPath:base.pathname,
     readOnly:true,writesVistos:false,writesD1:Number(env.VISTOS_SHARED_REQUESTS_PER_MINUTE)>0,writesBusinessData:false,completeImport:false,fields};
   if (!fields.includes('Id')) return {...result,status:'schema_without_id'};
-  // This is a bounded diagnostic: 3 pages of 5 and at most one explicit detail.
+  // Bounded business read: 3 pages of 5 and one detail, plus at most two metadata reads.
   const order=[{ColumnName:'Id',Direction:'asc'}];
   const first=await getVistosPage(readEnv,session,entity,fields,null,start,5,{order});
   const second=await getVistosPage(readEnv,session,entity,fields,null,start+5,5,{order});
@@ -42,7 +61,8 @@ export async function auditVistosRead(env,{entity='ServiceList',id=null,start=0}
     countStable:first.filtered===second.filtered&&first.filtered===repeat.filtered,ids:[...first.rows,...second.rows].map(r=>numericId(r.Id))};
   result.list=first.rows.map(r=>readAuditRecord(r,'list',entity));
   result.storageSample={rows:first.rows.length,sourceBytes:first.rows.map(r=>new TextEncoder().encode(JSON.stringify(r)).length),
-    fieldEnvelopeBytes:first.rows.map(r=>new TextEncoder().encode(JSON.stringify(mergeSourceFields({},r,{entity,observedAt:result.testedAt}))).length)};
+    fieldEnvelopeBytes:first.rows.map(r=>new TextEncoder().encode(JSON.stringify(mergeSourceFields({},r,{entity,observedAt:result.testedAt}))).length),
+    compactFieldBytes:first.rows.map(r=>new TextEncoder().encode(encodeSourceFields(mergeSourceFields({},r,{entity,observedAt:result.testedAt}),entity)).length)};
   const detailId=id||numericId(first.rows[0]?.Id);
   if(detailId) {
     try {
@@ -51,6 +71,7 @@ export async function auditVistosRead(env,{entity='ServiceList',id=null,start=0}
       result.detail={...readAuditRecord(row,'detail',entity),requestedId:detailId};
     } catch(error) {result.detail={requestedId:detailId,errorCode:/^[a-z0-9_]+$/.test(error.code||'')?error.code:'detail_unavailable',upstreamStatus:error.upstreamStatus||null};}
   }
+  result.metadata=await jobFieldMetadata(readEnv,session,entity);
   result.status='read_complete';
   return result;
 }

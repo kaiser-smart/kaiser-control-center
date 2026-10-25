@@ -3,7 +3,7 @@ import { deriveJobExecution, storeExecutionEvidence, temporalVehicle } from './v
 import { loadJobTrackingInterval } from './vehicle-tracking-history.js';
 import { fetchTcarsVehicleTrips } from './tcars-client.js';
 import { sourceTime, referenceIds } from './vistos-values.js';
-import { fieldValues } from './vistos-source-model.js';
+import { decodeSourceFields, fieldValues } from './vistos-source-model.js';
 import { pragueDayBounds } from './vistos-time.js';
 
 const day=value=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
@@ -18,7 +18,7 @@ export function verifiedTcarsTime(value,zone) {
 }
 function verifiedAliases(rows){return rows.map(row=>{let meta={};try{meta=JSON.parse(row.metadata_json||'{}');}catch{}return {...row,verified:meta.verified===true,source_system:meta.source_system};});}
 export async function enrichJobExecution(env,job,contract,{now=new Date(),tripReader=fetchTcarsVehicleTrips}={}) {
-  const db=integrationDb(env),tracking=contract.tracking||{},values=fieldValues(JSON.parse(job.fields_json));
+  const db=integrationDb(env),tracking=contract.tracking||{},values=fieldValues(decodeSourceFields(job.fields_json));
   let window={verified:false};
   if(job.planned_start&&job.planned_end&&job.planned_end>job.planned_start)window={verified:true,from:new Date(Date.parse(job.planned_start)-7200000).toISOString(),to:new Date(Date.parse(job.planned_end)+7200000).toISOString()};
   else if(job.planned_day)window={verified:true,...pragueDayBounds(job.planned_day)};

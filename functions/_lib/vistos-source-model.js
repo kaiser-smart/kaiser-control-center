@@ -13,6 +13,32 @@ export function registryFor(entity) {
   }
   return result;
 }
+// Storage v1 interns repeated provenance, availability and disclosure metadata once per
+// record. Values (including null/empty/zero) and the absence of a value are lossless.
+// Only presentation labels/sections from the registry are regenerated; disclosure
+// remains persisted so a registry edit cannot accidentally expose protected data.
+export function encodeSourceFields(fields, entity) {
+  const registry=registryFor(entity), metadata=[], indexes=new Map(), entries={};
+  for (const [key,field] of Object.entries(fields)) {
+    const {value,...meta}=field;
+    if(meta.label===(registry[key]?.label||key))delete meta.label;
+    if(meta.section===(registry[key]?.section||'all'))delete meta.section;
+    const signature=stableJson(meta);
+    if(!indexes.has(signature)){indexes.set(signature,metadata.length);metadata.push(meta);}
+    entries[key]=Object.hasOwn(field,'value')?[indexes.get(signature),value]:[indexes.get(signature)];
+  }
+  return JSON.stringify({$vistosFields:1,entity,metadata,entries});
+}
+export function decodeSourceFields(json) {
+  const stored=typeof json==='string'?JSON.parse(json):json;
+  if(!Object.hasOwn(stored,'$vistosFields'))return stored; // Existing records stay readable.
+  if(stored.$vistosFields!==1||!Array.isArray(stored.metadata)||!stored.entries||typeof stored.entity!=='string')throw new Error('vistos_field_storage_invalid');
+  const registry=registryFor(stored.entity);
+  return Object.fromEntries(Object.entries(stored.entries).map(([key,entry])=>{
+    if(!Array.isArray(entry)||entry.length<1||entry.length>2||!stored.metadata[entry[0]])throw new Error('vistos_field_storage_invalid');
+    return [key,{label:registry[key]?.label||key,section:registry[key]?.section||'all',...stored.metadata[entry[0]],...(entry.length===2?{value:entry[1]}:{})}];
+  }));
+}
 function safeEvidence(value, depth=0) {
   if (depth > 8) return null;
   if (Array.isArray(value)) return value.map(v=>safeEvidence(v,depth+1));
@@ -47,14 +73,15 @@ export function discloseFields(fields, rights) {
     || (v.disclosure==='personal' && rights.personal)).map(([k,v])=>[k,{...v,...(Object.hasOwn(v,'value')?{value:publicValue(v.value)}:{})}]));
 }
 export function fieldValues(fields) { return Object.fromEntries(Object.entries(fields).filter(([,v])=>Object.hasOwn(v,'value')).map(([k,v])=>[k,v.value])); }
-export async function normalizeSourceRecord(row, {installation,entity,contract={},previous=null,kind='list',now=new Date().toISOString()}={}) {
+export async function normalizeSourceRecord(row, {installation,entity,contract={},previous=null,kind='list',parentCompanyId=null,now=new Date().toISOString()}={}) {
   const id=numericId(row.Id);
   if (!id) throw Object.assign(new Error('source_identity_missing'),{code:'source_identity_missing'});
   const rules=contract.entities?.[entity]||{};
-  const previousFields=previous?JSON.parse(previous.fields_json):{};
+  const previousFields=previous?decodeSourceFields(previous.fields_json):{};
   const fields=mergeSourceFields(previousFields,row,{entity,kind,observedAt:now,verifiedFields:rules.verifiedFields||[]});
   const values=fieldValues(fields);
-  const company=rules.companyField ? referenceIds(values,rules.companyField,kind)[0] : rules.fixedCompanyId;
+  const refs=field=>referenceIds(values,field,fields[field]?.source||kind);
+  const company=entity==='ServiceListItem'&&rules.inheritCompanyFromParent===true?parentCompanyId:rules.companyField?refs(rules.companyField)[0]:rules.fixedCompanyId;
   const companyId=company && contract.companyIds?.includes(String(company))?String(company):null;
   const modified=sourceTime(row.Modified).instant;
   if (previous?.source_modified && modified && modified<previous.source_modified) return null;
@@ -66,9 +93,9 @@ export async function normalizeSourceRecord(row, {installation,entity,contract={
   const end=rules.plannedEndField && verified(rules.plannedEndField)?sourceTime(values[rules.plannedEndField]):null;
   const rawStatus=rules.statusField?values[rules.statusField]:null;
   const status=rules.statusMap?.[String(rawStatus)]||'unverified';
-  const vehicles=[...new Set([...referenceIds(values,'Auto_FK',kind),...referenceIds(values,'AllocatedVehicle',kind)])];
-  const driver=referenceIds(values,'RidicContact_FK',kind)[0]||null;
-  const parent=rules.parentField?referenceIds(values,rules.parentField,kind)[0]||null:null;
+  const vehicles=[...new Set((rules.vehicleFields||['Auto_FK','AllocatedVehicle']).flatMap(refs))];
+  const driver=refs('RidicContact_FK')[0]||null;
+  const parent=rules.parentField?refs(rules.parentField)[0]||null:null;
   const semanticContent=Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,{value:v.value,availability:v.availability,source:v.source,disclosure:v.disclosure}]));
   return {id:previous?.id||crypto.randomUUID(),installation,entity,source_id:id,company_id:companyId,
     number:text(rules.numberField),customer:text(rules.customerField),place:text(rules.placeField),service:text(rules.serviceField),
@@ -76,7 +103,7 @@ export async function normalizeSourceRecord(row, {installation,entity,contract={
     driver_id:driver,vehicle_ids_json:JSON.stringify(vehicles),parent_id:parent,
     // Source references are not verified canonical/HR assignments.
     unassigned:1,needs_review:!companyId || status==='unverified' || !date || !driver || !vehicles.length ? 1:0,
-    fields_json:JSON.stringify(fields),fingerprint:await fingerprint({semanticContent,companyId,mapping:contract.revision}),
+    fields_json:encodeSourceFields(fields,entity),fingerprint:await fingerprint({semanticContent,companyId,mapping:contract.revision}),
     source_modified:modified,received_at:now,detail_at:kind==='detail'?now:previous?.detail_at||null,mapping_version:contract.revision||'unverified',
     changedFields:Object.keys(fields).filter(k=>stableJson(previousFields[k]?.value)!==stableJson(fields[k]?.value))};
 }
