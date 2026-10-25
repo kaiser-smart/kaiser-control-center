@@ -136,7 +136,8 @@ function envFor({
       message: "Caller identity runtime fixture.",
       vehicles
     }),
-    SMART_ODPADY_DB: fakeD1(employees)
+    DB_CORE: fakeD1(employees),
+    DB_ARCHIVE: fakeD1(employees)
   };
 }
 

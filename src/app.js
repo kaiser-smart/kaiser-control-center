@@ -1,3 +1,4 @@
+import { createSessionGuard } from "./data/sessionGuard.js";
 import { forpsiAdminSection, mountForpsiAdmin, forpsiDirtyTarget, saveForpsiDraft, discardForpsiDraft } from "./components/ForpsiAdminPanel.js";
 import { forpsiMailSection, mountForpsiMail } from "./components/ForpsiMailPanel.js";
 import { forpsiComposerDirtyTarget, saveForpsiComposer, discardForpsiComposer } from "./components/ForpsiComposer.js";
@@ -919,6 +920,23 @@ let authState = {
   error: "",
   mockCode: false
 };
+
+const sessionGuard = createSessionGuard({
+  root: app,
+  getUser: () => authState.user,
+  onSignOut: () => {
+    if (collectionRoutesPilotState.myDailyRouteNavigationActive) stopCollectionDailyDriverNavigation({ renderAfter: false });
+    resetAiAssistantSession();
+  },
+  onEnd: () => {
+    clearLocalSession();
+    window.location.replace(routeHref("/"));
+  },
+  onUserChanged: () => {
+    authState.user = null;
+    window.location.reload();
+  }
+});
 
 const adminUsersState = {
   loaded: false,
@@ -44021,19 +44039,27 @@ function appErrorPage() {
 
 async function apiJson(path, options = {}) {
   const isFormData = options.body instanceof FormData;
-  const response = await fetch(path, {
+  let response;
+  try {
+    response = await fetch(path, {
     credentials: "include",
     headers: {
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(options.headers || {})
     },
     ...options
-  });
+    });
+  } catch (error) {
+    sessionGuard.failedConnection();
+    throw error;
+  }
+  if (response.status === 401) sessionGuard.unauthorized();
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     const error = new Error(payload.error || "Požadavek se nepodařilo dokončit.");
     error.payload = payload;
+    error.status = response.status;
     throw error;
   }
 
@@ -54699,6 +54725,7 @@ async function verifyLogin(form) {
       error: "",
       mockCode: false
     };
+    if (!sessionGuard.authenticated(result)) return;
     await loadThemeSettings({ renderAfter: false });
     await loadAbsenceSettings({ renderAfter: false });
     await loadAssistantPromo({ renderAfter: false });
@@ -54717,7 +54744,14 @@ async function logout() {
   if (collectionRoutesPilotState.myDailyRouteNavigationActive) {
     stopCollectionDailyDriverNavigation({ renderAfter: false });
   }
-  await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+  resetAiAssistantSession();
+  await sessionGuard.signOut();
+}
+
+function clearLocalSession() {
+  if (collectionRoutesPilotState.myDailyRouteNavigationActive) {
+    stopCollectionDailyDriverNavigation({ renderAfter: false });
+  }
   resetAiAssistantSession();
   resetAssistantPromoState();
   authState = {
@@ -55460,6 +55494,7 @@ function render() {
 }
 
 async function bootstrapAuth() {
+  if (!await sessionGuard.beforeBootstrap()) return;
   try {
     const result = await apiJson("/api/me");
     authState = {
@@ -55471,10 +55506,11 @@ async function bootstrapAuth() {
       error: "",
       mockCode: false
     };
+    if (!sessionGuard.authenticated(result)) return;
     await loadThemeSettings({ renderAfter: false });
     await loadAbsenceSettings({ renderAfter: false });
     await loadAssistantPromo({ renderAfter: false });
-  } catch {
+  } catch (error) {
     authState = {
       status: "anonymous",
       user: null,
@@ -55484,6 +55520,7 @@ async function bootstrapAuth() {
       error: "",
       mockCode: false
     };
+    if (error.status !== 401) sessionGuard.lock("Připojení k aplikaci není dostupné. Zkuste to znovu.");
   }
 
   render();
@@ -62845,7 +62882,9 @@ document.addEventListener("keydown", (event) => {
   render();
 });
 
-window.addEventListener("beforeunload", (event) => accessUnsavedChangesGuard.beforeUnload(event));
+window.addEventListener("beforeunload", (event) => {
+  if (authState.user && !sessionGuard.isEnded()) accessUnsavedChangesGuard.beforeUnload(event);
+});
 window.addEventListener("popstate", handlePopStateNavigation);
 window.addEventListener("hashchange", handleHashChangeNavigation);
 window.addEventListener("resize", syncCollectionDailyDriverViewportDiagnostics, { passive: true });

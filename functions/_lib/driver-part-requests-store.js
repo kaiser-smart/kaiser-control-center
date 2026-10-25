@@ -1,3 +1,4 @@
+import { runCrossDatabaseBatch } from "./cross-database-workflows.js";
 import { getModuleDatabase } from "./databases.js";
 import { getUsers } from "./auth.js";
 import {
@@ -98,7 +99,17 @@ function database(env, required = false) {
       "driver_part_requests_database_missing"
     );
   }
-  return db;
+  if (!db) return null;
+  return {
+    ...db,
+    // Core rows and audit events live in separate D1 databases. Preserve the
+    // domain guard and journal each operation with the existing workflow helper.
+    batch: statements => runCrossDatabaseBatch(env, db, statements, {
+      workflowType: "driver-part-requests-write",
+      idempotencyKey: `driver-part-requests:${crypto.randomUUID()}`,
+      allowAuditDeferred: false
+    })
+  };
 }
 
 export function driverPartRequestsApiStatus(env) {

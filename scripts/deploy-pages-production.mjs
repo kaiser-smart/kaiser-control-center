@@ -1,3 +1,5 @@
+import { checkCloudflare, cloudflareClient, wranglerCommand } from "./pwa-cloudflare.mjs";
+import { target, loadRelease, validateLocalRelease, assertLiveBaseline, assertBuildFiles, needsGitFetch, assertSuccessfulDeployment } from "./pwa-release.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
@@ -21,6 +23,9 @@ const PROTECTED_COMMITS = [
 const args = new Set(process.argv.slice(2));
 const checkOnly = args.has("--check-only");
 const skipFetch = args.has("--skip-fetch");
+const releasePath = process.argv.find(arg => arg.startsWith("--local-release="))?.split("=").slice(1).join("=");
+const localRelease = releasePath ? loadRelease(releasePath) : null;
+if (localRelease && !checkOnly && !args.has(`--approve-release=${localRelease.head}`)) fail("local release requires explicit approval of the exact commit.");
 
 function run(command, args = [], options = {}) {
   return execFileSync(command, args, {
@@ -58,19 +63,26 @@ function assertCleanWorktree() {
 }
 
 function assertProductionHead() {
-  if (!skipFetch) {
+  if (needsGitFetch({ localRelease, skipFetch })) {
     runVisible("git", ["fetch", "origin", REQUIRED_BRANCH]);
   }
 
   const head = git(["rev-parse", "HEAD"]);
-  const originMain = git(["rev-parse", `origin/${REQUIRED_BRANCH}`]);
+  const originMain = localRelease ? null : git(["rev-parse", `origin/${REQUIRED_BRANCH}`]);
   const branch = git(["branch", "--show-current"]);
 
-  if (branch !== REQUIRED_BRANCH) {
+  if (localRelease) {
+    validateLocalRelease(localRelease, {
+      head, originMain, branch, version: packageVersion(), clean: true,
+      configChanged: Boolean(git(["diff", localRelease.base, "HEAD", "--", "wrangler.toml"]))
+    });
+    git(["merge-base", "--is-ancestor", localRelease.base, "HEAD"]);
+  }
+  if (!localRelease && branch !== REQUIRED_BRANCH) {
     fail(`produkce se smi nasazovat jen z vetve ${REQUIRED_BRANCH}; aktualni vetev je ${branch || "detached HEAD"}.`);
   }
 
-  if (head !== originMain) {
+  if (!localRelease && head !== originMain) {
     fail([
       `HEAD musi presne odpovidat origin/${REQUIRED_BRANCH}.`,
       `HEAD: ${head}`,
@@ -118,7 +130,7 @@ function assertBuiltMeta(head, version) {
   if (!metaSource.includes(`"version": "${version}"`)) {
     fail(`buildMeta nema verzi ${version}.`);
   }
-  if (!metaSource.includes('"branch": "main"')) {
+  if (!metaSource.includes(`"branch": "${localRelease ? target.branch : REQUIRED_BRANCH}"`)) {
     fail("buildMeta nema branch main.");
   }
   if (!metaSource.includes(`"commit": "${shortHead}"`)) {
@@ -144,7 +156,7 @@ function assertBuiltMeta(head, version) {
 assertCleanWorktree();
 const { head } = assertProductionHead();
 const version = packageVersion();
-const backupDate = buildDate();
+const backupDate = localRelease?.buildDate || buildDate();
 
 runVisible("node", ["scripts/check-syntax.mjs"]);
 runVisible("node", ["--test", "scripts/theme-settings.test.mjs"]);
@@ -185,24 +197,46 @@ runVisible("node", ["scripts/data-box-plus-triage-ui.test.mjs"]);
 runVisible("node", ["scripts/data-box-plus-compose-save-race.test.mjs"]);
 runVisible("node", ["scripts/data-box-plus-workflows.test.mjs"]);
 runVisible("node", ["scripts/data-box-plus-sync-runner.test.mjs"]);
+// Preserve the existing public browser Maps key in a local production build.
+if (localRelease && !process.env.VITE_GOOGLE_MAPS_API_KEY) {
+  const config = readFileSync("wrangler.toml", "utf8");
+  const value = config.match(/^VITE_GOOGLE_MAPS_API_KEY\s*=\s*"([^"\r\n]+)"/m)?.[1];
+  if (!value) fail("Public Maps configuration missing; do not publish a degraded build.");
+  process.env.VITE_GOOGLE_MAPS_API_KEY = value;
+}
+runVisible("node", ["scripts/pwa-release.test.mjs"]);
+runVisible("node", ["scripts/pwa-package-integrity.test.mjs"]);
+runVisible("node", ["scripts/auth-session.test.mjs"]);
+runVisible("node", ["scripts/driver-parts-vin-pilot.test.mjs"]);
 runVisible("node", ["scripts/build.mjs"], {
   env: {
     ...process.env,
-    VITE_APP_BRANCH: REQUIRED_BRANCH,
+    VITE_APP_BRANCH: localRelease ? target.branch : REQUIRED_BRANCH,
     VITE_APP_COMMIT: head,
     VITE_BACKUP_DATE: backupDate
   }
 });
 assertBuiltMeta(head, version);
+runVisible("node", ["scripts/pwa.test.mjs"]);
+if (localRelease) assertBuildFiles(localRelease, "dist");
 
 if (checkOnly) {
   console.log(`Deploy guard OK: ${version} / ${REQUIRED_BRANCH} / ${head.slice(0, 7)} / ${backupDate}`);
   process.exit(0);
 }
 
-runVisible("pnpm", [
-  "dlx",
-  "wrangler",
+let productionApi;
+if (localRelease) {
+  await assertLiveBaseline(localRelease);
+  if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_ACCOUNT_ID !== target.account) fail("Wrong Cloudflare account in environment.");
+  process.env.CLOUDFLARE_ACCOUNT_ID = target.account;
+  productionApi = cloudflareClient();
+  await checkCloudflare(localRelease, productionApi);
+  await assertLiveBaseline(localRelease);
+  assertCleanWorktree();
+  if (git(["rev-parse", "HEAD"]) !== head) fail("Source changed during checks.");
+}
+const [deployCommand, deployArgs] = wranglerCommand([
   "pages",
   "deploy",
   "dist",
@@ -210,7 +244,17 @@ runVisible("pnpm", [
   PROJECT_NAME,
   "--branch",
   REQUIRED_BRANCH,
-  "--commit-dirty=true"
+  "--commit-dirty=false",
+  "--commit-hash", head
 ]);
+if (localRelease) assertBuildFiles(localRelease, "dist");
+runVisible(deployCommand, deployArgs);
 
-console.log(`Produkce nasazena pres deploy guard: ${version} / ${REQUIRED_BRANCH} / ${head.slice(0, 7)} / ${backupDate}`);
+console.log(`Upload dokoncen, nasleduje overeni: ${version} / ${REQUIRED_BRANCH} / ${head.slice(0, 7)} / ${backupDate}`);
+
+if (localRelease) {
+  const project = await productionApi("/");
+  assertSuccessfulDeployment(project.canonical_deployment, head);
+  runVisible("node", ["scripts/pwa-postdeploy.mjs", releasePath]);
+  console.log(`Production verified: ${version} / ${head}`);
+}

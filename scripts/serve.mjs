@@ -589,6 +589,7 @@ const contentTypes = new Map([
   [".js", "text/javascript; charset=utf-8"],
   [".ts", "text/javascript; charset=utf-8"],
   [".json", "application/json; charset=utf-8"],
+  [".webmanifest", "application/manifest+json; charset=utf-8"],
   [".wav", "audio/wav"],
   [".mp3", "audio/mpeg"],
   [".m4a", "audio/mp4"],

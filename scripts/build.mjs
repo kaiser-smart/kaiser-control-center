@@ -173,7 +173,10 @@ await writeFile(path.join(dist, "_redirects"), [
 ].join("\n") + "\n");
 await writeFile(path.join(dist, "_headers"), [
   "/*",
-  "  Cache-Control: no-cache"
+  "  Cache-Control: no-cache",
+  "/manifest.webmanifest",
+  "  Content-Type: application/manifest+json; charset=utf-8",
+  "  Cache-Control: no-store"
 ].join("\n") + "\n");
 
 for (const route of routes) {
