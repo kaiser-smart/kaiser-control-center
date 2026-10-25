@@ -84,7 +84,7 @@ const fixedRouteEntries = [
   { path: "/", moduleKey: "dashboard", label: "Hlavní stránka" },
   { path: "/sarlota", moduleKey: "dashboard", label: "Šarlota" },
   { path: "/pripominky", moduleKey: "feedback", label: "Připomínky a chyby" },
-  { path: "/dovolena-nemoc/rychle-zadani", moduleKey: "absence", label: "Nepřítomnosti – rychlé zadání" },
+  { path: "/dovolena-nemoc/rychle-zadani", moduleKey: "absence", label: "Nepřítomnost" },
   { path: "/dovolena-nemoc/moje-zadosti", moduleKey: "absence", label: "Nepřítomnosti – moje žádosti" },
   { path: "/dovolena-nemoc/nova-zadost", moduleKey: "absence", label: "Nepřítomnosti – nová žádost" },
   { path: "/dovolena-nemoc/ke-schvaleni", moduleKey: "absence", label: "Nepřítomnosti – ke schválení" },

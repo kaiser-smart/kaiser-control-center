@@ -284,7 +284,7 @@
   #app .mobile-fleet-summary strong { font-size:20px; }
 }
 
-/* Shared working surfaces follow Rychlé zadání (absence quick entry), across every agenda. */
+/* Shared working surfaces follow Nepřítomnost (absence quick entry), across every agenda. */
 @media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
   #app .ui-system-v2 :is(.module-panel,.module-settings-panel,.notification-center,.access-form,.system-check-card,.self-repair-overview,.self-repair-list,.self-repair-detail,.absence-detail-panel,.fuel-analytics,.rcs-platform-panel) { min-width:0; padding:12px; margin:0 0 8px; border-radius:12px; background:#fff; border:1px solid #d7dfe2; box-shadow:none; }
   #app .ui-system-v2 :is(.fleet-section,.collection-routes-panel,.receivables-panel,.absence-panel,.users-panel,.driver-report-click-entry,.ds-plus-triage-header,.tyres-panel,.quick-absence-card) { background:#fff; border:1px solid #d7dfe2; box-shadow:none; border-radius:12px; }
