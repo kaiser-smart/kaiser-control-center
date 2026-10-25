@@ -1,6 +1,6 @@
 # Integrační přejímka mapy vozidel v1.3
 
-25. 10. 2026. Navazuje na commit `1689d262`. **Produkční aplikace nebyla nasazena ani změněna.** Tato přejímka již obsahuje skutečnou Google mapu a přihlášený T-Cars backend; původní report je zachován v [PREJIMKA_1689d262.md](../../../outputs/PREJIMKA_1689d262.md).
+25. 10. 2026. Navazuje na commit `1689d262`. **Tato práce nenasadila ani nezměnila produkční aplikaci.** Tato přejímka již obsahuje skutečnou Google mapu a přihlášený T-Cars backend; původní report je zachován v [PREJIMKA_1689d262.md](../../../outputs/PREJIMKA_1689d262.md).
 
 ## Dostupný chráněný náhled
 
@@ -12,7 +12,54 @@ Testovací transport dovoluje pouze konkrétní čtecí endpointy a běžný log
 
 Lokální chráněná integrace byla provedena na `http://127.0.0.1:5173/sledovani-vozidel`. Po požadovaném testu odhlášení zůstává odhlášená. Vzdálený náhled nevyžaduje běh lokálního serveru.
 
-**Rozsah vzdáleného ověření:** deployment a Access ochrana jsou ověřené. Dokončení přihlášení a následný runtime readback přímo na vzdálené adrese zatím čeká na přihlášení uživatele. Následující živé testy byly skutečně provedeny v chráněném lokálním náhledu proti současnému produkčnímu backendu, nikoli proti mocku.
+**Vzdálená integrační přejímka dokončena 25. 10. 2026 v 10:43 Europe/Prague.** Skutečný Google SDK, přihlášený T-Cars backend, dvě obnovy, ovládání mapy, mobilní viewport, výpadek/návrat a úplné odhlášení jsou ověřené přímo na výše uvedené adrese. Po požadovaném testu odhlášení náhled opět vyžaduje běžné přihlášení. Konkrétní výsledky a dosud neověřené okraje jsou níže; starší lokální výsledky a historie překážek jsou zachovány jako historický záznam.
+
+## Finální přejímka přímo ve vzdáleném náhledu
+
+Přihlášení dokončil Radim v běžném OTP formuláři. Ochrana Cloudflare Access, oprávnění backendu, omezení Google klíče i read-only rozsah zůstaly zachované. Forpsi nebylo použito. Žádné cookies nebyly přenášeny z produkčního prohlížeče.
+
+| Scénář | Skutečně pozorovaný výsledek |
+|---|---|
+| Zdroj a identita | 57 vozidel z `tcars`, `isLive=true`, `isDemo=false`, `fallback=false`. Doložené individuální přiřazení cisterny odpovídá obrázku, stabilnímu vehicle ID, poloze, původnímu GPS času, rychlosti 0 a ignition=false. Řidič „Neověřeno“. Přesné souřadnice nebyly uloženy. |
+| Google mapa a výběr | Roadmap, skutečná atribuce, načtené markery. Výběr viditelného auta nezměnil střed ani zoom podle Google odkazu v UI. Výslovné vystředění souhlasí se zdrojovou polohou do 0,000001°. Posun změnil střed při stejném zoomu; tlačítko přiblížení změnilo zoom 8 → 9. |
+| Shluky | Shluk 54 vozidel otevřel 54 členů ve stejném panelu a přizpůsobil mapu. Postupné přiblížení umožnilo dojít ke dvěma vozidlům na shodné poloze: 2 řádky, 2 spojnice. Výběr člena zachoval spojnici a kameru. Escape vrátil detail do skupiny a následně celý seznam. |
+| Stará poloha | Doložený starý bod zůstal na mapě s hodinami a původním GPS časem, bez čerstvého headingu; detail uvádí poslední hlášený stav. Obrázek cisterny zůstává barevný. |
+| Hledání a součty | Hledání konkrétní SPZ dalo 1 z 57 v seznamu a 1 z 1 s polohou na mapě. Bez hledání bylo 56 s polohou a 1 bez polohy. Kategorie se v čase mění podle skutečných dat a stáří. |
+| Mobil a rozměry | Skutečná vzdálená mapa při šířkách 320, 390, 412, 768, 1024 a 1440 px, výška 844 px: žádný horizontální scroll, Google logo v mapě. Mapa 220 px na třech mobilních šířkách, 568 px na širších. Detail 390 px má načtený obrázek 100 × 75 px, viditelnou identitu a atribuci. |
+| Sada ikon | V legendě se dekódovaly všechny čtyři WebP 256 × 192, CSS filter `none`, bílá dlaždice `rgb(255,255,255)`. Pět neutrálních monogramů a jejich názvy přítomno. Doložená cisterna používá mapový export 128 × 96 a detailový 256 × 192. |
+
+### Dvě obnovy, výpadek a odhlášení
+
+Časy v následující tabulce jsou Europe/Prague dne 25. 10. 2026. U obnov jde o časy dokončení zobrazené UI se sekundovým rozlišením, nikoli přesné síťové latence.
+
+| Událost | Čas | Výsledek |
+|---|---|---|
+| Výchozí obnova | 10:23:29 | Vybrané vozidlo a kamera zachyceny. |
+| Následující automatická obnova | 10:24:29 | Po 60 s; stejný výběr a stejný Google střed/zoom. |
+| Další automatická obnova | 10:25:31 | Po dalších 62 s; stejný výběr a kamera. |
+| Řízený HTTP 503 | pozorováno 10:32:51 | „Obnova se nezdařila · poslední úspěšná aktualizace 10:30:35“. Vybraný bod, původní GPS čas, hledání a kamera zůstaly. Žádné modelové vozidlo ani demo fallback. |
+| Návrat normálního transportu | obnova 10:33:47 | Skutečná data znovu obnovena, výběr a kamera beze změny. Dočasný 503 Worker odstraněn. |
+| První pokus odhlášení | 10:35:05 | UI data odstranilo, ale `/api/me` ještě vracelo přihlášeného uživatele. Tento pokus je **FAIL**, nikoli úspěšný test odhlášení. |
+| Opravené odhlášení | 10:42:35–10:43:17 | Po commitu `9355e32f` zmizely všechny markery i seznam. Přímé otevření `/api/me` i `/api/vehicle-tracking/status` ve stejné kartě vrátilo `{"error":"Nepřihlášeno."}`. Nové načtení mapové stránky zůstalo na přihlášení. **PASS**. HTTP status těchto závěrečných navigací nebyl nástrojem měřen. |
+
+Výpadek byl skutečný HTTP 503 pouze v izolovaném vzdáleném transportu GPS endpointu. Produkční T-Cars, síť uživatele a oprávnění nebyly vypínány. Záznam není vydáván za fyzický test ztráty mobilního signálu.
+
+Oprava odhlášení je omezená na preview transport: po úspěšném backendovém logoutu explicitně vyprší jeho host-only Secure/HttpOnly session cookie. Přidána kompatibilita čtení Set-Cookie ve Workeru a regresní scénáře úspěšného logoutu bez mazací hlavičky, neúspěšného logoutu a Worker Headers. Přesná příčina chybějícího účinku původní mazací hlavičky nebyla potvrzena. Autentizace se neobchází a při chybě backendu se úspěch nepředstírá.
+
+### Důkazy a konečný deployment
+
+Skutečné provozní snímky jsou **jen v místním soukromém adresáři**, mimo Git, veřejný ZIP i preview payload: [galerie vzdálené přejímky](../../../private-integration/remote-index.html), [přehled](../../../private-integration/remote-overview-live.png), [vybraná stará poloha](../../../private-integration/remote-selected-stale-live.png), [hustá skupina](../../../private-integration/remote-group-live.png), [rozbalení shodných bodů](../../../private-integration/remote-spiderfy-live.png), [mobilní detail](../../../private-integration/remote-mobile-detail-live.png), [výpadek](../../../private-integration/remote-outage-live.png), [odhlášení](../../../private-integration/remote-logout-live.png), [strukturované pozorování](../../../private-integration/remote-runtime-verification.json).
+
+Finální preview: `7f3866db-f995-47be-8654-369e05db2453`, commit `9355e32f`, status success, prostředí preview. [Readback](../../../outputs/remote-final-deployment.json) v 10:42:30 potvrdil alias a opětovné anonymní 302 do Access pro stránku i GPS endpoint. Produkce v té chvíli samostatně běžela na `53d6dbb1de20c311f11f1212200d28f5a88575f2`, deployment `6e6a2ea2-0332-45da-a1fc-bfff137f5bcf`; vznikla mimo tuto práci. Před budoucím merge mapy je nutné zachovat tyto novější produkční změny. Vzdálené backendové endpointy a celý produkční obal nejsou v náhledu nahrazeny novou aplikací; preview dovoluje jen tracking a jeho nutné čtecí/auth endpointy.
+
+Aktuálně zopakované kontroly: [preview transportní regrese](../../../outputs/preview-worker-regression.log) PASS, [syntax 755 JS/MJS](../../../outputs/preview-worker-syntax.log) PASS. Dřívější frontendové build/browser/PWA gate jsou uvedeny níže; logout fix neměnil frontend. Nebyly přidány nové grafické varianty ani provozní funkce.
+
+### Zbývající neověřené okraje
+
+- Fyzický telefon, systémová mobilní klávesnice a porovnání výkonu s původní produkční mapou nejsou ověřeny. Viewporty a měření 200 syntetických vozidel jsou doloženy samostatně.
+- V aktuálním vzorku nebyl čerstvě jedoucí vůz; jeho skutečný heading za jízdy nebyl pozorován. Normalizace a 0° kurz jsou ověřeny syntetickými testy.
+- Tmavý motiv se skutečným Google SDK prošel syntetickým integračním testem; nová vzdálená relace s reálnou flotilou byla testována ve světlém motivu.
+- Neověřené podtypy evidence zůstávají neutrální; přezdívka ani značka vozidla nejsou důvodem domýšlet nástavbu. Dřívější nález budoucích GPS časů zůstává zdrojovou datovou odchylkou, bez odhadované opravy času.
 
 ## Google klíč
 
@@ -54,7 +101,7 @@ Měří se odezva operace přes dvě animation frames, nikoli úplné stažení 
 
 Snímky s výhradně syntetickými vozidly na skutečné mapě: [přehled](../../../outputs/integration-google/overview-desktop.png), [výběr](../../../outputs/integration-google/selected-desktop.png), [6 vozidel](../../../outputs/integration-google/group-six.png), [20 vozidel](../../../outputs/integration-google/group-twenty.png), [stará poloha](../../../outputs/integration-google/stale-desktop.png), [mobil 390](../../../outputs/integration-google/detail-390.png), [200 vozidel](../../../outputs/integration-google/dense200.png), [tmavý motiv](../../../outputs/integration-google/dark-selected-stale.png).
 
-## Skutečná T-Cars data a obnova
+## Předchozí lokální kontrola skutečných T-Cars dat a obnovy
 
 Přihlášený aktuální backend vrátil **57 vozidel**, `provider=tcars`, `isLive=true`, `isDemo=false`, `fallback.enabled=false`. API ani jeho konfigurace se neměnily. Přehled a filtry se počítají z nového normalizovaného modelu, nikoli z původního API summary.
 
@@ -78,7 +125,7 @@ Skutečný shluk 34 vozidel otevřel právě 34 řádků. Mobilní rámec 390 ×
 ## Nalezené odchylky a omezení
 
 1. **Budoucí GPS časy ve zdroji:** první kontrolovaná odpověď obsahovala 11 vzorků více než 120 s v budoucnosti. Parser předává `datumCas` jako `lastGpsAt` bez přepočtu. Příčina u poskytovatele není potvrzena; možná souvislost se změnou času není doložená. UI správně ukáže neověřený čas a „Bez polohy“, případně původní doloženou poslední známou polohu. Čas se neopravuje odhadem. Po restartu bez předchozí paměti proto může být více vozidel bez polohy než během nepřerušené relace.
-2. **Vzdálený runtime po přihlášení zatím čeká na přihlášení uživatele.** Nasazení, Access přesměrování a uložený Google referrer jsou ověřené; přihlášený transport/Google runtime na této konkrétní vzdálené adrese zatím ne.
+2. **Původní blokace vzdáleného přihlášení je odstraněna.** Finální vzdálené výsledky jsou v úvodním oddílu; starší čekání na OTP již není otevřenou odchylkou.
 3. **Fyzický mobil, klávesnice a srovnávací výkon staré produkční mapy zůstávají neověřené.** Syntetické viewport testy a skutečný Google výkon jsou doloženy výše; nejsou náhradou těchto kontrol.
 4. **Opravena chyba posunu detailu:** výběr jiného auta již nepřebírá posun předchozího detailu. Obnova stejného vozidla posun zachovává. Nový smysluplný browser scénář prošel v Chrome i WebKitu.
 5. V této noční kontrole nebylo v normalizované čerstvé kategorii jedoucí vozidlo; aktuální pohyb a čerstvý heading byly ověřeny synteticky, nikoli jízdou skutečného vozu.
@@ -87,7 +134,7 @@ Nové grafické varianty, náhradní obrázky ani provozní funkce nevznikly. Pr
 
 ## Zdroj, izolace a regresní kontroly
 
-Zachován commit `1689d262`; merge `3f023c17` přidal přesnou aktuálně nasazenou PWA 0.1.831 (`ef07b8e4297a8402c751ec72160ee51495f6f0a4`) bez zásahu do cizího rozpracovaného checkoutu. Produkční deployment před/po preview zůstal `b8ba2579-42dd-4060-bf58-7a133de07c4d`. Preview nemá D1/R2 ani produkční secret bindings.
+Zachován commit `1689d262`; merge `3f023c17` přidal tehdy aktuálně nasazenou PWA 0.1.831 (`ef07b8e4297a8402c751ec72160ee51495f6f0a4`) bez zásahu do cizího rozpracovaného checkoutu. V tomto původním měření produkční deployment před/po preview zůstal `b8ba2579-42dd-4060-bf58-7a133de07c4d`; novější souběžné deploymenty jsou doloženy ve finálním oddílu. Preview nemá D1/R2 ani produkční secret bindings.
 
 - [Chrome](../../../outputs/integration-regression-chrome/browser-verification.json): **47/47 PASS**.
 - [WebKit](../../../outputs/integration-regression-webkit/browser-verification.json): **47/47 PASS**. Online test nyní čeká na skutečné dokončení reautorizace, ne na pevnou nedostatečnou pauzu 180 ms.
@@ -99,7 +146,9 @@ Zachován commit `1689d262`; merge `3f023c17` přidal přesnou aktuálně nasaze
 Přesný seznam změn a diff tohoto kola: [integration-changed-files.txt](../../../outputs/integration-changed-files.txt), [integration.patch](../../../outputs/integration.patch). Aktuální zdrojový commit je uveden v [integration-delivery.json](../../../outputs/integration-delivery.json). Produkční nasazení vyžaduje samostatné schválení.
 
 
-## Doplnění 25. 10. 2026: skrytí modulu Firemní pošta
+## Historie průběhu (dřívější blokace již nenahrazují finální stav)
+
+### Doplnění 25. 10. 2026: skrytí modulu Firemní pošta
 
 Na výslovné upřesnění Radima je odstraněn vstup Pošta z hlavní navigace i odkaz Otevřít poštu z nastavení Forpsi. Jde o skrytí vstupů v UI; přímá chráněná cesta, schránky, zprávy, API a oprávnění zůstávají zachované. Změna je určena pro izolovaný náhled, nikoli produkční nasazení.
 
