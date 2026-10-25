@@ -1,6 +1,9 @@
 {
   "manifest": {
     "approvedReference": {
+      "file": "docs/icon-reference/approved-icons.png",
+      "sourceAttachment": "approved-icons.png",
+      "userApproval": "přesně tenhle design je schválený",
       "scope": [
         "home",
         "modules",
@@ -9,38 +12,46 @@
         "jobs",
         "more"
       ],
-      "historyId": "WBQuydSLHFxFXvYBRwLR"
+      "requirement": "Trace the exact attached pixels. Historical OpenArt generations are not evidence of approval.",
+      "attachmentSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98",
+      "sourceType": "user-attachment"
     },
     "reused": [
       {
         "name": "home",
         "cell": 1,
-        "historyId": "WBQuydSLHFxFXvYBRwLR"
+        "sourceType": "user-attachment",
+        "sourceFile": "docs/icon-reference/approved-icons.png"
       },
       {
         "name": "modules",
         "cell": 2,
-        "historyId": "WBQuydSLHFxFXvYBRwLR"
+        "sourceType": "user-attachment",
+        "sourceFile": "docs/icon-reference/approved-icons.png"
       },
       {
         "name": "absence",
         "cell": 3,
-        "historyId": "WBQuydSLHFxFXvYBRwLR"
+        "sourceType": "user-attachment",
+        "sourceFile": "docs/icon-reference/approved-icons.png"
       },
       {
         "name": "tracking",
         "cell": 4,
-        "historyId": "WBQuydSLHFxFXvYBRwLR"
+        "sourceType": "user-attachment",
+        "sourceFile": "docs/icon-reference/approved-icons.png"
       },
       {
         "name": "jobs",
         "cell": 5,
-        "historyId": "WBQuydSLHFxFXvYBRwLR"
+        "sourceType": "user-attachment",
+        "sourceFile": "docs/icon-reference/approved-icons.png"
       },
       {
         "name": "more",
         "cell": 6,
-        "historyId": "WBQuydSLHFxFXvYBRwLR"
+        "sourceType": "user-attachment",
+        "sourceFile": "docs/icon-reference/approved-icons.png"
       }
     ],
     "submitted": [
@@ -714,6 +725,25 @@
           "status": "completed",
           "aspectRatio": "3:2",
           "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247305_d82534ad.webp",
+          "metadata": {
+            "width": 2016,
+            "height": 1344,
+            "format": "png"
+          }
+        }
+      ]
+    },
+    {
+      "historyId": "jBrggqXVTmQUWteApJ9n",
+      "status": "COMPLETED",
+      "resources": [
+        {
+          "id": "cOMAtQOHHZKgjQSrwnSK",
+          "mediaType": "image",
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-1_1792916594281_0ea3c722.png",
+          "status": "completed",
+          "aspectRatio": "3:2",
+          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-1_1792916594451_00030b8e.webp",
           "metadata": {
             "width": 2016,
             "height": 1344,

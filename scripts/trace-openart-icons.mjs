@@ -10,9 +10,10 @@ const potrace=require(process.env.POTRACE_MODULE_PATH || 'potrace');
 const repo=path.resolve(import.meta.dirname,'..');
 const sources=path.resolve(process.argv[2]);
 const review=path.join(sources,'review');
-execFileSync(process.env.PYTHON || 'python3',[path.join(repo,'scripts/prepare-openart-masks.py'),sources],{stdio:'inherit'});
-const provenance=JSON.parse(await readFile(path.join(review,'provenance.json'),'utf8'));
-const definitions={};
+const only=process.argv.find(arg=>arg.startsWith('--only='))?.slice(7);
+execFileSync(process.env.PYTHON || 'python3',[path.join(repo,'scripts/prepare-openart-masks.py'),sources,...(only?['--only',only]:[])],{stdio:'inherit'});
+let provenance=JSON.parse(await readFile(path.join(review,'provenance.json'),'utf8'));
+const definitions=only?{...(await import('../src/components/icons/definitions.js')).iconDefinitions}:{};
 for(const item of provenance){
   const layers=[];
   for(const channel of ['graphite','green']){
@@ -20,7 +21,9 @@ for(const item of provenance){
     const d=svg.match(/<path d="([^"]+)"/)[1];
     // Potrace uses absolute coordinates throughout; preserve each curve and hole.
     if(/[ahqstv]/i.test(d))throw new Error('Unexpected non-absolute Potrace path');
-    const normalized=d.replace(/-?\d+(?:\.\d+)?/g,value=>String(Number((Number(value)/16).toFixed(3))));
+    const digits=item.sourceType==='user-attachment'?2:3;
+    const normalized=d.replace(/-?\d+(?:\.\d+)?/g,value=>String(Number((Number(value)/16).toFixed(digits))))
+      .replace(/, /g,' ').replace(/([MLCZ]) /g,'$1').replace(/ (?=-)/g,'');
     layers.push(`<path fill-rule="evenodd" d="${normalized}"/>`);
   }
   definitions[item.name]=layers;
@@ -28,6 +31,8 @@ for(const item of provenance){
 }
 await writeFile(path.join(repo,'src/components/icons/definitions.js'),'// Generated ONLY by scripts/trace-openart-icons.mjs from recorded OpenArt pixels.\n// Source identity: docs/icon-provenance.json. Do not hand-edit geometry.\nexport const iconDefinitions = Object.freeze('+JSON.stringify(definitions)+');\n');
 execFileSync(process.execPath,[path.join(repo,'scripts/export-icons.mjs')],{stdio:'inherit'});
+if(only){const changed=new Map(provenance.map(item=>[item.name,item]));provenance=JSON.parse(await readFile(path.join(repo,'docs/icon-provenance.json'),'utf8')).map(item=>changed.get(item.name)||item);}
 for(const item of provenance)item.svgSha256=createHash('sha256').update(await readFile(path.join(repo,item.svgFile))).digest('hex');
-for(const file of [path.join(repo,'docs/icon-provenance.json'),path.join(review,'provenance.json')])await writeFile(file,JSON.stringify(provenance,null,2)+'\n');
+await writeFile(path.join(repo,'docs/icon-provenance.json'),JSON.stringify(provenance,null,2)+'\n');
+await writeFile(path.join(review,'provenance.json'),JSON.stringify(only?provenance.filter(item=>only.split(',').includes(item.name)):provenance,null,2)+'\n');
 console.log(`Traced ${provenance.length} OpenArt icons to smooth SVG curves.`);

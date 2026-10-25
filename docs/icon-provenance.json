@@ -1,177 +1,189 @@
 [
   {
     "name": "home",
-    "historyId": "WBQuydSLHFxFXvYBRwLR",
-    "resourceId": "yQx2Hj5OhS2fPT1abvxw",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-    "sourceSha256": "5d34f271306d64db35249f8415209166bf619fee8513861c6cf5ed82d88126b4",
-    "sourceFile": "sources/WBQuydSLHFxFXvYBRwLR.png",
+    "sourceType": "user-attachment",
+    "historyId": null,
+    "resourceId": null,
+    "sourceUrl": null,
+    "sourceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98",
+    "sourceFile": "docs/icon-reference/approved-icons.png",
     "cellCrop": [
       0,
       0,
-      672,
-      672
+      252,
+      251
     ],
     "foregroundBounds": [
-      198,
-      228,
-      523,
-      545
+      78,
+      87,
+      200,
+      205
     ],
-    "transform": "matrix(0.06153846 0 0 0.06153846 -10.184615 -11.784615)",
+    "transform": "matrix(0.16393443 0 0 0.16393443 -10.786885 -11.934426)",
     "svgFile": "public/icons/ui/home.svg",
     "userApprovedExact": true,
+    "approvalStatus": "approved-original",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 6666,
-      "green": 3420
+      "graphite": 2020,
+      "green": 1210
     },
-    "svgSha256": "79713e11b2a12f653e0ee9a65b9e12e7ec8b647366c45fec51a1fe42e5b274cf"
+    "svgSha256": "9a8ccc38b590d4af67c849278a95791cf398576b3866e4fd9b5c9ca79ee036e8"
   },
   {
     "name": "modules",
-    "historyId": "WBQuydSLHFxFXvYBRwLR",
-    "resourceId": "yQx2Hj5OhS2fPT1abvxw",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-    "sourceSha256": "5d34f271306d64db35249f8415209166bf619fee8513861c6cf5ed82d88126b4",
-    "sourceFile": "sources/WBQuydSLHFxFXvYBRwLR.png",
+    "sourceType": "user-attachment",
+    "historyId": null,
+    "resourceId": null,
+    "sourceUrl": null,
+    "sourceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98",
+    "sourceFile": "docs/icon-reference/approved-icons.png",
     "cellCrop": [
-      672,
+      252,
       0,
-      1344,
-      672
+      505,
+      251
     ],
     "foregroundBounds": [
+      68,
+      94,
       182,
-      253,
-      483,
-      545
+      204
     ],
-    "transform": "matrix(0.06644518 0 0 0.06644518 -10.093023 -14.511628)",
+    "transform": "matrix(0.17543860 0 0 0.17543860 -9.929825 -14.140351)",
     "svgFile": "public/icons/ui/modules.svg",
     "userApprovedExact": true,
+    "approvalStatus": "approved-original",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 9306,
-      "green": 3284
+      "graphite": 2920,
+      "green": 866
     },
-    "svgSha256": "31589e8e4f9ae577a6a178abc39e05caf4bdc95dbba3b3f3eb0f18299200d001"
+    "svgSha256": "c5c34cf1fb849630ad42e9777596c970018398b8caacaa3a3cd8d64cedb3bc9f"
   },
   {
     "name": "absence",
-    "historyId": "WBQuydSLHFxFXvYBRwLR",
-    "resourceId": "yQx2Hj5OhS2fPT1abvxw",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-    "sourceSha256": "5d34f271306d64db35249f8415209166bf619fee8513861c6cf5ed82d88126b4",
-    "sourceFile": "sources/WBQuydSLHFxFXvYBRwLR.png",
+    "sourceType": "user-attachment",
+    "historyId": null,
+    "resourceId": null,
+    "sourceUrl": null,
+    "sourceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98",
+    "sourceFile": "docs/icon-reference/approved-icons.png",
     "cellCrop": [
-      1344,
+      505,
       0,
-      2016,
-      672
+      758,
+      251
     ],
     "foregroundBounds": [
-      147,
-      228,
-      433,
-      544
+      51,
+      85,
+      159,
+      206
     ],
-    "transform": "matrix(0.06329114 0 0 0.06329114 -6.354430 -12.430380)",
+    "transform": "matrix(0.16528926 0 0 0.16528926 -5.355372 -12.049587)",
     "svgFile": "public/icons/ui/absence.svg",
     "userApprovedExact": true,
+    "approvalStatus": "approved-original",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 10111,
-      "green": 1529
+      "graphite": 2989,
+      "green": 467
     },
-    "svgSha256": "3b3cc5af41b0ae72193751122545ec8df2839ff21a6ae78c46d3d8e658eb1ec7"
+    "svgSha256": "fdffeb3741220ca6f6f9d10ff5aa9b09bcfe0bc779c010ec742a8a955a818ce8"
   },
   {
     "name": "tracking",
-    "historyId": "WBQuydSLHFxFXvYBRwLR",
-    "resourceId": "yQx2Hj5OhS2fPT1abvxw",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-    "sourceSha256": "5d34f271306d64db35249f8415209166bf619fee8513861c6cf5ed82d88126b4",
-    "sourceFile": "sources/WBQuydSLHFxFXvYBRwLR.png",
+    "sourceType": "user-attachment",
+    "historyId": null,
+    "resourceId": null,
+    "sourceUrl": null,
+    "sourceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98",
+    "sourceFile": "docs/icon-reference/approved-icons.png",
     "cellCrop": [
       0,
-      672,
-      672,
-      1344
+      251,
+      252,
+      502
     ],
     "foregroundBounds": [
-      243,
-      147,
-      474,
-      454
+      94,
+      56,
+      184,
+      174
     ],
-    "transform": "matrix(0.06514658 0 0 0.06514658 -11.355049 -7.576547)",
+    "transform": "matrix(0.16949153 0 0 0.16949153 -11.559322 -7.491525)",
     "svgFile": "public/icons/ui/tracking.svg",
     "userApprovedExact": true,
+    "approvalStatus": "approved-original",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 5566,
-      "green": 1946
+      "graphite": 1776,
+      "green": 614
     },
-    "svgSha256": "0bedeaf78fdb23f9262ac84569987d94833c673dbbabe9030e8062f15f48c806"
+    "svgSha256": "23eee0df62160eed4147fdea5fbebfabad95d9302dde42818e5194d13471fbe5"
   },
   {
     "name": "jobs",
-    "historyId": "WBQuydSLHFxFXvYBRwLR",
-    "resourceId": "yQx2Hj5OhS2fPT1abvxw",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-    "sourceSha256": "5d34f271306d64db35249f8415209166bf619fee8513861c6cf5ed82d88126b4",
-    "sourceFile": "sources/WBQuydSLHFxFXvYBRwLR.png",
+    "sourceType": "user-attachment",
+    "historyId": null,
+    "resourceId": null,
+    "sourceUrl": null,
+    "sourceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98",
+    "sourceFile": "docs/icon-reference/approved-icons.png",
     "cellCrop": [
-      672,
-      672,
-      1344,
-      1344
+      252,
+      251,
+      505,
+      502
     ],
     "foregroundBounds": [
-      206,
-      123,
-      459,
-      454
+      77,
+      48,
+      173,
+      174
     ],
-    "transform": "matrix(0.06042296 0 0 0.06042296 -8.090634 -5.432024)",
+    "transform": "matrix(0.15873016 0 0 0.15873016 -7.841270 -5.619048)",
     "svgFile": "public/icons/ui/jobs.svg",
     "userApprovedExact": true,
+    "approvalStatus": "approved-original",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 11524,
-      "green": 655
+      "graphite": 3371,
+      "green": 134
     },
-    "svgSha256": "8c34ed240cf2d76193984d6c0ccb7d3608d85ec8d1a1365e885107a735d3d825"
+    "svgSha256": "991574455f00381ffd90b62274c1601752985d38beac2d028f39be5e403da5c1"
   },
   {
     "name": "more",
-    "historyId": "WBQuydSLHFxFXvYBRwLR",
-    "resourceId": "yQx2Hj5OhS2fPT1abvxw",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-    "sourceSha256": "5d34f271306d64db35249f8415209166bf619fee8513861c6cf5ed82d88126b4",
-    "sourceFile": "sources/WBQuydSLHFxFXvYBRwLR.png",
+    "sourceType": "user-attachment",
+    "historyId": null,
+    "resourceId": null,
+    "sourceUrl": null,
+    "sourceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98",
+    "sourceFile": "docs/icon-reference/approved-icons.png",
     "cellCrop": [
-      1344,
-      672,
-      2016,
-      1344
+      505,
+      251,
+      758,
+      502
     ],
     "foregroundBounds": [
-      123,
-      262,
-      455,
-      350
+      45,
+      99,
+      167,
+      133
     ],
-    "transform": "matrix(0.06024096 0 0 0.06024096 -5.409639 -6.433735)",
+    "transform": "matrix(0.16393443 0 0 0.16393443 -5.377049 -7.016393)",
     "svgFile": "public/icons/ui/more.svg",
     "userApprovedExact": true,
+    "approvalStatus": "approved-original",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 3439,
-      "green": 1818
+      "graphite": 986,
+      "green": 458
     },
-    "svgSha256": "9bb43378e2c6576596be18219760ac35c95ddaf374f58cbbd048e1d00efa6669"
+    "svgSha256": "b96c28cea8d261505c24e7c7d4be801e6871e325ecdebe620eda4c677c2d8936"
   },
   {
     "name": "fleet",
@@ -200,7 +212,8 @@
       "graphite": 13387,
       "green": 4178
     },
-    "svgSha256": "2978dbbc81fa012ba6dd9b7c2766c6dc18125a47ed4f0ca72397766412ab7ab9"
+    "svgSha256": "9411a5d501f0c12a0e0d30e689cdd815450a34ea13ad082384e9ad57c6e6fe52",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "invoice",
@@ -229,7 +242,8 @@
       "graphite": 7998,
       "green": 4452
     },
-    "svgSha256": "d94d2357d9e1ccc9f2cfe6ec3980d58cfc86e1755fc28429ecb93563ba6e8ffc"
+    "svgSha256": "f2cca098514741d2454998ae33b6db83bb1f770384af5435f7bdbafcbbc468b3",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "team",
@@ -258,7 +272,8 @@
       "graphite": 6483,
       "green": 2380
     },
-    "svgSha256": "871360ea501b3fc53448c94a299adc1101a60e7d26806490c2f1477ac69d3ac0"
+    "svgSha256": "a59299b19db3074e161549964648c3aa4994cdc15029be3f32f828e1e416c29f",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "dashboard",
@@ -287,7 +302,8 @@
       "graphite": 5300,
       "green": 4695
     },
-    "svgSha256": "3d12ef3853db693e594856120e1eee7af0ddd030c939d5d69b77aebbfeaede65"
+    "svgSha256": "f8536a869eca29a9270683a780734cefd051a047de649778a5f6446bd81c859a",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "settings",
@@ -316,7 +332,8 @@
       "graphite": 7580,
       "green": 2553
     },
-    "svgSha256": "aab7e1b2addfb234aa2fcdb60388962f8139232cbf60d0529658c71b682f254e"
+    "svgSha256": "5576d3ab6c633fefbc24473f94aea762edad15c025ad3dfca7ff1eb595c1d279",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "notification",
@@ -345,7 +362,8 @@
       "graphite": 5195,
       "green": 1313
     },
-    "svgSha256": "e109c92e36830aace91c07a381d0a950996657bbe4377fbe8df78449f3cdf4c7"
+    "svgSha256": "c663fa539bf34c9d5c61aca3130e0ae025301fd9eed0a5811549b128f22704fe",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "arrow-left",
@@ -374,7 +392,8 @@
       "graphite": 3044,
       "green": 408
     },
-    "svgSha256": "7931917325eafa4fe894f66c729b9dc9915c943a674fb2e2c1d29cb49f7ae610"
+    "svgSha256": "58ffa0aa50006ded2246dc98a5ded8671a1b212ed9f45fd5ab28bb9b54907a6a",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "health",
@@ -403,7 +422,8 @@
       "graphite": 8056,
       "green": 1935
     },
-    "svgSha256": "c7aa98fc8e8235a064de50a064e0839abb3151199e0eead762d06ccb5a8c1a01"
+    "svgSha256": "c52c9120ec99bb8a5b88ba30314f9fcf1c9f68efef97e22b3dfe06824562b4e8",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "care",
@@ -432,7 +452,8 @@
       "graphite": 6383,
       "green": 1769
     },
-    "svgSha256": "9d1feaa0061456130c6434ee73058712825e4e78e382e46d4fa2e3f9041a0e49"
+    "svgSha256": "63893b2b2f18879e868c936ed3ccc7fa1e8f012e6ca322bd31965c06184e8de1",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "time",
@@ -461,7 +482,8 @@
       "graphite": 6301,
       "green": 1837
     },
-    "svgSha256": "bd2257e02b256589e4815c95f6e042550155ba0bc00e2c6b99fb6758789ab58b"
+    "svgSha256": "366a6a9c999fc5deb1831de3374b728a9a7faa3ee54c2a13fbd1af429601fef9",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "calendar",
@@ -490,7 +512,8 @@
       "graphite": 10587,
       "green": 2475
     },
-    "svgSha256": "6fcba8266511dbb33434d3ad4df7b01d9343dd4d43e8f2911490a00f5bb2ff50"
+    "svgSha256": "ee66b23f3a0836a3e568d1b0f7b764fd5b283a30b12b88e8264c16eb2e2d40df",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "mail",
@@ -519,7 +542,8 @@
       "graphite": 6726,
       "green": 2589
     },
-    "svgSha256": "2fc68accf572477d74f5debffc3b4c27e799035b85335a0e089d853b13848669"
+    "svgSha256": "cfa0ca32b5811e7adb911e445347c7d619ca2b4ab8ff89737312dc49fc7e4dfe",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "message",
@@ -548,7 +572,8 @@
       "graphite": 7890,
       "green": 871
     },
-    "svgSha256": "a34d6e9f788016f12a28e7e7c338d4afcd6161f4cfc40f07993b0afd97246be0"
+    "svgSha256": "76b654c4abd3b55105f1927e05380e932087ad0d8d318cd5fff0d81984d2b617",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "service",
@@ -577,7 +602,8 @@
       "graphite": 5932,
       "green": 607
     },
-    "svgSha256": "97c08891ec320ff4c52109de1a9ef39a38aa1fe3e3fcc74f08d413e9581db831"
+    "svgSha256": "684fbdbf471c55bdf7351b54bad2e3295acee39482f5f63afb758104a49435a8",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "tyres",
@@ -606,7 +632,8 @@
       "graphite": 6724,
       "green": 3293
     },
-    "svgSha256": "75087c8ac89a0ad59d3a53ec1bddcaf0d3a58a4e8294de8ce3907ef62d17786e"
+    "svgSha256": "5aa0e35c0ff9aeec6f2980f76c7d43b38fb6fb56013947ba4fcf109a442b6ead",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "routes",
@@ -635,7 +662,8 @@
       "graphite": 5269,
       "green": 650
     },
-    "svgSha256": "09ecc4e9962f6e589b6e9abd5f6ccf7ed306c20a8755738a55bcacc915c1145a"
+    "svgSha256": "b3688d51bd3f552a5096e7cb2508865d8cd95b23d8d23885cb0aa6583716ae89",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "sampling",
@@ -664,7 +692,8 @@
       "graphite": 6089,
       "green": 1218
     },
-    "svgSha256": "534de246ef00bed84511fd7ccab158cb77c56c4dcfab3d0982cc473bb216151c"
+    "svgSha256": "4e06f10b29e10107fc985419b1a6ef160987fd5990aa50640fa23f668c7f28e0",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "customers",
@@ -693,7 +722,8 @@
       "graphite": 11817,
       "green": 1348
     },
-    "svgSha256": "d8a867ec736b2d33ab7367643ed0a68ad0511b071c004774c69608063781bf0e"
+    "svgSha256": "f85c60003d63b92a0ed62c2e8e06f436d76ff03a60b5e1ab3776fd2864f27ee7",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "costs",
@@ -722,7 +752,8 @@
       "graphite": 9374,
       "green": 779
     },
-    "svgSha256": "be4c2cfeb7da48af52414eb4f58f91efc9c622e5c7e675e78e1c5b16e01e3973"
+    "svgSha256": "1ccbdf799b6cc64d288de76205abbe0ce56bf07de87ba14f2006c80fb01507c5",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "reports",
@@ -751,7 +782,8 @@
       "graphite": 11068,
       "green": 2549
     },
-    "svgSha256": "164293bd361c61fb46d5149e2be5549c7bd1a305ab0b8f45ce05fd089fca86fc"
+    "svgSha256": "6f6fb8b0b17844b618e4b83fe3f496db47aaf2799ff234cd95608ad1fa500ecc",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "users",
@@ -780,7 +812,8 @@
       "graphite": 7939,
       "green": 657
     },
-    "svgSha256": "76ead4b24ecc220342edb8b82d0569a9faf6057e981692fd1bf4680ff704f441"
+    "svgSha256": "0ef9c35b42a7e2231214b968f950ab179ad219dd38441102b49883f904bf6c24",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "system",
@@ -809,7 +842,8 @@
       "graphite": 7953,
       "green": 2677
     },
-    "svgSha256": "beae7877906907043fc81b7fbf2a92bfab79cca6890cacc603e8f6575b4d253f"
+    "svgSha256": "b403044621f96613ddcc200a7389ea7a8ea065d231f8f6db514907ba6f781956",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "repair",
@@ -838,7 +872,8 @@
       "graphite": 5918,
       "green": 1059
     },
-    "svgSha256": "17ad770e47a8dac1eb9f8d191cbb3b4b6b046342a0367bc91b11937cda57a2af"
+    "svgSha256": "53993fe6970dddb27ef78e1ca7bc705c7ee3d0c484644808ecf444bbf3343cd5",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "warning",
@@ -867,7 +902,8 @@
       "graphite": 5777,
       "green": 2092
     },
-    "svgSha256": "ee4278056b403f5d5206da4c2ebc3d62fbd34a82b79dc2b6f3a67955422e8d46"
+    "svgSha256": "31a71740947f3233ffdea6c537847659aebb5ff4e52bbd064d5cbbc29ebdde11",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "check",
@@ -896,7 +932,8 @@
       "graphite": 5909,
       "green": 1704
     },
-    "svgSha256": "60c393600590f6caf686764774fca773f78885cb29ef1cb380b0fda37ef3e2cc"
+    "svgSha256": "087105087f04f6d2276c2dbb97fd9bd76c53fb9fc387cbc27395b238f3db1455",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "close",
@@ -925,7 +962,8 @@
       "graphite": 1683,
       "green": 2173
     },
-    "svgSha256": "0ed326d1465718e5ad51d6848d6ab1f9ce103bdf2520c540753f22613fe7f3a0"
+    "svgSha256": "43500068fa3700aa3f3bb762a8a6470e5812db5f6af8cfc786587a266a15ea37",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "plus",
@@ -954,7 +992,8 @@
       "graphite": 1493,
       "green": 1708
     },
-    "svgSha256": "b9f191b659afe521a666a78c60e85e6e9880e4f50326057714ae30b207f9cb8f"
+    "svgSha256": "e47c4ea52847146632214b2b378bcc3c70779a637451a59c8238dabe13803d5c",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "minus",
@@ -983,7 +1022,8 @@
       "graphite": 1015,
       "green": 784
     },
-    "svgSha256": "de41bc95ae07cad4e6937b2c2d8bba2c64aa544c17f35c43c09f5959c7426414"
+    "svgSha256": "debbf406bdaa3055cc77fa1001bc487b059da1fe7ee90f068e938287fb436139",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "chevron-right",
@@ -1012,7 +1052,8 @@
       "graphite": 1152,
       "green": 1329
     },
-    "svgSha256": "e4b459d6ce03cd8aaa6f29ae2ff0846b78fc4aa40c5a022fe8c9766e7a9e74ab"
+    "svgSha256": "2f4c6718aa99038cc2f752d83b21b4040da53f93164215b2407d0f0a6803eede",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "chevron-left",
@@ -1041,7 +1082,8 @@
       "graphite": 1153,
       "green": 1316
     },
-    "svgSha256": "ff34cc77b315bc170eab3cba588529bf8cf67beaaaecf0f75574bedd0564675c"
+    "svgSha256": "aa49988ff504510fb2f82544df2635306bf73a7baefa1b5953ab080619f9f81f",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "chevron-down",
@@ -1070,7 +1112,8 @@
       "graphite": 1368,
       "green": 1758
     },
-    "svgSha256": "10252dcd9085320c79ce82c49447cd33290410c9f9c6b9672e0a2f16568c0147"
+    "svgSha256": "1871c948a36f14e04d6dc67dea4e412802e50ff3a690378e09bd8483ae56c113",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "arrow-right",
@@ -1099,7 +1142,8 @@
       "graphite": 3298,
       "green": 686
     },
-    "svgSha256": "63d636409a4f745fcbfbf8c1b141704d14d3c5a5f5c4bbf78ff5aa90246c7981"
+    "svgSha256": "37fddc3f92035915320160cafdeb1a9d763a796b214f1b7c1592bf9049dc1e59",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "arrow-up",
@@ -1128,7 +1172,8 @@
       "graphite": 2938,
       "green": 770
     },
-    "svgSha256": "1931085c59ca33ca3a8ee93bb1d45b59972162930621b97384a9c22496ead011"
+    "svgSha256": "9ad8f45e65a99c12bfb7e9c96cbd3b1bd4625e73a3b612ed79eec0e7486f1590",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "arrow-down",
@@ -1157,7 +1202,8 @@
       "graphite": 2664,
       "green": 756
     },
-    "svgSha256": "f78312569383764a48cea3839856de962605878c102cf71ab83198413e60a5d4"
+    "svgSha256": "2d7045f1c4fbcf829233c173214fd4541a32bbd3f31ad2d284d5bf871dc19b72",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "search",
@@ -1186,7 +1232,8 @@
       "graphite": 4368,
       "green": 946
     },
-    "svgSha256": "a4f6d6095a294a8cbbf4fcad310fab38febf1b4b43bb523ea3ee7e29678803a8"
+    "svgSha256": "981581609f59b00fa14b48fb9acc1ded86e8570f3bf376c8030d12435a91e22e",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "refresh",
@@ -1215,7 +1262,8 @@
       "graphite": 4182,
       "green": 2312
     },
-    "svgSha256": "af6b02a44fcae8f0a782316b036e76c2ff1097496ec4bd26e30c9a7a3eedd2eb"
+    "svgSha256": "ceb95032d49694469b125c828806e33c4590e17d88b48755e375f98fd6585079",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "microphone",
@@ -1244,7 +1292,8 @@
       "graphite": 4526,
       "green": 2475
     },
-    "svgSha256": "5955884eff9866d35ccc6f924a852eb3f7e2de2cf69166e4fad2bc1b263942cf"
+    "svgSha256": "bc28562234eb82a0fc7b6155697ea2eab82cf471119848eca211c10e138c2ac3",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "sound",
@@ -1273,7 +1322,8 @@
       "graphite": 4390,
       "green": 2832
     },
-    "svgSha256": "b833c56c323189c79d0fb0123c0d49b7628907da280d9660f161e3e5c88cc40c"
+    "svgSha256": "762e297f4d8aeabf72f82eda31d515796e374b61c690600e71bcd759e3fdadfe",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "mute",
@@ -1302,7 +1352,8 @@
       "graphite": 4383,
       "green": 2066
     },
-    "svgSha256": "af047bf81da239f7cb006695c6947d020e692bb748ecb1b0ef4377e8314727ce"
+    "svgSha256": "185db09ce8e9fe150067af541268a365e3cecaaac4fbf58894cf672daa019b80",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "camera",
@@ -1331,7 +1382,8 @@
       "graphite": 6482,
       "green": 3236
     },
-    "svgSha256": "be22d615b6afc690ef0652d5cd285cafbe9e4b4e74b98bdff59acf874ff1ea62"
+    "svgSha256": "225593738b0506ba14083b4d8949b9cfda0211623f216bfb97635f455dbe3653",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "navigate",
@@ -1360,7 +1412,8 @@
       "graphite": 5017,
       "green": 818
     },
-    "svgSha256": "14c4d333a06e56e531a9f1bd902a0d6748838cfbb103f66e0eca096d3883ad51"
+    "svgSha256": "d661aba7f986de864ade4abbf60d81d9f7c3eee5c13c3cbc845c3881d9ecb8c2",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "bin",
@@ -1389,7 +1442,8 @@
       "graphite": 9140,
       "green": 1485
     },
-    "svgSha256": "9fefd1b43c9413680fe4eb1db4b9a1b62faddf59944dc7dd6c4de107442ff4ac"
+    "svgSha256": "ed21090fdad061e2aaa703b33d980ca14dc81adc2f41412c11b1361e2005d1e8",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "bin-missing",
@@ -1418,7 +1472,8 @@
       "graphite": 9732,
       "green": 2591
     },
-    "svgSha256": "77fb7c42649f34e30c7c5c778abf6476fcf1b9f8aedd3583e746248aa9b1c9fb"
+    "svgSha256": "ebd3ef9fa0b3a3acf135acac16b92b49b8f8f0c0c28f8b233e264c70a25760f7",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "overflow",
@@ -1447,7 +1502,8 @@
       "graphite": 10454,
       "green": 1327
     },
-    "svgSha256": "e26dc540dcafa5e4f28ed60e6784df3b046ac2676361ab261438f405e7fbc128"
+    "svgSha256": "027b89c10a0df699355762983ac24b82d9f4da61091320bdef02e4262ff7c2aa",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "obstruction",
@@ -1476,7 +1532,8 @@
       "graphite": 4858,
       "green": 3811
     },
-    "svgSha256": "a6720a42a43e64f7d91e8d7a8cfffac5d7b1758227600a4c2a951f2ab53926ba"
+    "svgSha256": "312e2bf6ccef7ddc3f95d8d83008ee3bd30fd07269a4f2becd29490ade4b7d6f",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "blocked",
@@ -1505,7 +1562,8 @@
       "graphite": 5145,
       "green": 1671
     },
-    "svgSha256": "411dd886d2f5becad97ac59150a507fa32a78177679b9f3e9f937d1fe8843034"
+    "svgSha256": "0f66fba5e50c36ab06f1add335c7c8b355e666af0f0b20950e6c9c0ef471187f",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "tablet",
@@ -1534,7 +1592,8 @@
       "graphite": 11821,
       "green": 478
     },
-    "svgSha256": "87bdd311e36a33ac74d51ba80126453259c61892bc804b9726a3ef5bc0fdcc05"
+    "svgSha256": "60eac642fa5e3318f53fbecc882ff2a1632398792c5bb56654ddf60ad7936f7a",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "pause",
@@ -1563,7 +1622,8 @@
       "graphite": 2664,
       "green": 2850
     },
-    "svgSha256": "42b21cc41b593c07c5b8f176644482f25b1ac8e7e6890a224fd74722cb69112f"
+    "svgSha256": "bba167eb3829505bfe5caa77439e3ec1d1f6b159a0500de64ecfd5e968d1c614",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "measure",
@@ -1592,7 +1652,8 @@
       "graphite": 5801,
       "green": 739
     },
-    "svgSha256": "09f5141751a7c3fa91c4496b307ccd3b613b5ee11a305564aed7a28b83fafff5"
+    "svgSha256": "9721285cc59d4453128beec23a93843725caf261276e7a1a7af768b712428d08",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "info",
@@ -1621,7 +1682,8 @@
       "graphite": 5983,
       "green": 1991
     },
-    "svgSha256": "4400ed50b7bf365aabe3bd8c8ce8ccd551d8e36e181c7d3b3cbca241a0f0d9d7"
+    "svgSha256": "acbb1486d557ea5b14e1b83889fef2b762ba034f0a55813f78e69013f95e916c",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "download",
@@ -1650,7 +1712,8 @@
       "graphite": 2965,
       "green": 2493
     },
-    "svgSha256": "c17125afc36e11911c33944a5c62d3fd718081ddf268e94f0943ce1ca58ab817"
+    "svgSha256": "7b7f383216d40edfd54723fc1fe12883a6fa3e7546d27504243843511e3fcaff",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "attachment",
@@ -1679,7 +1742,8 @@
       "graphite": 6807,
       "green": 1448
     },
-    "svgSha256": "b2ac3414603f5ce151381faac6a3f91826e78acfc07dd515cebf57f47f94062f"
+    "svgSha256": "319d67f4babe06d3eab05747bb30f50003365bfe04f94cdd318e6e2bc7a418be",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "car",
@@ -1708,7 +1772,8 @@
       "graphite": 9683,
       "green": 3457
     },
-    "svgSha256": "b1a56d0b0d6399f32d90254d242b2242559a2169638e1914461632a2e67593f9"
+    "svgSha256": "f0f9246ca83907af9561eabb055c9385e1ce2e62b8bc85f46308c460f825efc3",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "van",
@@ -1737,7 +1802,8 @@
       "graphite": 11372,
       "green": 4072
     },
-    "svgSha256": "4e3079a816ac99c5dcba4f156be9230599ad5040b0c65b907d39c568fbda2608"
+    "svgSha256": "ccdc704515161498e11890111f507efceba092ecdf787db2e5ae12dee31eab99",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "container-truck",
@@ -1766,7 +1832,8 @@
       "graphite": 12221,
       "green": 1293
     },
-    "svgSha256": "8a0237c7346e658339cbb43a37d3e29f61b4f2a15e88145b777f9fca30fb3e96"
+    "svgSha256": "afad55fe785db7cc9baf35468d965d3a8a569eae6ce5131802aedb069b74ceab",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "special-vehicle",
@@ -1795,7 +1862,8 @@
       "graphite": 8609,
       "green": 1602
     },
-    "svgSha256": "5c6b525a2127ea25f8f81481146242b589d32188d1993cd8593cba359fa8f2c7"
+    "svgSha256": "5549fba47f93183af42b59293038a33dcea24ce39e01760e8f6a8636d722e2dc",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "trailer",
@@ -1824,7 +1892,8 @@
       "graphite": 8363,
       "green": 1124
     },
-    "svgSha256": "cdfeaa816e4a69ca93f84bf0aa040484cbb5a1e470d863974adea45217a0a0ae"
+    "svgSha256": "ceb0047c3f344648bd49932e92cedb9ed43ebe2e6771d46e618be13d81bb2a77",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "map-truck",
@@ -1853,7 +1922,8 @@
       "graphite": 7370,
       "green": 590
     },
-    "svgSha256": "1cd826e0ccfa23d86e8ebb901e474804017ed50ecd00a89b3b8a499511a0af40"
+    "svgSha256": "3b0fc202e05829eb0f09776a01a690f989a75445071d2648aeacf1b44f69aa58",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "map-container",
@@ -1882,7 +1952,8 @@
       "graphite": 7885,
       "green": 507
     },
-    "svgSha256": "351e63edc3c63fa9fa1c19b230a74de75ed728cab0447130501ab4ae0fb24ebe"
+    "svgSha256": "ca3eee4c90608c0b13914d4122cad8c50ec0c61658c43d9b3d8a80368a8133ef",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "map-van",
@@ -1911,7 +1982,8 @@
       "graphite": 6988,
       "green": 510
     },
-    "svgSha256": "44921471f106db6bf104b4ef71a9973c651d23127e576284b45373065c5909fb"
+    "svgSha256": "2021d8b0637de20008cb93c1f41403555f00b67f3b473d542e716ee3c885b6c8",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "map-car",
@@ -1940,7 +2012,8 @@
       "graphite": 9762,
       "green": 755
     },
-    "svgSha256": "1304d46203b6a360ac2e159e86c129780c842f0293483066886b098dbac4f0fe"
+    "svgSha256": "f160093626f46d43eefc44494dc531adff83ab8a407dd42e69870747870e0151",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "map-special",
@@ -1969,7 +2042,8 @@
       "graphite": 14310,
       "green": 531
     },
-    "svgSha256": "d0b07e08bb0652cd8d11b4016540e112f29f2b06f9b99e93fd5b1e8196ff33b9"
+    "svgSha256": "1f41df5312675ab97cf1061b1e1bba8387baef1dde1ba9cb866071b1e6b93d24",
+    "approvalStatus": "exact-approved-original-not-provided"
   },
   {
     "name": "map-trailer",
@@ -1998,6 +2072,7 @@
       "graphite": 7965,
       "green": 821
     },
-    "svgSha256": "b6f7c01631e66253a543cf0899f1112b4be56f1dd0a563091617f88a0a514942"
+    "svgSha256": "8b836f69587d246e40e58346c7ed4afb557771c6f519e2a345d6fd28adeea7a2",
+    "approvalStatus": "exact-approved-original-not-provided"
   }
 ]
