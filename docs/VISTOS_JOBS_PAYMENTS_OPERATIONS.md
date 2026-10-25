@@ -68,3 +68,9 @@ Původní úplná obálka polí měla ve vzorku hlaviček přibližně 28,7 KB n
 Samostatný přepínač `VISTOS_JOBS_BULK_IMPORT_APPROVED` umožňuje pouze ServiceList/ServiceListItem s vlastním kapacitním plánem. Není to opt-in faktur. Globální stop zůstává pro ostatní toky. Každá dávka před čtením a před zápisem měří všechny tři cílové domény; vyžaduje `capacityEvidence.estimateEvidenceId`, `approvedAt` a `domains.{core,archive,audit}.maxSizeBytes` nejvýše 85 % stávajícího limitu. Chybějící měření, překročení stropu nebo chybějící doklad import zastaví. Přepínač není tímto vydáním zapnutý.
 
 Zbývá živě ověřit firemní a časový kontrakt, velikost detailů/položek, přidělit schválený firemní rozsah, provést obnovitelný import a ověřit nezávislé plánované běhy a UI se skutečnými daty. Modul není dosud předaný jako plně funkční.
+
+### Rozlišení chyby načítání a prázdného výsledku
+
+Chyba oprávnění nebo načtení Zakázek zobrazuje konkrétní důvod a bezpečné opakování GET. Nepředstírá prázdný seznam, nulové počty ani potvrzenou historii. Chyba po změně filtru odstraní staré výsledky, které neodpovídají novému dotazu. Zavření detailu vrací focus na skutečné viditelné tlačítko, včetně mobilních karet.
+
+Izolovaný WebKit test `scripts/vistos-jobs-browser.test.mjs` ověřuje 390 a 1440 px: 403 vs. prázdný úspěšný výsledek, opakované načtení, chybu nového filtru, opožděnou odpověď, bezpečné zobrazení zdrojového HTML jako textu, Escape a návrat focusu, vodorovné přetékání. Používá syntetická data a blokuje externí síť; nedokazuje produkční import ani fyzický iPhone. Spuštění přes `npm run test:vistos-jobs-browser`, s dostupným Playwright/WebKit; alternativní modul/binárky lze určit `PLAYWRIGHT_MODULE_PATH` a `PLAYWRIGHT_BROWSERS_PATH`.
