@@ -127,6 +127,8 @@ function createDriverPartTestDb(initialRows = []) {
     notificationLogs: [],
     communicationThreads: new Map(),
     communicationMessages: new Map(),
+    workflows: new Map(),
+    workflowAttempts: [],
     communicationEvents: []
   };
 
@@ -148,6 +150,9 @@ function createDriverPartTestDb(initialRows = []) {
       },
       async first() {
         const compactSql = normalizedSql(sql);
+        if (compactSql.includes("from cross_database_workflows")) {
+          return [...state.workflows.values()].find(row => row.id === this.params[0] || row.key === this.params[0]) || null;
+        }
         if (compactSql.includes("from driver_part_requests")) {
           return requestByIdOrReportId(this.params[0], this.params[1]);
         }
@@ -191,6 +196,20 @@ function createDriverPartTestDb(initialRows = []) {
       },
       async run() {
         const compactSql = normalizedSql(sql);
+        if (compactSql.includes("insert into cross_database_workflows")) {
+          const [id, type, key] = this.params;
+          state.workflows.set(id, { id, type, key, status: "pending" });
+          return { success: true };
+        }
+        if (compactSql.includes("update cross_database_workflows")) {
+          const [status, error, next, completed, id] = this.params;
+          Object.assign(state.workflows.get(id), { status, error });
+          return { success: true };
+        }
+        if (compactSql.includes("insert into workflow_attempts")) {
+          state.workflowAttempts.push({ domain: this.params[2], status: this.params[4] });
+          return { success: true };
+        }
         if (compactSql.includes("update driver_part_requests set price_boost_status")) {
           const [
             priceBoostStatus,
@@ -536,7 +555,10 @@ function driverPartTestEnv(db, offers) {
       vehicles: [passengerVehicle()],
       driverCandidates: [{ id: "radim-oplustil", userId: "radim-oplustil", name: "Radim Opluštil" }]
     }),
-    SMART_ODPADY_DB: db,
+    DB_CORE: db,
+    DB_AUDIT: db,
+    DB_MESSAGES: db,
+    DB_ARCHIVE: db,
     PARTS_PRICE_SEARCH_MOCK_JSON: JSON.stringify({ offers }),
     EMAIL_PROVIDER: "sendgrid",
     SENDGRID_API_KEY: "test-sendgrid-key",
@@ -1443,6 +1465,8 @@ function driverPartTestEnv(db, offers) {
     const db = createDriverPartTestDb();
     const sentEmail = await sendDriverPartOrderNotification({
       SMART_ODPADY_DB: db,
+      DB_MESSAGES: db,
+      DB_AUDIT: db,
       EMAIL_PROVIDER: "sendgrid",
       SENDGRID_API_KEY: "test-sendgrid-key",
       EMAIL_FROM: "robot@example.test"
@@ -1569,6 +1593,9 @@ function driverPartTestEnv(db, offers) {
     globalThis.fetch = originalFetch;
   }
 
+  assert.equal(verifyDb.state.workflows.size, 1);
+  assert.equal([...verifyDb.state.workflows.values()][0].status, "completed");
+  assert.deepEqual(verifyDb.state.workflowAttempts.map(item => item.domain), ["core", "audit"]);
   const row = verifyDb.state.requests.get("driver-part-request-mercedes-verify");
   const vehicleRequest = mercedesRequests.find((request) => String(request.url).includes("/vehicles/by-vin"));
   const partsRequest = mercedesRequests.find((request) => String(request.url).includes("/parts/search-by-vin"));

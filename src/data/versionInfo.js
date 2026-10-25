@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.830"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.845"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -21,6 +21,15 @@ export const versionInfo = {
 
 export const versionNews = [
   { title: "Zakázky a úhrady: příprava propojení Vistos", text: "Samostatný přehled zakázek, časových podkladů a účetních úhrad. Importy i zápis plateb čekají na ověřený instalační kontrakt a samostatná oprávnění; nová verze je sama nezapíná." },
+  { title: "Jednotné ikony aplikace", text: "Navigace, moduly a ovládací prvky mají kompaktní obrysové SVG ikony se zeleným akcentem. Vedle názvu aplikace přibyl domeček se zelenou střechou." },
+  { title: "Pohodlnější zadání nepřítomnosti", text: "Větší tlačítka pro výběr důvodu a čitelnější popisky. Hlasové zadání bylo z formulářů Nepřítomnosti odstraněno." },
+  { title: "Samostatný modul Zaměstnanci", text: "Zaměstnanci mají vlastní modul s dlaždicí, seznamem a kartami. Záložka z Nepřítomnosti se přesunula; původní odkazy i dosavadní oprávnění zůstávají funkční." },
+  { title: "Globální vyhledávání", text: "Úvodní stránka hledá napříč moduly a stránkami aplikace i v zákaznících, fakturách, dostupných vozidlech, zaměstnancích, hlášeních, datových zprávách a připomínkách. Výsledky respektují přístupová práva." },
+  { title: "Stabilní mobilní aplikace", text: "Pracovní obsah se posouvá mezi pevnými navigacemi. Formuláře respektují klávesnici a bezpečné okraje iPhonu, mapy zachovávají vlastní gesta a rychlé opakované klepnutí nespustí stejnou akci dvakrát." },
+  { title: "Společný úvod s moduly", text: "Po přihlášení se všem pracovním pozicím zobrazí stejné vyhledávání a modul Nepřítomnost. Oprávnění uvnitř modulů zůstávají zachovaná." },
+  { title: "Nepřítomnost a mobilní formuláře", text: "Jednotná podoba pracovních ploch, polí a tlačítek. Odeslání žádosti zůstává nad spodní navigací a přepínač sekcí správně rozlišuje aktuální úlohu." },
+  { title: "Kompaktní mobilní pracoviště", text: "Dnešní přehled, rychlé akce a spodní navigace. Seznamy mají stránkování, podrobnosti a filtry se rozbalují. Mapa a seznam vozidel mají vlastní zobrazení. Firemní pošta a plovoucí hlasová ikona jsou skryté." },
+  { title: "SMART ODPADY na iPhonu", text: "Aplikaci lze přidat ze Safari na plochu. Při výpadku připojení se údaje skryjí, při návratu se ověří přihlášení a vypršení relace vyžádá nové přihlášení. Odhlášení bez připojení se dokončí po obnovení spojení." },
   { title: "Vozidla: ochrana uloženého přiřazení", text: "GPS sběr nepřepisuje interní identitu, platnost ani původ existující vazby. Rozporné údaje ponechá k prověření. Čtecí kontrola tankování rozlišuje chybějící historické podklady a konflikty; sama tankování nepřepárovává." },
   { title: "Tankování: shodný detail a souhrn vozidla", text: "Detail nákladů využívá explicitní ID vozidla z Vistosu a T-Cars pro výběr jediné uložené skupiny tankování. Konfliktní skupiny se neslučují a firemní součty se nemění. Historická platnost identity zatím není ověřená." },
   { title: "Sledování vozidel: čtení SOAP polí T-Cars", text: "Parser podporuje i inline položky item v odpovědích seznamu vozidel a aktuálních poloh. Ověřuje typ a strukturu záznamu; původní formáty zůstávají zachované. Změna sama nepřepisuje identity ani historické tankování." },
@@ -1681,7 +1690,7 @@ export const versionNews = [
   },
   {
     title: "Šarlota: hlasové nepřítomnosti",
-    text: "Hlasová Šarlota v modulu Dovolená / Nemoc a Rychlé zadání nově připraví dovolenou, nemoc, OČR, lékaře, náhradní volno, neplacené volno i jinou nepřítomnost a zapisuje až po potvrzení přes KSO backend."
+    text: "Hlasová Šarlota v modulu Dovolená / Nemoc a Nepřítomnost nově připraví dovolenou, nemoc, OČR, lékaře, náhradní volno, neplacené volno i jinou nepřítomnost a zapisuje až po potvrzení přes KSO backend."
   },
   {
     title: "Datová schránka: jasné Autopilot příznaky",
@@ -2521,23 +2530,23 @@ export const versionNews = [
   },
   {
     title: "Dovolená / Nemoc",
-    text: "Navigace z Rychlého zadání nově otevírá skutečné podstránky modulu a nezůstává zamrzlá na rychlém zadání."
+    text: "Navigace z Nepřítomnosti nově otevírá skutečné podstránky modulu a nezůstává zamrzlá na nepřítomnosti."
   },
   {
     title: "Smart pomocník",
     text: "Vstupní okno, textový chat a hlasový režim mají nový prémiový vzhled bez napojení na externí AI API."
   },
   {
-    title: "Rychlé zadání",
-    text: "Klik na HP box Rychlé zadání otevře formulář přímo u otázky Co potřebujete nahlásit."
+    title: "Nepřítomnost",
+    text: "Klik na HP box Nepřítomnost otevře formulář přímo u otázky Co potřebujete nahlásit."
   },
   {
     title: "Smart pomocník",
     text: "Aplikace má první testovací UI pomocníka s textovým chatem, hlasovým ovládáním přes prohlížeč a bez ukládání konverzace."
   },
   {
-    title: "Rychlé zadání na HP",
-    text: "Na hlavní stránce je nový první box Rychlé zadání pro dovolenou, nemoc nebo lékaře přímo z mobilu."
+    title: "Nepřítomnost na HP",
+    text: "Na hlavní stránce je nový první box Nepřítomnost pro dovolenou, nemoc nebo lékaře přímo z mobilu."
   },
   {
     title: "Připomínky",
@@ -2552,7 +2561,7 @@ export const versionNews = [
     text: "Přehled uživatelů má jednoduché vyhledávání podle jména, kontaktu, role, stavu a nadřízeného."
   },
   {
-    title: "Rychlé zadání",
+    title: "Nepřítomnost",
     text: "Dovolená / Nemoc má jednoduchý mobilní režim pro vlastní žádost přes cloudové API."
   },
   {

@@ -72,7 +72,7 @@ assert.match(triageRenderSource, /data-ds-plus-triage-folder=/);
 assert.match(triageRenderSource, /data-ds-plus-triage-queue=/);
 assert.match(triageRenderSource, /data-ds-plus-triage-open=/);
 assert.match(triageRenderSource, />Otevřít<\/button>/);
-assert.match(triageRenderSource, /＋ Nová datová zpráva/);
+assert.ok(triageRenderSource.includes('${SmartIcon("plus")} Nová datová zpráva'));
 assert.match(triageRenderSource, /data-ds-plus-compose-open/);
 assert.match(triageRenderSource, /dataBoxPlusComposeOverlay\(\)/);
 assert.match(triageRenderSource, /dataBoxPlusReplyOverlay\(\)/);

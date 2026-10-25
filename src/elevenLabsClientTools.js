@@ -11,6 +11,7 @@ export const AI_ALLOWED_ROUTES = [
   "/dovolena-nemoc/moje-zadosti",
   "/dovolena-nemoc/ke-schvaleni",
   "/dovolena-nemoc/kalendar",
+  "/zamestnanci",
   "/dovolena-nemoc/zamestnanci",
   "/pneumatiky",
   "/hlaseni-ridicu",
@@ -30,6 +31,7 @@ export const AI_ALLOWED_ROUTES = [
 ];
 
 const AI_ALLOWED_ROUTE_PREFIXES = [
+  "/zamestnanci/",
   "/dovolena-nemoc/zamestnanci/",
   "/sledovani-vozidel/"
 ];
@@ -42,7 +44,8 @@ export const AI_MODULE_ROUTE_MAP = {
   "moje-zadosti": "/dovolena-nemoc/moje-zadosti",
   "ke-schvaleni": "/dovolena-nemoc/ke-schvaleni",
   kalendar: "/dovolena-nemoc/kalendar",
-  zamestnanci: "/dovolena-nemoc/zamestnanci",
+  employees: "/zamestnanci",
+  zamestnanci: "/zamestnanci",
   tyres: "/pneumatiky",
   pneumatiky: "/pneumatiky",
   "driver-reports": "/hlaseni-ridicu",

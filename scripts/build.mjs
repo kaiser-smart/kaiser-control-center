@@ -26,6 +26,8 @@ function versionedTemplate() {
     .replace('href="src/styles.css"', `href="src/styles.css?v=${assetVersion}"`)
     .replace('href="src/vistos-workspace.css"', `href="src/vistos-workspace.css?v=${assetVersion}"`)
     .replace('href="src/ui-system-pilot.css"', `href="src/ui-system-pilot.css?v=${assetVersion}"`)
+    .replace('href="src/icon-system.css"', `href="src/icon-system.css?v=${assetVersion}"`)
+    .replace('href="src/mobile-workspace.css"', `href="src/mobile-workspace.css?v=${assetVersion}"`)
     .replace('src="src/app.js"', `src="src/app.js?v=${assetVersion}"`);
 }
 
@@ -86,12 +88,11 @@ const fixedRouteEntries = [
   { path: "/", moduleKey: "dashboard", label: "Hlavní stránka" },
   { path: "/sarlota", moduleKey: "dashboard", label: "Šarlota" },
   { path: "/pripominky", moduleKey: "feedback", label: "Připomínky a chyby" },
-  { path: "/dovolena-nemoc/rychle-zadani", moduleKey: "absence", label: "Nepřítomnosti – rychlé zadání" },
+  { path: "/dovolena-nemoc/rychle-zadani", moduleKey: "absence", label: "Nepřítomnost" },
   { path: "/dovolena-nemoc/moje-zadosti", moduleKey: "absence", label: "Nepřítomnosti – moje žádosti" },
   { path: "/dovolena-nemoc/nova-zadost", moduleKey: "absence", label: "Nepřítomnosti – nová žádost" },
   { path: "/dovolena-nemoc/ke-schvaleni", moduleKey: "absence", label: "Nepřítomnosti – ke schválení" },
   { path: "/dovolena-nemoc/kalendar", moduleKey: "absence", label: "Nepřítomnosti – kalendář" },
-  { path: "/dovolena-nemoc/zamestnanci", moduleKey: "absence", label: "Nepřítomnosti – zaměstnanci" },
   { path: "/dovolena-nemoc/notifikace", moduleKey: "absence", label: "Nepřítomnosti – notifikace" },
   { path: "/dovolena-nemoc/reporty", moduleKey: "absence", label: "Nepřítomnosti – reporty" },
   { path: "/dovolena-nemoc/pravidla-automatizace", moduleKey: "absence", label: "Nepřítomnosti – pravidla" },
@@ -170,6 +171,7 @@ await writeFile(path.join(dist, "_redirects"), [
   "/sarlota /sarlota/index.html 200",
   "/pripominky/* /index.html 200",
   "/dovolena-nemoc/* /index.html 200",
+  "/zamestnanci/* /index.html 200",
   "/vozovy-park/* /index.html 200",
   "/sledovani-vozidel/* /index.html 200",
   "/pohledavky/* /pohledavky/index.html 200",
@@ -178,7 +180,10 @@ await writeFile(path.join(dist, "_redirects"), [
 ].join("\n") + "\n");
 await writeFile(path.join(dist, "_headers"), [
   "/*",
-  "  Cache-Control: no-cache"
+  "  Cache-Control: no-cache",
+  "/manifest.webmanifest",
+  "  Content-Type: application/manifest+json; charset=utf-8",
+  "  Cache-Control: no-store"
 ].join("\n") + "\n");
 
 for (const route of routes) {

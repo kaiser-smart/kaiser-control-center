@@ -1,6 +1,3 @@
-const SVG_BASE_ATTRIBUTES =
-  'class="module-icon__svg" viewBox="0 0 64 64" width="64" height="64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"';
-
-export function createSvgIcon(children) {
-  return `<svg ${SVG_BASE_ATTRIBUTES}>${children}</svg>`;
+export function createSvgIcon(children, name = "") {
+  return `<svg class="smart-icon module-icon__svg" data-icon="${name}" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#243128" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">${children}</svg>`;
 }
