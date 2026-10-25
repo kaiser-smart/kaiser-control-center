@@ -16,7 +16,7 @@ export async function relay(request,upstreamFetch=fetch){
  if(cookie)headers.set('Cookie',cookie);
  let body;
  if(request.method==='POST'){
-  body=await request.text();if(Buffer.byteLength(body)>4096)return Response.json({error:'Request too large'},{status:413});
+  body=await request.text();if(new TextEncoder().encode(body).byteLength>4096)return Response.json({error:'Request too large'},{status:413});
   headers.set('Content-Type','application/json');
  }
  try{

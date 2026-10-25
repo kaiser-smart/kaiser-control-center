@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { runInNewContext } from 'node:vm';
 import{permitted,relay,UPSTREAM}from'./integration-server.mjs';
 const origin='http://127.0.0.1:5173';
 assert(permitted(new Request(origin+'/api/me'),origin));
@@ -14,6 +16,14 @@ assert.equal(seen.url,UPSTREAM+'/api/me');assert.equal(seen.options.headers.get(
 const failure=await relay(new Request(origin+'/api/vehicle-tracking/status'),async()=>{throw Error('network');});assert.equal(failure.status,503);assert(!JSON.stringify(await failure.json()).includes('vehicles'));
 const redirect=await relay(new Request(origin+'/api/me'),async()=>new Response(null,{status:302,headers:{location:'https://another.example'}}));assert.equal(redirect.status,502);
 const forgedCookie=await relay(new Request(origin+'/api/me'),async()=>Response.json({ok:true},{headers:{'Set-Cookie':'__Host-smart_odpady_session=bad; Domain=example.com; Secure; HttpOnly'}}));assert.equal(forgedCookie.headers.get('set-cookie'),null);
+// Execute the transport with Worker Web APIs and no Node globals. Keep Node's
+// Request implementation outside the context so its own Buffer use is unaffected.
+const workerRelay=runInNewContext((await readFile(new URL('./integration-proxy.mjs',import.meta.url),'utf8')).replace(/^export /gm,'')+'\nrelay',{URL,Headers,Response,TextEncoder,AbortSignal});
+const auth=await workerRelay(new Request(origin+'/api/auth/start',{method:'POST',body:'{"identifier":"test@example.invalid"}'}),async()=>Response.json({ok:true}));
+assert.equal(auth.status,200);
+const oversized=await workerRelay(new Request(origin+'/api/auth/start',{method:'POST',body:'ž'.repeat(2049)}),async()=>{throw Error('Oversized request reached upstream');});
+assert.equal(oversized.status,413,'Enforce UTF-8 bytes, not character count');
+console.log('PASS: authentication POST works without Node Buffer; UTF-8 payload limit remains enforced.');
 console.log('PASS: exact endpoint/method/origin allowlist; backend 401 and secure cookies preserved; unrelated cookies withheld; failure stays 503 without model data; redirects rejected.');
 const worker=(await import('./integration-worker.mjs')).default;
 const preview='https://vehicle-map-v13.kaiser-control-center.pages.dev';
