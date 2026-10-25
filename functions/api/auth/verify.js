@@ -1,6 +1,6 @@
 import {
   checkRateLimit,
-  createSessionCookie,
+  createSession,
   findAllowedUser,
   isMockEnabled,
   json,
@@ -49,18 +49,19 @@ export async function onRequestPost({ request, env }) {
     return json({ error: "Přihlášení se nepodařilo." }, 401);
   }
 
-  const sessionCookie = await createSessionCookie(env, user, rememberMe);
+  const session = await createSession(env, user, rememberMe);
   console.log("auth.verify.success", { userId: user.id, role: user.role });
 
   return json(
     {
       ok: true,
+      sessionExpiresAt: session.expiresAt,
       user: publicUser({
         ...user,
         lastLoginAt: new Date().toISOString()
       })
     },
     200,
-    { "Set-Cookie": sessionCookie }
+    { "Set-Cookie": session.cookie }
   );
 }

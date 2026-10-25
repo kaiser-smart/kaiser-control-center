@@ -39,4 +39,4 @@ binding = "R2_ARCHIVE"
 bucket_name = "smart-odpady-archive"
 
 [triggers]
-crons = ["*/10 * * * *", "*/5 * * * *", "*/15 * * * *", "15 3 * * *", "7 * * * *"]
+crons = ["*/5 * * * *", "*/10 * * * *", "*/15 * * * *", "15 3 * * *", "7 * * * *"]

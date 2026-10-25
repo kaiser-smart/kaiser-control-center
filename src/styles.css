@@ -24749,6 +24749,11 @@ body:has(.data-box-page) {
   cursor: pointer;
 }
 
+.employees-page .absence-panel__head .employee-add-button,
+.employees-page .absence-panel__head .employee-add-button span {
+  color: #243116;
+}
+
 .employee-add-button span {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -28630,6 +28635,11 @@ body:has(.absence-page--employee-card) {
   width: 100%;
   padding: 12px 14px;
   text-align: left;
+}
+
+.quick-absence-type {
+  min-height:84px;
+  font-size:18px;
 }
 
 .quick-absence-choice {

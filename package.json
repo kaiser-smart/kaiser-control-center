@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.830",
+  "version": "0.1.845",
   "private": true,
   "type": "module",
   "scripts": {
@@ -40,6 +40,9 @@
     "typecheck": "node scripts/check-syntax.mjs --typecheck",
     "preview": "node scripts/serve.mjs dist",
     "test:forpsi": "node --test scripts/forpsi-*.test.mjs services/forpsi-connector/test/*.test.mjs",
+    "icons:export": "node scripts/export-icons.mjs",
+    "test:icons": "node scripts/icon-system.test.mjs",
+    "test:icons:browser": "node scripts/icon-system-browser.test.mjs",
     "test:vistos-jobs-payments": "node --test scripts/vistos-jobs-payments.test.mjs"
   },
   "engines": {

@@ -2,7 +2,13 @@
 
 ## Stav předání
 
-Vývojová větev `codex/vistos-jobs-payments`, základ `c37cd96b3313ad5d8678e1018f76bf1b9d98f72e`, verze balíku 0.1.830. Přesný výsledný SHA je v PR. **NENASAZENO; migrace nebyly spuštěny v cloudu, žádný nový runner ani účetní writer nebyl aktivován.** Ověřená produkční verze se z tohoto build čísla neodvozuje.
+Původní implementace `codex/vistos-jobs-payments` vycházela z `c37cd96b3313ad5d8678e1018f76bf1b9d98f72e`. Při autorizovaném nasazení 25. 10. 2026 byla zjištěna novější běžící produkce 0.1.844 / `b5e5a1c53a56f7e26a8225fa1e513f9cc35b0398`. Integrační větev ji zachovává a přidává Zakázky ve verzi 0.1.845. Přesný výsledný SHA a skutečný stav Pages jsou v PR; číslo balíku samo nepotvrzuje nasazení.
+
+Cloudové migrace ARCHIVE 0003, CORE 0006/0007 a AUDIT 0005 byly aplikovány přes přihlášenou D1 konzoli a nezávisle přečteny. ARCHIVE má devět nových tabulek a pět GPS sloupců, CORE devět tabulek a tři pravidla `inactive`, AUDIT dvě tabulky a index historie. Kapacita před změnou: CORE 266,92 MB, ARCHIVE 2,36 GB, AUDIT 1,23 GB. Původní legacy databáze má 10 GB; globální kapacitní ochrana zůstává zapnutá.
+
+Kompatibilní monitor je nasazen jako `9a32e44c-9df6-48db-8ca1-a8c5aa9afde9`; readback potvrdil zachování všech původních bindingů a čtyři nové přepínače `false`. Předchozí worker: `20e87053-71df-452f-98bf-4b8ff3c119fc`. Nový import, časové obohacení ani účetní writer nebyly aktivovány.
+
+Body obnovy před migracemi (pouze evidence, ne pokyn k obnově celé živé DB): ARCHIVE `00000a57-000000a0-0000510f-b1010e17fc0a234d7aaa68bb245772ee`, CORE `0000066a-00000466-0000510f-cb9d5744bb57c14426fbb52e1bc99c64`, AUDIT `00000a5e-0000009a-0000510f-12ceb868608686e9b46bcb784c77d0dd`. Pro frontend je ověřený předchozí deployment 0.1.844 `00e2a589-6ad4-4840-bd6e-7b9873d20dfe`.
 
 Vzdálené větve s názvem payment zahrnují existující KB import, účetní párování a čtecí audit. Kontrola main nenašla druhou implementaci Create/Save/Remove Payment. To není důkaz, že Money nebo jiný systém v provozu nezapisuje. Výhradní zapisovatel musí být doložen samostatně pro firmu, bankovní účet, zdroj a období.
 
@@ -42,7 +48,7 @@ Frontend lze vrátit na předchozí schválený build, ale nemažte outbox, alok
 | Podmínka | Odpovědná strana | Konkrétní potřebný důkaz |
 |---|---|---|
 | Živé čtení nyní nedostupné: endpoint v aktuální browser relaci vrátil `Nepřihlášeno.` | Správa přístupu Smart/Vistos + implementátor | Přihlášené povolené čtení schema/list/detail; skutečné vzorky požadovaných stavů a vazeb |
-| Kapacita a migrace D1 NEOVĚŘENO | Správce Cloudflare | Aktuální kapacita, záloha, migrační/readback výstup po doménách |
+| Schéma a aktuální kapacita ověřeny; rozpočet hromadného importu dosud ne | Správce Cloudflare | Před aktivací importu doložit objem, retenci a kapacitu; globální ochranu nevypínat |
 | Výhradní účetní zapisovatel NEOVĚŘENO | Účetní správce Money/Vistos | Potvrzení konkrétní firmy, bankovního zdroje a období bez dvojího zápisu |
 | Účetní API kontrakt NEOVĚŘENO | Správce Vistos + implementátor | Povolené testovací doklady a výsledky Create/Save/Remove/přepočtu; žádné skutečné faktury jako test |
 | Historické identity, lokality a T-Cars práva NEOVĚŘENO | Správa vozidel/T-Cars + implementátor | Platné aliasy, intervaly, soukromí, zóna a doložený geofence; nikoli odhad podle řidiče |

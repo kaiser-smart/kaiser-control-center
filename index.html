@@ -2,12 +2,18 @@
 <html lang="cs">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta
       name="description"
       content="Smart odpady - provozní systém pro odpady, vozidla a trasy."
     />
     <title>Smart odpady</title>
+    <meta name="application-name" content="SMART ODPADY" />
+    <meta name="theme-color" content="#75bd25" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="SMART ODPADY" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <script>
       const pathParts = location.pathname.split("/").filter(Boolean);
       const basePath = location.hostname.endsWith("github.io") && pathParts.length > 0
@@ -15,6 +21,8 @@
         : "/";
       document.write(`<base href="${basePath}">`);
     </script>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -23,6 +31,8 @@
     />
     <link rel="stylesheet" href="src/styles.css" />
     <link rel="stylesheet" href="src/ui-system-pilot.css" />
+    <link rel="stylesheet" href="src/mobile-workspace.css" />
+    <link rel="stylesheet" href="src/icon-system.css" />
     <link rel="stylesheet" href="src/vistos-workspace.css" />
   </head>
   <body>

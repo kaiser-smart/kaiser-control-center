@@ -1,3 +1,4 @@
+import { SmartIcon } from "./icons/SmartIcon.js";
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -24,7 +25,7 @@ export function AiWelcomeModal({ visible = false, animate = true } = {}) {
         aria-describedby="ai-welcome-description"
       >
         <div class="ai-welcome-modal__voice-mark" aria-hidden="true">
-          <span class="ai-welcome-modal__mic"></span>
+          ${SmartIcon("microphone")}
         </div>
         <span class="ai-welcome-modal__badge">SMART ODPADY</span>
         <h2 id="ai-welcome-title">Potřebuješ pomoct?</h2>
@@ -39,7 +40,7 @@ export function AiWelcomeModal({ visible = false, animate = true } = {}) {
             Textový pomocník
           </button>
           <button class="ai-voice-start-button" type="button" data-ai-welcome-action="voice">
-            <span class="ai-voice-start-button__icon" aria-hidden="true"></span>
+            <span class="ai-voice-start-button__icon" aria-hidden="true">${SmartIcon("microphone")}</span>
             Hlasový pomocník
           </button>
         </div>

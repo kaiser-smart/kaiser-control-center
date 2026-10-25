@@ -31,18 +31,17 @@ export const VEHICLE_TRACKING_GEOFENCING_NOTICE = "Geofencing alerty jsou připr
 export const VEHICLE_TRACKING_ICON_WAITING = "Ikony dodány a připraveny v mapě.";
 
 export const VEHICLE_TRACKING_ICON_FORMATS = [
-  "PNG s transparentním pozadím",
-  "WebP s transparentním pozadím",
-  "128 x 128 px nebo 256 x 256 px",
+  "SVG s transparentním pozadím",
+  "vektorová mřížka 24 × 24",
   "zobrazení v mapě 36-48 px",
-  "max. 100 KB na ikonu"
+  "méně než 1 KB na ikonu"
 ];
 
 export const VEHICLE_TRACKING_ICON_REQUIREMENTS = [
-  "3D-look je povolený, skutečný 3D model ne",
-  "horní šikmý pohled cca 45 stupňů",
+  "minimalistické 2D obrysy #243128",
+  "zelený akcent #75BD25",
   "bez SPZ, malých textů a pozadí",
-  "stejný úhel pohledu u všech ikon",
+  "jednotné oblé linky; orientace mapových ikon na sever",
   "stav vozidla řeší CSS obrys / badge"
 ];
 
@@ -51,144 +50,151 @@ export const VEHICLE_TRACKING_ICON_TYPES = [
     key: "collection_truck",
     label: "Svozové vozidlo",
     slug: "svozove-vozidlo",
-    primary: "/vehicles/icons/svozove-vozidlo.png",
-    webp: "/vehicles/icons/svozove-vozidlo.webp"
+    primary: "/vehicles/icons/svozove-vozidlo.svg",
+    webp: "/vehicles/icons/svozove-vozidlo.svg"
   },
   {
     key: "container_truck",
     label: "Kontejnerové vozidlo",
     slug: "kontejnerove-vozidlo",
-    primary: "/vehicles/icons/kontejnerove-vozidlo.png",
-    webp: "/vehicles/icons/kontejnerove-vozidlo.webp"
+    primary: "/vehicles/icons/kontejnerove-vozidlo.svg",
+    webp: "/vehicles/icons/kontejnerove-vozidlo.svg"
   },
   {
     key: "van",
     label: "Dodávka",
     slug: "dodavka",
-    primary: "/vehicles/icons/dodavka.png",
-    webp: "/vehicles/icons/dodavka.webp"
+    primary: "/vehicles/icons/dodavka.svg",
+    webp: "/vehicles/icons/dodavka.svg"
   },
   {
     key: "special",
     label: "Speciální technika",
     slug: "specialni-technika",
-    primary: "/vehicles/icons/specialni-technika.png",
-    webp: "/vehicles/icons/specialni-technika.webp"
+    primary: "/vehicles/icons/specialni-technika.svg",
+    webp: "/vehicles/icons/specialni-technika.svg"
   },
   {
     key: "car",
     label: "Osobní vozidlo",
     slug: "osobni-vozidlo",
-    primary: "/vehicles/icons/osobni-vozidlo.png",
-    webp: "/vehicles/icons/osobni-vozidlo.webp"
+    primary: "/vehicles/icons/osobni-vozidlo.svg",
+    webp: "/vehicles/icons/osobni-vozidlo.svg"
   },
   {
     key: "trailer",
     label: "Přívěs / návěs",
     slug: "prives-naves",
-    primary: "/vehicles/icons/prives-naves.png",
-    webp: "/vehicles/icons/prives-naves.webp"
+    primary: "/vehicles/icons/prives-naves.svg",
+    webp: "/vehicles/icons/prives-naves.svg"
   }
 ];
 
 export const VEHICLE_ICON_BY_TYPE = {
-  collection_truck: "/vehicles/icons/svozove-vozidlo.png",
-  container_truck: "/vehicles/icons/kontejnerove-vozidlo.png",
-  van: "/vehicles/icons/dodavka.png",
-  special: "/vehicles/icons/specialni-technika.png",
-  car: "/vehicles/icons/osobni-vozidlo.png",
-  trailer: "/vehicles/icons/prives-naves.png"
+  collection_truck: "/vehicles/icons/svozove-vozidlo.svg",
+  container_truck: "/vehicles/icons/kontejnerove-vozidlo.svg",
+  van: "/vehicles/icons/dodavka.svg",
+  special: "/vehicles/icons/specialni-technika.svg",
+  car: "/vehicles/icons/osobni-vozidlo.svg",
+  trailer: "/vehicles/icons/prives-naves.svg"
 };
 
 export const VEHICLE_ICON_WEBP_BY_TYPE = {
-  collection_truck: "/vehicles/icons/svozove-vozidlo.webp",
-  container_truck: "/vehicles/icons/kontejnerove-vozidlo.webp",
-  van: "/vehicles/icons/dodavka.webp",
-  special: "/vehicles/icons/specialni-technika.webp",
-  car: "/vehicles/icons/osobni-vozidlo.webp",
-  trailer: "/vehicles/icons/prives-naves.webp"
+  collection_truck: "/vehicles/icons/svozove-vozidlo.svg",
+  container_truck: "/vehicles/icons/kontejnerove-vozidlo.svg",
+  van: "/vehicles/icons/dodavka.svg",
+  special: "/vehicles/icons/specialni-technika.svg",
+  car: "/vehicles/icons/osobni-vozidlo.svg",
+  trailer: "/vehicles/icons/prives-naves.svg"
 };
 
-// Dodané 3D ikony jsou kreslené pohledem zleva dole. Nulový azimut T-Cars je
-// ale sever, proto se jejich vizuální směr kalibruje odděleně od směru mapy.
-// Profily zůstávají samostatné, abychom mohli jednotlivé typy později doladit
-// bez zásahu do GPS dat nebo kamery mapy.
+// Mapové SVG jsou kreslené směrem na sever. GPS azimut se nemění.
 export const VEHICLE_TRACKING_ICON_HEADING_OFFSETS = Object.freeze({
-  collection_truck: 135,
-  container_truck: 135,
-  van: 135,
-  special: 135,
-  car: 135,
-  trailer: 135
+  collection_truck: 0,
+  container_truck: 0,
+  van: 0,
+  special: 0,
+  car: 0,
+  trailer: 0
 });
 
 export const VEHICLE_TRACKING_CUSTOM_ICON_BY_LICENSE_PLATE = Object.freeze({
-  "8B43007": "/vehicles/icons/man-abroll.png",
-  "1BM1150": "/vehicles/icons/man-abroll.png",
-  "3BF1394": "/vehicles/icons/mercedes-abroll-v2.png",
-  "1BR6359": "/vehicles/icons/mercedes-abroll-v2.png",
-  "2BD8835": "/vehicles/icons/mercedes-abroll-v2.png",
-  "3BP5305": "/vehicles/icons/mercedes-abroll-v2.png",
-  "3BH5548": "/vehicles/icons/mercedes-ramenac-v2.png",
-  "5B80857": "/vehicles/icons/mercedes-ramenac-v2.png",
-  "3BP2836": "/vehicles/icons/mercedes-ramenac-v2.png",
-  "2BC1983": "/vehicles/icons/skoda-citigo-v2.png",
-  "2BC1984": "/vehicles/icons/skoda-citigo-v2.png",
-  "1BP8373": "/vehicles/icons/mercedes-popelarske.png",
-  "3BN3558": "/vehicles/icons/mercedes-popelarske.png",
-  "3BE2831": "/vehicles/icons/mercedes-popelarske.png",
-  "6B93840": "/vehicles/icons/man-popelarske.png",
-  "1BV6295": "/vehicles/icons/mercedes-skrin.png",
-  "2BE2247": "/vehicles/icons/mercedes-skrin.png",
-  "3BI2007": "/vehicles/icons/daf-abroll.png",
-  "2BR0904": "/vehicles/icons/man-ramenac.png",
-  "9B46276": "/vehicles/icons/fuso-v2.png",
-  "2BJ7654": "/vehicles/icons/iveco-rioned-v2.png",
-  "1BI4520": "/vehicles/icons/man-cisterna-v2.png",
-  "9C83570": "/vehicles/icons/mercedes-cisterna-milanek-v2.png",
-  "5B14417": "/vehicles/icons/man-cisterna-v2.png",
-  "5E73753": "/vehicles/icons/man-cisterna-v2.png",
-  "1BC3390": "/vehicles/icons/man-cisterna-v2.png",
-  "3BK4123": "/vehicles/icons/skoda-kamiq-v2.png",
-  "3BI9901": "/vehicles/icons/skoda-kamiq-v2.png",
-  "9B29971": "/vehicles/icons/opel-astra-v2.png",
-  "8B42064": "/vehicles/icons/opel-astra-v2.png",
-  "3BK5611": "/vehicles/icons/toyota-proace-v2.png",
-  "2BK7741": "/vehicles/icons/mercedes-vito.png",
-  "3BH3767": "/vehicles/icons/actros-vlek.png",
-  "HYUNDAIVZV": "/vehicles/icons/hyundai-vzv.png",
-  "VIN000098": "/vehicles/icons/hyundai-vzv.png",
-  "2BS6064": "/vehicles/icons/daf-naves-jenda-v2.png"
+  "8B43007": "/vehicles/icons/man-abroll.svg",
+  "1BM1150": "/vehicles/icons/man-abroll.svg",
+  "3BF1394": "/vehicles/icons/mercedes-abroll-v2.svg",
+  "1BR6359": "/vehicles/icons/mercedes-abroll-v2.svg",
+  "2BD8835": "/vehicles/icons/mercedes-abroll-v2.svg",
+  "3BP5305": "/vehicles/icons/mercedes-abroll-v2.svg",
+  "3BH5548": "/vehicles/icons/mercedes-ramenac-v2.svg",
+  "5B80857": "/vehicles/icons/mercedes-ramenac-v2.svg",
+  "3BP2836": "/vehicles/icons/mercedes-ramenac-v2.svg",
+  "2BC1983": "/vehicles/icons/skoda-citigo-v2.svg",
+  "2BC1984": "/vehicles/icons/skoda-citigo-v2.svg",
+  "1BP8373": "/vehicles/icons/mercedes-popelarske.svg",
+  "3BN3558": "/vehicles/icons/mercedes-popelarske.svg",
+  "3BE2831": "/vehicles/icons/mercedes-popelarske.svg",
+  "6B93840": "/vehicles/icons/man-popelarske.svg",
+  "1BV6295": "/vehicles/icons/mercedes-skrin.svg",
+  "2BE2247": "/vehicles/icons/mercedes-skrin.svg",
+  "3BI2007": "/vehicles/icons/daf-abroll.svg",
+  "2BR0904": "/vehicles/icons/man-ramenac.svg",
+  "9B46276": "/vehicles/icons/fuso-v2.svg",
+  "2BJ7654": "/vehicles/icons/iveco-rioned-v2.svg",
+  "1BI4520": "/vehicles/icons/man-cisterna-v2.svg",
+  "9C83570": "/vehicles/icons/mercedes-cisterna-milanek-v2.svg",
+  "5B14417": "/vehicles/icons/man-cisterna-v2.svg",
+  "5E73753": "/vehicles/icons/man-cisterna-v2.svg",
+  "1BC3390": "/vehicles/icons/man-cisterna-v2.svg",
+  "3BK4123": "/vehicles/icons/skoda-kamiq-v2.svg",
+  "3BI9901": "/vehicles/icons/skoda-kamiq-v2.svg",
+  "9B29971": "/vehicles/icons/opel-astra-v2.svg",
+  "8B42064": "/vehicles/icons/opel-astra-v2.svg",
+  "3BK5611": "/vehicles/icons/toyota-proace-v2.svg",
+  "2BK7741": "/vehicles/icons/mercedes-vito.svg",
+  "3BH3767": "/vehicles/icons/actros-vlek.svg",
+  "HYUNDAIVZV": "/vehicles/icons/hyundai-vzv.svg",
+  "VIN000098": "/vehicles/icons/hyundai-vzv.svg",
+  "2BS6064": "/vehicles/icons/daf-naves-jenda-v2.svg"
 });
 
 const VEHICLE_TRACKING_CUSTOM_ICON_BY_TEXT = Object.freeze([
-  [/\b(?:mercedes|mb)\b.*\b(?:skrin|skříň|box)\b|\bskrin(?:ovy|ový)?\b/, "/vehicles/icons/mercedes-skrin.png"],
-  [/\b(?:daf)\b.*\b(?:abroll|hooklift|nosi[cč])\b|\babroll\b.*\bdaf\b/, "/vehicles/icons/daf-abroll.png"],
-  [/\b(?:man)\b.*\b(?:ramenac|ramenáč|hak)\b|\bramenac\b/, "/vehicles/icons/man-ramenac.png"],
-  [/\bfuso\b/, "/vehicles/icons/fuso-v2.png"],
-  [/\b(?:iveco)\b.*\b(?:rioned|cisteni|čištění)\b|\brioned\b/, "/vehicles/icons/iveco-rioned-v2.png"],
-  [/\b(?:mercedes|mb)\b.*\b(?:cisterna|cistern|ibos)\b.*\b(?:milanek|milánek)\b/, "/vehicles/icons/mercedes-cisterna-milanek-v2.png"],
-  [/\b(?:mercedes|mb)\b.*\b(?:ibos|cisterna|cistern)\b|\bmercedes\s+ibos\b/, "/vehicles/icons/mercedes-cisterna-milanek-v2.png"],
-  [/\bdaf\b.*\b(?:naves|návěs|jenda|ibos|cisterna|cistern)\b/, "/vehicles/icons/daf-naves-jenda-v2.png"],
-  [/\bman\b.*\b(?:cisterna|cistern|tanker)\b/, "/vehicles/icons/man-cisterna-v2.png"],
-  [/\b(?:jcb|jcm|manitou)\b.*\b(?:mlt\s*630|630)\b/, "/vehicles/icons/manitou-mlt-630-v2.png"],
-  [/\b(?:jcb|jcm|manitou)\b.*\b(?:mt\s*625h|625h)\b/, "/vehicles/icons/manitou-mt-625h-v2.png"],
-  [/\b(?:jcb|jcm|manitou)\b.*\bmlt\b/, "/vehicles/icons/manitou-mlt-v2.png"],
-  [/\b(?:mercedes|mb)\b.*\bsprinter\b.*\bandrej\b/, "/vehicles/icons/mercedes-sprinter-andrej-v2.png"],
-  [/\b(?:mercedes|mb)\b.*\bsprinter\b.*\b(?:el|dodavka|dodávka)\b/, "/vehicles/icons/mercedes-sprinter-el-v2.png"],
-  [/\b(?:mercedes|mb)\b.*\bsprinter\b/, "/vehicles/icons/mercedes-sprinter-el-v2.png"],
-  [/\bford\b.*\b(?:transit|tranzit)\b|\b(?:transit|tranzit)\b/, "/vehicles/icons/ford-transit-v2.png"],
-  [/\b(?:mercedes|mb)\b.*\bcitan\b|\bcitan\b/, "/vehicles/icons/mercedes-citan-v2.png"],
-  [/\b(?:skoda|škoda)\b.*\b(?:kamiq|kamiq)\b|\bkamiq\b/, "/vehicles/icons/skoda-kamiq-v2.png"],
-  [/\b(?:skoda|škoda)\b.*\bkaroq\b|\bkaroq\b/, "/vehicles/icons/skoda-karoq-v2.png"],
-  [/\baudi\b.*\ba\s?1\b|\ba\s?1\b.*\baudi\b/, "/vehicles/icons/audi-a1-v2.png"],
-  [/\bopel\b.*\bgrandland\b|\bgrandland\b/, "/vehicles/icons/opel-grandland-v2.png"],
-  [/\b(?:opel)\b.*\b(?:astra)\b|\bopel\s+astra\b/, "/vehicles/icons/opel-astra-v2.png"],
-  [/\b(?:toyota)\b.*\b(?:proace)\b|\bproace\b/, "/vehicles/icons/toyota-proace-v2.png"],
-  [/\b(?:mercedes|mb)\b.*\b(?:vito)\b|\bvito\b/, "/vehicles/icons/mercedes-vito.png"],
-  [/\b(?:actros|mercedes)\b.*\b(?:vlek|naves|návěs|trailer)\b|\bactros\s+vlek\b/, "/vehicles/icons/actros-vlek.png"],
-  [/\b(?:hyundai)\b.*\b(?:vzv|forklift|vidle)\b|\b(?:vzv|forklift)\b/, "/vehicles/icons/hyundai-vzv.png"]
+  [/\b(?:mercedes|mb)\b.*\b(?:skrin|skříň|box)\b|\bskrin(?:ovy|ový)?\b/, "/vehicles/icons/mercedes-skrin.svg"],
+  [/\b(?:daf)\b.*\b(?:abroll|hooklift|nosi[cč])\b|\babroll\b.*\bdaf\b/, "/vehicles/icons/daf-abroll.svg"],
+  [/\b(?:man)\b.*\b(?:ramenac|ramenáč|hak)\b|\bramenac\b/, "/vehicles/icons/man-ramenac.svg"],
+  [/\bfuso\b/, "/vehicles/icons/fuso-v2.svg"],
+  [/\b(?:iveco)\b.*\b(?:rioned|cisteni|čištění)\b|\brioned\b/, "/vehicles/icons/iveco-rioned-v2.svg"],
+  [/\b(?:mercedes|mb)\b.*\b(?:cisterna|cistern|ibos)\b.*\b(?:milanek|milánek)\b/, "/vehicles/icons/mercedes-cisterna-milanek-v2.svg"],
+  [/\b(?:mercedes|mb)\b.*\b(?:ibos|cisterna|cistern)\b|\bmercedes\s+ibos\b/, "/vehicles/icons/mercedes-cisterna-milanek-v2.svg"],
+  [/\bdaf\b.*\b(?:naves|návěs|jenda|ibos|cisterna|cistern)\b/, "/vehicles/icons/daf-naves-jenda-v2.svg"],
+  [/\bman\b.*\b(?:cisterna|cistern|tanker)\b/, "/vehicles/icons/man-cisterna-v2.svg"],
+  [/\b(?:jcb|jcm|manitou)\b.*\b(?:mlt\s*630|630)\b/, "/vehicles/icons/manitou-mlt-630-v2.svg"],
+  [/\b(?:jcb|jcm|manitou)\b.*\b(?:mt\s*625h|625h)\b/, "/vehicles/icons/manitou-mt-625h-v2.svg"],
+  [/\b(?:jcb|jcm|manitou)\b.*\bmlt\b/, "/vehicles/icons/manitou-mlt-v2.svg"],
+  [/\b(?:mercedes|mb)\b.*\bsprinter\b.*\bandrej\b/, "/vehicles/icons/mercedes-sprinter-andrej-v2.svg"],
+  [/\b(?:mercedes|mb)\b.*\bsprinter\b.*\b(?:el|dodavka|dodávka)\b/, "/vehicles/icons/mercedes-sprinter-el-v2.svg"],
+  [/\b(?:mercedes|mb)\b.*\bsprinter\b/, "/vehicles/icons/mercedes-sprinter-el-v2.svg"],
+  [/\bford\b.*\b(?:transit|tranzit)\b|\b(?:transit|tranzit)\b/, "/vehicles/icons/ford-transit-v2.svg"],
+  [/\b(?:mercedes|mb)\b.*\bcitan\b|\bcitan\b/, "/vehicles/icons/mercedes-citan-v2.svg"],
+  [/\b(?:skoda|škoda)\b.*\b(?:kamiq|kamiq)\b|\bkamiq\b/, "/vehicles/icons/skoda-kamiq-v2.svg"],
+  [/\b(?:skoda|škoda)\b.*\bkaroq\b|\bkaroq\b/, "/vehicles/icons/skoda-karoq-v2.svg"],
+  [/\baudi\b.*\ba\s?1\b|\ba\s?1\b.*\baudi\b/, "/vehicles/icons/audi-a1-v2.svg"],
+  [/\bopel\b.*\bgrandland\b|\bgrandland\b/, "/vehicles/icons/opel-grandland-v2.svg"],
+  [/\b(?:opel)\b.*\b(?:astra)\b|\bopel\s+astra\b/, "/vehicles/icons/opel-astra-v2.svg"],
+  [/\b(?:toyota)\b.*\b(?:proace)\b|\bproace\b/, "/vehicles/icons/toyota-proace-v2.svg"],
+  [/\b(?:mercedes|mb)\b.*\b(?:vito)\b|\bvito\b/, "/vehicles/icons/mercedes-vito.svg"],
+  [/\b(?:actros|mercedes)\b.*\b(?:vlek|naves|návěs|trailer)\b|\bactros\s+vlek\b/, "/vehicles/icons/actros-vlek.svg"],
+  [/\b(?:hyundai)\b.*\b(?:vzv|forklift|vidle)\b|\b(?:vzv|forklift)\b/, "/vehicles/icons/hyundai-vzv.svg"]
 ]);
+
+const builtInVehicleSvgPaths = new Set([
+  ...VEHICLE_TRACKING_ICON_TYPES.map(item => item.primary),
+  ...Object.values(VEHICLE_TRACKING_CUSTOM_ICON_BY_LICENSE_PLATE),
+  ...VEHICLE_TRACKING_CUSTOM_ICON_BY_TEXT.map(([, source]) => source)
+]);
+export function vehicleTrackingSvgIconSource(source = "") {
+  const candidate = String(source).replace(/\.(png|webp)$/, ".svg");
+  return builtInVehicleSvgPaths.has(candidate) ? candidate : source;
+}
 
 const VEHICLE_ICON_TYPE_ALIASES = {
   collection_truck: "collection_truck",

@@ -23,6 +23,7 @@ const TARGETS = Object.freeze({
   settings: { moduleKey: "settings", moduleName: "Nastavení", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl },
   "system-check": { moduleKey: "system-check", moduleName: "Stav systému", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl },
   "self-repair": { moduleKey: "self-repair", moduleName: "Samoopravy", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl },
+  employees: { moduleKey: "employees", moduleName: "Zaměstnanci", repoKey: "kaiser-control-center", productionUrl: "https://smart-odpady.ai/zamestnanci" },
   absence: { moduleKey: "absence", moduleName: "Nepřítomnosti", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl },
   feedback: { moduleKey: "feedback", moduleName: "Připomínky a chyby", repoKey: "kaiser-control-center", productionUrl: DEFAULT_TARGET.productionUrl }
 });
@@ -45,6 +46,7 @@ const ALIASES = Object.freeze({
   "kontrola-systemu": "system-check",
   samoopravy: "self-repair",
   "dovolena-nemoc": "absence",
+  zamestnanci: "employees",
   pripominky: "feedback"
 });
 

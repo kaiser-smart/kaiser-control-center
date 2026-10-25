@@ -267,7 +267,7 @@ async function hmac(env, value) {
   return bytesToBase64Url(new Uint8Array(signature));
 }
 
-export async function createSessionCookie(env, user, rememberMe = false) {
+export async function createSession(env, user, rememberMe = false) {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     sub: user.id,
@@ -279,7 +279,14 @@ export async function createSessionCookie(env, user, rememberMe = false) {
   const signature = await hmac(env, encodedPayload);
   const maxAge = payload.exp - now;
 
-  return `${cookieName(env)}=${encodedPayload}.${signature}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+  return {
+    cookie: `${cookieName(env)}=${encodedPayload}.${signature}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`,
+    expiresAt: payload.exp * 1000
+  };
+}
+
+export async function createSessionCookie(env, user, rememberMe = false) {
+  return (await createSession(env, user, rememberMe)).cookie;
 }
 
 export async function verifySession(env, request) {
@@ -295,8 +302,8 @@ export async function verifySession(env, request) {
     return null;
   }
 
-  const [encodedPayload, signature] = raw.split(".");
-  if (!encodedPayload || !signature) {
+  const [encodedPayload, signature, extra] = raw.split(".");
+  if (!encodedPayload || !signature || extra !== undefined) {
     return null;
   }
 
@@ -305,9 +312,11 @@ export async function verifySession(env, request) {
     return null;
   }
 
-  const payload = JSON.parse(base64UrlDecodeText(encodedPayload));
+  let payload;
+  try { payload = JSON.parse(base64UrlDecodeText(encodedPayload)); }
+  catch { return null; }
   const now = Math.floor(Date.now() / 1000);
-  if (!payload.exp || payload.exp < now) {
+  if (!payload || !Number.isFinite(payload.exp) || payload.exp <= now) {
     return null;
   }
 

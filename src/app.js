@@ -1,6 +1,11 @@
 import { vistosWorkspaceSection, mountVistosWorkspace } from "./components/VistosWorkspace.js";
-import { forpsiAdminSection, mountForpsiAdmin, forpsiDirtyTarget, saveForpsiDraft, discardForpsiDraft } from "./components/ForpsiAdminPanel.js";
-import { forpsiMailSection, mountForpsiMail } from "./components/ForpsiMailPanel.js";
+import { searchNavigation } from "./data/globalSearch.js";
+import { vehicleTrackingSvgIconSource } from "./data/vehicleTracking.js";
+import { SmartIcon, ModuleIcon } from "./components/icons/SmartIcon.js";
+import { applyMobileWorkspace, revealMobileTarget } from "./mobileWorkspace.js";
+import { createSessionGuard } from "./data/sessionGuard.js";
+import { mountForpsiAdmin, forpsiDirtyTarget, saveForpsiDraft, discardForpsiDraft } from "./components/ForpsiAdminPanel.js";
+import { mountForpsiMail } from "./components/ForpsiMailPanel.js";
 import { forpsiComposerDirtyTarget, saveForpsiComposer, discardForpsiComposer } from "./components/ForpsiComposer.js";
 import { receivablesInvoicePage } from "./data/receivablesInvoicePagination.js";
 import { moduleDashboards, modules } from "./data/modules.js";
@@ -452,7 +457,8 @@ const FLEET_TAB_WAITING_MESSAGES = {
 };
 const VEHICLE_TRACKING_BASE_ROUTE = VEHICLE_TRACKING_ROUTE;
 const ABSENCE_ROUTE = "/dovolena-nemoc";
-const EMPLOYEE_CARD_ROUTE_PREFIX = "/dovolena-nemoc/zamestnanci";
+const EMPLOYEE_CARD_ROUTE_PREFIX = "/zamestnanci";
+const LEGACY_EMPLOYEE_ROUTE_PREFIX = "/dovolena-nemoc/zamestnanci";
 const ABSENCE_QUICK_ROUTE = "/dovolena-nemoc/rychle-zadani";
 const QUICK_ABSENCE_ENTRY_HASH = "#co-potrebujete";
 const QUICK_ABSENCE_ENTRY_ROUTE = `${ABSENCE_QUICK_ROUTE}${QUICK_ABSENCE_ENTRY_HASH}`;
@@ -463,14 +469,13 @@ const ABSENCE_TAB_ROUTES = {
   new: "/dovolena-nemoc/nova-zadost",
   approval: "/dovolena-nemoc/ke-schvaleni",
   calendar: "/dovolena-nemoc/kalendar",
-  "employee-card": EMPLOYEE_CARD_ROUTE_PREFIX,
   reports: "/dovolena-nemoc/reporty",
   "rules-automation": "/dovolena-nemoc/pravidla-automatizace",
   settings: "/dovolena-nemoc/nastaveni"
 };
 const quickAbsenceMenuItem = {
   id: "quick-absence",
-  title: "Rychlé zadání",
+  title: "Nepřítomnost",
   description: "Rychle zapsat událost, požadavek nebo nepřítomnost.",
   route: QUICK_ABSENCE_ENTRY_ROUTE,
   icon: QuickAbsenceIcon,
@@ -504,7 +509,7 @@ const HOME_MODULE_SECTIONS = [
     id: "administration",
     title: "Administrativa",
     description: "Reporty, připomínky a podpůrné administrativní přehledy.",
-    moduleIds: ["reports", "feedback"]
+    moduleIds: ["employees", "reports", "feedback"]
   },
   {
     id: "finance",
@@ -921,6 +926,23 @@ let authState = {
   error: "",
   mockCode: false
 };
+
+const sessionGuard = createSessionGuard({
+  root: app,
+  getUser: () => authState.user,
+  onSignOut: () => {
+    if (collectionRoutesPilotState.myDailyRouteNavigationActive) stopCollectionDailyDriverNavigation({ renderAfter: false });
+    resetAiAssistantSession();
+  },
+  onEnd: () => {
+    clearLocalSession();
+    window.location.replace(routeHref("/"));
+  },
+  onUserChanged: () => {
+    authState.user = null;
+    window.location.reload();
+  }
+});
 
 const adminUsersState = {
   loaded: false,
@@ -2383,7 +2405,7 @@ function absenceModuleItem() {
 }
 
 function renderModuleIcon(moduleItem) {
-  return moduleItem.icon();
+  return ModuleIcon(moduleItem.id);
 }
 
 function statusBadge(moduleItem) {
@@ -2681,7 +2703,7 @@ const UI_SYSTEM_PILOT_NAV_GROUPS = [
   },
   {
     label: "Hlavní práce",
-    moduleIds: ["quick-absence", "jobs", "collection-routes", "driver-reports", "vehicle-tracking", "forpsi-mail", "data-box-plus", "rcs-sms-autopilot"]
+    moduleIds: ["quick-absence", "jobs", "collection-routes", "driver-reports", "vehicle-tracking", "data-box-plus", "rcs-sms-autopilot"]
   },
   {
     label: "Vozidla a servis",
@@ -2697,13 +2719,13 @@ const UI_SYSTEM_PILOT_NAV_GROUPS = [
   },
   {
     label: "Správa systému",
-    moduleIds: ["absence", "users", "settings", "system-check", "self-repair", "feedback"]
+    moduleIds: ["absence", "employees", "users", "settings", "system-check", "self-repair", "feedback"]
   }
 ];
 
 const UI_SYSTEM_PILOT_NAV_LABELS = {
-  dashboard: "Dashboard",
-  "quick-absence": "Rychlé zadání",
+  dashboard: "Moduly",
+  "quick-absence": "Nepřítomnost",
   "collection-routes": "Trasy svozu",
   "driver-reports": "Hlášení z vozidel",
   "vehicle-tracking": "Poloha vozidel",
@@ -2717,6 +2739,7 @@ const UI_SYSTEM_PILOT_NAV_LABELS = {
   costs: "Náklady",
   reports: "Reporty",
   absence: "Nepřítomnosti",
+  employees: "Zaměstnanci",
   users: "Uživatelé a role",
   receivables: "Nezaplacené faktury",
   settings: "Nastavení",
@@ -2730,7 +2753,7 @@ function uiSystemPilotModulesForUser(user) {
     ? [quickAbsenceMenuItem, ...menuModules(user)]
     : menuModules(user);
 
-  return new Map([...items,{id:"forpsi-mail",title:"Pošta",route:"/dashboard?view=forpsi-mail",icon:ReportsIcon}].map((moduleItem) => [moduleItem.id, moduleItem]));
+  return new Map(items.map((moduleItem) => [moduleItem.id, moduleItem]));
 }
 
 function uiSystemPilotModuleHref(moduleItem, user) {
@@ -2758,7 +2781,7 @@ function uiSystemPilotSidebar(user, activeModuleId = "dashboard") {
                 data-link
                 ${active ? 'aria-current="page"' : ""}
               >
-                <span class="ui-pilot-nav__icon" aria-hidden="true">${renderModuleIcon(moduleItem)}</span>
+                <span class="ui-pilot-nav__icon" aria-hidden="true">${moduleItem.id === "dashboard" ? SmartIcon("modules") : renderModuleIcon(moduleItem)}</span>
                 <span>${escapeHtml(UI_SYSTEM_PILOT_NAV_LABELS[moduleItem.id] || moduleItem.title)}</span>
               </a>
             `;
@@ -2773,7 +2796,7 @@ function uiSystemPilotSidebar(user, activeModuleId = "dashboard") {
       <a class="ui-pilot-brand" href="${routeHref("/")}" data-link aria-label="${APP_NAME}">
         <span class="kaiser-logo">${kaiserLogoImageMarkup()}</span>
         <span class="ui-pilot-brand__copy">
-          <strong>Smart odpady</strong>
+          <strong class="smart-brand-name">${SmartIcon("home")}Smart odpady</strong>
           <small>Provozní systém</small>
         </span>
       </a>
@@ -3273,6 +3296,10 @@ function moduleIdForAiRoute(route) {
 
   if (normalizedRoute === "/" || normalizedRoute === "/dashboard") {
     return "dashboard";
+  }
+
+  if (normalizedRoute === EMPLOYEE_CARD_ROUTE_PREFIX || normalizedRoute.startsWith(`${EMPLOYEE_CARD_ROUTE_PREFIX}/`)) {
+    return "employees";
   }
 
   if (normalizedRoute.startsWith("/dovolena-nemoc")) {
@@ -4174,7 +4201,8 @@ function renderAiAssistantLayer() {
       demoStatus: aiAssistantState.demoStatus
     }),
     AiAssistantLauncher({
-      visible: !promoVisible && (collectionRoutesSpeakingHologram || ((aiAssistantState.launcherVisible && !aiAssistantState.chatOpen && !aiAssistantState.welcomeVisible) || shouldShowAiVoiceDock())),
+      // Hide the idle floating voice icon; preserve controls for a running call.
+      visible: !promoVisible && (collectionRoutesSpeakingHologram || shouldShowAiVoiceDock()),
       voiceActive: shouldShowAiVoiceDock(),
       voiceUiState: aiAssistantState.voiceUiState,
       voiceStatus: aiAssistantState.voiceStatus,
@@ -5213,6 +5241,7 @@ function setAccessState(nextState) {
 }
 
 function scrollToPageTop() {
+  document.querySelector("main.ui-system-v2")?.scrollTo({ top: 0, left: 0, behavior: "auto" });
   try {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   } catch {
@@ -6589,6 +6618,7 @@ function focusAccessUserEditor() {
   }
 
   try {
+    revealMobileTarget(editor);
     editor.scrollIntoView({ block: "start", behavior: "auto" });
     editor.querySelector("input[name='name']")?.focus({ preventScroll: true });
   } catch (error) {
@@ -7194,7 +7224,99 @@ function mainDashboardOperationsSection(user) {
   `;
 }
 
+let moduleLauncherQuery = "";
+let globalSearchState = { records: [], unavailable: [], more: [], loading: false, error: "" };
+let globalSearchOwner = null;
+let globalSearchTimer = 0;
+let globalSearchController = null;
+let globalSearchGeneration = 0;
+function globalSearchHtml(user) {
+  if (!moduleLauncherQuery.trim()) return "";
+  const navigation = searchNavigation(user, moduleLauncherQuery);
+  const items = [...navigation, ...globalSearchState.records];
+  const state = globalSearchState;
+  return `<p class="global-search-status" role="status">${state.loading ? "Hledám také v záznamech…" : items.length ? `Nalezeno ${items.length} výsledků` : "Žádné výsledky. Zkuste jiné jméno nebo název."}</p>
+    ${state.error ? `<p role="alert">${escapeHtml(state.error)}</p>` : ""}
+    ${state.unavailable.length ? `<p role="status">Nyní nelze prohledat: ${escapeHtml(state.unavailable.join(", "))}. Ostatní výsledky jsou dostupné.</p>` : ""}
+    <ul class="global-search-list">${items.map(item => `<li><a href="${escapeHtml(routeHref(item.route))}" data-link><small>${escapeHtml(item.kind)}</small><strong>${escapeHtml(item.title)}</strong>${item.description ? `<span>${escapeHtml(item.description)}</span>` : ""}</a></li>`).join("")}</ul>
+    ${state.more.length ? `<p>Další výsledky najdete v modulech: ${escapeHtml(state.more.join(", "))}. Hledání můžete zpřesnit.</p>` : ""}
+    ${moduleLauncherQuery.trim().length < 2 ? "<p>Pro hledání v záznamech zadejte alespoň 2 znaky.</p>" : ""}`;
+}
+function paintGlobalSearch() {
+  const target = app.querySelector("[data-global-search-results]");
+  if (target) target.innerHTML = globalSearchHtml(currentUser());
+  const searching = Boolean(moduleLauncherQuery.trim());
+  for (const element of app.querySelectorAll(".module-launcher-grid, #module-launcher-title")) element.hidden = searching;
+}
+function updateGlobalSearch(value) {
+  moduleLauncherQuery = value.slice(0, 100);
+  clearTimeout(globalSearchTimer);
+  globalSearchController?.abort();
+  const generation = ++globalSearchGeneration;
+  const userId = currentUser()?.id;
+  globalSearchState = { records: [], unavailable: [], more: [], loading: moduleLauncherQuery.trim().length >= 2, error: "" };
+  paintGlobalSearch();
+  if (!globalSearchState.loading) return;
+  globalSearchTimer = setTimeout(async () => {
+    const controller = new AbortController();
+    globalSearchController = controller;
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(`/api/ai/search?records=1&q=${encodeURIComponent(moduleLauncherQuery.trim())}`, { credentials: "same-origin", cache: "no-store", signal: controller.signal });
+      if (response.status === 401) sessionGuard.unauthorized();
+      if (!response.ok) throw new Error("search_failed");
+      const result = await response.json();
+      if (generation !== globalSearchGeneration || currentUser()?.id !== userId) return;
+      globalSearchState = { records: result.records || [], unavailable: result.unavailable || [], more: result.more || [], loading: false, error: "" };
+    } catch {
+      if (generation !== globalSearchGeneration || currentUser()?.id !== userId) return;
+      globalSearchState.loading = false;
+      globalSearchState.error = "Záznamy se nepodařilo načíst. Zkontrolujte připojení a zkuste hledání znovu. Moduly a stránky můžete otevřít níže.";
+    } finally {
+      clearTimeout(timeout);
+      if (generation === globalSearchGeneration && currentUser()?.id === userId) paintGlobalSearch();
+    }
+  }, 300);
+}
+
+function launcherModules(user) {
+  return [
+    ...(canViewModule(user, "absence") ? [{
+      id: "absence", title: "Nepřítomnost", description: "Dovolená, nemoc, lékař a další nepřítomnosti",
+      keywords: "Nepřítomnost dovolená nemoc lékař OČR volno",
+      route: hasPermission(user, "absence", "create") ? ABSENCE_QUICK_ROUTE : absenceRouteForTab("my")
+    }] : []),
+    ...(canViewModule(user, "employees") ? [{
+      id: "employees", title: "Zaměstnanci", description: "Karty zaměstnanců, pracovní údaje a dokumenty",
+      keywords: "Zaměstnanci lidé personalistika HR karty pracovní údaje dokumenty lékařské prohlídky",
+      route: EMPLOYEE_CARD_ROUTE_PREFIX
+    }] : [])
+  ];
+}
+
 function homePage(user) {
+  const items = launcherModules(user);
+  return `
+    <main class="app-shell module-theme-scope ui-system-pilot ui-system-pilot--modules" ${moduleThemeStyleAttribute()}>
+      ${uiSystemPilotSidebar(user, "dashboard")}
+      <div class="ui-pilot-toolbar module-launcher-toolbar"><strong class="smart-brand-name">${SmartIcon("home")}SMART ODPADY</strong>${userBar(user)}</div>
+      <section class="module-launcher" aria-labelledby="module-launcher-title">
+        <label class="module-launcher-search"><span>Globální vyhledávání</span><input type="search" data-module-search aria-label="Globální vyhledávání" placeholder="Hledat v celé aplikaci…" maxlength="100" enterkeyhint="search" autocomplete="off" value="${escapeHtml(moduleLauncherQuery)}" /></label>
+        <section data-global-search-results aria-label="Výsledky globálního vyhledávání">${globalSearchHtml(user)}</section>
+        <h1 id="module-launcher-title" ${moduleLauncherQuery.trim() ? "hidden" : ""}>Moduly</h1>
+        <div class="module-launcher-grid" ${moduleLauncherQuery.trim() ? "hidden" : ""}>
+          ${items.map(item => `<a class="module-launcher-card" href="${routeHref(item.route)}" data-link data-launcher-module>
+            <span class="module-launcher-icon" aria-hidden="true">${uiSystemPilotIcon(item.id)}</span>
+            <span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.description)}</small></span>
+            <span class="module-launcher-arrow" aria-hidden="true">${SmartIcon("chevron-right")}</span>
+          </a>`).join("")}
+        </div>
+      </section>
+    </main>
+  `;
+}
+
+function companyDashboardPage(user) {
   ensureDataBoxData();
   if (canViewModule(user, "driver-reports")) {
     ensureDriverReportsData();
@@ -7375,7 +7497,6 @@ function settingsManagementSection(user) {
 
   return `
     ${dashboardModule ? genericModuleSettingsSection(dashboardModule) : ""}
-    ${forpsiAdminSection(user.id)}
     ${rcsTemplateCenterSection(true)}
     ${vehicleTrackingAdministrationSettings(user)}
     ${communicationInfrastructureSection(user)}
@@ -7769,15 +7890,6 @@ function absenceOutOfOfficePanel(user, selectedEmployee) {
   `;
 }
 
-function sarlotaAbsenceVoiceButton(label = "Hlasem přes Šarlotu") {
-  return `
-    <button class="sarlota-absence-voice-button" type="button" data-absence-sarlota-voice>
-      <span aria-hidden="true">MIC</span>
-      <span>${escapeHtml(label)}</span>
-    </button>
-  `;
-}
-
 function quickAbsenceType(typeId = quickAbsenceState.type) {
   return QUICK_ABSENCE_TYPES.find((type) => type.id === typeId) || null;
 }
@@ -7911,13 +8023,12 @@ function quickDateChoices(type) {
 function quickAbsenceTypeStep() {
   return `
     <section id="co-potrebujete" class="quick-absence-card quick-absence-card--step" aria-labelledby="quick-absence-title">
-      <p class="quick-absence-kicker">Rychlé zadání</p>
+      <p class="quick-absence-kicker">Nepřítomnost</p>
       <h2 id="quick-absence-title">Co potřebujete nahlásit?</h2>
-      ${sarlotaAbsenceVoiceButton("Zadat hlasem")}
       <div class="quick-absence-types">
         ${QUICK_ABSENCE_TYPES.map((type) => `
           <button class="quick-absence-type" type="button" data-quick-type="${escapeHtml(type.id)}">
-            <span class="quick-absence-type__icon" aria-hidden="true">${escapeHtml(type.marker)}</span>
+            <span class="quick-absence-type__icon" aria-hidden="true">${SmartIcon(({vacation:"absence",sick:"health",doctor:"health",care:"care",compensatory_leave:"time",unpaid_leave:"calendar",other:"more"})[type.id])}</span>
             <span>${escapeHtml(type.label)}</span>
           </button>
         `).join("")}
@@ -8068,7 +8179,7 @@ function quickAbsenceSummaryStep() {
 function quickAbsenceSuccessStep() {
   return `
     <section class="quick-absence-card quick-absence-card--success" aria-labelledby="quick-success-title">
-      <span class="quick-absence-success-icon" aria-hidden="true">OK</span>
+      <span class="quick-absence-success-icon" aria-hidden="true">${SmartIcon("check")}</span>
       <h2 id="quick-success-title">Hotovo</h2>
       <p>Žádost byla odeslána.</p>
       <button class="primary-action quick-absence-wide-action" type="button" data-quick-reset>
@@ -8122,7 +8233,7 @@ function quickAbsenceContent(user) {
         : quickAbsenceTypeStep();
 
   return `
-    <section class="quick-absence-shell" aria-label="Rychlé zadání nepřítomnosti">
+    <section class="quick-absence-shell" aria-label="Nepřítomnost">
       ${content}
       ${quickAbsenceRecentSection()}
     </section>
@@ -8166,12 +8277,12 @@ function canUseAbsenceTab(user, tabId) {
 }
 
 function absenceTabsForUser(user) {
-  const primaryTabs = new Set(["dashboard", "calendar", "my", "employee-card", "approval", "reports"]);
+  const primaryTabs = new Set(["dashboard", "calendar", "my", "approval", "reports"]);
   return ABSENCE_TABS.filter((tab) => primaryTabs.has(tab.id) && canUseAbsenceTab(user, tab.id));
 }
 
 function resolveAbsenceTab(user, tabId) {
-  return canUseAbsenceTab(user, tabId) ? tabId : "dashboard";
+  return ABSENCE_TABS.some((tab) => tab.id === tabId) && canUseAbsenceTab(user, tabId) ? tabId : "dashboard";
 }
 
 function permissionInlineNotice() {
@@ -8502,11 +8613,11 @@ function absenceFilterPanel(user, mode = "calendar") {
 function absenceRequestActions(request, user) {
   const approveButton = canApproveAbsence(request, user)
     ? `
-        <button class="absence-icon-button absence-icon-button--approve" type="button" data-absence-approve="${escapeHtml(request.id)}" title="Schválit">
-          ✓
+        <button class="absence-icon-button absence-icon-button--approve" type="button" data-absence-approve="${escapeHtml(request.id)}" title="Schválit" aria-label="Schválit">
+          ${SmartIcon("check")}
         </button>
-        <button class="absence-icon-button absence-icon-button--reject" type="button" data-absence-reject="${escapeHtml(request.id)}" title="Zamítnout">
-          ×
+        <button class="absence-icon-button absence-icon-button--reject" type="button" data-absence-reject="${escapeHtml(request.id)}" title="Zamítnout" aria-label="Zamítnout">
+          ${SmartIcon("close")}
         </button>
       `
     : "";
@@ -9065,7 +9176,6 @@ function absenceNewRequest(user) {
           <h2>Nová žádost</h2>
           <p>Dovolená, lékař, OČR, náhradní volno, neplacené volno a jiná nepřítomnost jdou ke schválení. Nemoc se pouze eviduje.</p>
         </div>
-        ${sarlotaAbsenceVoiceButton()}
       </div>
       <form class="absence-form" data-absence-request-form>
         ${employeeLoadingNotice}
@@ -10154,7 +10264,7 @@ function employeeAddButton(user, extraClass = "") {
 
   return `
     <button class="employee-add-button ${escapeHtml(extraClass)}" type="button" data-employee-add-open>
-      <span>Přidat zaměstnance</span>
+      ${SmartIcon("plus")}<span>Přidat zaměstnance</span>
     </button>
   `;
 }
@@ -10174,7 +10284,7 @@ function employeeAddPanel(user) {
           <h2 id="employee-add-title">Přidat zaměstnance</h2>
           <p>Rychlé založení interní karty. Nevytváří login a nic neodesílá.</p>
         </div>
-        <button class="employee-add-panel__close" type="button" data-employee-add-close aria-label="Zavřít přidání zaměstnance">×</button>
+        <button class="employee-add-panel__close" type="button" data-employee-add-close aria-label="Zavřít přidání zaměstnance">${SmartIcon("close")}</button>
       </div>
       ${employeeCardState.addError ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.addError)}</p>` : ""}
       ${employeeCardState.addMessage ? `<p class="module-feedback__notice">${escapeHtml(employeeCardState.addMessage)}</p>` : ""}
@@ -10878,7 +10988,7 @@ function employeeMedicalExamEditor(employee, exam, canEdit) {
             <span>Lékařské prohlídky</span>
             <h2 id="employee-medical-editor-title">Upravit prohlídku</h2>
           </div>
-          <button class="employee-editor__close" type="button" data-employee-medical-exam-close aria-label="Zavřít editaci prohlídky">×</button>
+          <button class="employee-editor__close" type="button" data-employee-medical-exam-close aria-label="Zavřít editaci prohlídky">${SmartIcon("close")}</button>
         </header>
         <nav class="employee-editor-steps" aria-label="Kroky editace prohlídky">
           ${[
@@ -11405,7 +11515,7 @@ function employeeEditorDialog(employee, canEdit) {
             <span>Karta zaměstnance</span>
             <h2 id="employee-editor-title">Upravit zaměstnance</h2>
           </div>
-          <button class="employee-editor__close" type="button" data-employee-edit-close aria-label="Zavřít editaci zaměstnance">×</button>
+          <button class="employee-editor__close" type="button" data-employee-edit-close aria-label="Zavřít editaci zaměstnance">${SmartIcon("close")}</button>
         </header>
         ${employeeCardState.error ? `<p class="module-feedback__error">${escapeHtml(employeeCardState.error)}</p>` : ""}
         <form class="employee-card-form employee-editor__form" data-employee-card-form data-employee-id="${escapeHtml(employee.id)}">
@@ -11515,6 +11625,7 @@ function employeeCardContent(employeeId, user) {
           <p>${escapeHtml(employee.position || roleLabel(employee.role))} · ${escapeHtml(employee.department || "bez oddělení")}</p>
         </div>
         <div class="employee-card-header__actions">
+          <a class="secondary-link" href="${routeHref(EMPLOYEE_CARD_ROUTE_PREFIX)}" data-link>Zpět na zaměstnance</a>
           ${canEdit ? `<button class="primary-action" type="button" data-employee-edit-open>Upravit</button>` : ""}
           ${employeeAddButton(user, "employee-add-button--compact")}
           <select class="employee-card-switcher" data-employee-card-select aria-label="Vybrat zaměstnance">
@@ -11570,12 +11681,6 @@ function absenceActiveContent(activeTab, user, context = {}) {
     return absenceCalendar(user);
   }
 
-  if (safeTab === "employee-card") {
-    return context.employeeId
-      ? employeeCardContent(context.employeeId, user)
-      : absenceEmployees(user);
-  }
-
   if (safeTab === "reports") {
     return absenceReports(user);
   }
@@ -11591,11 +11696,30 @@ function absenceActiveContent(activeTab, user, context = {}) {
   return absenceDashboard(user);
 }
 
+function employeesModulePage(user, employeeId = "") {
+  const moduleItem = orderedModules.find((item) => item.id === "employees");
+  return `
+    <main class="app-shell module-page module-theme-scope absence-page employees-page ${employeeId ? "absence-page--employee-card" : ""}" ${moduleThemeStyleAttribute()}>
+      ${userBar(user)}
+      <nav class="topbar" aria-label="Navigace">
+        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
+        <a class="back-button" href="${routeHref(employeeId ? EMPLOYEE_CARD_ROUTE_PREFIX : "/")}" data-link>${employeeId ? "Zpět na zaměstnance" : "Zpět na moduly"}</a>
+      </nav>
+      <section class="absence-hero absence-hero--app" aria-labelledby="employees-title">
+        <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
+        <div>
+          <h1 id="employees-title">Zaměstnanci</h1>
+          <p>Karty zaměstnanců, pracovní údaje, dokumenty a lékařské prohlídky.</p>
+        </div>
+      </section>
+      ${employeeId ? employeeCardContent(employeeId, user) : absenceEmployees(user)}
+    </main>
+  `;
+}
+
 function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) {
   const requestedTab = context.tab
     ? context.tab
-    : context.employeeId
-    ? "employee-card"
     : context.quick
       ? "quick"
       : isDashboard
@@ -11612,8 +11736,7 @@ function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) 
     "module-page",
     "module-theme-scope",
     "absence-page",
-    isQuickTab ? "absence-page--quick" : "",
-    activeTab === "employee-card" ? "absence-page--employee-card" : ""
+    isQuickTab ? "absence-page--quick" : ""
   ].filter(Boolean).join(" ");
 
   return `
@@ -11627,7 +11750,7 @@ function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) 
       <section class="absence-hero absence-hero--app" aria-labelledby="absence-title">
         <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
         <div>
-          <h1 id="absence-title">${isQuickTab ? "Rychlé zadání" : "Dovolená / Nemoc"}</h1>
+          <h1 id="absence-title">${isQuickTab ? "Nepřítomnost" : "Dovolená / Nemoc"}</h1>
           <p>${isQuickTab ? "Typ, datum, odeslat." : "Stav: "}${isQuickTab ? "" : `<strong>${escapeHtml(heroDataStatus.label)}</strong> · ${escapeHtml(heroDataStatus.detail)}`}</p>
         </div>
         ${isQuickTab ? "" : `<div class="absence-command-actions absence-command-actions--hero">
@@ -12029,7 +12152,7 @@ function fleetActiveTab(vehicleId = "") {
     return "detail";
   }
 
-  return hashTab || (vehicleId ? "detail" : "overview");
+  return hashTab || (vehicleId ? "detail" : window.matchMedia("(max-width: 720px)").matches ? "vehicles" : "overview");
 }
 
 function fleetTabHref(tabId) {
@@ -12518,7 +12641,7 @@ function fleetHelpButton(text) {
   if (!help) return "";
   return `
     <button class="fleet-help" type="button" aria-label="Nápověda" data-fleet-help>
-      <span aria-hidden="true">?</span>
+      <span aria-hidden="true">${SmartIcon("info")}</span>
       <span class="fleet-help__bubble" role="tooltip">${escapeHtml(help)}</span>
     </button>
   `;
@@ -14978,7 +15101,7 @@ function vehicleTrackingMarkerImageSrc(vehicle = {}, options = {}) {
   const mappedImage = vehicleTrackingIconTypeForVehicle(vehicle)?.primary || "";
   const explicitImage = options.imageSrc || vehicle.iconSrc || vehicle.iconUrl || vehicle.imageSrc || "";
   const customImage = vehicleTrackingCustomIconForVehicle(vehicle);
-  return explicitImage || customImage || mappedImage;
+  return vehicleTrackingSvgIconSource(explicitImage || customImage || mappedImage);
 }
 
 function vehicleTrackingMarkerContent(vehicle = {}, options = {}) {
@@ -15533,7 +15656,7 @@ function vehicleTrackingDemoAlertOverlay(elapsedMs = vehicleTrackingDemoCurrentE
 
   return `
     <div class="tracking-demo-alert ${active ? "tracking-demo-alert--active" : ""}" data-tracking-demo-alert aria-live="polite">
-      <div class="tracking-demo-alert__symbol" aria-hidden="true">!</div>
+      <div class="tracking-demo-alert__symbol" aria-hidden="true">${SmartIcon("warning")}</div>
       <div>
         <strong>${escapeHtml(DEMO_VEHICLE_TRACKING_ALERT.title)}: ${escapeHtml(DEMO_VEHICLE_TRACKING_ALERT.text)}</strong>
         <span>${escapeHtml(DEMO_VEHICLE_TRACKING_ALERT.detail)}</span>
@@ -16489,7 +16612,7 @@ function vehicleTrackingTcarsInfoPanel(location = {}, markerVehicle = {}) {
           ${rows.map(([label, value]) => `<span><small>${escapeHtml(label)}</small><b>${escapeHtml(value)}</b></span>`).join("")}
         </span>
         <span class="tracking-marker-telemetry__event tracking-marker-telemetry__event--${location.emergency === true ? "alert" : "ok"}">
-          <i aria-hidden="true">${location.emergency === true ? "!" : "✓"}</i>
+          <i aria-hidden="true">${SmartIcon(location.emergency === true ? "warning" : "check")}</i>
           <span><small>Událost</small><b>${escapeHtml(eventText || (location.emergency === true ? "Nouzový stav" : "Bez aktivní události"))}</b></span>
         </span>
       </span>
@@ -16564,6 +16687,7 @@ function syncVehicleTrackingTcarsSelectionDom(locationId) {
       ? vehicleTrackingOperationalDetail(selectedLocation)
       : vehicleTrackingTcarsLocationDetail(selectedLocation);
   }
+  document.querySelector('.tracking-operational')?.dispatchEvent(new Event('mobile-vehicle-selected'));
 
   return true;
 }
@@ -16621,7 +16745,7 @@ function vehicleTrackingTcarsGoogleMarkerContent(location = {}, selected = false
         <span class="tracking-tcars-google-pin__fallback"></span>
       </span>
       <span class="tracking-tcars-google-pin__position" aria-hidden="true">
-        <span class="tracking-position-pin" aria-hidden="true"></span>
+        <span class="tracking-position-pin" aria-hidden="true">${SmartIcon("tracking")}</span>
       </span>
     </span>
   `;
@@ -17062,7 +17186,7 @@ function vehicleTrackingOperationalSection() {
             `}
           ` : `
             <div class="tracking-operational-map-empty" role="status">
-              <span class="tracking-operational-map-empty__icon" aria-hidden="true">⌖</span>
+              <span class="tracking-operational-map-empty__icon" aria-hidden="true">${SmartIcon("tracking")}</span>
               <strong>${escapeHtml(mapLoading ? "Připravuji Google mapu…" : "Google mapa čeká na bezpečné nastavení")}</strong>
               <span>Seznam a stav vozidel můžeš používat i bez mapového podkladu.</span>
             </div>
@@ -17337,7 +17461,7 @@ function vehicleTrackingIconSpecSection() {
       <div class="tracking-icon-spec__head">
         <div>
           <h3 id="tracking-icon-spec-title">Ikony vozidel pro mapu</h3>
-          <p>Dodané PNG ikony jsou uložené v aplikaci. Pokud se některá ikona nenačte, marker použije bezpečný CSS fallback.</p>
+          <p>Jednotné SVG ikony jsou uložené v aplikaci. Stav a označení vozidla zůstávají uvedené vedle ikony.</p>
         </div>
         <span>${escapeHtml(VEHICLE_TRACKING_ICON_WAITING)}</span>
       </div>
@@ -17352,7 +17476,7 @@ function vehicleTrackingIconSpecSection() {
         </article>
         <article>
           <h4>Složka</h4>
-          ${vehicleTrackingFieldChips([VEHICLE_TRACKING_ICON_FOLDER, "PNG primárně", "WebP volitelně"])}
+          ${vehicleTrackingFieldChips([VEHICLE_TRACKING_ICON_FOLDER, "SVG"])}
         </article>
         <article>
           <h4>Typy vozidel</h4>
@@ -21909,18 +22033,18 @@ function collectionRoutesSourceDriverNextStopCard(row, order) {
 }
 
 const COLLECTION_ROUTES_DRIVER_ACTION_ICONS = {
-  done: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 16.5l6 6L25 9.5"/></svg>`,
-  navigate: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M25 5L12.5 27l-2.2-9.3L3 14.5 25 5z"/><path d="M12.5 17.7L25 5"/></svg>`,
-  problem: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 5l13 22H3L16 5z"/><path d="M16 13v6"/><path d="M16 24h.01"/></svg>`,
-  "bin-missing": `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11h14l-1 15H10L9 11z"/><path d="M12 11V8h8v3"/><path d="M7 11h18"/><path d="M5 27L27 5"/></svg>`,
-  overflow: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 13h14l-1 13H10L9 13z"/><path d="M11 9h10"/><path d="M12 5h8"/><path d="M16 25V16"/><path d="M12.5 19.5L16 16l3.5 3.5"/></svg>`,
-  obstruction: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 5l8 22H8L16 5z"/><path d="M11 19h10"/><path d="M9.5 24h13"/></svg>`,
-  address: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 28s9-8.4 9-15a9 9 0 0 0-18 0c0 6.6 9 15 9 15z"/><path d="M14.5 11.5a2.2 2.2 0 1 1 3 2c-.9.4-1.5 1-1.5 2"/><path d="M16 20h.01"/></svg>`,
-  blocked: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="11"/><path d="M8.5 23.5l15-15"/></svg>`,
-  dispatch: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h20v13H12l-6 5V8z"/><path d="M11 13h10"/><path d="M11 17h7"/></svg>`,
-  camera: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11h6l2-3h6l2 3h6v14H5V11z"/><circle cx="16" cy="18" r="5"/></svg>`,
-  more: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="16" r="1.5"/><circle cx="16" cy="16" r="1.5"/><circle cx="23" cy="16" r="1.5"/></svg>`,
-  close: `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9l14 14"/><path d="M23 9L9 23"/></svg>`
+  "done": SmartIcon("check"),
+  "navigate": SmartIcon("navigate"),
+  "problem": SmartIcon("warning"),
+  "bin-missing": SmartIcon("bin-missing"),
+  "overflow": SmartIcon("overflow"),
+  "obstruction": SmartIcon("obstruction"),
+  "address": SmartIcon("tracking"),
+  "blocked": SmartIcon("blocked"),
+  "dispatch": SmartIcon("message"),
+  "camera": SmartIcon("camera"),
+  "more": SmartIcon("more"),
+  "close": SmartIcon("close")
 };
 
 let collectionRoutesDriverAudioContext = null;
@@ -21954,9 +22078,7 @@ function collectionRoutesSourceDriverSoundsEnabled() {
 }
 
 function collectionRoutesSourceDriverSoundIconHtml(enabled) {
-  return enabled
-    ? `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13h6l7-6v18l-7-6H6v-6z"/><path d="M23 11a7 7 0 0 1 0 10"/><path d="M26 8a11 11 0 0 1 0 16"/></svg>`
-    : `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13h6l7-6v18l-7-6H6v-6z"/><path d="M23 12l6 8"/><path d="M29 12l-6 8"/></svg>`;
+  return SmartIcon(enabled ? "sound" : "mute");
 }
 
 function collectionRoutesSourceDriverSoundToggleHtml() {
@@ -22094,7 +22216,7 @@ function collectionRoutesSourceDriverActionIconHtml(label, action, tone) {
     return "";
   }
   if (iconKey === "sarlota") {
-    return `<span class="collection-routes-driver-action__icon collection-routes-driver-action__icon--letter" aria-hidden="true">Š</span>`;
+    return `<span class="collection-routes-driver-action__icon collection-routes-driver-action__icon--letter" aria-hidden="true">${SmartIcon("microphone")}</span>`;
   }
   return `
     <span class="collection-routes-driver-action__icon collection-routes-driver-action__icon--${escapeHtml(iconKey)}" aria-hidden="true">
@@ -23516,7 +23638,7 @@ function collectionRoutesTestTabletEntryCard() {
     : "";
   return `
     <aside class="collection-routes-test-tablet-entry" aria-labelledby="collection-routes-test-tablet-entry-title">
-      <div class="collection-routes-test-tablet-entry__icon" aria-hidden="true">▣</div>
+      <div class="collection-routes-test-tablet-entry__icon" aria-hidden="true">${SmartIcon("tablet")}</div>
       <div>
         <span>Polní režim · GPS · hlasová Šarlota</span>
         <h4 id="collection-routes-test-tablet-entry-title">ŘIDIČSKÝ TABLET</h4>
@@ -24267,8 +24389,8 @@ function collectionDailyRouteDriverMapPanel(detail, currentStop) {
           >
           <svg class="collection-daily-driver-map__pins" aria-hidden="true" data-collection-driver-map-overlay></svg>
           <div class="collection-daily-driver-map__controls" aria-label="Ovládání mapy">
-            <button type="button" data-collection-driver-map-control="zoom-in" aria-label="Přiblížit mapu">+</button>
-            <button type="button" data-collection-driver-map-control="zoom-out" aria-label="Oddálit mapu">−</button>
+            <button type="button" data-collection-driver-map-control="zoom-in" aria-label="Přiblížit mapu">${SmartIcon("plus")}</button>
+            <button type="button" data-collection-driver-map-control="zoom-out" aria-label="Oddálit mapu">${SmartIcon("minus")}</button>
             <button type="button" data-collection-driver-map-control="fit">STŘED</button>
             <button type="button" data-collection-driver-map-control="fullscreen">${fullscreen ? "ZPĚT K OBSLUZE" : "CELÁ MAPA"}</button>
           </div>
@@ -25290,7 +25412,7 @@ function collectionRoutesTestIncidentModal(run, stop) {
           </button>
         ` : `
           <div class="collection-routes-test-incident-modal__instruction">
-            <span aria-hidden="true">Š</span>
+            <span aria-hidden="true">${SmartIcon("microphone")}</span>
             <p>Vyfoť ${draft.type === "site_inaccessible" ? "překážku nebo důvod, proč se do firmy nelze dostat" : draft.type === "damaged_container" ? "poškozenou nádobu tak, aby bylo poškození dobře vidět" : "přeplněnou nádobu i její okolí"}. Potom zkontroluj náhled.</p>
           </div>
           <label class="collection-routes-test-incident-camera">
@@ -25427,7 +25549,7 @@ function collectionRoutesTestGpsPanel(detail, options = {}) {
             class="collection-routes-test-gps__sarlota"
             data-collection-routes-test-voice-provider="${COLLECTION_ROUTES_SARLOTA_VOICE_PROVIDER}"
           >
-            <span aria-hidden="true">Š</span>
+            <span aria-hidden="true">${SmartIcon("microphone")}</span>
             <div>
               <p>${escapeHtml(prompt)}</p>
               <small>${collectionRoutesPilotState.testGpsVoicePlaying
@@ -25852,7 +25974,7 @@ function collectionDailyDriverBreakActivePanel(event, stopId, pending = "") {
       aria-label="Přestávka právě běží"
       data-collection-driver-break-started-at="${escapeHtml(startedAt)}"
     >
-      <span class="collection-daily-driver-break-active__icon" aria-hidden="true">Ⅱ</span>
+      <span class="collection-daily-driver-break-active__icon" aria-hidden="true">${SmartIcon("pause")}</span>
       <div>
         <span>PŘESTÁVKA BĚŽÍ</span>
         <strong data-collection-driver-break-elapsed>${escapeHtml(collectionDailyDriverBreakElapsedLabel(startedAt))}</strong>
@@ -28213,7 +28335,7 @@ function collectionRouteIncidentDetail(incident) {
       <aside class="collection-route-incident-drawer" aria-labelledby="collection-route-incident-detail-title">
         <header class="collection-route-incident-drawer__head">
           <div><span class="collection-route-incident-status collection-route-incident-status--${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span><h2 id="collection-route-incident-detail-title">${escapeHtml(incident.typeLabel)}</h2><strong>${escapeHtml(incident.companyName)}</strong><p>${escapeHtml(incident.address || incident.stationName)}</p><small>${escapeHtml(incident.routeTitle)} · ${escapeHtml(incident.driverName)} · ${escapeHtml(collectionRouteIncidentRelativeTime(incident.reportedAt))}</small></div>
-          <button type="button" data-collection-route-incident-close aria-label="Zavřít detail">×</button>
+          <button type="button" data-collection-route-incident-close aria-label="Zavřít detail">${SmartIcon("close")}</button>
         </header>
         <div class="collection-route-incident-drawer__body">
           <div class="collection-route-incident-media">${collectionRouteIncidentPhoto(incident)}${collectionRouteIncidentMap(incident)}</div>
@@ -30025,7 +30147,7 @@ function dataBoxPlusCommandCenter() {
                 aria-label="Předchozí stránka"
                 title="Předchozí stránka"
                 ${currentPage <= 1 ? "disabled" : ""}
-              >‹</button>
+              >${SmartIcon("chevron-left")}</button>
               <button
                 class="secondary-link"
                 type="button"
@@ -30033,7 +30155,7 @@ function dataBoxPlusCommandCenter() {
                 aria-label="Další stránka"
                 title="Další stránka"
                 ${currentPage >= totalPages ? "disabled" : ""}
-              >›</button>
+              >${SmartIcon("chevron-right")}</button>
             </div>
           </div>
           <div class="ds-plus-priority-list">
@@ -30355,7 +30477,7 @@ function dataBoxPlusTriageMessageRow(item) {
           data-ds-plus-triage-open="${escapeHtml(item.id)}"
           aria-label="${escapeHtml(`Otevřít zprávu ${item.subject}`)}"
         >Otevřít</button>
-        <button class="ds-plus-triage-more" type="button" ${item.attachmentCount ? `data-ds-plus-triage-row-download="${escapeHtml(item.id)}" aria-label="Stáhnout všechny přílohy zprávy"` : `disabled aria-label="Zpráva nemá přílohy"`} title="${item.attachmentCount ? "Stáhnout všechny přílohy" : "Bez příloh"}">⋯</button>
+        <button class="ds-plus-triage-more" type="button" ${item.attachmentCount ? `data-ds-plus-triage-row-download="${escapeHtml(item.id)}" aria-label="Stáhnout všechny přílohy zprávy"` : `disabled aria-label="Zpráva nemá přílohy"`} title="${item.attachmentCount ? "Stáhnout všechny přílohy" : "Bez příloh"}">${SmartIcon("more")}</button>
       </div>
     </article>
   `;
@@ -30375,7 +30497,7 @@ function dataBoxPlusTriageDraftRow(draft) {
       </div>
       <div class="ds-plus-triage-row__action">
         <button class="primary-action" type="button" data-ds-plus-draft-open="${escapeHtml(draft.id)}">Otevřít</button>
-        <button class="ds-plus-triage-more" type="button" data-ds-plus-draft-delete="${escapeHtml(draft.id)}" aria-label="Smazat koncept" title="Smazat koncept">⋯</button>
+        <button class="ds-plus-triage-more" type="button" data-ds-plus-draft-delete="${escapeHtml(draft.id)}" aria-label="Smazat koncept" title="Smazat koncept">${SmartIcon("more")}</button>
       </div>
     </article>
   `;
@@ -30432,7 +30554,7 @@ function dataBoxPlusTriageInbox() {
   return `
     <section class="ds-plus-workspace ds-plus-triage-workspace" aria-labelledby="ds-plus-triage-inbox-title">
       <div class="ds-plus-triage-context">
-        <button class="secondary-link" type="button" data-ds-plus-triage-back-mailboxes>← Všechny schránky</button>
+        <button class="secondary-link" type="button" data-ds-plus-triage-back-mailboxes>${SmartIcon("arrow-left")} Všechny schránky</button>
         <div>
           <label for="ds-plus-triage-mailbox-select">Datová schránka</label>
           <select id="ds-plus-triage-mailbox-select" data-ds-plus-triage-mailbox-select>
@@ -30448,7 +30570,7 @@ function dataBoxPlusTriageInbox() {
       ${dataBoxPlusState.triageFolder === "drafts" ? `
         <div class="ds-plus-triage-tools">
           <span>${escapeHtml(`${drafts.length} uložených konceptů`)}</span>
-          <button class="primary-action" type="button" data-ds-plus-compose-open>＋ Nová datová zpráva</button>
+          <button class="primary-action" type="button" data-ds-plus-compose-open>${SmartIcon("plus")} Nová datová zpráva</button>
         </div>
         <div class="ds-plus-triage-list" role="tabpanel">
           ${drafts.length ? drafts.map(dataBoxPlusTriageDraftRow).join("") : `<p class="ds-plus-empty">V této schránce zatím není uložený koncept.</p>`}
@@ -30513,8 +30635,8 @@ function dataBoxPlusTriageInbox() {
             ${[20, 50, 100].map((size) => `<button class="${pageSize === size ? "is-active" : ""}" type="button" data-ds-plus-triage-page-size="${size}">${size}</button>`).join("")}
           </div>
           <div>
-            <button type="button" data-ds-plus-triage-page="${currentPage - 1}" ${currentPage <= 1 ? "disabled" : ""}>← Předchozí</button>
-            <button type="button" data-ds-plus-triage-page="${currentPage + 1}" ${currentPage >= pageCount ? "disabled" : ""}>Další →</button>
+            <button type="button" data-ds-plus-triage-page="${currentPage - 1}" ${currentPage <= 1 ? "disabled" : ""}>${SmartIcon("arrow-left")} Předchozí</button>
+            <button type="button" data-ds-plus-triage-page="${currentPage + 1}" ${currentPage >= pageCount ? "disabled" : ""}>Další ${SmartIcon("arrow-right")}</button>
           </div>
         </nav>
       ` : ""}
@@ -30629,7 +30751,7 @@ function dataBoxPlusTriageDetailOverlay() {
           <button class="secondary-link" type="button" data-ds-plus-message-action="handoff" data-message-id="${escapeHtml(message.id)}">Předat</button>
           <button class="secondary-link" type="button" data-ds-plus-message-action="due" data-message-id="${escapeHtml(message.id)}">Přidat lhůtu</button>
           <button class="primary-action" type="button" data-ds-plus-reply="${escapeHtml(message.id)}">Odpovědět</button>
-          <button class="secondary-link" type="button" data-ds-plus-triage-close aria-label="Další akce a zavření">⋯ Další</button>
+          <button class="secondary-link" type="button" data-ds-plus-triage-close aria-label="Další akce a zavření">${SmartIcon("more")} Další</button>
         </footer>`}
       </section>
     </div>
@@ -30657,7 +30779,7 @@ function dataBoxPlusTriagePage(moduleItem, user) {
         <div class="ds-plus-triage-header__actions">
           <div class="ds-plus-triage-header__buttons">
             ${dataBoxPlusCanManageAccess(user) ? `<button class="secondary-action" type="button" data-ds-plus-access-open>Správa přístupů</button>` : ""}
-            <button class="primary-action" type="button" data-ds-plus-compose-open>＋ Nová datová zpráva</button>
+            <button class="primary-action" type="button" data-ds-plus-compose-open>${SmartIcon("plus")} Nová datová zpráva</button>
           </div>
           <small>${escapeHtml(dataBoxPlusState.sendReadiness?.dataBox?.enabled ? "Odesílání přes ISDS je připravené." : "Odesílající schránka čeká na aktivní přístup ISDS.")}</small>
         </div>
@@ -35002,7 +35124,7 @@ function dataBoxAttachmentRows(attachments = [], expectedCount = 0) {
     if (expectedCount > 0) {
       return `
         <li class="data-box-attachment-item data-box-attachment-item--metadata">
-          <span class="data-box-attachment-item__type" aria-hidden="true">?</span>
+          <span class="data-box-attachment-item__type" aria-hidden="true">${SmartIcon("info")}</span>
           <div class="data-box-attachment-item__body">
             <strong>${escapeHtml(dataBoxAttachmentCountLabel(expectedCount))}</strong>
             <span>Jen metadata · názvy souborů zatím nejsou dostupné.</span>
@@ -37685,7 +37807,7 @@ function driverReportDetail(item) {
           <h2 id="driver-report-detail-title">${escapeHtml(item.licensePlate || "Bez SPZ")} · ${escapeHtml(title)}</h2>
           <p>${escapeHtml(driverReportVehicleLabel(item))} · ${escapeHtml(formatDateTime(item.reportedAt))}</p>
         </div>
-        <button class="driver-report-drawer__close" type="button" data-driver-report-close-detail aria-label="Zavřít detail">×</button>
+        <button class="driver-report-drawer__close" type="button" data-driver-report-close-detail aria-label="Zavřít detail">${SmartIcon("close")}</button>
       </div>
 
       <div class="driver-report-drawer__body">
@@ -38310,7 +38432,7 @@ function receivablesModuleItem() {
     description: "Pohledávkový kompas AI",
     route: RECEIVABLES_ROUTE,
     dashboardRoute: `${RECEIVABLES_ROUTE}/dashboard`,
-    icon: CostsIcon,
+    icon: () => ModuleIcon("receivables"),
     status: "dry-run"
   };
 }
@@ -41024,11 +41146,11 @@ function tyresOverviewView() {
     <div class="tyres-overview-columns">
       <section class="tyres-panel" aria-labelledby="tyres-attention-title">
         <div class="tyres-panel__head"><div><p class="module-feedback__eyebrow">Dnes řešit</p><h2 id="tyres-attention-title">Vyžaduje pozornost</h2></div>${attention.length ? `<button class="text-action" type="button" data-tyres-kpi="attention">Otevřít filtrovanou evidenci</button>` : ""}</div>
-        ${attention.length ? `<div class="tyres-attention-list">${attention.slice(0, 8).map((item) => `<button type="button" data-tyres-open-detail="${escapeHtml(item.id)}"><span><strong>${escapeHtml(`${item.manufacturer} ${item.model}`.trim() || "Pneumatika")}</strong><small>${escapeHtml(item.vehicle ? `${item.vehicle} · ${tyresText(item.position)}` : tyresText(item.size))}</small></span><span class="tyres-reason-list">${(item.reasons || []).map((reason) => `<em>${escapeHtml(reason)}</em>`).join("")}</span></button>`).join("")}</div>` : `<div class="tyres-positive-state"><span aria-hidden="true">✓</span><div><strong>Evidence nehlásí žádný problém</strong><p>Všechny automaticky kontrolované údaje jsou v pořádku.</p></div></div>`}
+        ${attention.length ? `<div class="tyres-attention-list">${attention.slice(0, 8).map((item) => `<button type="button" data-tyres-open-detail="${escapeHtml(item.id)}"><span><strong>${escapeHtml(`${item.manufacturer} ${item.model}`.trim() || "Pneumatika")}</strong><small>${escapeHtml(item.vehicle ? `${item.vehicle} · ${tyresText(item.position)}` : tyresText(item.size))}</small></span><span class="tyres-reason-list">${(item.reasons || []).map((reason) => `<em>${escapeHtml(reason)}</em>`).join("")}</span></button>`).join("")}</div>` : `<div class="tyres-positive-state"><span aria-hidden="true">${SmartIcon("check")}</span><div><strong>Evidence nehlásí žádný problém</strong><p>Všechny automaticky kontrolované údaje jsou v pořádku.</p></div></div>`}
       </section>
       <section class="tyres-panel" aria-labelledby="tyres-activity-title">
         <div class="tyres-panel__head"><div><p class="module-feedback__eyebrow">Aktualizace</p><h2 id="tyres-activity-title">Poslední aktivita</h2></div></div>
-        ${activity.length ? `<ol class="tyres-activity-list">${activity.slice(0, 10).map((item) => `<li><span class="tyres-activity-icon" aria-hidden="true">${item.type === "measurement" ? "mm" : item.type === "service" ? "Kč" : "↻"}</span><div><strong>${escapeHtml(tyresActivityTitle(item))}</strong><small>${escapeHtml(tyresText(item.detail))} · ${escapeHtml(tyresDate(item.createdAt))}</small></div></li>`).join("")}</ol>` : tyresEmpty("Zatím bez aktivity", "Po prvním měření nebo servisním zápisu se událost zobrazí zde.")}
+        ${activity.length ? `<ol class="tyres-activity-list">${activity.slice(0, 10).map((item) => `<li><span class="tyres-activity-icon" aria-hidden="true">${SmartIcon(item.type === "measurement" ? "measure" : item.type === "service" ? "costs" : "refresh")}</span><div><strong>${escapeHtml(tyresActivityTitle(item))}</strong><small>${escapeHtml(tyresText(item.detail))} · ${escapeHtml(tyresDate(item.createdAt))}</small></div></li>`).join("")}</ol>` : tyresEmpty("Zatím bez aktivity", "Po prvním měření nebo servisním zápisu se událost zobrazí zde.")}
       </section>
     </div>`;
 }
@@ -41039,7 +41161,7 @@ function tyresSelectOptions(values, selected, emptyLabel) {
 
 function tyresSortButton(id, label) {
   const active = tyresState.inventory.sort === id;
-  return `<button type="button" data-tyres-sort="${escapeHtml(id)}" aria-label="Seřadit podle ${escapeHtml(label)}">${escapeHtml(label)}${active ? `<span aria-hidden="true">${tyresState.inventory.direction === "asc" ? "↑" : "↓"}</span>` : ""}</button>`;
+  return `<button type="button" data-tyres-sort="${escapeHtml(id)}" aria-label="Seřadit podle ${escapeHtml(label)}">${escapeHtml(label)}${active ? `<span aria-hidden="true">${SmartIcon(tyresState.inventory.direction === "asc" ? "arrow-up" : "arrow-down")}</span>` : ""}</button>`;
 }
 
 function tyresInventoryToolbar(user) {
@@ -41056,7 +41178,7 @@ function tyresInventoryToolbar(user) {
     <select data-tyres-filter="tread" aria-label="Dezén"><option value="">Všechny dezény</option><option value="low" ${filters.tread === "low" ? "selected" : ""}>Nízký dezén</option><option value="missing" ${filters.tread === "missing" ? "selected" : ""}>Dezén neuveden</option><option value="ok" ${filters.tread === "ok" ? "selected" : ""}>Dezén v pořádku</option></select>
     <button class="secondary-link" type="button" data-tyres-clear-filters>Vymazat filtry</button>
     <details class="tyres-column-picker"><summary>Sloupce</summary><div>${TYRES_OPTIONAL_COLUMNS.map((column) => `<label><input type="checkbox" value="${column.id}" data-tyres-column ${tyresState.visibleColumns.includes(column.id) ? "checked" : ""} /> ${escapeHtml(column.label)}</label>`).join("")}</div></details>
-    ${tyresCanEdit(user) ? `<button class="primary-action" type="button" data-tyres-add><span aria-hidden="true">＋</span> Nová pneumatika</button>` : ""}
+    ${tyresCanEdit(user) ? `<button class="primary-action" type="button" data-tyres-add><span aria-hidden="true">${SmartIcon("plus")}</span> Nová pneumatika</button>` : ""}
   </div>`;
 }
 
@@ -41068,7 +41190,7 @@ function tyresPagination(total, page, pageSize, scope) {
   const pages = Math.max(1, Math.ceil(Number(total || 0) / pageSize));
   const from = total ? (page - 1) * pageSize + 1 : 0;
   const to = Math.min(page * pageSize, total);
-  return `<div class="tyres-pagination"><span>Zobrazeno ${from}–${to} z ${total}</span><label>Na stránku <select data-tyres-page-size="${scope}">${TYRES_PAGE_SIZES.map((size) => `<option value="${size}" ${size === pageSize ? "selected" : ""}>${size}</option>`).join("")}</select></label><div><button type="button" data-tyres-page="${scope}" data-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>← Předchozí</button><span>${page} / ${pages}</span><button type="button" data-tyres-page="${scope}" data-page="${page + 1}" ${page >= pages ? "disabled" : ""}>Další →</button></div></div>`;
+  return `<div class="tyres-pagination"><span>Zobrazeno ${from}–${to} z ${total}</span><label>Na stránku <select data-tyres-page-size="${scope}">${TYRES_PAGE_SIZES.map((size) => `<option value="${size}" ${size === pageSize ? "selected" : ""}>${size}</option>`).join("")}</select></label><div><button type="button" data-tyres-page="${scope}" data-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>${SmartIcon("arrow-left")} Předchozí</button><span>${page} / ${pages}</span><button type="button" data-tyres-page="${scope}" data-page="${page + 1}" ${page >= pages ? "disabled" : ""}>Další ${SmartIcon("arrow-right")}</button></div></div>`;
 }
 
 function tyresInventoryTable(user) {
@@ -41099,7 +41221,7 @@ function tyresVehicleMap(detail, user) {
   const placements = positions.map((position, index) => ({ position, layout: tyresPositionLayout(position, index, positions) }));
   const rowCount = Math.max(...placements.map((item) => item.layout.row)) + 1;
   const mapHeight = Math.max(390, 142 + rowCount * 96);
-  return `<div class="tyres-vehicle-detail"><div class="tyres-vehicle-detail__head"><div><p class="module-feedback__eyebrow">Klikací osazení</p><h3>${escapeHtml(vehicle.licensePlate)}</h3><p>${escapeHtml(tyresText(vehicle.type))} · ${escapeHtml(tyresText(vehicle.driver))}</p></div><button type="button" class="icon-button" data-tyres-close-vehicle aria-label="Zavřít detail vozidla">×</button></div><div class="tyres-vehicle-map" style="min-height:${mapHeight}px" role="group" aria-label="Pozice kol vozidla ${escapeHtml(vehicle.licensePlate)}"><div class="tyres-vehicle-cab"><span>kabina</span></div><div class="tyres-vehicle-body" style="height:${Math.max(238, mapHeight - 152)}px"><span>vozidlo</span></div>${placements.map(({ position, layout }) => { const tyre = mounted.find((item) => item.position === position); return `<button type="button" class="tyres-wheel ${tyre ? "is-mounted" : "is-empty"}" style="top:${layout.top}px" data-position-code="${escapeHtml(layout.code)}" data-position-side="${layout.side}" data-position-axle="${layout.axle}" data-position-row="${layout.row}" data-tyres-vehicle-position="${escapeHtml(position)}" title="${escapeHtml(`${position}: ${tyre ? `${tyre.manufacturer} ${tyre.model}` : "bez pneumatiky"}`)}"><strong>${escapeHtml(tyresPositionShortLabel(position))}</strong><span>${tyre ? `${tyresNumber(tyre.currentTread)} mm` : "volná"}</span></button>`; }).join("")}</div><div class="tyres-position-list">${positions.map((position) => { const tyre = mounted.find((item) => item.position === position); return `<article class="${tyre ? "is-mounted" : "is-empty"}"><div><strong>${escapeHtml(position)}</strong><span>${tyre ? escapeHtml(`${tyre.manufacturer} ${tyre.model} · ${tyre.size}`) : "Pozice není osazená"}</span></div>${tyre ? `<span class="tyres-tread tyres-tread--${tyresTreadTone(tyre.currentTread)}">${tyresNumber(tyre.currentTread)} mm</span><button type="button" class="text-action" data-tyres-open-detail="${escapeHtml(tyre.id)}">Otevřít pneumatiku</button>${tyresCanEdit(user) ? `<button type="button" class="text-action tyres-action-danger" data-tyres-dismount="${escapeHtml(tyre.id)}">Demontovat na sklad</button>` : ""}` : tyresCanEdit(user) ? `<button type="button" class="text-action" data-tyres-start-fitment="${escapeHtml(position)}">Osadit pneumatiku</button>` : ""}</article>`; }).join("")}</div>${tyresFitmentPanel(vehicle)}</div>`;
+  return `<div class="tyres-vehicle-detail"><div class="tyres-vehicle-detail__head"><div><p class="module-feedback__eyebrow">Klikací osazení</p><h3>${escapeHtml(vehicle.licensePlate)}</h3><p>${escapeHtml(tyresText(vehicle.type))} · ${escapeHtml(tyresText(vehicle.driver))}</p></div><button type="button" class="icon-button" data-tyres-close-vehicle aria-label="Zavřít detail vozidla">${SmartIcon("close")}</button></div><div class="tyres-vehicle-map" style="min-height:${mapHeight}px" role="group" aria-label="Pozice kol vozidla ${escapeHtml(vehicle.licensePlate)}"><div class="tyres-vehicle-cab"><span>kabina</span></div><div class="tyres-vehicle-body" style="height:${Math.max(238, mapHeight - 152)}px"><span>vozidlo</span></div>${placements.map(({ position, layout }) => { const tyre = mounted.find((item) => item.position === position); return `<button type="button" class="tyres-wheel ${tyre ? "is-mounted" : "is-empty"}" style="top:${layout.top}px" data-position-code="${escapeHtml(layout.code)}" data-position-side="${layout.side}" data-position-axle="${layout.axle}" data-position-row="${layout.row}" data-tyres-vehicle-position="${escapeHtml(position)}" title="${escapeHtml(`${position}: ${tyre ? `${tyre.manufacturer} ${tyre.model}` : "bez pneumatiky"}`)}"><strong>${escapeHtml(tyresPositionShortLabel(position))}</strong><span>${tyre ? `${tyresNumber(tyre.currentTread)} mm` : "volná"}</span></button>`; }).join("")}</div><div class="tyres-position-list">${positions.map((position) => { const tyre = mounted.find((item) => item.position === position); return `<article class="${tyre ? "is-mounted" : "is-empty"}"><div><strong>${escapeHtml(position)}</strong><span>${tyre ? escapeHtml(`${tyre.manufacturer} ${tyre.model} · ${tyre.size}`) : "Pozice není osazená"}</span></div>${tyre ? `<span class="tyres-tread tyres-tread--${tyresTreadTone(tyre.currentTread)}">${tyresNumber(tyre.currentTread)} mm</span><button type="button" class="text-action" data-tyres-open-detail="${escapeHtml(tyre.id)}">Otevřít pneumatiku</button>${tyresCanEdit(user) ? `<button type="button" class="text-action tyres-action-danger" data-tyres-dismount="${escapeHtml(tyre.id)}">Demontovat na sklad</button>` : ""}` : tyresCanEdit(user) ? `<button type="button" class="text-action" data-tyres-start-fitment="${escapeHtml(position)}">Osadit pneumatiku</button>` : ""}</article>`; }).join("")}</div>${tyresFitmentPanel(vehicle)}</div>`;
 }
 
 function tyresVehiclesView(user) {
@@ -41171,16 +41293,16 @@ function tyresSettingsView(user) {
 function tyresDetailDrawer(user) {
   if (!tyresState.selectedTyreId) return "";
   const detail = tyresState.tyreDetail;
-  if (tyresState.detailLoading || !detail) return `<div class="tyres-drawer-backdrop" data-tyres-close-detail></div><aside class="tyres-detail-drawer" aria-label="Načítám detail pneumatiky"><button class="icon-button" type="button" data-tyres-close-detail aria-label="Zavřít detail">×</button>${tyresSkeleton(8)}</aside>`;
+  if (tyresState.detailLoading || !detail) return `<div class="tyres-drawer-backdrop" data-tyres-close-detail></div><aside class="tyres-detail-drawer" aria-label="Načítám detail pneumatiky"><button class="icon-button" type="button" data-tyres-close-detail aria-label="Zavřít detail">${SmartIcon("close")}</button>${tyresSkeleton(8)}</aside>`;
   const tyre = detail.tyre;
-  return `<div class="tyres-drawer-backdrop" data-tyres-close-detail></div><aside class="tyres-detail-drawer" aria-labelledby="tyres-detail-title"><header><div><p class="module-feedback__eyebrow">Detail pneumatiky</p><h2 id="tyres-detail-title">${escapeHtml(`${tyre.manufacturer} ${tyre.model}`.trim())}</h2><p>${escapeHtml(tyre.size)} · ${escapeHtml(tyre.id)}</p></div><button class="icon-button" type="button" data-tyres-close-detail aria-label="Zavřít detail">×</button></header>${tyresCanEdit(user) ? `<div class="tyres-detail-actions"><button class="primary-action" type="button" data-tyres-edit="${escapeHtml(tyre.id)}"><span aria-hidden="true">✎</span> Upravit</button><button type="button" data-tyres-detail-measure><span aria-hidden="true">mm</span> Zapsat měření</button><button type="button" data-tyres-detail-fit><span aria-hidden="true">↔</span> Přesunout / osadit</button><button type="button" data-tyres-detail-service><span aria-hidden="true">Kč</span> Zapsat servis</button></div>` : ""}<section><h3>Základní údaje</h3><dl class="tyres-detail-list"><div><dt>Typ</dt><dd>${escapeHtml(tyresText(tyre.type))}</dd></div><div><dt>DOT</dt><dd>${escapeHtml(tyresText(tyre.dot))}</dd></div><div><dt>Nosnostní index</dt><dd>${escapeHtml(tyresText(tyre.loadIndex))}</dd></div><div><dt>Cena bez DPH</dt><dd>${tyresCurrency(tyre.priceEx)}</dd></div><div><dt>Dodavatel</dt><dd>${escapeHtml(tyresText(tyre.supplier))}</dd></div></dl></section><section><h3>Aktuální umístění</h3><p>${escapeHtml(tyre.vehicle ? `${tyre.vehicle} · ${tyresText(tyre.position)}` : tyre.state === "sklad" ? "Sklad" : tyresText(tyre.state))}</p></section><section><h3>Stav a poslední měření</h3><dl class="tyres-detail-list"><div><dt>Dezén</dt><dd>${tyre.currentTread == null ? "Neuvedeno" : `${tyresNumber(tyre.currentTread)} mm`}</dd></div><div><dt>Tlak</dt><dd>${tyre.pressure == null ? "Neuvedeno" : `${tyresNumber(tyre.pressure)} bar`}</dd></div><div><dt>Poslední měření</dt><dd>${escapeHtml(tyresDate(tyre.lastMeasurementAt))}</dd></div><div><dt>Nájezd pneumatiky</dt><dd>${tyre.mileage ? `${tyresNumber(tyre.mileage, 0)} km` : "Neuvedeno"}</dd></div></dl></section><details open><summary>Historie měření (${detail.measurements.length})</summary>${detail.measurements.length ? `<ol class="tyres-compact-history">${detail.measurements.map((item) => `<li><strong>${tyresDate(item.measuredAt)}</strong><span>${tyresNumber(item.tread)} mm${item.pressure == null ? "" : ` · ${tyresNumber(item.pressure)} bar`} · ${escapeHtml(item.position)}</span></li>`).join("")}</ol>` : tyresEmpty("Bez měření")}</details><details><summary>Historie servisu (${detail.services.length})</summary>${detail.services.length ? `<ol class="tyres-compact-history">${detail.services.map((item) => `<li><strong>${escapeHtml(item.type)} · ${tyresDate(item.date)}</strong><span>${tyresCurrency(tyresServiceTotal(item))}</span></li>`).join("")}</ol>` : tyresEmpty("Bez doloženého servisu", "Starší vozidlové záznamy bez vazby na konkrétní pneumatiku se sem nedopočítávají.")}</details><details><summary>Náklady</summary><p class="tyres-detail-cost">${tyresCurrency(detail.costs)}</p></details><details><summary>Audit změn (${detail.audit.length})</summary>${detail.audit.length ? `<ol class="tyres-compact-history">${detail.audit.map((item) => `<li><strong>${escapeHtml(item.action)}</strong><span>${tyresDate(item.createdAt)} · ${escapeHtml(tyresText(item.actor, "Systém"))}</span></li>`).join("")}</ol>` : tyresEmpty("Bez auditních událostí")}</details></aside>`;
+  return `<div class="tyres-drawer-backdrop" data-tyres-close-detail></div><aside class="tyres-detail-drawer" aria-labelledby="tyres-detail-title"><header><div><p class="module-feedback__eyebrow">Detail pneumatiky</p><h2 id="tyres-detail-title">${escapeHtml(`${tyre.manufacturer} ${tyre.model}`.trim())}</h2><p>${escapeHtml(tyre.size)} · ${escapeHtml(tyre.id)}</p></div><button class="icon-button" type="button" data-tyres-close-detail aria-label="Zavřít detail">${SmartIcon("close")}</button></header>${tyresCanEdit(user) ? `<div class="tyres-detail-actions"><button class="primary-action" type="button" data-tyres-edit="${escapeHtml(tyre.id)}"><span aria-hidden="true">✎</span> Upravit</button><button type="button" data-tyres-detail-measure><span aria-hidden="true">${SmartIcon("measure")}</span> Zapsat měření</button><button type="button" data-tyres-detail-fit><span aria-hidden="true">↔</span> Přesunout / osadit</button><button type="button" data-tyres-detail-service><span aria-hidden="true">Kč</span> Zapsat servis</button></div>` : ""}<section><h3>Základní údaje</h3><dl class="tyres-detail-list"><div><dt>Typ</dt><dd>${escapeHtml(tyresText(tyre.type))}</dd></div><div><dt>DOT</dt><dd>${escapeHtml(tyresText(tyre.dot))}</dd></div><div><dt>Nosnostní index</dt><dd>${escapeHtml(tyresText(tyre.loadIndex))}</dd></div><div><dt>Cena bez DPH</dt><dd>${tyresCurrency(tyre.priceEx)}</dd></div><div><dt>Dodavatel</dt><dd>${escapeHtml(tyresText(tyre.supplier))}</dd></div></dl></section><section><h3>Aktuální umístění</h3><p>${escapeHtml(tyre.vehicle ? `${tyre.vehicle} · ${tyresText(tyre.position)}` : tyre.state === "sklad" ? "Sklad" : tyresText(tyre.state))}</p></section><section><h3>Stav a poslední měření</h3><dl class="tyres-detail-list"><div><dt>Dezén</dt><dd>${tyre.currentTread == null ? "Neuvedeno" : `${tyresNumber(tyre.currentTread)} mm`}</dd></div><div><dt>Tlak</dt><dd>${tyre.pressure == null ? "Neuvedeno" : `${tyresNumber(tyre.pressure)} bar`}</dd></div><div><dt>Poslední měření</dt><dd>${escapeHtml(tyresDate(tyre.lastMeasurementAt))}</dd></div><div><dt>Nájezd pneumatiky</dt><dd>${tyre.mileage ? `${tyresNumber(tyre.mileage, 0)} km` : "Neuvedeno"}</dd></div></dl></section><details open><summary>Historie měření (${detail.measurements.length})</summary>${detail.measurements.length ? `<ol class="tyres-compact-history">${detail.measurements.map((item) => `<li><strong>${tyresDate(item.measuredAt)}</strong><span>${tyresNumber(item.tread)} mm${item.pressure == null ? "" : ` · ${tyresNumber(item.pressure)} bar`} · ${escapeHtml(item.position)}</span></li>`).join("")}</ol>` : tyresEmpty("Bez měření")}</details><details><summary>Historie servisu (${detail.services.length})</summary>${detail.services.length ? `<ol class="tyres-compact-history">${detail.services.map((item) => `<li><strong>${escapeHtml(item.type)} · ${tyresDate(item.date)}</strong><span>${tyresCurrency(tyresServiceTotal(item))}</span></li>`).join("")}</ol>` : tyresEmpty("Bez doloženého servisu", "Starší vozidlové záznamy bez vazby na konkrétní pneumatiku se sem nedopočítávají.")}</details><details><summary>Náklady</summary><p class="tyres-detail-cost">${tyresCurrency(detail.costs)}</p></details><details><summary>Audit změn (${detail.audit.length})</summary>${detail.audit.length ? `<ol class="tyres-compact-history">${detail.audit.map((item) => `<li><strong>${escapeHtml(item.action)}</strong><span>${tyresDate(item.createdAt)} · ${escapeHtml(tyresText(item.actor, "Systém"))}</span></li>`).join("")}</ol>` : tyresEmpty("Bez auditních událostí")}</details></aside>`;
 }
 
 function tyresEditorDialog(user) {
   if (!tyresState.editingId || !tyresCanEdit(user)) return "";
   const editing = tyresState.editingId === "new" ? null : tyresState.tyreDetail?.tyre || (tyresDashboardData().tyres || []).find((item) => item.id === tyresState.editingId) || null;
   const fields = { tyreId: editing?.id || "", manufacturer: editing?.manufacturer || "", model: editing?.model || "", size: editing?.size || "", type: editing?.type || "nová", state: editing?.state || "sklad", vehicle: editing?.vehicle || "", position: editing?.position || "", currentTread: editing?.currentTread ?? "", pressure: editing?.pressure ?? "", priceEx: editing?.priceEx ?? "", supplier: editing?.supplier || "", purchaseDate: editing?.purchaseDate || "", invoice: editing?.invoice || "", dot: editing?.dot || "", loadIndex: editing?.loadIndex || "", mounted: editing?.mounted || "", mountedOdo: editing?.mountedOdo ?? "", mileage: editing?.mileage ?? "", defects: editing?.defects ?? "" };
-  return `<div class="tyres-dialog-backdrop"></div><section class="tyres-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="tyres-editor-title"><header><div><p class="module-feedback__eyebrow">Evidence</p><h2 id="tyres-editor-title">${editing ? "Upravit pneumatiku" : "Nová pneumatika"}</h2></div><button type="button" class="icon-button" data-tyres-edit-cancel aria-label="Zavřít formulář">×</button></header><form class="tyres-form" data-tyres-tyre-form data-tyres-baseline="${tyresFormBaseline(fields)}"><input type="hidden" name="tyreId" value="${escapeHtml(fields.tyreId)}" /><div class="tyres-form__grid"><label><span>Výrobce *</span><input name="manufacturer" required maxlength="120" value="${escapeHtml(fields.manufacturer)}" /></label><label><span>Model</span><input name="model" maxlength="160" value="${escapeHtml(fields.model)}" /></label><label><span>Rozměr *</span><input name="size" required maxlength="120" value="${escapeHtml(fields.size)}" placeholder="315/80 R22,5" /></label><label><span>Typ</span><input name="type" maxlength="80" value="${escapeHtml(fields.type)}" /></label><label><span>Stav</span><select name="state"><option value="sklad" ${fields.state === "sklad" ? "selected" : ""}>Sklad</option><option value="na vozidle" ${fields.state === "na vozidle" ? "selected" : ""}>Na vozidle</option><option value="vyřazená" ${fields.state === "vyřazená" ? "selected" : ""}>Vyřazená</option></select></label><label><span>Vozidlo</span><select name="vehicle">${tyresVehicleOptions(fields.vehicle)}</select></label><label><span>Pozice kola</span><input name="position" maxlength="80" value="${escapeHtml(fields.position)}" /></label><label><span>Aktuální dezén mm</span><input name="currentTread" inputmode="decimal" type="number" min="0" max="100" step="0.1" value="${escapeHtml(fields.currentTread)}" /></label><label><span>Tlak bar</span><input name="pressure" inputmode="decimal" type="number" min="0" max="30" step="0.1" value="${escapeHtml(fields.pressure)}" /></label><label><span>Cena bez DPH</span><input name="priceEx" inputmode="decimal" type="number" min="0" max="1000000" step="1" value="${escapeHtml(fields.priceEx)}" /></label><label><span>Dodavatel</span><input name="supplier" maxlength="180" value="${escapeHtml(fields.supplier)}" /></label><label><span>Datum nákupu</span><input name="purchaseDate" type="date" value="${escapeHtml(fields.purchaseDate)}" /></label><label><span>Faktura</span><input name="invoice" maxlength="120" value="${escapeHtml(fields.invoice)}" /></label><label><span>DOT</span><input name="dot" maxlength="40" value="${escapeHtml(fields.dot)}" /></label><label><span>Nosnostní index</span><input name="loadIndex" maxlength="80" value="${escapeHtml(fields.loadIndex)}" /></label><label><span>Datum montáže</span><input name="mounted" type="date" value="${escapeHtml(fields.mounted)}" /></label><label><span>Stav km při montáži</span><input name="mountedOdo" inputmode="numeric" type="number" min="0" max="10000000" value="${escapeHtml(fields.mountedOdo)}" /></label><label><span>Nájezd km</span><input name="mileage" inputmode="numeric" type="number" min="0" max="10000000" value="${escapeHtml(fields.mileage)}" /></label><label><span>Počet závad</span><input name="defects" inputmode="numeric" type="number" min="0" max="999" value="${escapeHtml(fields.defects)}" /></label></div><div class="tyres-form__actions"><button class="primary-action" type="submit" ${tyresState.saving ? "disabled" : ""}>${tyresState.saving ? "Ukládám…" : editing ? "Uložit změny pneumatiky" : "Přidat pneumatiku do evidence"}</button><button class="secondary-link" type="button" data-tyres-edit-cancel>Zrušit</button></div></form></section>`;
+  return `<div class="tyres-dialog-backdrop"></div><section class="tyres-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="tyres-editor-title"><header><div><p class="module-feedback__eyebrow">Evidence</p><h2 id="tyres-editor-title">${editing ? "Upravit pneumatiku" : "Nová pneumatika"}</h2></div><button type="button" class="icon-button" data-tyres-edit-cancel aria-label="Zavřít formulář">${SmartIcon("close")}</button></header><form class="tyres-form" data-tyres-tyre-form data-tyres-baseline="${tyresFormBaseline(fields)}"><input type="hidden" name="tyreId" value="${escapeHtml(fields.tyreId)}" /><div class="tyres-form__grid"><label><span>Výrobce *</span><input name="manufacturer" required maxlength="120" value="${escapeHtml(fields.manufacturer)}" /></label><label><span>Model</span><input name="model" maxlength="160" value="${escapeHtml(fields.model)}" /></label><label><span>Rozměr *</span><input name="size" required maxlength="120" value="${escapeHtml(fields.size)}" placeholder="315/80 R22,5" /></label><label><span>Typ</span><input name="type" maxlength="80" value="${escapeHtml(fields.type)}" /></label><label><span>Stav</span><select name="state"><option value="sklad" ${fields.state === "sklad" ? "selected" : ""}>Sklad</option><option value="na vozidle" ${fields.state === "na vozidle" ? "selected" : ""}>Na vozidle</option><option value="vyřazená" ${fields.state === "vyřazená" ? "selected" : ""}>Vyřazená</option></select></label><label><span>Vozidlo</span><select name="vehicle">${tyresVehicleOptions(fields.vehicle)}</select></label><label><span>Pozice kola</span><input name="position" maxlength="80" value="${escapeHtml(fields.position)}" /></label><label><span>Aktuální dezén mm</span><input name="currentTread" inputmode="decimal" type="number" min="0" max="100" step="0.1" value="${escapeHtml(fields.currentTread)}" /></label><label><span>Tlak bar</span><input name="pressure" inputmode="decimal" type="number" min="0" max="30" step="0.1" value="${escapeHtml(fields.pressure)}" /></label><label><span>Cena bez DPH</span><input name="priceEx" inputmode="decimal" type="number" min="0" max="1000000" step="1" value="${escapeHtml(fields.priceEx)}" /></label><label><span>Dodavatel</span><input name="supplier" maxlength="180" value="${escapeHtml(fields.supplier)}" /></label><label><span>Datum nákupu</span><input name="purchaseDate" type="date" value="${escapeHtml(fields.purchaseDate)}" /></label><label><span>Faktura</span><input name="invoice" maxlength="120" value="${escapeHtml(fields.invoice)}" /></label><label><span>DOT</span><input name="dot" maxlength="40" value="${escapeHtml(fields.dot)}" /></label><label><span>Nosnostní index</span><input name="loadIndex" maxlength="80" value="${escapeHtml(fields.loadIndex)}" /></label><label><span>Datum montáže</span><input name="mounted" type="date" value="${escapeHtml(fields.mounted)}" /></label><label><span>Stav km při montáži</span><input name="mountedOdo" inputmode="numeric" type="number" min="0" max="10000000" value="${escapeHtml(fields.mountedOdo)}" /></label><label><span>Nájezd km</span><input name="mileage" inputmode="numeric" type="number" min="0" max="10000000" value="${escapeHtml(fields.mileage)}" /></label><label><span>Počet závad</span><input name="defects" inputmode="numeric" type="number" min="0" max="999" value="${escapeHtml(fields.defects)}" /></label></div><div class="tyres-form__actions"><button class="primary-action" type="submit" ${tyresState.saving ? "disabled" : ""}>${tyresState.saving ? "Ukládám…" : editing ? "Uložit změny pneumatiky" : "Přidat pneumatiku do evidence"}</button><button class="secondary-link" type="button" data-tyres-edit-cancel>Zrušit</button></div></form></section>`;
 }
 
 function tyresQuickMeasure(user) {
@@ -41188,7 +41310,7 @@ function tyresQuickMeasure(user) {
   const detail = tyresState.measurementVehicleDetail;
   const positions = detail?.vehicle?.configuration || [];
   const tyre = tyresMeasurementTyre();
-  return `<div class="tyres-mm ${tyresState.quickMeasureOpen ? "is-open" : ""}"><button class="tyres-mm-toggle" type="button" data-tyres-mm-toggle aria-expanded="${tyresState.quickMeasureOpen}"><span>mm</span><strong>Rychlé měření</strong></button>${tyresState.quickMeasureOpen ? `<section class="tyres-mm-panel" aria-label="Rychlé měření"><header><div><p class="module-feedback__eyebrow">Dvůr / dílna</p><h2>Rychlé měření</h2></div><button class="icon-button" type="button" data-tyres-mm-close aria-label="Zavřít rychlé měření">×</button></header><div class="tyres-segmented"><button type="button" data-tyres-mm-mode="single" class="${tyresState.measurement.mode === "single" ? "is-active" : ""}">Jedna pozice</button><button type="button" data-tyres-mm-mode="bulk" class="${tyresState.measurement.mode === "bulk" ? "is-active" : ""}">Všechny pozice</button></div><label><span>SPZ *</span><select data-tyres-measurement-vehicle>${tyresVehicleOptions(tyresState.measurement.vehicle, { includeEmpty: false })}</select></label>${tyresState.measurementVehicleLoading ? tyresSkeleton(2) : tyresState.measurement.mode === "bulk" ? `<form data-tyres-bulk-measurement-form><label><span>Stav km pro všechny pozice</span><input name="odometer" inputmode="numeric" type="number" min="0" max="10000000" value="${detail?.vehicle?.odometer || ""}" /></label><div class="tyres-mm-bulk-rows">${positions.map((position) => { const item = (detail?.tyres || []).find((candidate) => candidate.position === position); return `<fieldset ${item ? "" : "disabled"} data-position="${escapeHtml(position)}" data-tyre-id="${escapeHtml(item?.id || "")}"><legend>${escapeHtml(position)}</legend><small>${item ? escapeHtml(`${item.manufacturer} ${item.model}`) : "Bez osazené pneumatiky"}</small><label><span>Dezén mm</span><input data-bulk-tread inputmode="decimal" type="number" min="0" max="100" step="0.1" /></label><label><span>Tlak bar</span><input data-bulk-pressure inputmode="decimal" type="number" min="0" max="30" step="0.1" /></label><label><span>Poznámka</span><input data-bulk-note maxlength="2000" /></label></fieldset>`; }).join("")}</div><button class="primary-action" type="submit" ${tyresState.saving ? "disabled" : ""}>Uložit vyplněné pozice</button></form>` : `<form data-tyres-quick-measurement-form><label><span>Pozice *</span><select data-tyres-measurement-position required><option value="">Vyberte pozici</option>${positions.map((position) => `<option value="${escapeHtml(position)}" ${position === tyresState.measurement.position ? "selected" : ""}>${escapeHtml(position)}</option>`).join("")}</select></label>${tyre ? `<input type="hidden" name="tyreId" value="${escapeHtml(tyre.id)}" /><input type="hidden" name="vehicle" value="${escapeHtml(tyre.vehicle)}" /><input type="hidden" name="position" value="${escapeHtml(tyre.position)}" /><div class="tyres-mm-values"><label><span>Dezén mm *</span><input name="tread" required inputmode="decimal" type="number" min="0" max="100" step="0.1" /></label><label><span>Tlak bar</span><input name="pressure" inputmode="decimal" type="number" min="0" max="30" step="0.1" /></label><label><span>Stav km</span><input name="odometer" inputmode="numeric" type="number" min="0" max="10000000" value="${detail?.vehicle?.odometer || ""}" /></label></div><label><span>Poznámka</span><input name="note" maxlength="2000" /></label><input type="hidden" name="measuredAt" value="${new Date().toISOString().slice(0, 10)}" /><button class="primary-action" type="submit" ${tyresState.saving ? "disabled" : ""}>Uložit rychlé měření</button>` : tyresState.measurement.position ? `<div class="tyres-missing-fitment"><strong>Na této pozici není pneumatika.</strong><button type="button" data-tyres-measurement-fit>Osadit pneumatiku</button></div>` : ""}</form>`}</section>` : ""}</div>`;
+  return `<div class="tyres-mm ${tyresState.quickMeasureOpen ? "is-open" : ""}"><button class="tyres-mm-toggle" type="button" data-tyres-mm-toggle aria-expanded="${tyresState.quickMeasureOpen}"><span>mm</span><strong>Rychlé měření</strong></button>${tyresState.quickMeasureOpen ? `<section class="tyres-mm-panel" aria-label="Rychlé měření"><header><div><p class="module-feedback__eyebrow">Dvůr / dílna</p><h2>Rychlé měření</h2></div><button class="icon-button" type="button" data-tyres-mm-close aria-label="Zavřít rychlé měření">${SmartIcon("close")}</button></header><div class="tyres-segmented"><button type="button" data-tyres-mm-mode="single" class="${tyresState.measurement.mode === "single" ? "is-active" : ""}">Jedna pozice</button><button type="button" data-tyres-mm-mode="bulk" class="${tyresState.measurement.mode === "bulk" ? "is-active" : ""}">Všechny pozice</button></div><label><span>SPZ *</span><select data-tyres-measurement-vehicle>${tyresVehicleOptions(tyresState.measurement.vehicle, { includeEmpty: false })}</select></label>${tyresState.measurementVehicleLoading ? tyresSkeleton(2) : tyresState.measurement.mode === "bulk" ? `<form data-tyres-bulk-measurement-form><label><span>Stav km pro všechny pozice</span><input name="odometer" inputmode="numeric" type="number" min="0" max="10000000" value="${detail?.vehicle?.odometer || ""}" /></label><div class="tyres-mm-bulk-rows">${positions.map((position) => { const item = (detail?.tyres || []).find((candidate) => candidate.position === position); return `<fieldset ${item ? "" : "disabled"} data-position="${escapeHtml(position)}" data-tyre-id="${escapeHtml(item?.id || "")}"><legend>${escapeHtml(position)}</legend><small>${item ? escapeHtml(`${item.manufacturer} ${item.model}`) : "Bez osazené pneumatiky"}</small><label><span>Dezén mm</span><input data-bulk-tread inputmode="decimal" type="number" min="0" max="100" step="0.1" /></label><label><span>Tlak bar</span><input data-bulk-pressure inputmode="decimal" type="number" min="0" max="30" step="0.1" /></label><label><span>Poznámka</span><input data-bulk-note maxlength="2000" /></label></fieldset>`; }).join("")}</div><button class="primary-action" type="submit" ${tyresState.saving ? "disabled" : ""}>Uložit vyplněné pozice</button></form>` : `<form data-tyres-quick-measurement-form><label><span>Pozice *</span><select data-tyres-measurement-position required><option value="">Vyberte pozici</option>${positions.map((position) => `<option value="${escapeHtml(position)}" ${position === tyresState.measurement.position ? "selected" : ""}>${escapeHtml(position)}</option>`).join("")}</select></label>${tyre ? `<input type="hidden" name="tyreId" value="${escapeHtml(tyre.id)}" /><input type="hidden" name="vehicle" value="${escapeHtml(tyre.vehicle)}" /><input type="hidden" name="position" value="${escapeHtml(tyre.position)}" /><div class="tyres-mm-values"><label><span>Dezén mm *</span><input name="tread" required inputmode="decimal" type="number" min="0" max="100" step="0.1" /></label><label><span>Tlak bar</span><input name="pressure" inputmode="decimal" type="number" min="0" max="30" step="0.1" /></label><label><span>Stav km</span><input name="odometer" inputmode="numeric" type="number" min="0" max="10000000" value="${detail?.vehicle?.odometer || ""}" /></label></div><label><span>Poznámka</span><input name="note" maxlength="2000" /></label><input type="hidden" name="measuredAt" value="${new Date().toISOString().slice(0, 10)}" /><button class="primary-action" type="submit" ${tyresState.saving ? "disabled" : ""}>Uložit rychlé měření</button>` : tyresState.measurement.position ? `<div class="tyres-missing-fitment"><strong>Na této pozici není pneumatika.</strong><button type="button" data-tyres-measurement-fit>Osadit pneumatiku</button></div>` : ""}</form>`}</section>` : ""}</div>`;
 }
 
 function tyresActiveView(user) {
@@ -41203,7 +41325,7 @@ function tyresActiveView(user) {
 }
 
 function tyresModulePage(moduleItem, user) {
-  return `<main class="app-shell module-page module-theme-scope tyres-page" ${moduleThemeStyleAttribute()}>${userBar(user)}<nav class="topbar" aria-label="Navigace"><a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a><a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a></nav><header class="tyres-header"><div class="tyres-header__title"><div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div><div><p class="module-detail__eyebrow">SMART ODPADY / VOZIDLA</p><h1>Pneumatiky</h1><p>Evidence, osazení, měření a servis bez zbytečného scrollování.</p></div></div><div class="tyres-header__actions"><span class="tyres-api-status ${tyresState.error ? "is-error" : tyresState.loaded ? "is-ready" : "is-loading"}">${escapeHtml(tyresState.error ? "Vyžaduje pozornost" : tyresState.loaded ? "Data načtena" : "Načítám")}</span>${tyresCanEdit(user) ? `<button class="primary-action" type="button" data-tyres-open-measure><span aria-hidden="true">mm</span> Nové měření</button>` : ""}</div></header><nav class="tyres-tabs" aria-label="Sekce Pneumatik">${TYRES_TABS.map((tab) => `<button type="button" data-tyres-tab="${tab.id}" class="${tyresState.activeTab === tab.id ? "is-active" : ""}" aria-current="${tyresState.activeTab === tab.id ? "page" : "false"}">${escapeHtml(tab.label)}</button>`).join("")}</nav>${tyresState.message ? `<p class="tyres-notice" role="status">${escapeHtml(tyresState.message)}</p>` : ""}${tyresState.error && tyresState.loadedViews.includes(tyresState.activeTab) ? `<p class="tyres-error" role="alert">${escapeHtml(tyresState.error)} <button type="button" data-tyres-refresh>Opakovat</button></p>` : ""}<div class="tyres-workspace">${tyresActiveView(user)}</div>${tyresDetailDrawer(user)}${tyresEditorDialog(user)}${tyresQuickMeasure(user)}</main>`;
+  return `<main class="app-shell module-page module-theme-scope tyres-page" ${moduleThemeStyleAttribute()}>${userBar(user)}<nav class="topbar" aria-label="Navigace"><a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a><a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a></nav><header class="tyres-header"><div class="tyres-header__title"><div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div><div><p class="module-detail__eyebrow">SMART ODPADY / VOZIDLA</p><h1>Pneumatiky</h1><p>Evidence, osazení, měření a servis bez zbytečného scrollování.</p></div></div><div class="tyres-header__actions"><span class="tyres-api-status ${tyresState.error ? "is-error" : tyresState.loaded ? "is-ready" : "is-loading"}">${escapeHtml(tyresState.error ? "Vyžaduje pozornost" : tyresState.loaded ? "Data načtena" : "Načítám")}</span>${tyresCanEdit(user) ? `<button class="primary-action" type="button" data-tyres-open-measure><span aria-hidden="true">${SmartIcon("measure")}</span> Nové měření</button>` : ""}</div></header><nav class="tyres-tabs" aria-label="Sekce Pneumatik">${TYRES_TABS.map((tab) => `<button type="button" data-tyres-tab="${tab.id}" class="${tyresState.activeTab === tab.id ? "is-active" : ""}" aria-current="${tyresState.activeTab === tab.id ? "page" : "false"}">${escapeHtml(tab.label)}</button>`).join("")}</nav>${tyresState.message ? `<p class="tyres-notice" role="status">${escapeHtml(tyresState.message)}</p>` : ""}${tyresState.error && tyresState.loadedViews.includes(tyresState.activeTab) ? `<p class="tyres-error" role="alert">${escapeHtml(tyresState.error)} <button type="button" data-tyres-refresh>Opakovat</button></p>` : ""}<div class="tyres-workspace">${tyresActiveView(user)}</div>${tyresDetailDrawer(user)}${tyresEditorDialog(user)}${tyresQuickMeasure(user)}</main>`;
 }
 
 function tyresMarkLoaded(view) {
@@ -42423,7 +42545,7 @@ function rcsTemplateIosAction(template = {}) {
   return `
     <span class="rcs-native-card__action rcs-native-card__action--ios">
       <span>${escapeHtml(label)}</span>
-      <span aria-hidden="true">›</span>
+      <span aria-hidden="true">${SmartIcon("chevron-right")}</span>
     </span>
   `;
 }
@@ -43502,7 +43624,7 @@ function feedbackWorkflowReportPanel(user) {
     const backRoute = feedbackWorkflowState.draft.sourceRoute || "/";
     return `
       <section class="feedback-workflow-confirmation" role="status" aria-labelledby="feedback-created-title">
-        <span class="feedback-workflow-confirmation__icon" aria-hidden="true">✓</span>
+        <span class="feedback-workflow-confirmation__icon" aria-hidden="true">${SmartIcon("check")}</span>
         <div>
           <p class="module-detail__eyebrow">Uloženo</p>
           <h2 id="feedback-created-title">Hlášení bylo vytvořeno</h2>
@@ -43877,7 +43999,7 @@ function feedbackWorkflowDetailPage(user) {
   return `
     <div class="feedback-workflow-detail">
       <div class="feedback-workflow-detail__main">
-        <a class="feedback-workflow-back" href="${routeHref(`${FEEDBACK_ROUTE}?tab=list`)}" data-link>← Zpět na hlášení</a>
+        <a class="feedback-workflow-back" href="${routeHref(`${FEEDBACK_ROUTE}?tab=list`)}" data-link>${SmartIcon("arrow-left")} Zpět na hlášení</a>
         <header class="feedback-workflow-detail__header">
           <div>
             <p class="module-detail__eyebrow">${escapeHtml(item.caseNumber)}</p>
@@ -44028,19 +44150,27 @@ function appErrorPage() {
 
 async function apiJson(path, options = {}) {
   const isFormData = options.body instanceof FormData;
-  const response = await fetch(path, {
+  let response;
+  try {
+    response = await fetch(path, {
     credentials: "include",
     headers: {
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(options.headers || {})
     },
     ...options
-  });
+    });
+  } catch (error) {
+    sessionGuard.failedConnection();
+    throw error;
+  }
+  if (response.status === 401) sessionGuard.unauthorized();
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     const error = new Error(payload.error || "Požadavek se nepodařilo dokončit.");
     error.payload = payload;
+    error.status = response.status;
     throw error;
   }
 
@@ -54707,9 +54837,13 @@ async function verifyLogin(form) {
       error: "",
       mockCode: false
     };
+    if (!sessionGuard.authenticated(result)) return;
     await loadThemeSettings({ renderAfter: false });
     await loadAbsenceSettings({ renderAfter: false });
     await loadAssistantPromo({ renderAfter: false });
+    updateGlobalSearch("");
+    window.history.replaceState({}, "", routeHref("/"));
+    lastRenderedUrl = window.location.href;
   } catch {
     authState = {
       ...authState,
@@ -54725,7 +54859,14 @@ async function logout() {
   if (collectionRoutesPilotState.myDailyRouteNavigationActive) {
     stopCollectionDailyDriverNavigation({ renderAfter: false });
   }
-  await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+  resetAiAssistantSession();
+  await sessionGuard.signOut();
+}
+
+function clearLocalSession() {
+  if (collectionRoutesPilotState.myDailyRouteNavigationActive) {
+    stopCollectionDailyDriverNavigation({ renderAfter: false });
+  }
   resetAiAssistantSession();
   resetAssistantPromoState();
   authState = {
@@ -54967,12 +55108,12 @@ function renderAuthenticatedApp(user) {
     document.title = `${integration ? 'Propojení Vistos' : 'Zakázky'} | ${APP_NAME}`;
     return;
   }
-  // Mailbox grants govern this workspace. Reuse the dashboard route to retain the monitoring budget.
+  // Retain the old URL as a safe redirect while the mail module is hidden.
   if(path==='/dashboard' && new URLSearchParams(window.location.search).get('view')==='forpsi-mail') {
-    app.innerHTML=`<main class="app-shell module-page module-theme-scope" ${moduleThemeStyleAttribute()}>${userBar(user)}
-      <nav class="topbar" aria-label="Navigace"><a class="back-button" href="${routeHref('/')}" data-link>Zpět na přehled</a>
-      ${hasPermission(user,'settings','manage')?`<a class="secondary-link" href="${routeHref('/nastaveni#forpsi-admin')}" data-link>Nastavení Forpsi</a>`:''}</nav>${forpsiMailSection()}</main>`;
-    document.title=`Pošta | ${APP_NAME}`;return;
+    // Company mail is hidden by product decision; retain its data and backend.
+    window.history.replaceState({}, '', routeHref('/'));
+    renderAuthenticatedApp(user);
+    return;
   }
   if (isDriverReportsPath(path) && (aiAssistantState.chatOpen || isAiVoiceSessionActive() || aiAssistantState.isListening)) {
     closeAiAssistant({ renderAfter: false });
@@ -55010,9 +55151,15 @@ function renderAuthenticatedApp(user) {
     return;
   }
 
-  if (path === "/" || path === "/dashboard") {
-    ensureCollectionRoutesSvozKaiserWatchdog(user);
+  if (path === "/") {
     app.innerHTML = homePage(user);
+    document.title = `Moduly | ${APP_NAME}`;
+    return;
+  }
+
+  if (path === "/dashboard") {
+    ensureCollectionRoutesSvozKaiserWatchdog(user);
+    app.innerHTML = companyDashboardPage(user);
     ensureDataBoxPlusHomeStatus(user);
     if (hasPermission(user, "fleet", "view") && mainDashboardCanSeeEconomics(user)) {
       void loadFleetFuelAnalytics({ period: mainDashboardUiState.period });
@@ -55041,6 +55188,30 @@ function renderAuthenticatedApp(user) {
     return;
   }
 
+  if (path === LEGACY_EMPLOYEE_ROUTE_PREFIX || path.startsWith(`${LEGACY_EMPLOYEE_ROUTE_PREFIX}/`)) {
+    const target = `${EMPLOYEE_CARD_ROUTE_PREFIX}${path.slice(LEGACY_EMPLOYEE_ROUTE_PREFIX.length)}${window.location.search}${window.location.hash}`;
+    window.history.replaceState({}, "", routeHref(target));
+    renderAuthenticatedApp(user);
+    return;
+  }
+
+  if (path === EMPLOYEE_CARD_ROUTE_PREFIX || path.startsWith(`${EMPLOYEE_CARD_ROUTE_PREFIX}/`)) {
+    if (!canViewModule(user, "employees")) {
+      app.innerHTML = forbiddenPage(user);
+      document.title = `Bez oprávnění | ${APP_NAME}`;
+      return;
+    }
+    const employeeId = routeEmployeeId(path);
+    loadEmployeeList();
+    loadAbsenceRequests();
+    app.innerHTML = employeesModulePage(user, employeeId);
+    const titleName = employeeId && employeeCardState.employee?.id === employeeId
+      ? employeeFullName(employeeCardState.employee)
+      : "Zaměstnanci";
+    document.title = `${titleName} | ${APP_NAME}`;
+    return;
+  }
+
   const routeTab = absenceTabForRoute(path);
   if (routeTab) {
     if (!canUseAbsenceTab(user, routeTab)) {
@@ -55063,23 +55234,6 @@ function renderAuthenticatedApp(user) {
         loadAbsenceApprovalRequests();
       }
     }
-    return;
-  }
-
-  const employeeId = routeEmployeeId(path);
-  if (employeeId) {
-    if (!canViewModule(user, "absence")) {
-      app.innerHTML = forbiddenPage(user);
-      document.title = `Bez oprávnění | ${APP_NAME}`;
-      return;
-    }
-
-    const moduleItem = absenceModuleItem();
-    app.innerHTML = absenceModulePage(moduleItem, user, false, { employeeId });
-    const titleName = employeeCardState.employee?.id === employeeId
-      ? employeeFullName(employeeCardState.employee)
-      : "Karta zaměstnance";
-    document.title = `${titleName} | ${APP_NAME}`;
     return;
   }
 
@@ -55446,7 +55600,17 @@ function syncCollectionDailyDriverViewportDiagnostics() {
   kiosk.dataset.collectionDriverScreenHeight = String(screenHeight);
 }
 
+let mobileScrollRoute = null;
 function render() {
+  if (location.pathname !== "/" && moduleLauncherQuery) updateGlobalSearch("");
+  const searchOwner = authState.status === "authenticated" ? authState.user?.id : null;
+  if (globalSearchOwner !== searchOwner) {
+    globalSearchOwner = searchOwner;
+    updateGlobalSearch("");
+  }
+  const scrollRoute = location.pathname + location.search + location.hash;
+  const scrollTop = mobileScrollRoute === scrollRoute ? (app.querySelector("main.ui-system-v2")?.scrollTop || 0) : 0;
+  mobileScrollRoute = scrollRoute;
   try {
     accessUnsavedChangesGuard.unmountModal();
     applyActiveThemeToRoot();
@@ -55457,6 +55621,9 @@ function render() {
     syncCollectionDailyDriverViewportDiagnostics();
     applyUiSystemV2();
     mountVistosWorkspace(app, { apiJson, user: authState.user });
+    applyMobileWorkspace(app, { userId: authState.user?.id || null, activeModuleId: uiSystemV2ActiveModuleId(window.location.pathname), render });
+    const mobileShell = app.querySelector("main.ui-system-v2");
+    if (mobileShell) mobileShell.scrollTop = scrollTop;
     bindRcsSmsAutopilot(app, { apiJson, render });
     app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
     app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());
@@ -55481,6 +55648,7 @@ function render() {
 }
 
 async function bootstrapAuth() {
+  if (!await sessionGuard.beforeBootstrap()) return;
   try {
     const result = await apiJson("/api/me");
     authState = {
@@ -55492,10 +55660,11 @@ async function bootstrapAuth() {
       error: "",
       mockCode: false
     };
+    if (!sessionGuard.authenticated(result)) return;
     await loadThemeSettings({ renderAfter: false });
     await loadAbsenceSettings({ renderAfter: false });
     await loadAssistantPromo({ renderAfter: false });
-  } catch {
+  } catch (error) {
     authState = {
       status: "anonymous",
       user: null,
@@ -55505,6 +55674,7 @@ async function bootstrapAuth() {
       error: "",
       mockCode: false
     };
+    if (error.status !== 401) sessionGuard.lock("Připojení k aplikaci není dostupné. Zkuste to znovu.");
   }
 
   render();
@@ -56613,7 +56783,9 @@ function scrollToFleetTarget(targetId) {
   }
 
   window.requestAnimationFrame(() => {
-    document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const target = document.getElementById(targetId);
+    revealMobileTarget(target);
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 }
 
@@ -58863,6 +59035,12 @@ document.addEventListener("submit", async (event) => {
 let tyresSearchTimer = 0;
 
 document.addEventListener("input", (event) => {
+  const moduleSearch = event.target.closest("[data-module-search]");
+  if (moduleSearch) {
+    updateGlobalSearch(moduleSearch.value);
+    return;
+  }
+
   const tyresSearch = event.target.closest("[data-tyres-search]");
   if (tyresSearch) {
     tyresState.inventory.q = tyresSearch.value;
@@ -61881,10 +62059,6 @@ document.addEventListener("click", async (event) => {
   if (absenceTab) {
     const nextTab = absenceTab.dataset.absenceTab || "dashboard";
     const resolvedTab = resolveAbsenceTab(currentUser(), nextTab);
-    if (resolvedTab === "employee-card") {
-      guardedAccessAction(() => navigateToUrl(routeHref(absenceRouteForTab("employee-card"))));
-      return;
-    }
 
     guardedAccessAction(() => {
       absenceUiState.tab = resolvedTab;
@@ -62866,7 +63040,9 @@ document.addEventListener("keydown", (event) => {
   render();
 });
 
-window.addEventListener("beforeunload", (event) => accessUnsavedChangesGuard.beforeUnload(event));
+window.addEventListener("beforeunload", (event) => {
+  if (authState.user && !sessionGuard.isEnded()) accessUnsavedChangesGuard.beforeUnload(event);
+});
 window.addEventListener("popstate", handlePopStateNavigation);
 window.addEventListener("hashchange", handleHashChangeNavigation);
 window.addEventListener("resize", syncCollectionDailyDriverViewportDiagnostics, { passive: true });

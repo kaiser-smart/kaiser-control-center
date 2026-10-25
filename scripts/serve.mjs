@@ -1,3 +1,4 @@
+import { searchNavigation, matchesSearch } from "../src/data/globalSearch.js";
 import { createReadStream } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -589,6 +590,7 @@ const contentTypes = new Map([
   [".js", "text/javascript; charset=utf-8"],
   [".ts", "text/javascript; charset=utf-8"],
   [".json", "application/json; charset=utf-8"],
+  [".webmanifest", "application/manifest+json; charset=utf-8"],
   [".wav", "audio/wav"],
   [".mp3", "audio/mpeg"],
   [".m4a", "audio/mp4"],
@@ -3785,7 +3787,7 @@ function mockAiLimit(value, fallback = 5) {
 
 function mockEmployeeAiRoute(employeeId) {
   const id = String(employeeId || "").trim();
-  return id ? `/dovolena-nemoc/zamestnanci/${encodeURIComponent(id)}` : "/dovolena-nemoc/zamestnanci";
+  return id ? `/zamestnanci/${encodeURIComponent(id)}` : "/zamestnanci";
 }
 
 function mockEmployeeMatchesAiQuery(employee, query) {
@@ -9335,35 +9337,14 @@ async function handleApi(request, response) {
       return true;
     }
 
-    const query = String(url.searchParams.get("q") || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .trim();
-    const match = (item) => !query || [
-      item.id,
-      item.title,
-      item.description,
-      item.route
-    ].join(" ").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(query);
-    const visibleModules = modules
-      .filter((moduleItem) => hasPermission(user, moduleItem.id, "view"))
-      .filter(match)
-      .map((moduleItem) => ({
-        id: moduleItem.id,
-        title: moduleItem.title,
-        description: moduleItem.description,
-        route: moduleItem.route,
-        status: moduleItem.status
-      }));
-
-    sendJson(response, 200, {
-      query: url.searchParams.get("q") || "",
-      modules: visibleModules,
-      pages: [],
-      records: [],
-      apiStatus: "ready"
-    });
+    if (!hasPermission(user, "dashboard", "view")) {
+      sendJson(response, 403, { error: "Nemáte oprávnění." }); return true;
+    }
+    const query = String(url.searchParams.get("q") || "").trim().slice(0, 100);
+    const navigation = searchNavigation(user, query);
+    const records = query.length >= 2 && url.searchParams.get("records") === "1" && hasPermission(user, "absence", "view")
+      ? visibleMockEmployees(user).map(e => ({ id: e.id || e.userId, title: [e.firstName, e.lastName].filter(Boolean).join(" "), description: e.position || "", kind: "Zaměstnanci", route: `/zamestnanci/${encodeURIComponent(e.id || e.userId)}` })).filter(e => matchesSearch(e, query)).slice(0, 8) : [];
+    sendJson(response, 200, { query, modules: navigation.filter(item => item.kind === "Modul"), pages: navigation.filter(item => item.kind !== "Modul"), records, unavailable: [], more: [], apiStatus: "ready" });
     return true;
   }
 
