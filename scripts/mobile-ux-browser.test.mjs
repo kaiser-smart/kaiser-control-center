@@ -252,7 +252,8 @@ try {
     const header=await page.locator('.mobile-header').boundingBox(); assert.equal(header.height,52);
     assert.equal(await page.locator('.ai-assistant-launcher').count(),0,'Floating voice icon hidden');
     const tile=await page.locator('[data-launcher-module]').first().boundingBox(); assert.ok(tile.y+tile.height<607,'Module above fold');
-    assert.equal(await page.locator('[data-launcher-module]').count(),2);
+    assert.equal(await page.locator('[data-launcher-module]').count(),3);
+    assert.equal(await page.locator('[data-launcher-module="jobs"]').count(),1,'Preserve production Jobs launcher');
     assert.equal(await page.locator('.main-dashboard-kpis,.mobile-today').count(),0);
     for(const node of await page.locator('.mobile-bottom-nav a,.mobile-bottom-nav button,.mobile-header button').all()) {
       const box=await node.boundingBox(); assert.ok(box.height>=44 && box.width>=44,'Touch targets >=44');
