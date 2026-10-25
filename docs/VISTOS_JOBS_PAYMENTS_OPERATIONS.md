@@ -84,3 +84,9 @@ Nezávislé čtení uživatelského rozhraní Vistos 3.3.9.10, ServiceList 18145
 Readiness 20:42 UTC: CORE 267366400 B, ARCHIVE 2361745408 B, AUDIT 1240596480 B. Kontrakty, granty, zdrojové záznamy a checkpointy stále prázdné. Pravidla neaktivní. Kompaktní listové vzorky: hlavičky 5749–5843 B, položky 3472–3574 B. Odhad detailů, ověření filtrů a aktivace stále zbývají.
 
 Audit podporuje omezené čtení podle Modified_From/To (max. 92 dní, doslovné lokální časy) nebo jedné rodičovské zakázky ServiceList_FK. Každý vrácený řádek je kontrolován proti filtru. Prázdná odpověď ani správný vzorek se neoznačují za úplný důkaz filtru. Přibyla velikost sloučeného detailu. Opraven chybějící import časového resolveru při průchodu sousedními zakázkami; integrační test nyní projde skutečnou větví obohacení v izolované databázi.
+
+
+### 0.1.853 — kontrola filtru přes detail
+Živé čtení 2026-10-25T20:54:28Z vrací pro 24. září 127 z 183131 hlaviček, ale seznam neposkytuje Modified. Tento stav není důkaz ignorovaného filtru ani úspěšné kontroly. Omezený audit proto čte nejvýše deset různých detailů ze vzorku, kontroluje přesnou identitu a porovnává zdrojový čas bez doplňování časové zóny. Detail prvního řádku se používá opakovaně bez dalšího požadavku. Chybný detail, neověřený čas či řádek mimo okno znamená neúspěšnou kontrolu. Úplnost celého importu tím stále není potvrzena. Import a oprávnění se touto změnou nezapínají.
+
+Ověření: pět testů read-audit včetně chybějícího Modified, neodpovídajícího ID, hranice intervalu a nezpřístupnění osobních/finančních hodnot.

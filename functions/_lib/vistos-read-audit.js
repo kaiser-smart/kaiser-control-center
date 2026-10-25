@@ -58,24 +58,46 @@ export function jobAuditFilter({entity,modifiedFrom=null,modifiedTo=null,parentI
 export async function auditVistosRead(env,{entity='ServiceList',id=null,start=0,modifiedFrom=null,modifiedTo=null,parentId=null}={}) {
   if (!AUDIT_ENTITIES.includes(entity)||!Number.isSafeInteger(start)||start<0||start>10000000||(id!==null&&!numericId(id))) throw Object.assign(new Error('invalid_read_audit'),{code:'invalid_read_audit',status:400});
   const filter=jobAuditFilter({entity,modifiedFrom,modifiedTo,parentId});
-  const readEnv={...env,VISTOS_EXACT_DECIMALS:true};
+  const readEnv={...env,VISTOS_EXACT_DECIMALS:true,syncRequestDeadline:Date.now()+90000};
   const session=await loginVistosExecute(readEnv),schema=await getVistosSchemaEntity(readEnv,session,entity);
   const fields=vistosSchemaColumnNames(schema).filter(k=>!EXCLUDE.test(k));
   const base=new URL(env.VISTOS_API_BASE_URL);
   const result={testedAt:new Date().toISOString(),entity,apiOrigin:base.origin,installationPath:base.pathname,
     readOnly:true,writesVistos:false,writesD1:Number(env.VISTOS_SHARED_REQUESTS_PER_MINUTE)>0,writesBusinessData:false,completeImport:false,fields};
   if (!fields.includes('Id')) return {...result,status:'schema_without_id'};
-  // Bounded business read: 3 pages of 5 and one detail, plus at most two metadata reads.
+  // Bounded business read: 3 pages of 5, at most 10 filter-check details plus
+  // one specifically requested detail, and at most two metadata reads.
   const order=[{ColumnName:'Id',Direction:'asc'}];
   const first=await getVistosPage(readEnv,session,entity,fields,filter,start,5,{order});
   const second=await getVistosPage(readEnv,session,entity,fields,filter,start+5,5,{order});
   const repeat=await getVistosPage(readEnv,session,entity,fields,filter,start,5,{order});
+  const detailCache=new Map();
+  const detailRead=async sourceId=>{
+    if(!detailCache.has(sourceId)) {
+      const response=await getVistosById(readEnv,session,entity,sourceId,fields);
+      if(numericId(response.row?.Id)!==sourceId)throw Object.assign(new Error('vistos_record_identity_mismatch'),{code:'vistos_record_identity_mismatch'});
+      detailCache.set(sourceId,response);
+    }
+    return detailCache.get(sourceId);
+  };
   if(filter) {
     const rows=[...first.rows,...second.rows,...repeat.rows];
     const matches=row=>parentId?referenceIds(row,'ServiceList_FK','list').includes(String(parentId)):
       typeof row.Modified==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(row.Modified)&&row.Modified>=modifiedFrom&&row.Modified<modifiedTo;
     result.filterEvidence={requested:filter,rowsChecked:rows.length,allObservedRowsMatch:rows.every(matches),nonEmpty:first.rows.length>0,
       excludedRowsReported:first.countEvidence.totalReported&&first.countEvidence.filteredReported&&first.filtered<first.total,completeProof:false};
+    if(!parentId) {
+      const ids=[...new Set(rows.map(r=>numericId(r.Id)))],checks=[];
+      for(const sourceId of ids) {
+        try {
+          const {row}=await detailRead(sourceId);
+          checks.push({id:sourceId,modified:typeof row.Modified==='string'?row.Modified.slice(0,50):null,matches:matches(row)});
+        } catch(error) { checks.push({id:sourceId,matches:false,errorCode:/^[a-z0-9_]+$/.test(error.code||'')?error.code:'detail_unavailable'}); }
+      }
+      result.filterEvidence.listModifiedMissing=rows.filter(r=>!Object.hasOwn(r,'Modified')).length;
+      result.filterEvidence.detailChecks=checks;
+      result.filterEvidence.allObservedDetailsMatch=checks.length>0&&checks.every(c=>c.matches);
+    }
   }
   result.count={total:first.total,filtered:first.filtered,evidence:first.countEvidence};
   result.order={requested:order,ascending:ascending([...first.rows,...second.rows]),repeatStable:JSON.stringify(first.rows.map(r=>r.Id))===JSON.stringify(repeat.rows.map(r=>r.Id)),
@@ -87,7 +109,7 @@ export async function auditVistosRead(env,{entity='ServiceList',id=null,start=0,
   const detailId=id||numericId(first.rows[0]?.Id);
   if(detailId) {
     try {
-      const {row,diagnostics}=await getVistosById(readEnv,session,entity,detailId,fields);
+      const {row}=await detailRead(detailId);
       if(!row||numericId(row.Id)!==detailId)throw Object.assign(new Error('vistos_record_identity_mismatch'),{code:'vistos_record_identity_mismatch'});
       result.detail={...readAuditRecord(row,'detail',entity),requestedId:detailId};
       const merged=mergeSourceFields(mergeSourceFields({},first.rows.find(r=>numericId(r.Id)===detailId)||{},{entity,observedAt:result.testedAt}),row,{entity,kind:'detail',observedAt:result.testedAt});
