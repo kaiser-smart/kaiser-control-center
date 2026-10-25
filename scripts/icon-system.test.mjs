@@ -1,26 +1,33 @@
 import assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
 import { iconDefinitions } from '../src/components/icons/definitions.js';
 import { SmartIcon, moduleIconNames } from '../src/components/icons/SmartIcon.js';
 import { modules } from '../src/data/modules.js';
 import { vehicleTrackingSvgIconSource, VEHICLE_TRACKING_ICON_TYPES, VEHICLE_TRACKING_CUSTOM_ICON_BY_LICENSE_PLATE, vehicleTrackingVisualHeading, vehicleTrackingHeadingOffsetForVehicle } from '../src/data/vehicleTracking.js';
 const root=new URL('../',import.meta.url);
 let totalBytes=0,maxBytes=0;
+const provenance=JSON.parse(await readFile(new URL('docs/icon-provenance.json',root),'utf8'));
+assert.deepEqual(provenance.map(item=>item.name).sort(),Object.keys(iconDefinitions).sort());
 for(const name of Object.keys(iconDefinitions)){
   const svg=SmartIcon(name),saved=await readFile(new URL(`public/icons/ui/${name}.svg`,root),'utf8');
   assert.equal(saved.trim(),svg,`Regenerate outdated standalone icon ${name}`);
   assert.ok(!/<(?:image|filter|linearGradient|radialGradient|script|foreignObject|text)\b|data:image/i.test(svg),`Not pure vector: ${name}`);
-  assert.match(svg, /stroke="#243128"/);assert.match(svg, /stroke="#75BD25"/);
-  assert.match(svg,/stroke-width="2.2"/);assert.match(svg,/stroke-linecap="round" stroke-linejoin="round"/);
+  assert.match(svg, /fill="#243128"/);assert.match(svg, /fill="#75BD25"/);
+  assert.match(svg,/stroke="none"/); // Source outlines are traced filled contours, never thickened by an extra stroke.
   assert.match(svg,/aria-hidden="true" focusable="false"/);
-  assert.ok(Buffer.byteLength(saved)<1024,`Oversized ${name}`);
+  assert.ok(Buffer.byteLength(saved)<8192,`Oversized ${name}`);
+  const source=provenance.find(item=>item.name===name);
+  assert.match(source.sourceUrl,/^https:\/\/cdn\.openart\.ai\//);
+  assert.equal(source.svgSha256,createHash('sha256').update(saved).digest('hex'),`Source provenance drift: ${name}`);
+  assert.match(source.sourceSha256,/^[a-f0-9]{64}$/);
   totalBytes+=Buffer.byteLength(saved);maxBytes=Math.max(maxBytes,Buffer.byteLength(saved));
 }
 assert.throws(()=>SmartIcon('<script>'));
 for(const module of modules){assert.ok(Object.hasOwn(moduleIconNames,module.id),`Unmapped existing module ${module.id}`);assert.match(module.icon(),/class="smart-icon/);}
 for(const source of [...VEHICLE_TRACKING_ICON_TYPES.flatMap(i=>[i.primary,i.webp]),...Object.values(VEHICLE_TRACKING_CUSTOM_ICON_BY_LICENSE_PLATE)]){
-  assert.match(source,/\.svg$/);assert.ok((await stat(new URL(`public${source}`,root))).size<1024);
+  assert.match(source,/\.svg$/);assert.ok((await stat(new URL(`public${source}`,root))).size<20000);
 }
 // The north-facing map artwork must not retain the old 3D diagonal correction.
 for(const type of VEHICLE_TRACKING_ICON_TYPES){assert.equal(vehicleTrackingHeadingOffsetForVehicle({iconType:type.key}),0);assert.equal(vehicleTrackingVisualHeading(90,20,vehicleTrackingHeadingOffsetForVehicle({iconType:type.key})),90);}

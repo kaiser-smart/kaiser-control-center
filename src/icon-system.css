@@ -2,10 +2,10 @@
 #app svg.smart-icon {
   display:inline-block; width:24px; height:24px; flex-shrink:0; vertical-align:middle;
   padding:0; border:0; border-radius:0; background:none; box-shadow:none; filter:none;
-  fill:none; stroke:#243128; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round;
+  fill:#243128; stroke:none;
   pointer-events:none;
 }
-#app svg.smart-icon g { stroke:#75BD25; }
+#app svg.smart-icon [data-icon-accent] { fill:#75BD25; }
 #app :is(.module-icon,.module-detail__icon,.ui-pilot-hero__icon,.module-launcher-icon,
   .ui-pilot-nav__icon,.quick-absence-type__icon,.quick-absence-success-icon,.tyres-activity-icon,
   .feedback-workflow-confirmation__icon,.collection-routes-driver-action__icon,
@@ -48,7 +48,7 @@
 #app .mobile-section-select::after { content:''; height:20px; background:url('../icons/ui/chevron-down.svg') center/20px 20px no-repeat; }
 /* The green is decorative: labels and graphite geometry carry identity and state. */
 @media (forced-colors:active) {
-  #app svg.smart-icon, #app svg.smart-icon g { stroke:CanvasText; }
+  #app svg.smart-icon, #app svg.smart-icon [data-icon-accent] { fill:CanvasText; }
 }
 @media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
   #app .mobile-menu .ui-pilot-nav__item > span:last-child { min-width:0; white-space:normal; overflow-wrap:anywhere; }
