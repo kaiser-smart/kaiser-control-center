@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.848"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.849"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Ikony podle tenké předlohy OpenArt", text: "Původní silné ikony nahrazuje celá sada 69 věrně převedených SVG z OpenArt. Navigace, nabídky a tlačítka používají stejnou tenkou dvoubarevnou kresbu." },
   { title: "Vistos: kontrola skutečného propojení", text: "Opravené řazení čtecích dávek a omezená správcovská diagnostika dostupnosti zdrojových polí. Aktivace importu se ověřuje samostatně." },
   { title: "Poloha vozidel: přehledná mapa a seznam", text: "Kompaktní mapa s realistickými ikonami, shluky, hledáním a mobilním detailem. Stará i chybějící poloha jsou rozlišené; obnova zachovává výběr a mapu." },
   { title: "Zakázky na úvodní obrazovce", text: "Modul Zakázky je dostupný z úvodní nabídky a globálního hledání. Správci mohou otevřít provozní přehled; firemní rozsah, finanční a osobní údaje dál vyžadují samostatná oprávnění." },
