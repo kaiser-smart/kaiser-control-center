@@ -11,8 +11,10 @@ export default {
       return relay(request);
     }
     if (!['GET', 'HEAD'].includes(request.method)) return new Response('Read-only preview', { status: 405 });
-    if (['/', '/sledovani-vozidel'].includes(url.pathname)) url.pathname = '/index.html';
-    else if (!/^\/(?:src|vehicles|fonts|icons|brand|images)\//.test(url.pathname) && !['/manifest.webmanifest', '/favicon.ico'].includes(url.pathname)) return new Response('Preview is limited to vehicle tracking.', { status: 404 });
+    // Pages redirects /index.html to /. Fetch the canonical asset path so the
+    // rewritten tracking route cannot redirect back into this worker forever.
+    if (['/', '/sledovani-vozidel'].includes(url.pathname)) url.pathname = '/';
+    else if (!/^\/(?:src|vehicles|fonts|icons|brand|images)\//.test(url.pathname) && !['/manifest.webmanifest', '/favicon.ico', '/logo-kaiser.png', '/logo-kaiser.svg', '/smart-odpady-logo.png'].includes(url.pathname)) return new Response('Preview is limited to vehicle tracking.', { status: 404 });
     const response = await env.ASSETS.fetch(new Request(url, request));
     const headers = new Headers(response.headers);
     headers.set('Cache-Control', 'no-store');

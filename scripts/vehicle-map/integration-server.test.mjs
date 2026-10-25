@@ -20,6 +20,19 @@ const preview='https://vehicle-map-v13.kaiser-control-center.pages.dev';
 assert.equal((await worker.fetch(new Request('https://smart-odpady.ai/'),{})).status,403);
 assert.equal((await worker.fetch(new Request(preview+'/api/fleet/vehicles',{method:'POST'}),{})).status,403);
 assert.equal((await worker.fetch(new Request(preview+'/scripts/vehicle-map/fixtures.mjs'),{})).status,404);
-let assetUrl;const asset=await worker.fetch(new Request(preview+'/sledovani-vozidel'),{ASSETS:{fetch:async r=>{assetUrl=r.url;return new Response('protected app');}}});
-assert.equal(asset.status,200);assert.equal(assetUrl,preview+'/index.html');assert.equal(asset.headers.get('cache-control'),'no-store');
+const pagesAssets={fetch:async r=>{
+  const path=new URL(r.url).pathname;
+  if(path==='/index.html') return Response.redirect(preview+'/',308);
+  if(path==='/') return new Response('protected app');
+  if(path==='/logo-kaiser.png') return new Response('logo');
+  return new Response('missing',{status:404});
+}};
+for(const path of ['/', '/sledovani-vozidel']) {
+  const asset=await worker.fetch(new Request(preview+path),{ASSETS:pagesAssets});
+  assert.equal(asset.status,200,'Pages canonicalization must not create a redirect loop');
+  assert.equal(asset.headers.get('location'),null);
+  assert.equal(await asset.text(),'protected app');
+  assert.equal(asset.headers.get('cache-control'),'no-store');
+}
+assert.equal((await worker.fetch(new Request(preview+'/logo-kaiser.png'),{ASSETS:pagesAssets})).status,200);
 console.log('PASS: remote worker restricted to exact preview alias; production host, business writes and test fixtures denied; static app no-store.');
