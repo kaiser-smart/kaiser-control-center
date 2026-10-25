@@ -56,7 +56,7 @@ try {
         }
         else if (url.pathname === '/api/forpsi/admin') response=json({mailboxes:[],rules:[],labels:[],queue:[],truncated:{},credentialStorageReady:false});
         else if (url.pathname === '/api/driver-reports') response=json({apiStatus:'ready',permissions:{canCreate:true,canManage:true},requests:Array.from({length:18},(_,i)=>({id:`report-${i}`,reportId:`H-${i+1}`,licensePlate:`TEST ${String(i+1).padStart(3,'0')}`,defectDescription:'Kontrola osvětlení vozidla',status:'new_report',driverName:`Řidič ${i+1}`,createdByUserId:user.id,reportedAt:'2026-10-25T06:00:00Z'}))});
-        else if (url.pathname === '/api/vehicle-tracking/status') response=json({apiStatus:'ready',liveVerified:true,lastUpdatedAt:new Date().toISOString(),summary:{vehiclesTotal:24,withoutValidLocationCount:3},locations:Array.from({length:21},(_,i)=>({id:`position-${i}`,vehicleId:`mobile-${i}`,licensePlate:`TEST ${String(i+1).padStart(3,'0')}`,latitude:49.2+i/1000,longitude:16.6+i/1000,lastGpsAt:new Date().toISOString(),speedKmh:i<12?35:0}))});
+        else if (url.pathname === '/api/vehicle-tracking/status') response=json({apiStatus:'ready',liveVerified:true,lastUpdatedAt:new Date().toISOString(),summary:{vehiclesTotal:24,withoutValidLocationCount:3},vehicles:Array.from({length:24},(_,i)=>({vehicleId:`mobile-${i}`,licensePlate:`TEST ${String(i+1).padStart(3,'0')}`,vehicleType:'collection_truck'})),locations:Array.from({length:21},(_,i)=>({id:`position-${i}`,vehicleId:`mobile-${i}`,licensePlate:`TEST ${String(i+1).padStart(3,'0')}`,latitude:49.2+i/1000,longitude:16.6+i/1000,lastGpsAt:new Date().toISOString(),speedKmh:i<12?35:0}))});
         else if (url.pathname === '/api/vehicles') response = json({apiStatus:'ready', vehicles:Array.from({length:24},(_,i)=>({id:`mobile-${i}`,licensePlate:`TEST ${String(i+1).padStart(3,'0')}`,brand:'MAN',model:'TGS',vehicleType:'Svozové vozidlo',driverName:`Řidič ${i+1}`,status:'active'}))});
         else if (url.pathname.endsWith('/tcars')) response=json({apiStatus:'ready',trips:[],costs:[],positions:[],fuel:[],summary:{},vehicle:{id:'mobile-0',licensePlate:'TEST 001'}});
         else if (url.pathname.startsWith('/api/vehicles/mobile-')) response = json({vehicle:{id:url.pathname.split('/').pop(),licensePlate:'TEST 001',brand:'MAN',model:'TGS'}});
@@ -145,7 +145,16 @@ try {
       await page.screenshot({path:path.join(output,`${slug}-${width}.png`),fullPage:true});
       await page.screenshot({path:path.join(output,`${slug}-${width}-viewport.png`)});
       if(!process.env.MOBILE_BASELINE) assert.ok(metrics.width<=width,`Horizontal overflow ${route} ${width}`);
-      if (!process.env.MOBILE_BASELINE) {
+      if (!process.env.MOBILE_BASELINE && route === '/sledovani-vozidel') {
+        // The approved map workspace retains simultaneous map/list and its own shell.
+        // Short screens may scroll to keep controls reachable; other modules keep native chrome.
+        await page.locator('[data-vm-row]').first().waitFor();
+        assert.equal(await page.locator('[data-vm-row]').count(),24);
+        assert.equal(await page.locator('[data-vm-filter="missing"] b').innerText(),'3');
+        assert.ok((await page.locator('.vm-map').boundingBox()).height>=220);
+        assert.equal(await page.locator('.ui-pilot-sidebar').count(),0);
+        assert.ok(await page.locator('#vm-search').evaluate(e=>parseFloat(getComputedStyle(e).fontSize)>=16));
+      } else if (!process.env.MOBILE_BASELINE) {
         const native = await page.evaluate(() => {
           const main = document.querySelector('main.ui-system-v2');
           const header = document.querySelector('.mobile-header');
@@ -243,7 +252,8 @@ try {
     const header=await page.locator('.mobile-header').boundingBox(); assert.equal(header.height,52);
     assert.equal(await page.locator('.ai-assistant-launcher').count(),0,'Floating voice icon hidden');
     const tile=await page.locator('[data-launcher-module]').first().boundingBox(); assert.ok(tile.y+tile.height<607,'Module above fold');
-    assert.equal(await page.locator('[data-launcher-module]').count(),2);
+    assert.equal(await page.locator('[data-launcher-module]').count(),3);
+    assert.equal(await page.locator('[data-launcher-module][href="/zakazky"]').count(),1,'Preserve production Jobs launcher');
     assert.equal(await page.locator('.main-dashboard-kpis,.mobile-today').count(),0);
     for(const node of await page.locator('.mobile-bottom-nav a,.mobile-bottom-nav button,.mobile-header button').all()) {
       const box=await node.boundingBox(); assert.ok(box.height>=44 && box.width>=44,'Touch targets >=44');
@@ -289,15 +299,16 @@ try {
     await page.waitForTimeout(150);
     assert.equal(await page.locator('.fleet-table__row:visible').count(),1,'Filter changes visible records');
     await page.screenshot({path:path.join(output,'vehicle-filter-375.png')});
-    await page.goto(origin+'/sledovani-vozidel'); await page.locator('.mobile-map-switch').waitFor(); await page.waitForTimeout(150);
-    const stage=await page.locator('.tracking-operational-map-stage').boundingBox();
-    assert.ok(stage.height>=250 && stage.y+stage.height<=607,'Map ends above navigation');
-    await page.locator('.mobile-map-switch').getByRole('button',{name:'Vozidla',exact:true}).click();
-    assert.ok(await page.locator('.tracking-operational-list').isVisible());
-    assert.equal(await page.locator('.tracking-operational-map-stage').isVisible(),false);
+    await page.goto(origin+'/sledovani-vozidel'); await page.locator('[data-vm-row]').first().waitFor();
+    assert.ok((await page.locator('.vm-map').boundingBox()).height>=220,'Map keeps minimum usable height');
+    await page.locator('[data-vm-expand]').click();
+    assert.ok(await page.locator('.vm-list').isVisible());
+    assert.ok(await page.locator('.vm-map').isVisible(),'List does not replace map');
+    assert.equal(await page.locator('[data-vm-row]').count(),24);
     await page.screenshot({path:path.join(output,'map-list-375.png')});
-    await page.locator('.tracking-operational-vehicle').first().click();
-    assert.ok(await page.locator('.tracking-operational-detail').isVisible(), 'Selected map record detail reachable');
+    await page.locator('[data-vm-row]').first().click();
+    assert.ok(await page.locator('.vm-panel-detail').isVisible(),'Selected vehicle detail reachable');
+    assert.match(await page.locator('.vm-panel-detail').innerText(),/TEST 001/);
     await page.goto(origin+'/hlaseni-ridicu'); await page.locator('[name=defectDescription]').waitFor();
     await page.locator('[name=defectDescription]').fill('Test mobilního formuláře; neodesílat');
     await page.setViewportSize({width:375,height:420});
@@ -426,8 +437,9 @@ try {
         await page.setViewportSize({width,height});
         await page.waitForFunction(mobile=>Boolean(document.querySelector('.mobile-header'))===mobile,width<721);
         await page.locator('[data-module-search]').waitFor();
-        assert.equal(await page.locator('[data-launcher-module]:visible').count(),2);
-        assert.deepEqual(await page.locator('[data-launcher-module] strong').allTextContents(),['Nepřítomnost','Zaměstnanci']);
+        const expectedLauncher = [...(hasPermission(account,'jobs','view') ? ['Zakázky'] : []),'Nepřítomnost','Zaměstnanci'];
+        assert.equal(await page.locator('[data-launcher-module]:visible').count(),expectedLauncher.length);
+        assert.deepEqual(await page.locator('[data-launcher-module] strong').allTextContents(),expectedLauncher);
         const {search,tile}=await page.evaluate(()=>({search:document.querySelector('[data-module-search]').getBoundingClientRect().toJSON(),tile:document.querySelector('[data-launcher-module]').getBoundingClientRect().toJSON()}));
         assert.ok(search.y<tile.y && tile.y+tile.height<height-(width<721?60:0),'Search and module visible without scrolling');
         assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));

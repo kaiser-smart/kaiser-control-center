@@ -1,6 +1,6 @@
 // Online-only session lifecycle. Persistent storage contains one logout-intent bit,
 // never a token, identity, draft or business data. The server remains authoritative.
-export function createSessionGuard({ root, getUser, onEnd, onUserChanged, onSignOut = () => {}, win = window, doc = document, request = fetch }) {
+export function createSessionGuard({ root, getUser, onEnd, onUserChanged, onSignOut = () => {}, retainReadOnlyView = () => false, win = window, doc = document, request = fetch }) {
   const key = "smart-odpady.logout-pending";
   const cookieKey = "__Host-smart_odpady_logout_pending";
   let pending = false;
@@ -136,7 +136,15 @@ export function createSessionGuard({ root, getUser, onEnd, onUserChanged, onSign
     if (!win.navigator.onLine) { lock("Jste offline. Pro přihlášení se připojte k internetu."); return false; }
     return true;
   }
+  // Only an already visible, authenticated read-only screen may retain its
+  // in-memory snapshot on a temporary outage. Never unlock a hidden/resumed
+  // session, pending logout, unknown expiry, or an expired session.
+  function canRetainVisibleSnapshot() {
+    return getUser() && !ended && !hasPendingLogout() && expiresAt > Date.now()
+      && !doc.hidden && !root.inert && retainReadOnlyView();
+  }
   function failedConnection() {
+    if (canRetainVisibleSnapshot()) return;
     if (getUser()) lock("Připojení k aplikaci není dostupné. Data jsou skrytá. Zkuste to znovu.");
   }
   function unauthorized() { if (getUser()) end("expired"); }
@@ -147,7 +155,9 @@ export function createSessionGuard({ root, getUser, onEnd, onUserChanged, onSign
   }
   retry.addEventListener("click", () => void check());
   logoutButton.addEventListener("click", () => void signOut());
-  win.addEventListener("offline", () => lock("Jste offline. Pro pokračování se připojte k internetu."));
+  win.addEventListener("offline", () => {
+    if (!canRetainVisibleSnapshot()) lock("Jste offline. Pro pokračování se připojte k internetu.");
+  });
   win.addEventListener("online", () => void check());
   doc.addEventListener("visibilitychange", visibility);
   win.addEventListener("pagehide", () => { if (getUser()) lock("Ověřuji přihlášení…", true); });

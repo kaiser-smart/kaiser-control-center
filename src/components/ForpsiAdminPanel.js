@@ -235,7 +235,7 @@ function filterRules() {
 }
 function paint() {
   if(!state.root?.isConnected) return;
-  state.root.innerHTML=`<div class="users-panel__head"><div><h2>Forpsi</h2><p>Schránky a přístupy v SO.ai.</p></div>${state.data?'<a class="secondary-link" href="/dashboard?view=forpsi-mail" data-link>Otevřít poštu</a>':''}</div>
+  state.root.innerHTML=`<div class="users-panel__head"><div><h2>Forpsi</h2><p>Schránky a přístupy v SO.ai.</p></div></div>
     <div class="forpsi-tabs" role="group" aria-label="Nastavení Forpsi">${tabs.map(([id,label])=>button('tab',label,`data-tab="${id}" aria-pressed="${state.tab===id}"`)).join('')}</div>
     ${state.data?`<p>${state.data.verificationMode==='simulated'?'Izolovaný TEST: Forpsi je nahrazený simulovanými poskytovateli. ':''}Čtení v SO.ai: ${state.data.soaiMailEnabled?'zapnuté podle přidělených práv':'vypnuté'}. ChatGPT: ${state.data.connectorEnabled?'povolené':'vypnuté'}.</p>`:''}
     <div role="status">${escape(state.notice)}</div>${state.error?`<p role="alert" class="module-feedback__error">${escape(state.error)}</p>`:''}

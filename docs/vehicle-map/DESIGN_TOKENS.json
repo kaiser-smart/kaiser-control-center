@@ -1,0 +1,175 @@
+{
+  "version": "1.3",
+  "date": "2026-10-25",
+  "typography": {
+    "family": "Quicksand",
+    "text": 14,
+    "secondary": 12,
+    "mobileInput": 16,
+    "title": 25
+  },
+  "colors": {
+    "brand": "#75BD25",
+    "brandDark": "#3F7416",
+    "ink": "#202821",
+    "muted": "#657164",
+    "background": "#F5F7F3",
+    "surface": "#FFFFFF",
+    "border": "#E2E7DF",
+    "vehicleSurface": "#FFFFFF",
+    "onBrand": "#202821",
+    "moving": "#75BD25",
+    "movingText": "#3F7416",
+    "stopped": "#5B6875",
+    "ignitionOn": "#9A5B00",
+    "stale": "#9A531D",
+    "selected": "#75BD25",
+    "activeFilter": "#75BD25",
+    "cluster": "#75BD25",
+    "selectedLabel": "#75BD25",
+    "selectionSeparator": "#202821",
+    "vehicleMonogram": "#5B6875"
+  },
+  "darkColors": {
+    "ink": "#EDF3EE",
+    "muted": "#B2BEB3",
+    "background": "#151C18",
+    "surface": "#202A23",
+    "border": "#39463C",
+    "brand": "#75BD25",
+    "vehicleSurface": "#FFFFFF",
+    "onBrand": "#202821",
+    "moving": "#75BD25",
+    "movingText": "#EDF3EE",
+    "stopped": "#BAC6D0",
+    "ignitionOn": "#EFBA65",
+    "stale": "#E9B380",
+    "selected": "#75BD25",
+    "activeFilter": "#75BD25",
+    "cluster": "#75BD25",
+    "selectedLabel": "#75BD25",
+    "selectionSeparator": "#202821",
+    "vehicleMonogram": "#5B6875"
+  },
+  "vehicleArtwork": {
+    "style": "realistic-reference-based-photo-like",
+    "view": "front-left-three-quarter",
+    "livery": "actual reference livery with realistic raster shading",
+    "greenPaintPrompt": "#75BD25",
+    "exactRasterGreenGuaranteed": false,
+    "transparent": false,
+    "canvas": "#FFFFFF",
+    "canvasInDarkTheme": "#FFFFFF",
+    "artworkTypes": [
+      "collection_truck",
+      "tanker",
+      "skip_loader",
+      "van"
+    ],
+    "fallbackMonograms": {
+      "container_truck": "HÁK",
+      "car": "OS",
+      "trailer": "PŘ",
+      "special": "SP",
+      "unknown": "?"
+    },
+    "unverifiedContainerSubtypeMonogram": "?",
+    "source": {
+      "provider": "OpenArt",
+      "id": "RFjR59F0v68BkvJ6Avpl",
+      "model": "Nano Banana 2.1",
+      "width": 4800,
+      "height": 3584
+    },
+    "mapExport": {
+      "pathPattern": "assets/openart/{type}-128x96.webp",
+      "width": 128,
+      "height": 96,
+      "familyBytes": 14334
+    },
+    "detailExport": {
+      "pathPattern": "assets/openart/{type}-256x192.webp",
+      "width": 256,
+      "height": 192,
+      "familyBytes": 43540
+    },
+    "generationStatus": "Complete and visually inspected.",
+    "prototypeStatus": "Integrated into the local prototype; automated local demo QA passed 21/21 checks with no runtime errors. These are not production tests.",
+    "productionDeployed": false,
+    "userAestheticApprovalRecorded": false,
+    "existingSvgStatus": "Obsolete construction archive; do not use as the final icon family.",
+    "localQa": {
+      "report": "preview/verification.json",
+      "passed": 21,
+      "total": 21,
+      "runtimeErrors": 0,
+      "scope": "local demo only"
+    },
+    "localPrototypeAssetMode": {
+      "embeddedExport": "256x192",
+      "allFourTypesInline": true,
+      "alsoUsedForMap": true,
+      "inlineFragmentBytes": 966448
+    }
+  },
+  "layout": {
+    "desktopPanel": 328,
+    "compactPanel": 304,
+    "desktopFrom": 1200,
+    "mobileMax": 760,
+    "mobileCollapsedPanel": 168,
+    "minMapHeight": 220,
+    "workAreaMinHeight": 480
+  },
+  "marker": {
+    "width": 56,
+    "height": 44,
+    "radius": 10,
+    "stroke": 2,
+    "halo": 3,
+    "minTouchTarget": 44,
+    "buttonWidth": 60,
+    "buttonHeight": 48,
+    "iconWidth": 48,
+    "iconHeight": 36,
+    "badgeSize": 15,
+    "clusterSize": 48,
+    "clusterOverlapThresholdX": 72,
+    "clusterOverlapThresholdY": 64,
+    "spiderfyLimit": 8,
+    "labelOccupiedWidth": 70,
+    "labelOccupiedHeight": 58,
+    "labelGap": 6
+  },
+  "data": {
+    "refreshSeconds": 60,
+    "movingAboveKmh": 2,
+    "defaultStaleAfterSeconds": 1800,
+    "softAgeWarningSeconds": 120,
+    "headingMaxAgeSeconds": 120,
+    "futureClockToleranceSeconds": 120
+  },
+  "note": "Production keeps current Google Maps and T-Cars interfaces. Demo geometries and invented vehicle positions are not production data.",
+  "listVehicleImage": {
+    "tileWidth": 52,
+    "tileHeight": 40,
+    "imageWidth": 48,
+    "imageHeight": 36,
+    "canvas": "#FFFFFF"
+  },
+  "detailVehicleImage": {
+    "tileWidth": 112,
+    "tileHeight": 84,
+    "imageWidth": 108,
+    "imageHeight": 81,
+    "canvas": "#FFFFFF",
+    "mobile": {
+      "maxViewportWidth": 760,
+      "tileWidth": 104,
+      "tileHeight": 78,
+      "imageWidth": 100,
+      "imageHeight": 75,
+      "canvas": "#FFFFFF"
+    }
+  }
+}
