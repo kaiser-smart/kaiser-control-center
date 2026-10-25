@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.840"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.841"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -21,6 +21,7 @@ export const versionInfo = {
 
 export const versionNews = [
   { title: "Samostatný modul Zaměstnanci", text: "Zaměstnanci mají vlastní modul s dlaždicí, seznamem a kartami. Záložka z Nepřítomnosti se přesunula; původní odkazy i dosavadní oprávnění zůstávají funkční." },
+  { title: "Globální vyhledávání", text: "Úvodní stránka hledá napříč moduly a stránkami aplikace i v zákaznících, fakturách, dostupných vozidlech, zaměstnancích, hlášeních, datových zprávách a připomínkách. Výsledky respektují přístupová práva." },
   { title: "Stabilní mobilní aplikace", text: "Pracovní obsah se posouvá mezi pevnými navigacemi. Formuláře respektují klávesnici a bezpečné okraje iPhonu, mapy zachovávají vlastní gesta a rychlé opakované klepnutí nespustí stejnou akci dvakrát." },
   { title: "Společný úvod s moduly", text: "Po přihlášení se všem pracovním pozicím zobrazí stejné vyhledávání a modul Nepřítomnost. Oprávnění uvnitř modulů zůstávají zachovaná." },
   { title: "Nepřítomnost a mobilní formuláře", text: "Jednotná podoba pracovních ploch, polí a tlačítek. Odeslání žádosti zůstává nad spodní navigací a přepínač sekcí správně rozlišuje aktuální úlohu." },

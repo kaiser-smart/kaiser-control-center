@@ -1,3 +1,5 @@
+import { searchNavigation } from "../src/data/globalSearch.js";
+import { hasPermission } from "../src/permissions.js";
 // Optional integration test. Uses external Playwright tooling, not an app dependency.
 // Only local HTTPS, synthetic accounts and mock OTP; no D1, Twilio or production traffic.
 import assert from "node:assert/strict";
@@ -63,6 +65,12 @@ try {
         else if (url.pathname === "/api/users") {
           const access = await requireUserPermission(env, request, "users", "view");
           response = access.response || json({ users: [user, ...Array.from({length:23},(_,i)=>({id:`team-${i+2}`,name:`Zkouška ${i+2}`,email:`team${i+2}@example.test`,role:'readonly',active:true,status:'active'}))] });
+        } else if (url.pathname === "/api/ai/search") {
+          const check = await requireUserPermission(env, request, "dashboard", "view");
+          const q = url.searchParams.get("q") || "";
+          const navigation = searchNavigation(check.user, q);
+          if (q === "slow") await new Promise(resolve => setTimeout(resolve, 1000));
+          response = check.response || json({ modules: navigation.filter(i => i.kind === "Modul"), pages: navigation.filter(i => i.kind !== "Modul"), records: q === "test-spz" ? [{ id: "test-vehicle", title: "TEST-SPZ", description: "Testovací vozidlo", route: "/vozovy-park/test-vehicle", kind: "Vozidla" }] : q === "slow" ? [{id: "old", title: "STALE RESULT", route: "/", kind: "Test"}] : [], unavailable: [], more: [] });
         } else {
           // Business modules are fixtures. This test does not claim to validate their backends.
           response = json({ settings: {}, items: [], messages: [], users: [], show: false, apiStatus: "ready" });
@@ -104,6 +112,30 @@ try {
   await context.addCookies([{name:'__Host-smart_odpady_session',value:cookie.split(';')[0].split('=')[1],domain:'127.0.0.1',path:'/',httpOnly:true,secure:true,sameSite:'Lax'}]);
   const page=await context.newPage(); page.setDefaultTimeout(10000); page.setDefaultNavigationTimeout(15000);
   const errors=[]; page.on('pageerror',e=>{errors.push(e.message); console.log('PAGEERROR',page.url(),e.stack);}); page.on('console',m=>{if(m.type()==='error') {console.log('CONSOLE',m.text()); if(m.text().includes('smart_odpady_render_failed')) errors.push(m.text());}});
+  if (process.env.GLOBAL_SEARCH_ONLY) {
+    for (const [width,height] of [[375,667],[390,844],[430,932],[1440,1000]]) {
+      await page.setViewportSize({width,height}); await page.goto(origin+'/');
+      const input=page.locator('[data-module-search]'); await input.waitFor();
+      await input.fill('vozidla');
+      await page.locator('[data-global-search-results] a[href="/vozovy-park"]').waitFor();
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+      assert.equal(await input.getAttribute('aria-label'),'Globální vyhledávání');
+      const oldStarted=page.waitForRequest(r=>r.url().includes('q=slow'));
+      await input.fill('slow'); await oldStarted;
+      await input.fill('vozidla'); await page.waitForTimeout(1200);
+      assert.equal(await page.getByText('STALE RESULT',{exact:true}).count(),0);
+      await input.fill('test-spz'); await page.getByText('TEST-SPZ',{exact:true}).waitFor();
+      assert.equal(await page.locator('[data-global-search-results] a').getAttribute('href'),'/vozovy-park/test-vehicle');
+      await input.fill('<img src=x onerror=alert(1)>');
+      assert.equal(await page.locator('[data-global-search-results] img').count(),0);
+      await input.fill('vozidla'); await page.screenshot({path:path.join(output,`global-search-${width}.png`)});
+      await page.locator('[data-global-search-results] a[href="/vozovy-park"]').click();
+      await page.waitForURL('**/vozovy-park');
+      results.push({globalSearch:'passed',width,checks:['module-search','record-result','stale-response-rejected','safe-html','result-navigation','no-horizontal-overflow']});
+    }
+    await writeFile(path.join(output,'global-search.json'),JSON.stringify({results,errors},null,2));
+    assert.deepEqual(errors,[]); await context.close();
+  } else {
   for(const [width,height] of ((process.env.MOBILE_FUNCTION_ONLY || process.env.MOBILE_REFERENCE_ONLY || process.env.MOBILE_LAUNCHER_ONLY) ? [] : process.env.MOBILE_AUDIT_FAST ? [[375,667]] : [[375,667],[390,844],[430,932]])) {
     await page.setViewportSize({width,height});
     for (const route of routes) {
@@ -400,10 +432,12 @@ try {
         assert.ok(search.y<tile.y && tile.y+tile.height<height-(width<721?60:0),'Search and module visible without scrolling');
         assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
         await page.locator('[data-module-search]').fill('nepritomnost');
-        assert.equal(await page.locator('[data-launcher-module]:visible').count(),1,'Search ignores accents');
+        assert.ok(await page.locator('[data-global-search-results] a').count() > 0,'Search ignores accents');
         await page.locator('[data-module-search]').fill('vozidla');
         assert.equal(await page.locator('[data-launcher-module]:visible').count(),0);
-        assert.ok(await page.locator('[data-module-search-empty]').isVisible());
+        assert.equal(await page.locator('[data-global-search-results] a[href="/vozovy-park"]').count(),hasPermission(account,'fleet','view') ? 1 : 0,'Search respects module permissions');
+        await page.locator('[data-module-search]').fill('zzzz-no-match');
+        assert.equal(await page.locator('[data-global-search-results] a').count(),0);
         await page.locator('[data-module-search]').fill('');
         await page.screenshot({path:path.join(output,`launcher-${account.role}-${width}.png`)});
       }
@@ -413,12 +447,13 @@ try {
       if(['garazmistr','dispecer','ridic','readonly'].includes(account.role)) assert.equal((await context.request.get(origin+'/api/users')).status(),403);
       await page.waitForLoadState('networkidle');
       await context.request.post(origin+'/api/auth/logout');await context.clearCookies();
-      results.push({launcherRole:account.role,status:'passed',sizes:[375,390,430,1440],checks:['real-login-to-home','same-two-modules','search-without-accents','empty-search-result','module-opens','permissions-preserved']});
+      results.push({launcherRole:account.role,status:'passed',sizes:[375,390,430,1440],checks:['real-login-to-home','launcher-preserved','global-search-without-accents','permission-filtered-results','empty-search-result','module-opens','permissions-preserved']});
     }
   }
   assert.deepEqual(errors,[],'No render or browser errors');
   await writeFile(path.join(output,'audit.json'),JSON.stringify({results,errors},null,2));
   await context.close();
+  }
 } finally {
  if(browser) await browser.close();
  if(server) { server.closeAllConnections(); await new Promise(resolve=>server.close(resolve)); }

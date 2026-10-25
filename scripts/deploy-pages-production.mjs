@@ -160,6 +160,7 @@ const backupDate = localRelease?.buildDate || buildDate();
 
 runVisible("node", ["scripts/check-syntax.mjs"]);
 runVisible("node", ["--test", "scripts/theme-settings.test.mjs"]);
+runVisible("node", ["scripts/global-search.test.mjs"]);
 runVisible("node", ["scripts/version-module-imports.test.mjs"]);
 runVisible("node", ["scripts/sarlota-mandatory-reading.test.mjs"]);
 runVisible("node", ["scripts/kso-test-mode-contract.test.mjs"]);

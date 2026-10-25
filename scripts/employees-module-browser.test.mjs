@@ -47,10 +47,10 @@ try {
       await page.goto(origin);
       await page.locator('[data-module-search]').waitFor();
       await page.locator('[data-module-search]').fill('zamestnanci');
-      assert.equal(await page.locator('[data-launcher-module]:visible').count(),1);
-      assert.equal(await page.locator('[data-launcher-module]:visible').getAttribute('href'),'/zamestnanci');
+      assert.equal(await page.locator('[data-global-search-results] a[href="/zamestnanci"]').count(),1);
+      assert.equal(await page.locator('[data-launcher-module]:visible').count(),0);
       await page.locator('[data-module-search]').fill('nic-takoveho');
-      assert.equal(await page.locator('[data-module-search-empty]').isVisible(),true);
+      assert.equal(await page.locator('[data-global-search-results] a').count(),0);
       await page.locator('[data-module-search]').fill('');
       assert.equal(await page.locator('[data-launcher-module]:visible').count(),2);
       if(role==='admin')await page.screenshot({path:path.join(output,`launcher-${width}.png`)});

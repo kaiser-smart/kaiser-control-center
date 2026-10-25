@@ -1,3 +1,4 @@
+import { searchNavigation } from "./data/globalSearch.js";
 import { applyMobileWorkspace, revealMobileTarget } from "./mobileWorkspace.js";
 import { createSessionGuard } from "./data/sessionGuard.js";
 import { mountForpsiAdmin, forpsiDirtyTarget, saveForpsiDraft, discardForpsiDraft } from "./components/ForpsiAdminPanel.js";
@@ -7220,7 +7221,60 @@ function mainDashboardOperationsSection(user) {
 }
 
 let moduleLauncherQuery = "";
-const moduleSearchText = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("cs").trim();
+let globalSearchState = { records: [], unavailable: [], more: [], loading: false, error: "" };
+let globalSearchOwner = null;
+let globalSearchTimer = 0;
+let globalSearchController = null;
+let globalSearchGeneration = 0;
+function globalSearchHtml(user) {
+  if (!moduleLauncherQuery.trim()) return "";
+  const navigation = searchNavigation(user, moduleLauncherQuery);
+  const items = [...navigation, ...globalSearchState.records];
+  const state = globalSearchState;
+  return `<p class="global-search-status" role="status">${state.loading ? "Hledám také v záznamech…" : items.length ? `Nalezeno ${items.length} výsledků` : "Žádné výsledky. Zkuste jiné jméno nebo název."}</p>
+    ${state.error ? `<p role="alert">${escapeHtml(state.error)}</p>` : ""}
+    ${state.unavailable.length ? `<p role="status">Nyní nelze prohledat: ${escapeHtml(state.unavailable.join(", "))}. Ostatní výsledky jsou dostupné.</p>` : ""}
+    <ul class="global-search-list">${items.map(item => `<li><a href="${escapeHtml(routeHref(item.route))}" data-link><small>${escapeHtml(item.kind)}</small><strong>${escapeHtml(item.title)}</strong>${item.description ? `<span>${escapeHtml(item.description)}</span>` : ""}</a></li>`).join("")}</ul>
+    ${state.more.length ? `<p>Další výsledky najdete v modulech: ${escapeHtml(state.more.join(", "))}. Hledání můžete zpřesnit.</p>` : ""}
+    ${moduleLauncherQuery.trim().length < 2 ? "<p>Pro hledání v záznamech zadejte alespoň 2 znaky.</p>" : ""}`;
+}
+function paintGlobalSearch() {
+  const target = app.querySelector("[data-global-search-results]");
+  if (target) target.innerHTML = globalSearchHtml(currentUser());
+  const searching = Boolean(moduleLauncherQuery.trim());
+  for (const element of app.querySelectorAll(".module-launcher-grid, #module-launcher-title")) element.hidden = searching;
+}
+function updateGlobalSearch(value) {
+  moduleLauncherQuery = value.slice(0, 100);
+  clearTimeout(globalSearchTimer);
+  globalSearchController?.abort();
+  const generation = ++globalSearchGeneration;
+  const userId = currentUser()?.id;
+  globalSearchState = { records: [], unavailable: [], more: [], loading: moduleLauncherQuery.trim().length >= 2, error: "" };
+  paintGlobalSearch();
+  if (!globalSearchState.loading) return;
+  globalSearchTimer = setTimeout(async () => {
+    const controller = new AbortController();
+    globalSearchController = controller;
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(`/api/ai/search?records=1&q=${encodeURIComponent(moduleLauncherQuery.trim())}`, { credentials: "same-origin", cache: "no-store", signal: controller.signal });
+      if (response.status === 401) sessionGuard.unauthorized();
+      if (!response.ok) throw new Error("search_failed");
+      const result = await response.json();
+      if (generation !== globalSearchGeneration || currentUser()?.id !== userId) return;
+      globalSearchState = { records: result.records || [], unavailable: result.unavailable || [], more: result.more || [], loading: false, error: "" };
+    } catch {
+      if (generation !== globalSearchGeneration || currentUser()?.id !== userId) return;
+      globalSearchState.loading = false;
+      globalSearchState.error = "Záznamy se nepodařilo načíst. Zkontrolujte připojení a zkuste hledání znovu. Moduly a stránky můžete otevřít níže.";
+    } finally {
+      clearTimeout(timeout);
+      if (generation === globalSearchGeneration && currentUser()?.id === userId) paintGlobalSearch();
+    }
+  }, 300);
+}
+
 function launcherModules(user) {
   return [
     ...(canViewModule(user, "absence") ? [{
@@ -7238,22 +7292,21 @@ function launcherModules(user) {
 
 function homePage(user) {
   const items = launcherModules(user);
-  const matches = item => moduleSearchText(item.keywords).includes(moduleSearchText(moduleLauncherQuery));
   return `
     <main class="app-shell module-theme-scope ui-system-pilot ui-system-pilot--modules" ${moduleThemeStyleAttribute()}>
       ${uiSystemPilotSidebar(user, "dashboard")}
       <div class="ui-pilot-toolbar module-launcher-toolbar"><strong>SMART ODPADY</strong>${userBar(user)}</div>
       <section class="module-launcher" aria-labelledby="module-launcher-title">
-        <label class="module-launcher-search"><span>Hledat modul</span><input type="search" data-module-search aria-label="Hledat modul" placeholder="Hledat modul…" autocomplete="off" value="${escapeHtml(moduleLauncherQuery)}" /></label>
-        <h1 id="module-launcher-title">Moduly</h1>
-        <div class="module-launcher-grid">
-          ${items.map(item => `<a class="module-launcher-card" href="${routeHref(item.route)}" data-link data-launcher-module data-module-keywords="${escapeHtml(item.keywords)}" ${matches(item) ? "" : "hidden"}>
+        <label class="module-launcher-search"><span>Globální vyhledávání</span><input type="search" data-module-search aria-label="Globální vyhledávání" placeholder="Hledat v celé aplikaci…" maxlength="100" enterkeyhint="search" autocomplete="off" value="${escapeHtml(moduleLauncherQuery)}" /></label>
+        <section data-global-search-results aria-label="Výsledky globálního vyhledávání">${globalSearchHtml(user)}</section>
+        <h1 id="module-launcher-title" ${moduleLauncherQuery.trim() ? "hidden" : ""}>Moduly</h1>
+        <div class="module-launcher-grid" ${moduleLauncherQuery.trim() ? "hidden" : ""}>
+          ${items.map(item => `<a class="module-launcher-card" href="${routeHref(item.route)}" data-link data-launcher-module>
             <span class="module-launcher-icon" aria-hidden="true">${uiSystemPilotIcon(item.id)}</span>
             <span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.description)}</small></span>
             <span class="module-launcher-arrow" aria-hidden="true">›</span>
           </a>`).join("")}
         </div>
-        <p class="module-launcher-empty" data-module-search-empty role="status" ${items.some(matches) ? "hidden" : ""}>Žádný modul neodpovídá hledání.</p>
       </section>
     </main>
   `;
@@ -54791,7 +54844,7 @@ async function verifyLogin(form) {
     await loadThemeSettings({ renderAfter: false });
     await loadAbsenceSettings({ renderAfter: false });
     await loadAssistantPromo({ renderAfter: false });
-    moduleLauncherQuery = "";
+    updateGlobalSearch("");
     window.history.replaceState({}, "", routeHref("/"));
     lastRenderedUrl = window.location.href;
   } catch {
@@ -55540,6 +55593,12 @@ function syncCollectionDailyDriverViewportDiagnostics() {
 
 let mobileScrollRoute = null;
 function render() {
+  if (location.pathname !== "/" && moduleLauncherQuery) updateGlobalSearch("");
+  const searchOwner = authState.status === "authenticated" ? authState.user?.id : null;
+  if (globalSearchOwner !== searchOwner) {
+    globalSearchOwner = searchOwner;
+    updateGlobalSearch("");
+  }
   const scrollRoute = location.pathname + location.search + location.hash;
   const scrollTop = mobileScrollRoute === scrollRoute ? (app.querySelector("main.ui-system-v2")?.scrollTop || 0) : 0;
   mobileScrollRoute = scrollRoute;
@@ -58968,13 +59027,7 @@ let tyresSearchTimer = 0;
 document.addEventListener("input", (event) => {
   const moduleSearch = event.target.closest("[data-module-search]");
   if (moduleSearch) {
-    moduleLauncherQuery = moduleSearch.value;
-    const tiles = [...app.querySelectorAll("[data-launcher-module]")];
-    tiles.forEach(tile => {
-      tile.hidden = !moduleSearchText(tile.dataset.moduleKeywords).includes(moduleSearchText(moduleLauncherQuery));
-    });
-    const empty = app.querySelector("[data-module-search-empty]");
-    if (empty) empty.hidden = tiles.some(tile => !tile.hidden);
+    updateGlobalSearch(moduleSearch.value);
     return;
   }
 

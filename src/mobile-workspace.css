@@ -392,3 +392,12 @@
   #app :is(.tracking-operational-google-map,.gm-style,.H_map) { touch-action:auto; }
   #app .ui-system-v2 [data-mobile-map=map] .tracking-operational-map-stage { min-height:160px; }
 }
+
+/* Global search shares the main workspace scroll area and keeps data selectable. */
+#app .module-launcher [hidden] { display:none !important; }
+#app .global-search-list { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+#app .global-search-list a { display:grid; gap:4px; min-height:48px; padding:12px 14px; border:1px solid #d7dfe2; border-radius:10px; color:inherit; text-decoration:none; background:#fff; overflow-wrap:anywhere; }
+#app .global-search-list a:focus-visible { outline:3px solid #007a6d; outline-offset:2px; }
+#app .global-search-list small { color:#52646b; font-size:12px; }
+#app .global-search-list span { font-size:14px; }
+#app .global-search-status { margin:12px 0; }
