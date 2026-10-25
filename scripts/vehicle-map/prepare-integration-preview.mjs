@@ -1,10 +1,11 @@
 // Build with scripts/build.mjs first. This writes only the isolated preview package.
-import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const out = path.resolve(root, '../preview-deploy/site');
+const out = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve(root, '../preview-deploy/site');
 await mkdir(out, { recursive: true });
+if ((await readdir(out)).length) throw new Error('Preview output must be empty. Pass a fresh local directory to avoid stale or cloud-only files.');
 for (const name of ['src', 'icons']) await cp(path.join(root, 'dist', name), path.join(out, name), { recursive: true });
 await cp(path.join(root, 'dist/vehicles/openart'), path.join(out, 'vehicles/openart'), { recursive: true });
 for (const name of ['manifest.webmanifest', 'logo-kaiser.svg', 'logo-kaiser.png', 'smart-odpady-logo.png']) await cp(path.join(root, 'dist', name), path.join(out, name));
