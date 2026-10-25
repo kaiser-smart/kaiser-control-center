@@ -1,3 +1,4 @@
+import { SmartIcon } from "./icons/SmartIcon.js";
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -123,7 +124,7 @@ export function AiAssistantLauncher({
 
   return `
     <button class="ai-assistant-launcher" type="button" data-ai-launcher data-ai-launcher-mode="voice" aria-label="Otevřít Šarlotu">
-      <span class="ai-assistant-launcher__icon" aria-hidden="true"></span>
+      <span class="ai-assistant-launcher__icon" aria-hidden="true">${SmartIcon("message")}</span>
       <span>Šarlota</span>
     </button>
   `;

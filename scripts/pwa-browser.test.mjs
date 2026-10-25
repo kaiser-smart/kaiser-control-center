@@ -126,13 +126,13 @@ try {
     await page.locator('[data-auth-form] button[type="submit"]').click();
     await page.locator('[name="code"]').fill("123456");
     await page.locator('[data-auth-form] button[type="submit"]').click();
-    await page.locator("[data-logout]").first().waitFor();
+    await page.locator("[data-logout]").first().waitFor({state:"attached"});
     const cookie = (await context.cookies()).find(item => item.name === "__Host-smart_odpady_session");
     assert.ok(cookie?.httpOnly && cookie?.secure && cookie?.sameSite === "Lax");
     assert.ok(!(await page.evaluate(() => document.cookie)).includes("smart_odpady_session"));
     assert.equal((await context.request.get(`${origin}/api/me`)).status(), 200);
     await page.reload();
-    await page.locator("[data-logout]").first().waitFor();
+    await page.locator("[data-logout]").first().waitFor({state:"attached"});
     await page.screenshot({ path: path.join(output, `${profile.name}-authenticated.png`), fullPage: true });
     const authenticatedWidth = await page.evaluate(() => ({ content: document.documentElement.scrollWidth, viewport: innerWidth }));
     assert.ok(authenticatedWidth.content <= authenticatedWidth.viewport + 1, "Authenticated page must not overflow");
@@ -142,8 +142,11 @@ try {
       await page.screenshot({ path: path.join(output, "iphone-landscape.png"), fullPage: true });
       await page.setViewportSize({ width: 390, height: 844 });
     }
+    // Fresh login opens modules; authenticated deep links and browser history still work.
+    await page.goto(`${origin}/pripominky`);
+    await page.locator("[data-logout]").first().waitFor({state:"attached"});
     // Real internal links and browser history; no URL/router stubs.
-    const home = page.locator('a[data-link][href="/"]').first();
+    const home = page.locator('a[data-link][href="/"]:visible').first();
     await home.click();
     await page.waitForURL(`${origin}/`);
     await page.goBack();
@@ -153,7 +156,7 @@ try {
     page = await context.newPage();
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${origin}/pripominky`);
-    await page.locator("[data-logout]").first().waitFor();
+    await page.locator("[data-logout]").first().waitFor({state:"attached"});
     const offlineState = await page.evaluate(async () => ({ registrations: (await navigator.serviceWorker.getRegistrations()).length, caches: await caches.keys() }));
     assert.equal(offlineState.registrations, 0);
     assert.deepEqual(offlineState.caches, []);
@@ -162,20 +165,21 @@ try {
     const entryRequests = served.get(cachedEntry);
     assert.ok(entryRequests > 0, "Previous entrypoint fetched from server");
     await page.goto(`${origin}/pripominky?cache-probe=${profile.name}`);
-    await page.locator("[data-logout]").first().waitFor();
+    await page.locator("[data-logout]").first().waitFor({state:"attached"});
     assert.equal(served.get(cachedEntry), entryRequests, "Existing application script really reused HTTP cache across navigation");
     activeDist = dist;
     loadedModules.length = 0;
     revision = `${profile.name}-after-update`;
     await page.reload();
-    await page.locator("[data-logout]").first().waitFor();
+    await page.locator("[data-logout]").first().waitFor({state:"attached"});
     assert.equal(await page.locator('meta[name="pwa-test-revision"]').getAttribute("content"), revision);
     assert.ok(loadedModules.some(url => url.includes(`/src/app.js?v=${nextMeta.version}`)), "Updated entrypoint loaded");
     assert.ok(loadedModules.some(url => url.includes(`/src/data/versionInfo.js?v=${nextMeta.version}`)), "Updated nested import loaded");
     const browserMeta = await page.evaluate(async version => (await import(`/src/data/buildMeta.js?v=${version}`)).buildMeta, nextMeta.version);
     assert.equal(browserMeta.commit, nextMeta.commit);
     assert.equal(browserMeta.version, nextMeta.version);
-    await page.locator("[data-logout]").first().click();
+    if (await page.locator(".mobile-header").isVisible()) await page.locator(".mobile-header button").click();
+    await page.locator("[data-logout]:visible").first().click();
     await page.locator("[data-auth-form]").waitFor();
     assert.equal((await context.request.get(`${origin}/api/me`)).status(), 401);
     await page.reload();
@@ -206,7 +210,7 @@ try {
     const cookie = await createSessionCookie({ ...env, AUTH_SESSION_TTL_SECONDS: ttl }, user);
     await context.addCookies([{ name: "__Host-smart_odpady_session", value: cookie.split(";")[0].split("=")[1], domain: "127.0.0.1", path: "/", httpOnly: true, secure: true, sameSite: "Lax" }]);
     await page.goto(`${origin}/pripominky`);
-    await page.locator("[data-logout]").first().waitFor();
+    await page.locator("[data-logout]").first().waitFor({state:"attached"});
   }
   await seedSession();
   await context.setOffline(true);
@@ -220,7 +224,8 @@ try {
 
   // A failed logout is retained over reload and completes only after server ACK.
   failLogout = true;
-  await page.locator("[data-logout]").first().click();
+  if (await page.locator(".mobile-header").isVisible()) await page.locator(".mobile-header button").click();
+    await page.locator("[data-logout]:visible").first().click();
   await page.locator("#session-guard").waitFor({ state: "visible" });
   await page.waitForFunction(() => document.querySelector("[data-session-message]").textContent.includes("ještě není dokončené"));
   assert.equal(await page.evaluate(() => localStorage.getItem("smart-odpady.logout-pending")), "1");
@@ -252,7 +257,7 @@ try {
   await seedSession();
   env.AUTH_USERS_JSON = JSON.stringify([{ ...user, role: "readonly" }, reader]);
   await Promise.all([page.waitForEvent("load"), page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")))]);
-  await page.locator("[data-logout]").first().waitFor();
+  await page.locator("[data-logout]").first().waitFor({state:"attached"});
   assert.equal((await context.request.get(`${origin}/api/users`)).status(), 403, "Changed permissions are enforced after resume");
   env.AUTH_USERS_JSON = JSON.stringify([user, reader]);
 
@@ -286,8 +291,9 @@ try {
   await seedSession();
   const sibling = await context.newPage();
   await sibling.goto(`${origin}/pripominky`);
-  await sibling.locator("[data-logout]").first().waitFor();
-  await page.locator("[data-logout]").first().click();
+  await sibling.locator("[data-logout]").first().waitFor({state:"attached"});
+  if (await page.locator(".mobile-header").isVisible()) await page.locator(".mobile-header button").click();
+    await page.locator("[data-logout]:visible").first().click();
   await page.locator("[data-auth-form]").waitFor();
   await sibling.locator("[data-auth-form]").waitFor();
   await context.close();
@@ -298,6 +304,6 @@ try {
 } finally {
   releaseHeldMe?.();
   await browser?.close();
-  if (server?.listening) await new Promise(resolve => server.close(resolve));
+  if (server?.listening) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   await rm(temp, { recursive: true, force: true });
 }

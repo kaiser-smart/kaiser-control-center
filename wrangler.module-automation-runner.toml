@@ -4,6 +4,10 @@ compatibility_date = "2026-06-26"
 workers_dev = false
 
 [vars]
+VISTOS_JOBS_RUNNER_ENABLED = "false"
+VISTOS_READ_SYNC_ENABLED = "false"
+VISTOS_PAYMENT_WRITE_ENABLED = "false"
+VISTOS_JOB_EXECUTION_ENABLED = "false"
 MODULE_AUTOMATION_MODULE_KEY = "absence"
 MODULE_AUTOMATION_TIME_ZONE = "Europe/Prague"
 MODULE_AUTOMATION_MODE = "dry-run"
@@ -35,4 +39,4 @@ binding = "R2_ARCHIVE"
 bucket_name = "smart-odpady-archive"
 
 [triggers]
-crons = ["*/5 * * * *", "*/15 * * * *", "15 3 * * *", "7 * * * *"]
+crons = ["*/5 * * * *", "*/10 * * * *", "*/15 * * * *", "15 3 * * *", "7 * * * *"]

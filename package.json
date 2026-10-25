@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.831",
+  "version": "0.1.847",
   "private": true,
   "type": "module",
   "scripts": {
@@ -42,7 +42,11 @@
     "test:forpsi": "node --test scripts/forpsi-*.test.mjs services/forpsi-connector/test/*.test.mjs",
     "test:vehicle-map": "node scripts/vehicle-map/model.test.mjs",
     "test:vehicle-map:browser": "node scripts/vehicle-map/browser.test.mjs",
-    "preview:vehicle-map": "node scripts/vehicle-map/preview-server.mjs"
+    "preview:vehicle-map": "node scripts/vehicle-map/preview-server.mjs",
+    "icons:export": "node scripts/export-icons.mjs",
+    "test:icons": "node scripts/icon-system.test.mjs",
+    "test:icons:browser": "node scripts/icon-system-browser.test.mjs",
+    "test:vistos-jobs-payments": "node --test scripts/vistos-jobs-payments.test.mjs"
   },
   "engines": {
     "node": ">=18"

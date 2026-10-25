@@ -1,3 +1,4 @@
+import { SmartIcon } from "./icons/SmartIcon.js";
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -113,7 +114,6 @@ export function AiVoiceAssistantPanel({
   const normalizedVoiceUiState = VOICE_UI_STATES.includes(voiceUiState)
     ? voiceUiState
     : "idle";
-  const microphonePath = assistant?.microphonePath || "/avatars/sarlota-microphone-black.png";
   const canStopVoice = demoPlaying || listening || STOPPABLE_VOICE_STATES.includes(normalizedVoiceUiState);
   const voiceBusy = listening || [
     "connecting",
@@ -169,7 +169,7 @@ export function AiVoiceAssistantPanel({
               ${voiceBusy ? "disabled" : ""}
             >
               <span class="ai-voice-assistant-panel__mic-loader" aria-hidden="true"></span>
-              <img src="${escapeHtml(microphonePath)}" alt="" aria-hidden="true" />
+              ${SmartIcon("microphone")}
             </button>
             <span class="ai-voice-assistant-panel__wave" aria-hidden="true">
               <span></span><span></span><span></span><span></span>

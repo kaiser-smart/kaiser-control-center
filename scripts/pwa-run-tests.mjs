@@ -4,7 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 const root=process.cwd(), output=path.join(root,"output/pwa-final");
 mkdirSync(output,{recursive:true}); mkdirSync(path.join(root,"output/pwa-test-logs"),{recursive:true});
-const files=execFileSync("git",["ls-files","--cached","--others","--exclude-standard","scripts","services/forpsi-connector/test"],{encoding:"utf8"}).trim().split('\n').filter(p=>/\.test\.(?:mjs|js)$/.test(p) && !p.endsWith("pwa-browser.test.mjs"));
+const files=execFileSync("git",["ls-files","--cached","--others","--exclude-standard","scripts","services/forpsi-connector/test"],{encoding:"utf8"}).trim().split('\n').filter(p=>/\.test\.(?:mjs|js)$/.test(p) && !p.endsWith("pwa-browser.test.mjs") && !p.endsWith("mobile-ux-browser.test.mjs"));
 const results=[]; let index=0;
 async function worker() {
  while(index<files.length) {

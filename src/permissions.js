@@ -1,6 +1,8 @@
-export const ACTIONS = ["view", "create", "edit", "delete", "approve", "export", "manage", "parts-search"];
+export const ACTIONS = ["view", "create", "edit", "delete", "approve", "export", "manage", "parts-search", "view_finance", "view_personal", "vistos_write"];
 export const PERMISSION_MODULES = [
   "dashboard",
+  "jobs",
+  "integrations",
   "fleet",
   "vehicle-tracking",
   "data-box-plus",
@@ -55,6 +57,7 @@ const ROLE_ALIASES = {
 };
 
 const MODULE_ALIASES = {
+  zakazky: "jobs",
   "vozovy-park": "fleet",
   "sledovani-vozidel": "vehicle-tracking",
   "datova-schranka": "data-box-plus",
@@ -75,6 +78,9 @@ const MODULE_ALIASES = {
   nastaveni: "settings",
   samoopravy: "self-repair",
   "dovolena-nemoc": "absence",
+  // Employee navigation keeps the existing HR/API permission scope.
+  employees: "absence",
+  zamestnanci: "absence",
   pripominky: "feedback"
 };
 
@@ -256,6 +262,14 @@ export function hasPermission(user, moduleId, action = "view") {
   const normalizedModuleId = normalizeModuleId(moduleId);
   const normalizedAction = String(action || "view").trim();
   const role = normalizeRole(user?.role);
+
+  // Full-access roles may open the operational workspace; company scope still gates every API read.
+  // Finance, personal data, integration management and writes require separate explicit grants.
+  if (normalizedModuleId === 'jobs' || normalizedModuleId === 'integrations' || (normalizedModuleId === 'receivables' && normalizedAction === 'vistos_write')) {
+    const grant = explicitPermission(user, normalizedModuleId, normalizedAction);
+    if (normalizedModuleId === 'jobs' && normalizedAction === 'view' && !grant && isFullAccessRole(user)) return true;
+    return role !== 'ridic' && grant?.allowed === true;
+  }
 
   if (normalizedModuleId === "data-box" && !["admin", "management"].includes(role)) {
     return false;

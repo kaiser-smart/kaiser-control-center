@@ -1,3 +1,4 @@
+import { SmartIcon } from "./icons/SmartIcon.js";
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -19,7 +20,6 @@ export function AiAssistantPromoModal({
   }
 
   const safeVideoUrl = videoUrl || "/avatars/sarlota-intro.mp4";
-  const safeFallbackImageUrl = fallbackImageUrl || "/avatars/sarlota-microphone.png";
 
   return `
     <div class="ai-assistant-promo-backdrop" role="presentation">
@@ -33,7 +33,7 @@ export function AiAssistantPromoModal({
         <div class="ai-assistant-promo-modal__media">
           ${videoFailed ? `
             <div class="ai-assistant-promo-modal__fallback" role="img" aria-label="Šarlota">
-              <img src="${escapeHtml(safeFallbackImageUrl)}" alt="" aria-hidden="true" />
+              ${SmartIcon("microphone")}
               <span>Video se nepodařilo přehrát</span>
             </div>
           ` : `

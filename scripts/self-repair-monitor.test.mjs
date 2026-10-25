@@ -147,7 +147,7 @@ assert.deepEqual(selfRepairMonitorRouteCapacity(SELF_REPAIR_MONITOR_MAX_ROUTES),
 assert.equal(selfRepairMonitorRouteCapacity(SELF_REPAIR_MONITOR_MAX_ROUTES + 1).ok, false);
 assert.match(
   readFileSync(new URL("./build.mjs", import.meta.url), "utf8"),
-  /selfRepairMonitorRouteCapacity\(routeEntries\.length\)/
+  /selfRepairMonitorBatch\(routeEntries/
 );
 
 const sqlite = new DatabaseSync(":memory:");
@@ -362,3 +362,15 @@ assert.equal(status.monitor.monitorCases, 3);
 assert.equal(status.monitor.promptDrafts, 3);
 
 console.log("Self-repair Phase 2A hourly monitor tests passed.");
+
+// New schema explicitly opts into rotation; legacy overflow still fails above.
+const visited=new Set();
+for(let h=6;h<8;h++){
+ let fetches=0;const manifest=capacityManifest(52);manifest.schemaVersion=2;manifest.monitor={batchSize:49,batchCount:2};
+ const r=await runSelfRepairHourlyMonitor(env,{scheduledTime:firstHour+h*3600000,fetchImpl:async input=>{
+  fetches++;const url=new URL(input);if(url.pathname==='/route-manifest.json')return Response.json(manifest);
+  visited.add(url.pathname);return new Response(routeHtml(manifest.build.version),{headers:{'content-type':'text/html'}});
+ }});
+ assert.equal(r.status,'success');assert.equal(r.routesTotal,52);assert.equal(r.batchCount,2);assert.ok(fetches<=50);
+}
+assert.equal(visited.size,52,'two bounded invocations cover every route');

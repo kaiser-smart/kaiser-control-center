@@ -1,3 +1,4 @@
+import { selfRepairMonitorBatch } from './self-repair-monitor-config.js';
 import { getModuleDatabase } from "./databases.js";
 const DB_BINDING = "DB_CORE / DB_AUDIT";
 import {
@@ -250,7 +251,10 @@ function normalizeManifest(text) {
       "self_repair_monitor_manifest_incomplete"
     );
   }
-  const capacity = selfRepairMonitorRouteCapacity(rawRoutes.length);
+  const batched=parsed.schemaVersion===2 && parsed.monitor?.batchSize===SELF_REPAIR_MONITOR_MAX_ROUTES
+    && parsed.monitor?.batchCount===Math.ceil(rawRoutes.length/SELF_REPAIR_MONITOR_MAX_ROUTES)
+    && parsed.monitor.batchCount<=24;
+  const capacity = selfRepairMonitorRouteCapacity(batched?Math.min(rawRoutes.length,SELF_REPAIR_MONITOR_MAX_ROUTES):rawRoutes.length);
   if (!capacity.ok) {
     throw new SelfRepairMonitorError(
       `Produkční route manifest obsahuje ${capacity.routeCount} cest; bezpečný limit monitoru je ${SELF_REPAIR_MONITOR_MAX_ROUTES}.`,
@@ -278,7 +282,7 @@ function normalizeManifest(text) {
     );
   }
 
-  return { version, commit, routes };
+  return { version, commit, routes, batched };
 }
 
 async function loadRouteManifest(fetchImpl, baseUrl) {
@@ -487,8 +491,10 @@ export async function runSelfRepairHourlyMonitor(env, options = {}) {
 
   try {
     manifest = await loadRouteManifest(fetchImpl, baseUrl);
+    const batch=manifest.batched?selfRepairMonitorBatch(manifest.routes,scheduledAt):{index:0,count:1,routes:manifest.routes};
+    manifest.batch=batch;
     routeResults = await mapWithConcurrency(
-      manifest.routes,
+      batch.routes,
       SELF_REPAIR_MONITOR_CONCURRENCY,
       (route) => checkRoute(fetchImpl, baseUrl, route, manifest.version)
     );
@@ -519,8 +525,8 @@ export async function runSelfRepairHourlyMonitor(env, options = {}) {
     const slowRouteCount = routeResults.filter((item) => item.durationMs > SLOW_ROUTE_MS).length;
     const status = failedCount > 0 ? "partial_error" : findings.length ? "dry_run" : "success";
     const message = findings.length
-      ? `Zkontrolováno ${manifest.routes.length} cest, nalezeno ${findings.length} problémů, nové případy ${newCases}, deduplikované ${deduplicatedCases}. Připraveny jsou pouze návrhy promptů; Codex, deploy a e-mail jsou vypnuté.`
-      : `Zkontrolováno ${manifest.routes.length} cest bez nálezu. Pomalé cesty: ${slowRouteCount}. Codex, deploy a e-mail jsou vypnuté.`;
+      ? `Dávka ${batch.index+1}/${batch.count}: zkontrolováno ${batch.routes.length} z ${manifest.routes.length} cest, nalezeno ${findings.length} problémů, nové případy ${newCases}, deduplikované ${deduplicatedCases}. Připraveny jsou pouze návrhy promptů; Codex, deploy a e-mail jsou vypnuté.`
+      : `Dávka ${batch.index+1}/${batch.count}: zkontrolováno ${batch.routes.length} z ${manifest.routes.length} cest bez nálezu. Pomalé cesty: ${slowRouteCount}. Codex, deploy a e-mail jsou vypnuté.`;
 
     await finishAutomationRun(db, {
       id: automationRunId,
@@ -560,6 +566,9 @@ export async function runSelfRepairHourlyMonitor(env, options = {}) {
       buildCommit: manifest.commit,
       routesTotal: manifest.routes.length,
       routesChecked: routeResults.length,
+      batchIndex:manifest?.batch?.index ?? null,
+      batchCount:manifest?.batch?.count ?? null,
+      coverage:(manifest?.batch?.count||1)>1?"rotating_batch":"all_routes",
       slowRouteCount,
       findingsTotal: findings.length,
       newCases,
@@ -620,6 +629,9 @@ export async function runSelfRepairHourlyMonitor(env, options = {}) {
       cron: SELF_REPAIR_MONITOR_CRON,
       routesTotal: manifest?.routes?.length || 0,
       routesChecked: routeResults.length,
+      batchIndex:manifest?.batch?.index ?? null,
+      batchCount:manifest?.batch?.count ?? null,
+      coverage:(manifest?.batch?.count||1)>1?"rotating_batch":"all_routes",
       findingsTotal: findings.length,
       newCases,
       deduplicatedCases,
