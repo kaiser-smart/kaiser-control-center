@@ -106,3 +106,8 @@ Na výslovné upřesnění Radima je odstraněn vstup Pošta z hlavní navigace 
 Soubory: `src/app.js`, `src/components/ForpsiAdminPanel.js`. Ověření: dashboard test prošel, 27/27 existujících testů Forpsi administrace a čtení pošty prošlo, 755 souborů prošlo kontrolou syntaxe, build 49 rout prošel. Spuštění skutečné funkce sestavující navigaci potvrdilo nepřítomnost pošty a zachování sledování vozidel i nastavení. Nejde o nové ověření přihlášeného vzdáleného UI.
 
 Pokus otevřít vlastní schránku přes přihlášené SO.ai pro dokončení OTP byl automatickou kontrolou zamítnut: posoudila přístup k soukromým zprávám jako nepovolený v rámci pokynu ke skrytí modulu. Zprávy tímto pokusem nebyly přečteny. Ochrana náhledu se neobchází; konečné přihlášené ověření vzdálené adresy zůstává nehotové.
+
+
+### Nezávislé ověření souběžné produkce
+
+Readback Cloudflare a přihlášeného prohlížeče potvrzuje produkci 0.1.832 / `1c503a285b94b9a3cfd02a3252d09e4577b31c97`, deployment `385830a9-f075-43b2-9e87-465546a88b07`. Tato větev jej nenasazovala. Po obnovení původní stránky pošty aplikace přesměrovala na hlavní přehled; v hlavní navigaci ani přehledu modulů není pošta. Soukromý screenshot: `private-integration/mail-hidden-production.png` ve workspace; není součástí veřejného ZIPu ani preview payloadu. Tím je skrytí pošty ověřeno i v aktuální produkci, nezávisle na izolovaném commitu `fd509c1d`. Novější produkční mobilní změny z 1c503a2 nejsou do mapové větve automaticky převzaté; před případným budoucím produkčním merge je nutné je porovnat a zachovat.
