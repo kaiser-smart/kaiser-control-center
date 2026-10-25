@@ -7281,6 +7281,11 @@ function updateGlobalSearch(value) {
 
 function launcherModules(user) {
   return [
+    ...(canViewModule(user, "jobs") ? [{
+      id: "jobs", title: "Zakázky", description: "Zakázkové listy, jejich provedení a doklady",
+      keywords: "Zakázky zakázkové listy Vistos služby provedení doklady",
+      route: "/zakazky"
+    }] : []),
     ...(canViewModule(user, "absence") ? [{
       id: "absence", title: "Nepřítomnost", description: "Dovolená, nemoc, lékař a další nepřítomnosti",
       keywords: "Nepřítomnost dovolená nemoc lékař OČR volno",

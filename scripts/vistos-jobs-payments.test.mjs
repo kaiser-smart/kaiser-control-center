@@ -56,7 +56,19 @@ test('J01-J05/J12: >100 pages, restart atomicity, repeat without business events
  db.sqlite.close();
 });
 test('S01: explicit permissions, finance denial and company isolation',async()=>{
- const db=fixtureDb(),env=environment(db);assert.equal(hasPermission({role:'admin',permissions:[]},'jobs','view'),false);
+ const db=fixtureDb(),env=environment(db);
+ for(const role of ['admin','management']) {
+  const admin={id:'u',role,permissions:[]};
+  assert.equal(hasPermission(admin,'jobs','view'),true);
+  for(const action of ['view_finance','view_personal','manage'])assert.equal(hasPermission(admin,'jobs',action),false);
+  assert.equal(hasPermission(admin,'integrations','manage'),false);
+  assert.equal(hasPermission(admin,'receivables','vistos_write'),false);
+  assert.equal(hasPermission({...admin,permissions:[{moduleId:'jobs',action:'view',allowed:false}]},'jobs','view'),false);
+  assert.equal(hasPermission({...admin,active:false},'jobs','view'),false);
+  await assert.rejects(authorizedIntegrationScope(env,admin),e=>e.status===403);
+ }
+ for(const role of ['dispecer','ridic','readonly'])assert.equal(hasPermission({role,permissions:[]},'jobs','view'),false);
+ assert.equal(hasPermission({role:'ridic',permissions:[{moduleId:'jobs',action:'view',allowed:true}]},'jobs','view'),false);
  await assert.rejects(authorizedIntegrationScope(env,{id:'u'}),e=>e.status===403);
  db.sqlite.prepare('INSERT INTO vistos_company_access VALUES(?,?,?)').run('u','test','1');
  await assert.rejects(authorizedIntegrationScope(env,{id:'u'},{companyId:'2'}),e=>e.status===403);

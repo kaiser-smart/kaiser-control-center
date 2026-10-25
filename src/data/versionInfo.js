@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.845"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.846"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Zakázky na úvodní obrazovce", text: "Modul Zakázky je dostupný z úvodní nabídky a globálního hledání. Správci mohou otevřít provozní přehled; firemní rozsah, finanční a osobní údaje dál vyžadují samostatná oprávnění." },
   { title: "Zakázky a úhrady: příprava propojení Vistos", text: "Samostatný přehled zakázek, časových podkladů a účetních úhrad. Importy i zápis plateb čekají na ověřený instalační kontrakt a samostatná oprávnění; nová verze je sama nezapíná." },
   { title: "Jednotné ikony aplikace", text: "Navigace, moduly a ovládací prvky mají kompaktní obrysové SVG ikony se zeleným akcentem. Vedle názvu aplikace přibyl domeček se zelenou střechou." },
   { title: "Pohodlnější zadání nepřítomnosti", text: "Větší tlačítka pro výběr důvodu a čitelnější popisky. Hlasové zadání bylo z formulářů Nepřítomnosti odstraněno." },

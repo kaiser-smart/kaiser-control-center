@@ -263,10 +263,11 @@ export function hasPermission(user, moduleId, action = "view") {
   const normalizedAction = String(action || "view").trim();
   const role = normalizeRole(user?.role);
 
-  // New integration privileges require an explicit grant, including technical administrators.
-  // Existing wildcard roles do not silently expose finance/personal data or enable writes.
+  // Full-access roles may open the operational workspace; company scope still gates every API read.
+  // Finance, personal data, integration management and writes require separate explicit grants.
   if (normalizedModuleId === 'jobs' || normalizedModuleId === 'integrations' || (normalizedModuleId === 'receivables' && normalizedAction === 'vistos_write')) {
     const grant = explicitPermission(user, normalizedModuleId, normalizedAction);
+    if (normalizedModuleId === 'jobs' && normalizedAction === 'view' && !grant && isFullAccessRole(user)) return true;
     return role !== 'ridic' && grant?.allowed === true;
   }
 

@@ -15,6 +15,8 @@ for(const role of ['admin','management','kancelar','garazmistr','dispecer','ridi
  for(const item of searchNavigation(user,'')) assert.ok(hasPermission(user,item.moduleId,'view'));
 }
 assert.ok(searchNavigation(admin,'vozidla').some(i=>i.route==='/vozovy-park'));
+assert.ok(searchNavigation(admin,'zakazky').some(i=>i.route==='/zakazky'));
+assert.equal(searchNavigation({...admin,permissions:[{moduleId:'jobs',action:'view',allowed:false}]},'zakazky').length,0);
 assert.ok(searchNavigation(admin,'nepritomnost').length);
 assert.ok(searchNavigation(admin,'kalendar nepritomnosti').length);
 assert.equal(searchNavigation(reader,'ke schvaleni').length,0);
