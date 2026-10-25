@@ -1,0 +1,72 @@
+/* Approved SMART ODPADY 2D icon family. Geometry and palette live in icons/definitions.js. */
+#app svg.smart-icon {
+  display:inline-block; width:24px; height:24px; flex-shrink:0; vertical-align:middle;
+  padding:0; border:0; border-radius:0; background:none; box-shadow:none; filter:none;
+  fill:none; stroke:#243128; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round;
+  pointer-events:none;
+}
+#app svg.smart-icon g { stroke:#75BD25; }
+#app :is(.module-icon,.module-detail__icon,.ui-pilot-hero__icon,.module-launcher-icon,
+  .ui-pilot-nav__icon,.quick-absence-type__icon,.quick-absence-success-icon,.tyres-activity-icon,
+  .feedback-workflow-confirmation__icon,.collection-routes-driver-action__icon,
+  .collection-routes-driver-sound-toggle__icon,.ai-voice-start-button__icon,
+  .ai-assistant-launcher__icon,.ai-welcome-modal__voice-mark) {
+  background:none; background-image:none; border:0; box-shadow:none; filter:none;
+  border-radius:0; padding:0; color:#243128;
+}
+#app :is(.module-icon,.module-detail__icon,.ui-pilot-hero__icon,.module-launcher-icon) svg.smart-icon { width:28px; height:28px; }
+#app :is(.ui-pilot-nav__icon,.mobile-bottom-link) svg.smart-icon { width:22px; height:22px; }
+#app :is(.module-launcher-arrow,button:not(.mobile-bottom-link),.feedback-workflow-back) > svg.smart-icon { width:20px; height:20px; }
+#app .mobile-home-link > svg.smart-icon { width:26px; height:26px; }
+#app .smart-brand-name { display:inline-flex; align-items:center; gap:8px; }
+#app .smart-brand-name svg.smart-icon { width:24px; height:24px; }
+#app .ui-pilot-brand__copy .smart-brand-name { gap:5px; }
+#app .ui-pilot-brand__copy .smart-brand-name svg.smart-icon { width:20px; height:20px; }
+#app :is(.ai-assistant-launcher__icon,.ai-voice-start-button__icon) { display:inline-flex; align-items:center; width:24px; height:24px; }
+#app :is(.ai-assistant-launcher__icon,.ai-voice-start-button__icon)::before,
+#app :is(.ai-assistant-launcher__icon,.ai-voice-start-button__icon)::after { content:none; }
+#app .ai-voice-assistant-panel__mic > svg.smart-icon { width:28px; height:28px; }
+#app .ai-voice-assistant-panel__mic { width:64px; min-height:64px; aspect-ratio:1; background:none; box-shadow:none; filter:none; }
+#app .ai-voice-assistant-panel__mic::before { content:none; }
+#app .ai-welcome-modal__voice-mark svg.smart-icon { width:28px; height:28px; }
+#app .employee-add-button { display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+/* Dark driver controls need a light neutral surface for the fixed graphite outline. */
+#app .collection-routes-driver-action:has(.smart-icon),
+#app .collection-routes-driver-sound-toggle:has(.smart-icon) { background:#fff; color:#243128; }
+#app .collection-routes-driver-action__icon svg.smart-icon { width:24px; height:24px; }
+#app :is(.tracking-vehicle-marker__image,.tracking-operational-vehicle__icon img,
+  .tracking-tcars-google-pin__icon img) { filter:none; box-shadow:none; }
+#app .tracking-operational-vehicle__icon { background:none; border:0; box-shadow:none; }
+/* Shared standalone SVGs also replace CSS/text-only disclosure glyphs. */
+#app .mobile-fold__toggle::after,
+#app .tracking-admin-group > summary::after {
+  content:''; display:block; width:20px; height:20px; flex-shrink:0;
+  background:url('../icons/ui/plus.svg') center/20px 20px no-repeat;
+}
+#app .mobile-fold--open > .mobile-fold__toggle::after,
+#app .tracking-admin-group[open] > summary::after { content:''; background-image:url('../icons/ui/minus.svg'); }
+#app .mobile-section-select::after { content:''; height:20px; background:url('../icons/ui/chevron-down.svg') center/20px 20px no-repeat; }
+/* The green is decorative: labels and graphite geometry carry identity and state. */
+@media (forced-colors:active) {
+  #app svg.smart-icon, #app svg.smart-icon g { stroke:CanvasText; }
+}
+@media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
+  #app .mobile-menu .ui-pilot-nav__item > span:last-child { min-width:0; white-space:normal; overflow-wrap:anywhere; }
+}
+
+#app .tracking-position-pin { width:28px; height:28px; border:0; border-radius:0; background:none; box-shadow:none; transform:none; }
+#app .tracking-position-pin::after { content:none; }
+#app .tracking-position-pin svg.smart-icon { display:block; width:28px; height:28px; }
+#app .tracking-vehicle-marker__asset { background:none; box-shadow:none; }
+#app .tracking-tcars-google-pin__icon { background:none; box-shadow:none; filter:none; }
+#app .sarlota-absence-voice-button > span:first-child { width:24px; height:24px; border:0; border-radius:0; background:none; box-shadow:none; }
+/* A neutral button surface keeps both approved icon colours visible (green-on-green disappears). */
+#app :is(.sarlota-absence-voice-button,.ai-assistant-launcher,.ai-voice-start-button,.primary-action,.primary-link):has(.smart-icon) {
+  background:#fff; color:#243128; border-color:#75BD25; box-shadow:none;
+}
+#app .sarlota-absence-voice-button > span { color:#243128; }
+#app :is(.tracking-demo-alert__symbol,.collection-routes-test-tablet-entry__icon,
+  .collection-daily-driver-break-active__icon,.tracking-marker-telemetry__event > i,.fleet-help) {
+  background:none; border:0; border-radius:0; box-shadow:none; filter:none;
+}
+#app .tracking-marker-telemetry__event > i svg.smart-icon { width:20px; height:20px; }

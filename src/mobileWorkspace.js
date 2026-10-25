@@ -1,3 +1,4 @@
+import { SmartIcon } from "./components/icons/SmartIcon.js";
 import { isMobileViewport, mobileViewportQuery } from './mobileViewport.js';
 // Presentation only. Existing links, permissions and action handlers remain authoritative.
 const states = new Map();
@@ -275,7 +276,8 @@ export function applyMobileWorkspace(app, { userId, activeModuleId, render }) {
   const links = [...sidebar.querySelectorAll('a[data-link]')].filter(link => link.closest('nav'));
   const title = shell.querySelector('h1')?.textContent.trim() || document.title.split('|')[0].trim();
   const header = el('header', 'mobile-header');
-  const home = el('a', 'mobile-home-link', '‹');
+  const home = el('a', 'mobile-home-link');
+  home.innerHTML = SmartIcon('home');
   home.href = sidebar.querySelector('.ui-pilot-brand').href;
   home.dataset.link = '';
   home.setAttribute('aria-label', 'Zpět na přehled');
@@ -315,7 +317,9 @@ export function applyMobileWorkspace(app, { userId, activeModuleId, render }) {
     if (path === '/vozovy-park') link.hash = 'fleet-vehicles';
     bottom.append(link);
   });
-  bottom.append(button('•••\nVíce', open, 'mobile-bottom-link'));
+  const more = button('', open, 'mobile-bottom-link');
+  more.innerHTML = `${SmartIcon('more')}<span>Více</span>`;
+  bottom.append(more);
   shell.prepend(header); shell.append(bottom, dialog);
   if (state.menuOpen) { open({currentTarget:header.querySelector('button')}); search.value = state.menuQuery || ''; search.dispatchEvent(new Event('input')); search.focus(); }
   compactTabs(shell);

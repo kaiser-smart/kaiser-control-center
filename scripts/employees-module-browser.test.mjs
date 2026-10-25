@@ -7,7 +7,7 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 const { webkit, chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
 const root = path.resolve(import.meta.dirname, '..', 'dist');
-const output = path.resolve(import.meta.dirname, '../../../outputs/employees-module');
+const output = process.env.PWA_TEST_OUTPUT ? path.resolve(process.env.PWA_TEST_OUTPUT) : path.resolve(import.meta.dirname, '../../../outputs/employees-module');
 await mkdir(output, {recursive:true});
 const mime = {'.js':'text/javascript','.css':'text/css','.html':'text/html','.png':'image/png','.svg':'image/svg+xml','.json':'application/json'};
 const server = createServer(async (req,res) => {

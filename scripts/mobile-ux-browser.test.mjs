@@ -99,7 +99,7 @@ try {
     server.listen(0, "127.0.0.1", resolve);
   });
   origin = `https://127.0.0.1:${server.address().port}`;
-  browser = await webkit.launch({ headless: true });
+  browser = await webkit.launch({ headless: true, ...(process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE ? { executablePath: process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE } : {}) });
   console.log(`WebKit ${browser.version()}; local HTTPS; real auth handlers with mock OTP.`);
 
 
