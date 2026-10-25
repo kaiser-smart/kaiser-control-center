@@ -2,7 +2,7 @@ import { json, requireUserPermission } from './auth.js';
 import { hasPermission } from '../../src/permissions.js';
 import { authorizedIntegrationScope, integrationError, loadIntegrationContract, publicSourceRecord, readScopedRecord, syncVistosBatch, flushIntegrationAudit } from './vistos-integration-store.js';
 import { confirmJobExecution } from './vistos-job-execution.js';
-import { fieldValues } from './vistos-source-model.js';
+import { decodeSourceFields, fieldValues } from './vistos-source-model.js';
 import { invoiceAccountingState, decimal, referenceIds, exactJsonParse } from './vistos-values.js';
 import { previewTransfers, submitTransfers, processPaymentCommand, confirmAllocation, preparePaymentCorrection, submitPaymentCorrection, TRANSFER_LABELS } from './vistos-payment-outbox.js';
 
@@ -65,7 +65,7 @@ async function transfers(scope,url,env) {
     const {results=[]}=await scope.db.prepare(`SELECT * FROM vistos_source_records WHERE installation=? AND entity='InvoiceIssued' AND company_id IN (${scope.companies.map(()=>'?')}) ${invoiceId?'AND source_id=?':''} ORDER BY received_at DESC,id LIMIT ? OFFSET ?`).bind(scope.installation,...scope.companies,...(invoiceId?[invoiceId]:[]),pageSize,(page-1)*pageSize).all();
     const contract=await loadIntegrationContract(scope.db,scope.installation);
     return {rows:[],invoices:results.map(row=>({id:row.id,sourceId:row.source_id,companyId:row.company_id,receivedAt:row.received_at,number:row.number,
-      fields:publicSourceRecord(row,{finance:true,personal:false}).fields,accounting:invoiceAccountingState(fieldValues(JSON.parse(row.fields_json)),{modelVerified:contract.writer?.accountingModelVerified===true})})),page,pagination:{page,pageSize,total:await sourceTotal('InvoiceIssued',invoiceId)},writerEnabled:false};
+      fields:publicSourceRecord(row,{finance:true,personal:false}).fields,accounting:invoiceAccountingState(fieldValues(decodeSourceFields(row.fields_json)),{modelVerified:contract.writer?.accountingModelVerified===true})})),page,pagination:{page,pageSize,total:await sourceTotal('InvoiceIssued',invoiceId)},writerEnabled:false};
   }
   if(status==='source_only') {
     const {results=[]}=await scope.db.prepare(`SELECT * FROM vistos_source_records WHERE installation=? AND entity='Payment' AND company_id IN (${scope.companies.map(()=>'?')}) ORDER BY received_at DESC,id LIMIT ? OFFSET ?`).bind(scope.installation,...scope.companies,pageSize,(page-1)*pageSize).all();

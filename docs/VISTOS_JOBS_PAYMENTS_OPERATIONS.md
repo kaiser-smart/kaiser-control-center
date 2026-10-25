@@ -54,3 +54,17 @@ Frontend lze vrátit na předchozí schválený build, ale nemažte outbox, alok
 | Historické identity, lokality a T-Cars práva NEOVĚŘENO | Správa vozidel/T-Cars + implementátor | Platné aliasy, intervaly, soukromí, zóna a doložený geofence; nikoli odhad podle řidiče |
 
 Nejbližší krok je review tohoto PR a autorizovaný čtecí audit pro doplnění kontraktu. Aktivace se z tohoto předání neodvozuje. Načteno 0 živých řádků, zápisů do Vistosu 0, živě neověřeno 144/144 položek registru. Není doloženo procento automatického zpracování.
+
+## Dokončení Zakázek — ověřování 25. 10. 2026
+
+Aktuální pokyn uživatele omezuje práci na Zakázky. Faktury a přijaté platby se nyní neaktivují ani nemění.
+
+Produkční čtecí audit verze 0.1.848 ověřil `SortOrder: Id asc` na prvních dvou stránkách a opakování první stránky: 183131 hlaviček hlášených zdrojem. Jde o zdrojový počet, nikoli dokončený import. Readiness 2026-10-25T16:28:45Z: CORE 267251712 B, ARCHIVE 2361659392 B, AUDIT 1238274048 B, žádný instalační kontrakt, grant ani importovaný záznam. Nové tři automatizační pravidla jsou neaktivní.
+
+Původní úplná obálka polí měla ve vzorku hlaviček přibližně 28,7 KB na řádek při zdrojovém JSON okolo 3,4 KB. Nový formát `fields_json` v1 sdílí opakovanou dostupnost, původ a čas pozorování uvnitř jednoho záznamu. Hodnoty, explicitní null/prázdná hodnota/nula a nepřítomnost hodnoty zůstávají rozlišené. Třída zpřístupnění je uložená, nikoli odvozovaná při čtení z novějšího registru. Staré záznamy zůstávají čitelné. Živou velikost nového formátu měří diagnostika `compactFieldBytes`; kapacitní odhad musí zahrnout také detaily, položky, indexy a audit.
+
+`detailOnImport` je volba ověřeného kontraktu: nejvýše 20 hlaviček v dávce a detail pro každou, sdílené přihlášení/rozpočet, ověřené ID, deadline 90 s. Selhání detailu neposune checkpoint ani neuloží část stránky. `inheritCompanyFromParent` pro ServiceListItem přebírá pouze ověřenou firmu hlavičky se shodnou instalací a zdrojovým ID; chybějící rodič ponechá položku bez firemního přístupu. `AssignedToCompany_FK` se nesmí použít jako firma podle názvu: existující metadata smluv jej popisují jako přiřazeného uživatele. Význam hlaviček je třeba doložit metadaty DbObject/DbColumn a zdrojovým detailem.
+
+Samostatný přepínač `VISTOS_JOBS_BULK_IMPORT_APPROVED` umožňuje pouze ServiceList/ServiceListItem s vlastním kapacitním plánem. Není to opt-in faktur. Globální stop zůstává pro ostatní toky. Každá dávka před čtením a před zápisem měří všechny tři cílové domény; vyžaduje `capacityEvidence.estimateEvidenceId`, `approvedAt` a `domains.{core,archive,audit}.maxSizeBytes` nejvýše 85 % stávajícího limitu. Chybějící měření, překročení stropu nebo chybějící doklad import zastaví. Přepínač není tímto vydáním zapnutý.
+
+Zbývá živě ověřit firemní a časový kontrakt, velikost detailů/položek, přidělit schválený firemní rozsah, provést obnovitelný import a ověřit nezávislé plánované běhy a UI se skutečnými daty. Modul není dosud předaný jako plně funkční.

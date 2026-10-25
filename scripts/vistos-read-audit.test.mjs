@@ -42,3 +42,25 @@ test('audit excludes personal/financial values and cannot be accessed anonymousl
  const result=await onRequestGet({request:new Request('https://fixture.invalid/api/integrations/vistos/read-audit'),env:{AUTH_USERS_JSON:'[]'}});
  assert.equal(result.status,401);
 });
+
+test('job metadata must name the expected entity and every column must belong to it',async()=>{
+ const saved=globalThis.fetch;let wrongParent=false;
+ globalThis.fetch=async(url,init)=>{
+  const b=JSON.parse(init.body);
+  if(b.LoginParam)return Response.json({status:'OK'},{headers:{'Set-Cookie':'VistosAccessToken=fixture; Path=/'}});
+  if(b.GetSchemaEntity)return Response.json({status:'OK',data:{Columns:[{ColumnName:'Id'}]}});
+  if(b.GetByIdParam){const p=b.GetByIdParam;return Response.json({status:'OK',data:p.EntityName==='DbObject'?{Id:137,Name:'ServiceList'}:{Id:1}});}
+  const p=b.GetPageParam;
+  if(p.EntityName==='DbColumn'){
+   assert.deepEqual(p.Filter,{DbObject_FK:137});
+   return Response.json({status:'OK',data:{recordsTotal:1,recordsFiltered:1,data:[{Id:1,ColumnName:'Issuer_FK',Caption:'Vystavitel',DbObject_FK_RecordId:wrongParent?138:137,ReferenceDbObject_FK:'reference',ReferenceDbObject_FK_RecordId:42}]}});
+  }
+  return Response.json({status:'OK',data:{recordsTotal:1,recordsFiltered:1,data:p.Start?[]:[{Id:1}]}});
+ };
+ try{
+  const env={VISTOS_API_BASE_URL:'https://fixture.invalid',VISTOS_API_USERNAME:'x',VISTOS_API_PASSWORD:'x'};
+  const a=await auditVistosRead(env);assert.equal(a.metadata.status,'read');assert.deepEqual(a.metadata.fields[0].referenceIds,['42']);assert.equal(a.metadata.complete,true);
+  assert.ok(a.storageSample.compactFieldBytes[0]<a.storageSample.fieldEnvelopeBytes[0]);
+  wrongParent=true;assert.equal((await auditVistosRead(env)).metadata.status,'metadata_filter_unverified');
+ }finally{globalThis.fetch=saved;}
+});

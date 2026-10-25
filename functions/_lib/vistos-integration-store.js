@@ -1,6 +1,7 @@
+import {checkJobsImportCapacity} from './vistos-import-capacity.js';
 import { getModuleDatabase } from './databases.js';
 import { hasPermission } from '../../src/permissions.js';
-import { normalizeSourceRecord, discloseFields, fieldValues } from './vistos-source-model.js';
+import { decodeSourceFields, normalizeSourceRecord, discloseFields, fieldValues } from './vistos-source-model.js';
 import { numericId, sourceTime, referenceIds } from './vistos-values.js';
 import { getVistosPage, getVistosById, loginVistosExecute } from './vistos-execute-client.js';
 
@@ -39,14 +40,26 @@ export async function flushIntegrationAudit(db) {
     }
   }
 }
-export async function syncVistosBatch(env,{installation,entity,mode='initial_backfill',actor='scheduler',pageSize=100,source=null,now=new Date().toISOString()}={}) {
+// Items inherit the company only from an imported parent in the same installation.
+// A customer reference or an unresolved parent can never widen company visibility.
+export async function normalizeImportedRecord(db,row,options) {
+  const {entity,installation,contract}=options,rules=contract.entities?.[entity]||{};
+  let record=await normalizeSourceRecord(row,options);
+  if(record&&entity==='ServiceListItem'&&rules.inheritCompanyFromParent===true&&record.parent_id) {
+    const parent=await db.prepare("SELECT company_id FROM vistos_source_records WHERE installation=? AND entity='ServiceList' AND source_id=?").bind(installation,record.parent_id).first();
+    record=await normalizeSourceRecord(row,{...options,parentCompanyId:parent?.company_id||null});
+  }
+  return record;
+}
+export async function syncVistosBatch(env,{installation,entity,mode='initial_backfill',actor='scheduler',pageSize=100,source=null,detailSource=null,now=new Date().toISOString()}={}) {
   if(!['ServiceList','ServiceListItem','Payment','InvoiceIssued'].includes(entity)||!['initial_backfill','delta','reconciliation'].includes(mode)) throw integrationError('invalid_sync_stream',400);
   if(String(env.VISTOS_READ_SYNC_ENABLED)!=='true') throw integrationError('vistos_read_sync_disabled',503);
-  if(String(env.D1_CAPACITY_BLOCK_BULK_WRITES)==='true') throw integrationError('d1_bulk_capacity_blocked',503);
   const db=integrationDb(env),contract=await loadIntegrationContract(db,installation),rules=contract.entities?.[entity];
   if(!rules?.readVerified || !rules.orderVerified || !contract.companyIds?.length || !contract.capacityEvidence?.approvedAt) throw integrationError('vistos_read_contract_unverified',503);
+  await checkJobsImportCapacity(env,contract,{entity});
   if(mode==='delta'&&!rules.modifiedFilterVerified) throw integrationError('vistos_delta_filter_unverified',503);
-  pageSize=Math.max(1,Math.min(100,Math.trunc(pageSize)||100));
+  if(rules.detailOnImport&&!rules.detailVerified)throw integrationError('vistos_detail_contract_unverified',503);
+  pageSize=Math.max(1,Math.min(rules.detailOnImport?20:100,Math.trunc(pageSize)||100));
   const resource=`${installation}:${entity}`,owner=crypto.randomUUID(),expires=new Date(Date.parse(now)+120000).toISOString();
   const claim=await db.prepare(`INSERT INTO vistos_sync_entity_locks(resource,owner,expires_at) VALUES(?,?,?)
     ON CONFLICT(resource) DO UPDATE SET owner=excluded.owner,expires_at=excluded.expires_at WHERE expires_at<?`).bind(resource,owner,expires,now).run();
@@ -71,7 +84,7 @@ export async function syncVistosBatch(env,{installation,entity,mode='initial_bac
       await db.prepare('UPDATE vistos_sync_checkpoints SET window_from=?,window_to=? WHERE id=?').bind(from,now,cp.id).run();cp.window_from=from;cp.window_to=now;
     }
     await db.prepare('INSERT INTO vistos_sync_runs(id,installation,entity,mode,status,started_at,scope_json) VALUES(?,?,?,?,?,?,?)').bind(runId,installation,entity,mode,'running',now,JSON.stringify(contract.companyIds)).run();
-    const readEnv={...env,VISTOS_EXACT_DECIMALS:true,VISTOS_REQUIRE_SHARED_BUDGET:true};
+    const readEnv={...env,VISTOS_EXACT_DECIMALS:true,VISTOS_REQUIRE_SHARED_BUDGET:true,syncRequestDeadline:Date.now()+90000};
     if(!source)assertVistosInstallation(env,contract);
     const session=source?null:await loginVistosExecute(readEnv);
     const filter=mode==='delta'?{Modified_From:cp.window_from,Modified_To:cp.window_to}:null;
@@ -80,13 +93,27 @@ export async function syncVistosBatch(env,{installation,entity,mode='initial_bac
     if(cp.expected_count!==null&&page.filtered!==cp.expected_count) throw integrationError('vistos_page_count_changed');
     if(page.rows.length>pageSize||(!page.rows.length&&cp.offset<page.filtered)||cp.offset+page.rows.length>page.filtered) throw integrationError('vistos_page_range_mismatch');
     let last=cp.last_source_id?BigInt(cp.last_source_id):0n;
-    const statements=[];
+    const statements=[];let pendingBytes=0;
     for(const row of page.rows) {
       const id=numericId(row.Id); if(!id||BigInt(id)<=last) throw integrationError('vistos_page_order_unstable'); last=BigInt(id);
       if(mode==='delta') { const t=sourceTime(row.Modified).instant;if(!t||t<cp.window_from||t>=cp.window_to) throw integrationError('vistos_modified_filter_ignored'); }
       const previous=await db.prepare('SELECT * FROM vistos_source_records WHERE installation=? AND entity=? AND source_id=?').bind(installation,entity,id).first();
-      const record=await normalizeSourceRecord(row,{installation,entity,contract,previous,now});
+      let record=await normalizeImportedRecord(db,row,{installation,entity,contract,previous,now});
+      if(rules.detailOnImport) {
+        // A failed detail rolls back this page's data/checkpoint; retry is read-only.
+        // One shared login and a bounded page prevent a detail call per new session.
+        if(source&&!detailSource)throw integrationError('vistos_detail_source_missing');
+        const detail=detailSource?await detailSource(id):(await getVistosById(readEnv,session,entity,id,rules.detailColumns||rules.columns||[])).row;
+        if(numericId(detail?.Id)!==id)throw integrationError('vistos_detail_identity_mismatch');
+        record=await normalizeImportedRecord(db,detail,{installation,entity,contract,previous:record||previous,kind:'detail',now});
+        if(!record)throw integrationError('vistos_detail_version_older');
+        // The audit compares the committed revision, not the intermediate list merge.
+        const before=previous?fieldValues(decodeSourceFields(previous.fields_json)):{};
+        const after=fieldValues(decodeSourceFields(record.fields_json));
+        record.changedFields=Object.keys(after).filter(k=>JSON.stringify(before[k])!==JSON.stringify(after[k]));
+      }
       if(record && record.fingerprint!==previous?.fingerprint) {
+        pendingBytes+=new TextEncoder().encode(record.fields_json).length*3+8192;
         const columns=RECORD_COLUMNS;
         statements.push(db.prepare(`INSERT INTO vistos_source_records(${columns.join(',')}) SELECT ${columns.map(()=>'?').join(',')} WHERE EXISTS(SELECT 1 FROM vistos_sync_entity_locks WHERE resource=? AND owner=?)
           ON CONFLICT(installation,entity,source_id) DO UPDATE SET ${columns.filter(c=>!['id','installation','entity','source_id'].includes(c)).map(c=>`${c}=excluded.${c}`).join(',')}`).bind(...columns.map(c=>record[c]),resource,owner));
@@ -94,7 +121,7 @@ export async function syncVistosBatch(env,{installation,entity,mode='initial_bac
           SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM vistos_sync_entity_locks WHERE resource=? AND owner=?)`).bind(`${runId}:${id}`,record.id,record.company_id,'source_changed',actor,previous?.fingerprint||null,record.fingerprint,JSON.stringify(record.changedFields),now,resource,owner));
       }
       if(entity==='Payment'&&record?.fingerprint!==previous?.fingerprint){
-        const old=previous?fieldValues(JSON.parse(previous.fields_json)):{};
+        const old=previous?fieldValues(decodeSourceFields(previous.fields_json)):{};
         const invoices=[...new Set([...referenceIds(old,'InvoiceIssued_FK','detail'),...referenceIds(row,'InvoiceIssued_FK','list')])];
         for(const invoiceId of invoices)statements.push(db.prepare(`INSERT INTO vistos_detail_refresh_queue(installation,entity,source_id,requested_at) SELECT ?,'InvoiceIssued',?,? WHERE EXISTS(SELECT 1 FROM vistos_sync_entity_locks WHERE resource=? AND owner=?) ON CONFLICT(installation,entity,source_id) DO UPDATE SET requested_at=excluded.requested_at`).bind(installation,invoiceId,now,resource,owner));
       }
@@ -105,6 +132,7 @@ export async function syncVistosBatch(env,{installation,entity,mode='initial_bac
     statements.push(db.prepare(`UPDATE vistos_sync_checkpoints SET offset=?,expected_count=?,last_source_id=?,status=?,updated_at=?,error_code=NULL,
       last_success_at=CASE WHEN ? THEN ? ELSE last_success_at END,confirmed_through=CASE WHEN ? AND mode='delta' THEN window_to ELSE confirmed_through END
       WHERE id=? AND offset=? AND EXISTS(SELECT 1 FROM vistos_sync_entity_locks WHERE resource=? AND owner=?)`).bind(next,page.filtered,String(last),done?'compared':'partial',now,done?1:0,now,done?1:0,cp.id,cp.offset,resource,owner));
+    await checkJobsImportCapacity(env,contract,{entity,reserveBytes:pendingBytes});
     const results=await db.batch(statements);
     if(!results.at(-1)?.meta?.changes) throw integrationError('vistos_lease_lost');
     await db.prepare(`UPDATE vistos_sync_runs SET status=?,finished_at=?,rows_seen=? WHERE id=?`).bind(done?'compared':'partial',new Date().toISOString(),count,runId).run();
@@ -135,7 +163,7 @@ export async function syncVistosBatch(env,{installation,entity,mode='initial_bac
   } finally { await db.prepare('DELETE FROM vistos_sync_entity_locks WHERE resource=? AND owner=?').bind(resource,owner).run(); }
 }
 export function publicSourceRecord(row,rights) {
-  const fields=discloseFields(JSON.parse(row.fields_json),rights);
+  const fields=discloseFields(decodeSourceFields(row.fields_json),rights);
   const values=fieldValues(fields);
   return {id:row.id,number:row.number||values.Number||`Vistos ${row.source_id}`,companyId:row.company_id,status:row.status,
     customer:row.customer,place:row.place,service:row.service,plannedStart:row.planned_start,plannedEnd:row.planned_end,plannedDay:row.planned_day,
@@ -156,7 +184,7 @@ export async function refreshSourceDetail(env,installation,id) {
   const readEnv={...env,VISTOS_EXACT_DECIMALS:true,VISTOS_REQUIRE_SHARED_BUDGET:true},session=await loginVistosExecute(readEnv);
   const {row}=await getVistosById(readEnv,session,previous.entity,previous.source_id,rules.detailColumns||rules.columns||[]);
   if(numericId(row.Id)!==previous.source_id)throw integrationError('vistos_detail_identity_mismatch');
-  const now=new Date().toISOString(),record=await normalizeSourceRecord(row,{installation,entity:previous.entity,contract,previous,kind:'detail',now});
+  const now=new Date().toISOString(),record=await normalizeImportedRecord(db,row,{installation,entity:previous.entity,contract,previous,kind:'detail',now});
   if(!record)return {status:'older_detail_ignored'};
   // Compare-and-swap prevents a slow detail from overwriting a concurrently imported revision.
   const columns=RECORD_COLUMNS.filter(c=>!['id','installation','entity','source_id'].includes(c));
@@ -172,7 +200,7 @@ export async function refreshSourceDetail(env,installation,id) {
 export async function persistVerifiedSourceReadback(db,installation,entity,row,contract,{kind='detail',actor='scheduler'}={}) {
   const id=numericId(row?.Id);if(!id)throw integrationError('source_identity_missing');
   const previous=await db.prepare('SELECT * FROM vistos_source_records WHERE installation=? AND entity=? AND source_id=?').bind(installation,entity,id).first();
-  const record=await normalizeSourceRecord(row,{installation,entity,contract,previous,kind});if(!record)return {status:'older_or_unversioned'};
+  const record=await normalizeImportedRecord(db,row,{installation,entity,contract,previous,kind});if(!record)return {status:'older_or_unversioned'};
   const statements=[],columns=RECORD_COLUMNS;
   const guard=previous?'EXISTS(SELECT 1 FROM vistos_source_records WHERE id=? AND fingerprint=?)':'NOT EXISTS(SELECT 1 FROM vistos_source_records WHERE installation=? AND entity=? AND source_id=?)';
   const args=previous?[previous.id,previous.fingerprint]:[installation,entity,id];
