@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { buildMetaModuleSource, resolveBuildMeta } from "./build-meta.mjs";
 import { versionModuleImports } from "./version-module-imports.mjs";
 import { modules } from "../src/data/modules.js";
-import { selfRepairMonitorRouteCapacity } from "../functions/_lib/self-repair-monitor-config.js";
+import { selfRepairMonitorRouteCapacity, selfRepairMonitorBatch } from "../functions/_lib/self-repair-monitor-config.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dist = path.join(root, "dist");
@@ -24,6 +24,7 @@ function runtimeConfigModuleSource(env = process.env) {
 function versionedTemplate() {
   return template
     .replace('href="src/styles.css"', `href="src/styles.css?v=${assetVersion}"`)
+    .replace('href="src/vistos-workspace.css"', `href="src/vistos-workspace.css?v=${assetVersion}"`)
     .replace('href="src/ui-system-pilot.css"', `href="src/ui-system-pilot.css?v=${assetVersion}"`)
     .replace('src="src/app.js"', `src="src/app.js?v=${assetVersion}"`);
 }
@@ -80,6 +81,8 @@ async function versionCopiedModuleImports(directory) {
 }
 
 const fixedRouteEntries = [
+  { path: "/pohledavky/uhrady", moduleKey: "receivables", label: "Úhrady" },
+  { path: "/vistos/propojeni", moduleKey: "integrations", label: "Propojení Vistos" },
   { path: "/", moduleKey: "dashboard", label: "Hlavní stránka" },
   { path: "/sarlota", moduleKey: "dashboard", label: "Šarlota" },
   { path: "/pripominky", moduleKey: "feedback", label: "Připomínky a chyby" },
@@ -122,7 +125,8 @@ for (const entry of [
 
 const routeEntries = [...routeEntryByPath.values()];
 const routes = new Set(routeEntries.map((entry) => entry.path));
-const monitorCapacity = selfRepairMonitorRouteCapacity(routeEntries.length);
+const monitorBatch = selfRepairMonitorBatch(routeEntries, new Date());
+const monitorCapacity = selfRepairMonitorRouteCapacity(Math.min(routeEntries.length,49));
 
 if (!monitorCapacity.ok) {
   throw new Error(
@@ -146,7 +150,8 @@ await versionCopiedModuleImports(path.join(dist, "src"));
 await writeFile(
   path.join(dist, "route-manifest.json"),
   `${JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
+    monitor: { batchSize:49, batchCount:monitorBatch.count },
     build: {
       version: buildMeta.version,
       branch: buildMeta.branch,

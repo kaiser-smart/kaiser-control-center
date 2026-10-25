@@ -13,6 +13,11 @@ on:
       - "workers/vistos-leadhub-*.js"
       - "scripts/vistos-*.mjs"
       - "package.json"
+      - "functions/api/jobs/**"
+      - "functions/api/integrations/**"
+      - "src/components/VistosWorkspace.js"
+      - "src/vistos-workspace.css"
+      - "migrations/modular/**"
       - "wrangler.vistos-leadhub-profile-sync-runner.toml"
       - ".github/workflows/vistos-integration-tests.yml"
 
@@ -38,5 +43,9 @@ jobs:
         run: npm run test:vistos-contacts
       - name: Invoice synchronization recovery and customer pagination
         run: npm run test:receivables
+      - name: Jobs, payments and tracking evidence
+        run: npm run test:vistos-jobs-payments
+      - name: Bounded monitor route batches
+        run: node scripts/self-repair-monitor.test.mjs
       - name: Build
         run: npm run build

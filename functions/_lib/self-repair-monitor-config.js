@@ -23,3 +23,11 @@ export function isSelfRepairMonitorRule(moduleKey, ruleId) {
   return String(moduleKey || "").trim() === SELF_REPAIR_MONITOR_MODULE_KEY &&
     String(ruleId || "").trim() === SELF_REPAIR_MONITOR_RULE_ID;
 }
+
+// Schema 2 rotates bounded batches; the external subrequest ceiling remains unchanged.
+export function selfRepairMonitorBatch(routes, scheduledAt) {
+  const count=Math.ceil(routes.length/SELF_REPAIR_MONITOR_MAX_ROUTES);
+  if(!count||count>24)throw new RangeError('self_repair_monitor_batch_capacity');
+  const index=Math.floor(new Date(scheduledAt).getTime()/3600000)%count;
+  return {index,count,routes:routes.slice(index*SELF_REPAIR_MONITOR_MAX_ROUTES,(index+1)*SELF_REPAIR_MONITOR_MAX_ROUTES)};
+}

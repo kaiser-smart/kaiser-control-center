@@ -1,0 +1,3825 @@
+{
+  "schema_version": "1.1",
+  "prepared_at": "2026-10-24",
+  "locale": "cs-CZ",
+  "purpose": "Závazný požadovaný registr pro implementaci; ne tvrzení, že jsou všechna pole živě dostupná.",
+  "repository": "kaiser-smart/kaiser-control-center",
+  "repository_audit_ref": "c37cd96b3313ad5d8678e1018f76bf1b9d98f72e",
+  "source_identity": [
+    "vistos_installation",
+    "entity_name",
+    "source_id"
+  ],
+  "company_scope": "required context; preserve source identity if company changes; never cross-company match by label",
+  "evidence_legend": {
+    "M": "Field documented in user-provided Payment/InvoiceIssued manual2026-09-30; current list availability/installation still unverified.",
+    "H": "Field presence observed in documented read2026-10-22; exact semantics and current availability still require verification.",
+    "K": "Candidate named in current Vistos/T-Cars code or older mapping; not proof of current runtime availability or semantics.",
+    "P": "Requested business datum, no verified API field or relation; discover or display explicit unavailable state.",
+    "L": "New/existing local integration metadata, not an invented Vistos field."
+  },
+  "missing_semantics": [
+    "missing_key_is_not_null",
+    "null_is_not_zero",
+    "empty_is_not_zero",
+    "forbidden_is_not_deleted"
+  ],
+  "ui_status_mapping": {
+    "known": "formatted value",
+    "null": "Nevyplněno ve Vistosu",
+    "empty": "Nevyplněno ve Vistosu",
+    "not_exposed": "Vistos neposkytuje",
+    "forbidden": "Nedostupné pro tento přístup",
+    "unverified": "Význam čeká na ověření",
+    "error": "Načtení se nezdařilo"
+  },
+  "explicitly_unconfirmed_source_fields": [
+    "PaymentStatus_FK",
+    "MoneyInvoiceId",
+    "MoneySourceSystemId",
+    "fully_paid_date"
+  ],
+  "writeback_constraints": [
+    "single_writer_proven_against_Money",
+    "stable_allocation_identity",
+    "explicit_invoice_source_id",
+    "company_and_currency_verified",
+    "write_permissions_verified",
+    "no_automatic_retry_after_ambiguous_create",
+    "never_save_partial_InvoiceIssued"
+  ],
+  "fields": [
+    {
+      "logical_key": "job.id",
+      "label_cs": "ID zakázkového listu",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "Id"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_id",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.number",
+      "label_cs": "Číslo zakázkového listu",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "Number"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "string",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.source_status",
+      "label_cs": "Původní stav",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "Status_FK"
+      ],
+      "evidence": "H",
+      "expected_normalized_type": "reference",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": " Popisek není ID. Ověřit doprovodné *_RecordId nebo strukturovaný detail.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.is_done",
+      "label_cs": "Příznak dokončení",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "IsDone"
+      ],
+      "evidence": "H",
+      "expected_normalized_type": "boolean",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.parent",
+      "label_cs": "Nadřazený dokument",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "MasterParent_FK"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "reference",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": " Popisek není ID. Ověřit doprovodné *_RecordId nebo strukturovaný detail.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.created",
+      "label_cs": "Vytvořeno ve Vistosu",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "Created"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_datetime",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Zachovat originální hodnotu a nejistotu zóny. Nevyvozovat odpracovaný čas.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.modified",
+      "label_cs": "Změněno ve Vistosu",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "Modified"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_datetime",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Zachovat originální hodnotu a nejistotu zóny. Nevyvozovat odpracovaný čas.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.document_date",
+      "label_cs": "Datum zakázkového listu",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "DateOfServiceList"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_date_or_datetime",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Zachovat originální hodnotu a nejistotu zóny. Nevyvozovat odpracovaný čas.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.realization_date",
+      "label_cs": "Datum realizace ze zdroje",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "DateOfRealization"
+      ],
+      "evidence": "H",
+      "expected_normalized_type": "source_date_or_datetime",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Zachovat originální hodnotu a nejistotu zóny. Nevyvozovat odpracovaný čas.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.date_start",
+      "label_cs": "DateStart ze zdroje",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "DateStart"
+      ],
+      "evidence": "H",
+      "expected_normalized_type": "source_datetime",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Zachovat originální hodnotu a nejistotu zóny. Nevyvozovat odpracovaný čas.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.date_end",
+      "label_cs": "DateEnd ze zdroje",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "DateEnd"
+      ],
+      "evidence": "H",
+      "expected_normalized_type": "source_datetime",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Zachovat originální hodnotu a nejistotu zóny. Nevyvozovat odpracovaný čas.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.resolution_start",
+      "label_cs": "StartOfResolution ze zdroje",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "StartOfResolution"
+      ],
+      "evidence": "H",
+      "expected_normalized_type": "source_datetime",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Zachovat originální hodnotu a nejistotu zóny. Nevyvozovat odpracovaný čas.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.resolution_end",
+      "label_cs": "EndOfResolution ze zdroje",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "EndOfResolution"
+      ],
+      "evidence": "H",
+      "expected_normalized_type": "source_datetime",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Zachovat originální hodnotu a nejistotu zóny. Nevyvozovat odpracovaný čas.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.customer",
+      "label_cs": "Zákazník",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "CustomerCompany_FK"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "reference",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": " Popisek není ID. Ověřit doprovodné *_RecordId nebo strukturovaný detail.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.branch",
+      "label_cs": "Provozovna zákazníka",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "CustomerBranch_FK"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "reference",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": " Popisek není ID. Ověřit doprovodné *_RecordId nebo strukturovaný detail.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.contact",
+      "label_cs": "Kontaktní osoba zákazníka",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "CustomerContact_FK"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "reference",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": " Popisek není ID. Ověřit doprovodné *_RecordId nebo strukturovaný detail.",
+      "required_to_enable": [],
+      "disclosure_class": "personal",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.phone",
+      "label_cs": "Telefon u zakázky",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "Phone"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "string",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "",
+      "required_to_enable": [],
+      "disclosure_class": "personal",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.service_address",
+      "label_cs": "Nakládková / servisní adresa",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "Nakladkovaadresa_FK"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "reference",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": " Popisek není ID. Ověřit doprovodné *_RecordId nebo strukturovaný detail.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.site",
+      "label_cs": "Stanoviště",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "Stanoviste"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_value",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.contract",
+      "label_cs": "Smlouva",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "Contract_FK"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "reference",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": " Popisek není ID. Ověřit doprovodné *_RecordId nebo strukturovaný detail.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.waste",
+      "label_cs": "Odpad ze zdroje",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "Waste"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_value",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.vehicle",
+      "label_cs": "Vozidlo ze zdroje",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "Auto_FK"
+      ],
+      "evidence": "H",
+      "expected_normalized_type": "reference",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": " Popisek není ID. Ověřit doprovodné *_RecordId nebo strukturovaný detail.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.allocated_vehicles",
+      "label_cs": "Přidělená vozidla",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "AllocatedVehicle"
+      ],
+      "evidence": "H",
+      "expected_normalized_type": "reference_or_reference_array",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": " Popisek není ID. Ověřit doprovodné *_RecordId nebo strukturovaný detail. Zachovat všechny hodnoty; nevybrat jen první vozidlo.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.driver_contact",
+      "label_cs": "Řidič ze zdroje",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "RidicContact_FK"
+      ],
+      "evidence": "H",
+      "expected_normalized_type": "reference",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": " Popisek není ID. Ověřit doprovodné *_RecordId nebo strukturovaný detail. Není automaticky HR employee ID; použít doloženou časově platnou vazbu.",
+      "required_to_enable": [],
+      "disclosure_class": "personal",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.finance.Currency_FK",
+      "label_cs": "Měna zakázky",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "Currency_FK"
+      ],
+      "evidence": "H",
+      "expected_normalized_type": "reference",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Cena není automaticky výnos, marže ani podklad mzdy; význam a měnu potvrdit.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.finance.PriceWithoutTax",
+      "label_cs": "Cena zakázky bez DPH",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "PriceWithoutTax"
+      ],
+      "evidence": "H",
+      "expected_normalized_type": "decimal",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Cena není automaticky výnos, marže ani podklad mzdy; význam a měnu potvrdit.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.finance.PriceTax",
+      "label_cs": "DPH zakázky",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "PriceTax"
+      ],
+      "evidence": "H",
+      "expected_normalized_type": "decimal",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Cena není automaticky výnos, marže ani podklad mzdy; význam a měnu potvrdit.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.finance.PriceWithTax",
+      "label_cs": "Cena zakázky s DPH",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "PriceWithTax"
+      ],
+      "evidence": "H",
+      "expected_normalized_type": "decimal",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Cena není automaticky výnos, marže ani podklad mzdy; význam a měnu potvrdit.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.finance.TransferredTaxLiability",
+      "label_cs": "Přenesená daňová povinnost",
+      "source_entity": "ServiceList",
+      "candidate_source_fields": [
+        "TransferredTaxLiability"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "boolean",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Cena není automaticky výnos, marže ani podklad mzdy; význam a měnu potvrdit.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.company",
+      "label_cs": "Právnická osoba / firma KAISER",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "reference",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.kind",
+      "label_cs": "Typ služby",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "reference_or_string",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.description",
+      "label_cs": "Popis práce",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "string",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.customer_ico",
+      "label_cs": "IČO zákazníka",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "string",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.customer_dic",
+      "label_cs": "DIČ zákazníka",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "string",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.customer_email",
+      "label_cs": "E-mail zákazníka",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "string",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "personal",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.other_stops",
+      "label_cs": "Další místa / zastávky",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "array",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.coordinates",
+      "label_cs": "Souřadnice servisního místa",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "coordinates",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.crew",
+      "label_cs": "Další členové posádky",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "reference_array",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "personal",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.planned_duration",
+      "label_cs": "Potvrzená plánovaná délka",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "duration",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.actual_segments",
+      "label_cs": "Skutečné úseky práce",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "array",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.waste_code",
+      "label_cs": "Katalogové číslo odpadu",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "string",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.waste_category",
+      "label_cs": "Kategorie odpadu",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "string",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.measured_weight",
+      "label_cs": "Skutečně naměřená hmotnost",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "quantity_with_unit",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.measured_volume",
+      "label_cs": "Skutečně naměřený objem",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "quantity_with_unit",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.order_link",
+      "label_cs": "Obchodní objednávka",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "reference_array",
+      "ui_section": "documents",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.invoice_links",
+      "label_cs": "Vazby na faktury",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "reference_array",
+      "ui_section": "documents",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.invoice_allocations",
+      "label_cs": "Doložená alokace částky k faktuře",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "array",
+      "ui_section": "documents",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.instructions",
+      "label_cs": "Pokyny k provedení",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "sanitized_text",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.notes",
+      "label_cs": "Poznámky",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "sanitized_text",
+      "ui_section": "overview",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job.attachments",
+      "label_cs": "Metadata příloh / dokumentů / fotek",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "array",
+      "ui_section": "documents",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Požadovaný údaj; přesné API pole/vztah zjistit čtením schématu a detailu, nevymýšlet.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.Id",
+      "label_cs": "ID položky",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "Id"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_id",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Kandidát ze stávajícího auditu; ServiceListItem a parent vazbu je nutné znovu ověřit.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.ServiceList_FK",
+      "label_cs": "Zakázkový list položky",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "ServiceList_FK"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "reference",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Kandidát ze stávajícího auditu; ServiceListItem a parent vazbu je nutné znovu ověřit.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.MasterParent_FK",
+      "label_cs": "Nadřazený záznam položky",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "MasterParent_FK"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "reference",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Kandidát ze stávajícího auditu; ServiceListItem a parent vazbu je nutné znovu ověřit.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.ContractRow_FK",
+      "label_cs": "Smluvní položka",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "ContractRow_FK"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "reference",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Kandidát ze stávajícího auditu; ServiceListItem a parent vazbu je nutné znovu ověřit.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.Product_FK",
+      "label_cs": "Produkt / služba položky",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "Product_FK"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "reference",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Kandidát ze stávajícího auditu; ServiceListItem a parent vazbu je nutné znovu ověřit.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.Quantity",
+      "label_cs": "Množství ze zdroje",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "Quantity"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Kandidát ze stávajícího auditu; ServiceListItem a parent vazbu je nutné znovu ověřit.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.c_OrderedQuantity",
+      "label_cs": "Objednané množství ze zdroje",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "c_OrderedQuantity"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Kandidát ze stávajícího auditu; ServiceListItem a parent vazbu je nutné znovu ověřit.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.Status_FK",
+      "label_cs": "Stav položky",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "Status_FK"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "reference",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Kandidát ze stávajícího auditu; ServiceListItem a parent vazbu je nutné znovu ověřit.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.IsDone",
+      "label_cs": "Příznak dokončení položky",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "IsDone"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "boolean",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Kandidát ze stávajícího auditu; ServiceListItem a parent vazbu je nutné znovu ověřit.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.DateOfRealization",
+      "label_cs": "Datum realizace položky",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "DateOfRealization"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_date_or_datetime",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Kandidát ze stávajícího auditu; ServiceListItem a parent vazbu je nutné znovu ověřit.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.Created",
+      "label_cs": "Vytvoření položky",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "Created"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_datetime",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Kandidát ze stávajícího auditu; ServiceListItem a parent vazbu je nutné znovu ověřit.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.Modified",
+      "label_cs": "Změna položky",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "Modified"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_datetime",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Kandidát ze stávajícího auditu; ServiceListItem a parent vazbu je nutné znovu ověřit.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.finance.UnitPrice",
+      "label_cs": "Jednotková cena",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "UnitPrice"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Nepředpokládat vztah k UnitPrice/Quantity bez potvrzení významu; ceny hlavičky a položek nesčítat dohromady.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.finance.ListPrice",
+      "label_cs": "Ceníková cena",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "ListPrice"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Nepředpokládat vztah k UnitPrice/Quantity bez potvrzení významu; ceny hlavičky a položek nesčítat dohromady.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.finance.UnitPriceDiscount",
+      "label_cs": "Sleva na jednotku",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "UnitPriceDiscount"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Nepředpokládat vztah k UnitPrice/Quantity bez potvrzení významu; ceny hlavičky a položek nesčítat dohromady.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.finance.UnitPriceDiscountPercentage",
+      "label_cs": "Sleva v procentech",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "UnitPriceDiscountPercentage"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Nepředpokládat vztah k UnitPrice/Quantity bez potvrzení významu; ceny hlavičky a položek nesčítat dohromady.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.finance.TaxIncluded",
+      "label_cs": "Daň zahrnuta v ceně",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "TaxIncluded"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "boolean",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Nepředpokládat vztah k UnitPrice/Quantity bez potvrzení významu; ceny hlavičky a položek nesčítat dohromady.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.finance.TaxRate_FK",
+      "label_cs": "Sazba DPH",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "TaxRate_FK"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "reference",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Nepředpokládat vztah k UnitPrice/Quantity bez potvrzení významu; ceny hlavičky a položek nesčítat dohromady.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.finance.PriceWithoutTax",
+      "label_cs": "Položka bez DPH",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "PriceWithoutTax"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Nepředpokládat vztah k UnitPrice/Quantity bez potvrzení významu; ceny hlavičky a položek nesčítat dohromady.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.finance.PriceTax",
+      "label_cs": "DPH položky",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "PriceTax"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Nepředpokládat vztah k UnitPrice/Quantity bez potvrzení významu; ceny hlavičky a položek nesčítat dohromady.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.finance.PriceWithTax",
+      "label_cs": "Položka s DPH",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "PriceWithTax"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Nepředpokládat vztah k UnitPrice/Quantity bez potvrzení významu; ceny hlavičky a položek nesčítat dohromady.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.finance.Currency_FK",
+      "label_cs": "Měna položky",
+      "source_entity": "ServiceListItem",
+      "candidate_source_fields": [
+        "Currency_FK"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "reference",
+      "ui_section": "items",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Nepředpokládat vztah k UnitPrice/Quantity bez potvrzení významu; ceny hlavičky a položek nesčítat dohromady.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "job_item.unit",
+      "label_cs": "Jednotka množství",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "reference_or_string",
+      "ui_section": "items",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Přesné pole je třeba objevit; číslo bez jednotky není objem/hmotnost.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "invoice.Id",
+      "label_cs": "ID faktury Vistos",
+      "source_entity": "InvoiceIssued",
+      "candidate_source_fields": [
+        "Id"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "source_id",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Jedinečné v instalaci; ne číslo faktury.",
+      "required_to_enable": [
+        "invoice_readback"
+      ],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "invoice.InvoiceNumber",
+      "label_cs": "Číslo faktury",
+      "source_entity": "InvoiceIssued",
+      "candidate_source_fields": [
+        "InvoiceNumber"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "string",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Může se opakovat mezi firmami; není stabilní integrační klíč.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "invoice.Currency_FK",
+      "label_cs": "Měna faktury",
+      "source_entity": "InvoiceIssued",
+      "candidate_source_fields": [
+        "Currency_FK"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "reference",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Žádná implicitní konverze měn.",
+      "required_to_enable": [
+        "invoice_readback"
+      ],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "invoice.PriceWithTax",
+      "label_cs": "Částka faktury s DPH",
+      "source_entity": "InvoiceIssued",
+      "candidate_source_fields": [
+        "PriceWithTax"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "decimal_nullable",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Neznámo není nula.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "invoice.AmountPaid",
+      "label_cs": "Evidované úhrady Vistos",
+      "source_entity": "InvoiceIssued",
+      "candidate_source_fields": [
+        "AmountPaid"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "decimal_nullable",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Nepotvrzuje úplnost Money přenosu; musí umět i pokles.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "invoice.AmountPaidProformaInvoice",
+      "label_cs": "Odpočet zálohových faktur",
+      "source_entity": "InvoiceIssued",
+      "candidate_source_fields": [
+        "AmountPaidProformaInvoice"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "decimal_nullable",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Oddělený vstup do zůstatku; nezapočítat dvakrát.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "invoice.RemainToPay",
+      "label_cs": "Zůstatek Vistos",
+      "source_entity": "InvoiceIssued",
+      "candidate_source_fields": [
+        "RemainToPay"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "decimal",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Pouze číst. Ne PriceWithTax−AmountPaid. Záporný výsledek zachovat.",
+      "required_to_enable": [
+        "invoice_readback"
+      ],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "invoice.IsPaid",
+      "label_cs": "Příznak úhrady Vistos",
+      "source_entity": "InvoiceIssued",
+      "candidate_source_fields": [
+        "IsPaid"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "boolean",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "V instalaci dle manuálu abs(RemainToPay)<2; není přesná nula.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "invoice.InAccounting",
+      "label_cs": "Evidence v účetnictví",
+      "source_entity": "InvoiceIssued",
+      "candidate_source_fields": [
+        "InAccounting"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "boolean",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Není stav úhrady ani doklad aktuálního Money.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "invoice.Modified",
+      "label_cs": "Změna faktury ve Vistosu",
+      "source_entity": "InvoiceIssued",
+      "candidate_source_fields": [
+        "Modified"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "source_datetime",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Není poslední úspěšný přenos Money.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "invoice.company",
+      "label_cs": "Firma vystavitele",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "source_value",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Přesný kontrakt/vazbu ověřit. MoneyInvoiceId ani MoneySourceSystemId nejsou podle přílohy dosud nasazená pole.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "invoice.customer",
+      "label_cs": "Zákazník faktury",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "source_value",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Přesný kontrakt/vazbu ověřit. MoneyInvoiceId ani MoneySourceSystemId nejsou podle přílohy dosud nasazená pole.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "invoice.money_id",
+      "label_cs": "Identita faktury v Money",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "source_value",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Přesný kontrakt/vazbu ověřit. MoneyInvoiceId ani MoneySourceSystemId nejsou podle přílohy dosud nasazená pole.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "invoice.fully_paid_date",
+      "label_cs": "Autoritativní datum úplného doplacení",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "source_value",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Přesný kontrakt/vazbu ověřit. MoneyInvoiceId ani MoneySourceSystemId nejsou podle přílohy dosud nasazená pole.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "payment.Id",
+      "label_cs": "ID Payment ve Vistosu",
+      "source_entity": "Payment",
+      "candidate_source_fields": [
+        "Id"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "source_id",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Create vrací data.EntityID; následné čtení používá Id.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "payment.InvoiceIssued_FK",
+      "label_cs": "Faktura úhrady",
+      "source_entity": "Payment",
+      "candidate_source_fields": [
+        "InvoiceIssued_FK"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "reference",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "List může vracet label + InvoiceIssued_FK_RecordId. Zápis vyžaduje číselné InvoiceIssued.Id.",
+      "required_to_enable": [
+        "payment_write"
+      ],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "payment.Amount",
+      "label_cs": "Částka alokace",
+      "source_entity": "Payment",
+      "candidate_source_fields": [
+        "Amount"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "decimal_nullable",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Podíl konkrétní faktury, ne vždy celá bankovní transakce; směr a znaménko zachovat.",
+      "required_to_enable": [
+        "payment_write"
+      ],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "payment.Date",
+      "label_cs": "Datum evidence Vistos",
+      "source_entity": "Payment",
+      "candidate_source_fields": [
+        "Date"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "source_date",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "U importů může být den přenosu; nezaměnit s bankovním datem.",
+      "required_to_enable": [
+        "payment_write"
+      ],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "payment.Currency_FK",
+      "label_cs": "Měna úhrady",
+      "source_entity": "Payment",
+      "candidate_source_fields": [
+        "Currency_FK"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "reference",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Povinné při zápisu; převzít z potvrzené faktury/alokace.",
+      "required_to_enable": [
+        "payment_write"
+      ],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "payment.PaymentType_FK",
+      "label_cs": "Směr platby",
+      "source_entity": "Payment",
+      "candidate_source_fields": [
+        "PaymentType_FK"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "reference",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Received/Issued, v manuálu Kaiser17121/17122. Není banka/hotovost.",
+      "required_to_enable": [
+        "payment_write"
+      ],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "payment.Type_FK",
+      "label_cs": "Způsob platby",
+      "source_entity": "Payment",
+      "candidate_source_fields": [
+        "Type_FK"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "reference_nullable",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "PaymentMethodType; jiné pole než směr.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "payment.Ext_ID",
+      "label_cs": "Externí ID podle Vistosu",
+      "source_entity": "Payment",
+      "candidate_source_fields": [
+        "Ext_ID"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "string_nullable",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Dosavadní přenos jej dle manuálu neplní; unikátnost a idempotence nejsou potvrzené.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "payment.AdvancedPayment",
+      "label_cs": "Příznak zálohové platby",
+      "source_entity": "Payment",
+      "candidate_source_fields": [
+        "AdvancedPayment"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "boolean",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Není totéž co odpočet zálohové faktury.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "payment.BusinessUnit_FK",
+      "label_cs": "Firma platby",
+      "source_entity": "Payment",
+      "candidate_source_fields": [
+        "BusinessUnit_FK"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "reference_nullable",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Převzít ze skutečné faktury/šablony dle konfigurace, ne hardcoded1.",
+      "required_to_enable": [
+        "payment_write"
+      ],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "payment.Directory_FK",
+      "label_cs": "Adresářová vazba",
+      "source_entity": "Payment",
+      "candidate_source_fields": [
+        "Directory_FK"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "reference_nullable",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Význam a povinnost podle konfigurace.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "payment.Modified",
+      "label_cs": "Změna Payment",
+      "source_entity": "Payment",
+      "candidate_source_fields": [
+        "Modified"
+      ],
+      "evidence": "M",
+      "expected_normalized_type": "source_datetime",
+      "ui_section": "payments",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Standardní seznam neobsahuje smazané platby.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "meta.source_installation",
+      "label_cs": "Instalace zdroje",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "string",
+      "ui_section": "provenance",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Součást identity všech zdrojových záznamů.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "meta.imported_at",
+      "label_cs": "Načteno do Smartu",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "instant",
+      "ui_section": "provenance",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Skutečný čas úspěšného přijetí, ne změna zdroje.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "meta.mapping_version",
+      "label_cs": "Verze mapování",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "string",
+      "ui_section": "provenance",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Jednoznačně určí pravidla transformace.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "meta.source_hash",
+      "label_cs": "Fingerprint zdrojových hodnot",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "string",
+      "ui_section": "provenance",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Stabilní normalizace, bez secrets.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "meta.availability",
+      "label_cs": "Dostupnost jednotlivých polí",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "enum",
+      "ui_section": "provenance",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "value/null/empty/not_exposed/forbidden/unverified/error.",
+      "required_to_enable": [],
+      "disclosure_class": "operational",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "meta.extensions",
+      "label_cs": "Další dostupné oborové údaje",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "object",
+      "ui_section": "provenance",
+      "financial_permission_required": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Zachovat source názvy, typy, původ; serverově role a vyloučení citlivých tajemství.",
+      "required_to_enable": [],
+      "disclosure_class": "unclassified",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "allocation.id",
+      "label_cs": "Stálé ID alokace Smart",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "string",
+      "ui_section": "provenance",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Unikátní konkrétní část bankovní transakce na fakturu.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "allocation.bank_transaction_id",
+      "label_cs": "ID bankovní transakce",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "string",
+      "ui_section": "provenance",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Provázat se zdrojovým účtem a firmou; bez názvového odhadu.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "allocation.booking_date",
+      "label_cs": "Datum zaúčtování v bance",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "date",
+      "ui_section": "provenance",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Doložené bankovním zdrojem, odlišné od Vistos Date.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "allocation.revision",
+      "label_cs": "Neměnná revize alokace",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "integer",
+      "ui_section": "provenance",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Změna již odeslané revize je oprava, nikoli další Create.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "allocation.export_authority",
+      "label_cs": "Výlučný zapisovatel",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "enum",
+      "ui_section": "provenance",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "money/smart/unknown; účinnost pro účet/firmu/období.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "allocation.vistos_payment_id",
+      "label_cs": "Výsledek zápisu Vistos",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "source_id_nullable",
+      "ui_section": "provenance",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Uložit okamžitě po odpovědi, opět použít při ověřování.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "allocation.transfer_status",
+      "label_cs": "Stav přenosu",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "enum",
+      "ui_section": "provenance",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Přesný automat z kapitoly6.4.",
+      "required_to_enable": [],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "allocation.confirmation_method",
+      "label_cs": "Způsob potvrzení alokace",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "enum",
+      "ui_section": "provenance",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "human nebo verified_source_link; nikoli jen match score.",
+      "required_to_enable": [
+        "payment_write"
+      ],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "allocation.confirmation_evidence",
+      "label_cs": "Důkaz potvrzení alokace",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "object",
+      "ui_section": "provenance",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Čas, actor nebo schválená rule verze a neměnná revize.",
+      "required_to_enable": [
+        "payment_write"
+      ],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "allocation.operation_kind",
+      "label_cs": "Druh účetního příkazu",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "enum",
+      "ui_section": "provenance",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "create/adjust/relink/remove; vlastní revize a očekávaný stav.",
+      "required_to_enable": [
+        "payment_write"
+      ],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "allocation.reservation",
+      "label_cs": "Rezervace bankovní částky",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "object",
+      "ui_section": "provenance",
+      "financial_permission_required": true,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Atomická vůči všem alokacím stejné transakce.",
+      "required_to_enable": [
+        "payment_write"
+      ],
+      "disclosure_class": "financial",
+      "expose_without_classification": false,
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.trip.id",
+      "label_cs": "ID jízdy T-Cars",
+      "source_entity": "T-Cars.knihaJizdVozidlo",
+      "candidate_source_fields": [
+        "jizdaId"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_id",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.trip.started_at",
+      "label_cs": "Začátek jízdy T-Cars",
+      "source_entity": "T-Cars.knihaJizdVozidlo",
+      "candidate_source_fields": [
+        "jizdaOd"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_datetime",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.trip.ended_at",
+      "label_cs": "Konec jízdy T-Cars",
+      "source_entity": "T-Cars.knihaJizdVozidlo",
+      "candidate_source_fields": [
+        "jizdaDo"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_datetime",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.trip.origin",
+      "label_cs": "Počáteční místo ze zdroje",
+      "source_entity": "T-Cars.knihaJizdVozidlo",
+      "candidate_source_fields": [
+        "jizdaOdkud"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "string",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.trip.destination",
+      "label_cs": "Cílové místo ze zdroje",
+      "source_entity": "T-Cars.knihaJizdVozidlo",
+      "candidate_source_fields": [
+        "jizdaKam"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "string",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.trip.distance",
+      "label_cs": "Vzdálenost jízdy",
+      "source_entity": "T-Cars.knihaJizdVozidlo",
+      "candidate_source_fields": [
+        "jizdaDelkaKm"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.trip.odometer_start",
+      "label_cs": "Počáteční stav tachometru",
+      "source_entity": "T-Cars.knihaJizdVozidlo",
+      "candidate_source_fields": [
+        "jizdaStavKmPocatek"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.trip.odometer_end",
+      "label_cs": "Koncový stav tachometru",
+      "source_entity": "T-Cars.knihaJizdVozidlo",
+      "candidate_source_fields": [
+        "jizdaStavKmKonec"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.trip.engine_hours_start",
+      "label_cs": "Počáteční stav motohodin",
+      "source_entity": "T-Cars.knihaJizdVozidlo",
+      "candidate_source_fields": [
+        "jizdaStavMthPocatek"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.trip.engine_hours_end",
+      "label_cs": "Koncový stav motohodin",
+      "source_entity": "T-Cars.knihaJizdVozidlo",
+      "candidate_source_fields": [
+        "jizdaStavMthKonec"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.trip.driver",
+      "label_cs": "Řidič podle T-Cars",
+      "source_entity": "T-Cars.knihaJizdVozidlo",
+      "candidate_source_fields": [
+        "jizdaRidic"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "provider_person_reference",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "personal",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.trip.responsible",
+      "label_cs": "Odpovědná osoba podle T-Cars",
+      "source_entity": "T-Cars.knihaJizdVozidlo",
+      "candidate_source_fields": [
+        "jizdaOdpovedny"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "provider_person_reference",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "personal",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.trip.private",
+      "label_cs": "Soukromá jízda",
+      "source_entity": "T-Cars.knihaJizdVozidlo",
+      "candidate_source_fields": [
+        "jizdaSoukroma"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "boolean",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "personal",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.gps.point_id",
+      "label_cs": "ID bodu poskytovatele",
+      "source_entity": "T-Cars.vozidlaPozice",
+      "candidate_source_fields": [
+        "id"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_id",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.gps.observed_at",
+      "label_cs": "Původní GPS čas",
+      "source_entity": "T-Cars.vozidlaPozice",
+      "candidate_source_fields": [
+        "datumCas"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "source_datetime",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.gps.valid",
+      "label_cs": "Platnost GPS fixu",
+      "source_entity": "T-Cars.vozidlaPozice",
+      "candidate_source_fields": [
+        "gpsValid"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "boolean_nullable",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.gps.latitude",
+      "label_cs": "Zeměpisná šířka",
+      "source_entity": "T-Cars.vozidlaPozice",
+      "candidate_source_fields": [
+        "latitude"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.gps.longitude",
+      "label_cs": "Zeměpisná délka",
+      "source_entity": "T-Cars.vozidlaPozice",
+      "candidate_source_fields": [
+        "longitude"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.gps.speed",
+      "label_cs": "Rychlost ze zdroje",
+      "source_entity": "T-Cars.vozidlaPozice",
+      "candidate_source_fields": [
+        "rychlost"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "decimal_nullable",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.gps.ignition",
+      "label_cs": "Zapalování",
+      "source_entity": "T-Cars.vozidlaPozice",
+      "candidate_source_fields": [
+        "zapalovani"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "boolean_nullable",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "tracking.gps.switch",
+      "label_cs": "Přepínač bez potvrzeného významu",
+      "source_entity": "T-Cars.vozidlaPozice",
+      "candidate_source_fields": [
+        "prepinac"
+      ],
+      "evidence": "K",
+      "expected_normalized_type": "boolean_nullable",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "unclassified",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Doloženo v parseru, nikoli dnešním živým čtením. GPS historický store některá pole nezachovává; doplnit budoucí sběr. Motohodiny/ignition/switch nejsou PTO ani pracovní hodiny.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "execution.arrival_bounds",
+      "label_cs": "Časové rozmezí příjezdu",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "datetime_interval",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Podle povinného doplnění SLEDOVANI_VOZIDEL_CASY_ZAKAZEK.md; přesný podklad a nejistota, chybějící čas není nula.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "execution.departure_bounds",
+      "label_cs": "Časové rozmezí odjezdu",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "datetime_interval",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Podle povinného doplnění SLEDOVANI_VOZIDEL_CASY_ZAKAZEK.md; přesný podklad a nejistota, chybějící čas není nula.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "execution.visit_duration_bounds",
+      "label_cs": "Rozmezí pozorované doby na místě",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "duration_interval",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Podle povinného doplnění SLEDOVANI_VOZIDEL_CASY_ZAKAZEK.md; přesný podklad a nejistota, chybějící čas není nula.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "execution.association",
+      "label_cs": "Stav přiřazení",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "enum",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Podle povinného doplnění SLEDOVANI_VOZIDEL_CASY_ZAKAZEK.md; přesný podklad a nejistota, chybějící čas není nula.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "execution.coverage",
+      "label_cs": "Pokrytí a mezery časových dat",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "object",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Podle povinného doplnění SLEDOVANI_VOZIDEL_CASY_ZAKAZEK.md; přesný podklad a nejistota, chybějící čas není nula.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "execution.evidence",
+      "label_cs": "Podklady a verze časového odvození",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "L",
+      "expected_normalized_type": "object",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": false,
+      "availability": "local_metadata",
+      "use_for_payroll": false,
+      "note": "Podle povinného doplnění SLEDOVANI_VOZIDEL_CASY_ZAKAZEK.md; přesný podklad a nejistota, chybějící čas není nula.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    },
+    {
+      "logical_key": "execution.technology_time",
+      "label_cs": "Doložený chod technologie",
+      "source_entity": null,
+      "candidate_source_fields": [],
+      "evidence": "P",
+      "expected_normalized_type": "duration_nullable",
+      "ui_section": "execution",
+      "financial_permission_required": false,
+      "disclosure_class": "operational",
+      "tracking_permission_required": true,
+      "expose_without_classification": false,
+      "production_read_verified_in_this_assignment": false,
+      "semantic_verification_required": true,
+      "availability": "not_yet_verified",
+      "use_for_payroll": false,
+      "note": "Podle povinného doplnění SLEDOVANI_VOZIDEL_CASY_ZAKAZEK.md; přesný podklad a nejistota, chybějící čas není nula.",
+      "required_to_enable": [
+        "tracking_enrichment"
+      ],
+      "runtime_verification": {
+        "actual_path": null,
+        "list_availability": "unverified",
+        "detail_availability": "unverified",
+        "verified_at": null
+      }
+    }
+  ],
+  "additional_source_systems": [
+    "tcars"
+  ],
+  "tracking_contract": "SLEDOVANI_VOZIDEL_CASY_ZAKAZEK.md",
+  "tracking_source_identity": [
+    "provider",
+    "provider_account_scope",
+    "provider_vehicle_id",
+    "provider_trip_id"
+  ],
+  "implementation_verification": {
+    "date": "2026-10-25",
+    "base_sha": "c37cd96b3313ad5d8678e1018f76bf1b9d98f72e",
+    "live_status": "blocked",
+    "blocker": "Authenticated Smart audit endpoint returned Nepřihlášeno. No live schema/list/detail obtained.",
+    "imported_live_records": 0,
+    "production_writes": 0
+  }
+}

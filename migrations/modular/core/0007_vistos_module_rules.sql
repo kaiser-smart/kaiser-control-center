@@ -1,0 +1,8 @@
+-- Registered but inactive: applying migrations never activates an external integration.
+INSERT OR IGNORE INTO module_rules (
+ id,module_key,title,description,type,status,conditions_json,actions_json,is_automation,trigger_type,schedule_cron,event_name,cloud_runner,
+ created_by_user_id,created_at,updated_by_user_id,updated_at
+) VALUES
+('jobs-vistos-read','jobs','Načítání zakázek a účetních podkladů Vistos','Obnovitelné dávky se samostatnou historií, deltou a rekonciliací. Vyžaduje ověřený kontrakt, kapacitu a sdílený limit požadavků.','automation','inactive','{"verifiedContract":true,"capacityEvidence":true}','{"writesVistos":false,"sendsNotifications":false}',1,'time','*/10 * * * *','','kaiser-module-automation-runner','migration-vistos-jobs',CURRENT_TIMESTAMP,'migration-vistos-jobs',CURRENT_TIMESTAMP),
+('jobs-tcars-evidence','jobs','Časové podklady ze Sledování vozidel','Využívá existující GPS historii a čte knihu jízd po dnech. Nepočítá mzdy; neúplné podklady neoznačí jako hotové provedení.','automation','inactive','{"verifiedTemporalIdentity":true,"verifiedLocation":true}','{"newGpsPolling":false,"useForPayroll":false}',1,'time','*/10 * * * *','','kaiser-module-automation-runner','migration-vistos-jobs',CURRENT_TIMESTAMP,'migration-vistos-jobs',CURRENT_TIMESTAMP),
+('receivables-vistos-writer','receivables','Přenos potvrzených alokací do Vistosu','Odesílá pouze konkrétně potvrzené alokace při doložené koordinaci s Money. Nejasný výsledek pouze dohledává.','automation','inactive','{"singleWriter":true,"explicitAllocation":true}','{"paymentOrders":false,"invoiceWrites":false}',1,'time','*/10 * * * *','','kaiser-module-automation-runner','migration-vistos-jobs',CURRENT_TIMESTAMP,'migration-vistos-jobs',CURRENT_TIMESTAMP);
