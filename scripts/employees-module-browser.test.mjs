@@ -26,7 +26,7 @@ try {
   browser=process.env.BROWSER_ENGINE === "chromium"
     ? await chromium.launch({headless:true, channel:"chrome", timeout:20000})
     : await webkit.launch({headless:true, timeout:20000, ...(process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE ? {executablePath:process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE} : {})});
-  for (const role of ['admin','kancelar','ridic','readonly']) {
+  for (const role of ['admin','management','kancelar','garazmistr','dispecer','ridic','readonly']) {
     const context=await browser.newContext();
     const page=await context.newPage();
     page.setDefaultTimeout(10000);
