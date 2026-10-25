@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.851"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.852"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Zakázky: ověřené zdrojové vazby", text: "Import rozlišuje výstavce a uživatele, používá skutečný číselník vozidel a zachovává názvy zdrojových vazeb. Správcovská kontrola ověřuje filtry a velikost detailů před načtením historie." },
   { title: "Zakázky: srozumitelné chyby načítání", text: "Chyba přístupu se nezamění za prázdný seznam. Načítání lze bezpečně zopakovat a mobilní detail po zavření vrátí ovládání na správné tlačítko." },
   { title: "Zakázky: příprava skutečného importu", text: "Úsporné uložení zdrojových údajů, ověřování detailů a firemních vazeb položek, kontrola kapacity před každou dávkou. Zapnutí živého importu se ověřuje samostatně." },
   { title: "Ikony podle tenké předlohy OpenArt", text: "Původní silné ikony nahrazuje celá sada 69 věrně převedených SVG z OpenArt. Navigace, nabídky a tlačítka používají stejnou tenkou dvoubarevnou kresbu." },

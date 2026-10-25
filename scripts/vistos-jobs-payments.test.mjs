@@ -232,7 +232,7 @@ test('Jobs detail-backed import retains list fields, checks identity, and rolls 
  delete contract.entities.ServiceList.fixedCompanyId;
  const env=environment(db,contract),source=async()=>({rows:[{Id:1,Number:'Z-1'},{Id:2,Number:'Z-2'}],filtered:2,countEvidence:{filteredReported:true}});
  let mismatch=true;
- const detailSource=async id=>({Id:mismatch&&id==='2'?99:Number(id),Issuer_FK:1,Auto_FK:'22',Modified:'2026-10-25T09:00:00Z'});
+ const detailSource=async id=>({Id:mismatch&&id==='2'?99:Number(id),Issuer_FK:1,Vozidlo_FK:'22',Auto_FK:999,AllocatedVehicle:[998],Modified:'2026-10-25T09:00:00Z'});
  await assert.rejects(syncVistosBatch(env,{installation:'test',entity:'ServiceList',source,detailSource}),e=>e.code==='vistos_detail_identity_mismatch');
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM vistos_source_records').get().n,0);
  assert.equal(db.sqlite.prepare('SELECT offset FROM vistos_sync_checkpoints').get().offset,0);
@@ -256,5 +256,20 @@ test('Jobs items inherit company from exact parent in the same installation, nev
  await persistVerifiedSourceReadback(db,'test','ServiceList',{Id:8,Number:'own'},contract);
  const known=await normalizeImportedRecord(db,{Id:1,ServiceList_FK_RecordId:8},options);
  assert.equal(known.company_id,'1');assert.notEqual(known.fingerprint,unknown.fingerprint);
+ db.sqlite.close();
+});
+
+test('Jobs tracking traverses neighbouring source jobs through the temporal resolver',async()=>{
+ const {enrichJobExecution}=await import('../functions/_lib/vistos-tracking-enrichment.js');
+ const db=fixtureDb(),env=environment(db);
+ db.sqlite.exec('CREATE TABLE fleet_vehicle_external_aliases(id TEXT,external_system TEXT,external_key TEXT,vehicle_id TEXT,status TEXT,valid_from TEXT,valid_to TEXT,metadata_json TEXT)');
+ for(const [id,system,key]of [['v','vistos','113'],['t','tcars','7']])db.sqlite.prepare('INSERT INTO fleet_vehicle_external_aliases VALUES(?,?,?,?,?,?,?,?)').run(id,system,key,'car','active','2020-01-01T00:00:00Z',null,JSON.stringify({verified:true,source_system:system}));
+ const contract=structuredClone(mapping);contract.entities.ServiceList.verifiedFields.push('DateOfRealization');contract.entities.ServiceList.plannedField='DateOfRealization';
+ contract.tracking={tripPrivacyVerified:true,tripCompletenessVerified:true,timeZoneEvidenceId:'fixture',timeZone:'Europe/Prague'};
+ await persistVerifiedSourceReadback(db,'test','ServiceList',{Id:1,DateOfRealization:'2026-10-24',Vozidlo_FK:113},contract);
+ const job=db.sqlite.prepare('SELECT * FROM vistos_source_records').get();
+ const result=await enrichJobExecution(env,job,contract,{now:new Date('2026-10-25'),tripReader:async()=>[]});
+ assert.ok(result);const row=db.sqlite.prepare('SELECT * FROM job_execution_evidence').get();
+ assert.equal(row.assignment_status,'unavailable');assert.ok(JSON.parse(row.evidence_json).reasons.includes('history_unavailable'));assert.equal(row.use_for_payroll,0);
  db.sqlite.close();
 });

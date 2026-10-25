@@ -5,6 +5,7 @@ import { fetchTcarsVehicleTrips } from './tcars-client.js';
 import { sourceTime, referenceIds } from './vistos-values.js';
 import { decodeSourceFields, fieldValues } from './vistos-source-model.js';
 import { pragueDayBounds } from './vistos-time.js';
+import { resolveFleetVehicleIdentityAt } from './fleet-temporal-evidence.js';
 
 const day=value=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
 export function verifiedTcarsTime(value,zone) {
