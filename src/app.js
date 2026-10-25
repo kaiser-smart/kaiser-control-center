@@ -470,7 +470,7 @@ const ABSENCE_TAB_ROUTES = {
 };
 const quickAbsenceMenuItem = {
   id: "quick-absence",
-  title: "Rychlé zadání",
+  title: "Nepřítomnost",
   description: "Rychle zapsat událost, požadavek nebo nepřítomnost.",
   route: QUICK_ABSENCE_ENTRY_ROUTE,
   icon: QuickAbsenceIcon,
@@ -2720,7 +2720,7 @@ const UI_SYSTEM_PILOT_NAV_GROUPS = [
 
 const UI_SYSTEM_PILOT_NAV_LABELS = {
   dashboard: "Moduly",
-  "quick-absence": "Rychlé zadání",
+  "quick-absence": "Nepřítomnost",
   "collection-routes": "Trasy svozu",
   "driver-reports": "Hlášení z vozidel",
   "vehicle-tracking": "Poloha vozidel",
@@ -7955,7 +7955,7 @@ function quickDateChoices(type) {
 function quickAbsenceTypeStep() {
   return `
     <section id="co-potrebujete" class="quick-absence-card quick-absence-card--step" aria-labelledby="quick-absence-title">
-      <p class="quick-absence-kicker">Rychlé zadání</p>
+      <p class="quick-absence-kicker">Nepřítomnost</p>
       <h2 id="quick-absence-title">Co potřebujete nahlásit?</h2>
       ${sarlotaAbsenceVoiceButton("Zadat hlasem")}
       <div class="quick-absence-types">
@@ -8166,7 +8166,7 @@ function quickAbsenceContent(user) {
         : quickAbsenceTypeStep();
 
   return `
-    <section class="quick-absence-shell" aria-label="Rychlé zadání nepřítomnosti">
+    <section class="quick-absence-shell" aria-label="Nepřítomnost">
       ${content}
       ${quickAbsenceRecentSection()}
     </section>
@@ -11671,7 +11671,7 @@ function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) 
       <section class="absence-hero absence-hero--app" aria-labelledby="absence-title">
         <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
         <div>
-          <h1 id="absence-title">${isQuickTab ? "Rychlé zadání" : "Dovolená / Nemoc"}</h1>
+          <h1 id="absence-title">${isQuickTab ? "Nepřítomnost" : "Dovolená / Nemoc"}</h1>
           <p>${isQuickTab ? "Typ, datum, odeslat." : "Stav: "}${isQuickTab ? "" : `<strong>${escapeHtml(heroDataStatus.label)}</strong> · ${escapeHtml(heroDataStatus.detail)}`}</p>
         </div>
         ${isQuickTab ? "" : `<div class="absence-command-actions absence-command-actions--hero">

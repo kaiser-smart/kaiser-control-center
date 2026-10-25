@@ -202,7 +202,7 @@ try {
         if(input){const target=page.locator(input).first();if(await target.count()){const actualField=await target.evaluate(el=>{const s=getComputedStyle(el);return {radius:s.borderRadius,border:s.borderColor,background:s.backgroundColor,fontSize:s.fontSize};});assert.deepEqual(actualField,field,`Fields match Quick entry: ${route}`);}}
         assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
       }
-      results.push({reference:'Rychlé zadání',width,height,status:'passed',checks:['correct-section-navigation','vacation-summary-back-note-submit','doctor-invalid-time','doctor-valid-submit','submit-not-covered','shared-panels-and-fields']});
+      results.push({reference:'Nepřítomnost',width,height,status:'passed',checks:['correct-section-navigation','vacation-summary-back-note-submit','doctor-invalid-time','doctor-valid-submit','submit-not-covered','shared-panels-and-fields']});
     }
   }
   if (!process.env.MOBILE_BASELINE && !process.env.MOBILE_AUDIT_EXTRA && !process.env.MOBILE_REFERENCE_ONLY && !process.env.MOBILE_LAUNCHER_ONLY) {

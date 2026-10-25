@@ -21,7 +21,7 @@ export const ABSENCE_TABS = [
   { id: "employee-card", label: "Zaměstnanci" },
   { id: "approval", label: "Schvalování" },
   { id: "reports", label: "Reporty" },
-  { id: "quick", label: "Rychlé zadání" },
+  { id: "quick", label: "Nepřítomnost" },
   { id: "new", label: "Nová žádost" },
   { id: "rules-automation", label: "Seznam pravidel a automatizace" },
   { id: "settings", label: "Nastavení" }
