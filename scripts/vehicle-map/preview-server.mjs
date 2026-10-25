@@ -7,11 +7,19 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const state={scene:'overview',theme:'light',error:false,denied:false,unauthorized:false,revision:0,ttl:3600000,sessionDeadline:Date.now()+3600000,failMe:false,startedAt:Date.now(),requests:[]};
 const user={id:'synthetic-preview-admin',name:'Syntetický náhled',email:'preview@example.test',role:'admin',active:true,status:'active'};
 const mime={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.json':'application/json','.webp':'image/webp','.png':'image/png','.svg':'image/svg+xml','.woff2':'font/woff2'};
-export function startPreview(port=5188){
+export async function startPreview(port=5188){
+ let browserApiKey="synthetic-sdk-not-a-key";
+ if(process.env.VEHICLE_MAP_GOOGLE_RUNTIME){
+  const config=await readFile(process.env.VEHICLE_MAP_GOOGLE_RUNTIME,"utf8");
+  browserApiKey=config.match(/googleMapsApiKey[\s\"']*:[\s\"']*([A-Za-z0-9_-]{30,})/)?.[1];
+  if(!browserApiKey)throw new Error("Existing Google browser configuration unavailable");
+ }
+ const googleMode=browserApiKey!=="synthetic-sdk-not-a-key";
  const server=createServer(async(req,res)=>{
   const url=new URL(req.url,'http://127.0.0.1');
   const json=(data,status=200)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
   if(req.method!=='GET'){json({error:'Isolated read-only preview'},405);return;}
+  if(url.pathname==='/__preview/meta'){json({mapMode:googleMode?'google':'adapter'});return;}
   if(url.pathname==='/__preview/control'){
    if(url.searchParams.has('scene')){state.scene=url.searchParams.get('scene');state.startedAt=Date.now();}
    if(url.searchParams.has('toggleTheme'))state.theme=state.theme==='dark'?'light':'dark';
@@ -32,7 +40,7 @@ export function startPreview(port=5188){
     if(state.error){json({apiStatus:'waiting',errorCode:'tcars_read_failed',message:'Syntetický výpadek',vehicles:[],locations:[]});return;}
     json(fixture(state.scene,state.startedAt,state.revision));return;
    }
-   if(url.pathname==='/api/vehicle-tracking/maps-config'){json({configured:true,browserApiKey:'synthetic-sdk-not-a-key',provider:'google-maps-javascript',apiStatus:'ready'});return;}
+   if(url.pathname==='/api/vehicle-tracking/maps-config'){json({configured:true,browserApiKey,provider:'google-maps-javascript',apiStatus:'ready'});return;}
    if(url.pathname==='/api/theme-settings'){json({settings:state.theme==='dark'?{backgroundColor:'#151C18',cardColor:'#202A23',textColor:'#EDF3EE',mutedTextColor:'#B2BEB3',paletteMode:'manual'}:{}});return;}
    if(url.pathname==='/api/vehicle-tracking/history'){json({vehicleKey:url.searchParams.get('vehicleKey'),points:[],apiStatus:'ready'});return;}
    json({apiStatus:'ready',settings:{},preferences:{},items:[],messages:[],users:[],show:false,showIntro:false,modules:[],rules:[],notifications:[]});return;

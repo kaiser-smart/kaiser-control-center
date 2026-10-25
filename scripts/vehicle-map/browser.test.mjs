@@ -3,11 +3,13 @@ import { createRequire } from 'node:module';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { startPreview } from './preview-server.mjs';
 const require = createRequire(import.meta.url);
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
+const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
+const engine=process.env.VEHICLE_MAP_BROWSER || 'chromium';
+if(!['chromium','webkit'].includes(engine))throw new Error('Unsupported test browser');
 const output=process.env.VEHICLE_MAP_OUTPUT || '../outputs';
 await mkdir(output,{recursive:true});
 const {server,url,state}=await startPreview(0);
-const browser=await chromium.launch({headless:true,channel:'chrome'});
+const browser=await (engine==='webkit'?webkit.launch({headless:true}):chromium.launch({headless:true,channel:'chrome'}));
 const context=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
 const page=await context.newPage();page.setDefaultTimeout(6000);const errors=[],network=[],results=[],metrics=[];
 page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>network.push({method:r.method(),url:r.url()}));
@@ -141,7 +143,7 @@ try{
  await test('No business writes or GPS browser persistence during acceptance run',async()=>{assert.deepEqual(network.filter(r=>r.method!=='GET'),[]);const stored=await page.evaluate(()=>({local:{...localStorage},session:{...sessionStorage}}));assert.deepEqual(stored,{local:{},session:{}});});
  await test('No uncaught runtime errors',async()=>assert.deepEqual(errors,[]));
 }finally{
- await writeFile(`${output}/browser-verification.json`,JSON.stringify({scope:'Isolated real application UI with synthetic protected-API fixtures and explicit Google API test double; not real Google/provider verification',results,metrics,errors,nonGetRequests:network.filter(r=>r.method!=='GET')},null,2));
+ await writeFile(`${output}/browser-verification.json`,JSON.stringify({engine,scope:'Isolated real application UI with synthetic protected-API fixtures and explicit Google API test double; not real Google/provider verification',results,metrics,errors,nonGetRequests:network.filter(r=>r.method!=='GET')},null,2));
  await browser.close();server.close();
 }
 if(results.some(r=>r.status==='FAIL'))process.exitCode=1;
