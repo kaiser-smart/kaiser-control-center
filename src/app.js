@@ -452,7 +452,8 @@ const FLEET_TAB_WAITING_MESSAGES = {
 };
 const VEHICLE_TRACKING_BASE_ROUTE = VEHICLE_TRACKING_ROUTE;
 const ABSENCE_ROUTE = "/dovolena-nemoc";
-const EMPLOYEE_CARD_ROUTE_PREFIX = "/dovolena-nemoc/zamestnanci";
+const EMPLOYEE_CARD_ROUTE_PREFIX = "/zamestnanci";
+const LEGACY_EMPLOYEE_ROUTE_PREFIX = "/dovolena-nemoc/zamestnanci";
 const ABSENCE_QUICK_ROUTE = "/dovolena-nemoc/rychle-zadani";
 const QUICK_ABSENCE_ENTRY_HASH = "#co-potrebujete";
 const QUICK_ABSENCE_ENTRY_ROUTE = `${ABSENCE_QUICK_ROUTE}${QUICK_ABSENCE_ENTRY_HASH}`;
@@ -463,7 +464,6 @@ const ABSENCE_TAB_ROUTES = {
   new: "/dovolena-nemoc/nova-zadost",
   approval: "/dovolena-nemoc/ke-schvaleni",
   calendar: "/dovolena-nemoc/kalendar",
-  "employee-card": EMPLOYEE_CARD_ROUTE_PREFIX,
   reports: "/dovolena-nemoc/reporty",
   "rules-automation": "/dovolena-nemoc/pravidla-automatizace",
   settings: "/dovolena-nemoc/nastaveni"
@@ -504,7 +504,7 @@ const HOME_MODULE_SECTIONS = [
     id: "administration",
     title: "Administrativa",
     description: "Reporty, připomínky a podpůrné administrativní přehledy.",
-    moduleIds: ["reports", "feedback"]
+    moduleIds: ["employees", "reports", "feedback"]
   },
   {
     id: "finance",
@@ -2714,7 +2714,7 @@ const UI_SYSTEM_PILOT_NAV_GROUPS = [
   },
   {
     label: "Správa systému",
-    moduleIds: ["absence", "users", "settings", "system-check", "self-repair", "feedback"]
+    moduleIds: ["absence", "employees", "users", "settings", "system-check", "self-repair", "feedback"]
   }
 ];
 
@@ -2734,6 +2734,7 @@ const UI_SYSTEM_PILOT_NAV_LABELS = {
   costs: "Náklady",
   reports: "Reporty",
   absence: "Nepřítomnosti",
+  employees: "Zaměstnanci",
   users: "Uživatelé a role",
   receivables: "Nezaplacené faktury",
   settings: "Nastavení",
@@ -3290,6 +3291,10 @@ function moduleIdForAiRoute(route) {
 
   if (normalizedRoute === "/" || normalizedRoute === "/dashboard") {
     return "dashboard";
+  }
+
+  if (normalizedRoute === EMPLOYEE_CARD_ROUTE_PREFIX || normalizedRoute.startsWith(`${EMPLOYEE_CARD_ROUTE_PREFIX}/`)) {
+    return "employees";
   }
 
   if (normalizedRoute.startsWith("/dovolena-nemoc")) {
@@ -7215,9 +7220,24 @@ function mainDashboardOperationsSection(user) {
 
 let moduleLauncherQuery = "";
 const moduleSearchText = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("cs").trim();
+function launcherModules(user) {
+  return [
+    ...(canViewModule(user, "absence") ? [{
+      id: "absence", title: "Nepřítomnost", description: "Dovolená, nemoc, lékař a další nepřítomnosti",
+      keywords: "Nepřítomnost dovolená nemoc lékař OČR volno",
+      route: hasPermission(user, "absence", "create") ? ABSENCE_QUICK_ROUTE : absenceRouteForTab("my")
+    }] : []),
+    ...(canViewModule(user, "employees") ? [{
+      id: "employees", title: "Zaměstnanci", description: "Karty zaměstnanců, pracovní údaje a dokumenty",
+      keywords: "Zaměstnanci lidé personalistika HR karty pracovní údaje dokumenty lékařské prohlídky",
+      route: EMPLOYEE_CARD_ROUTE_PREFIX
+    }] : [])
+  ];
+}
+
 function homePage(user) {
-  const matches = moduleSearchText("Nepřítomnost dovolená nemoc lékař OČR volno").includes(moduleSearchText(moduleLauncherQuery));
-  const destination = hasPermission(user, "absence", "create") ? ABSENCE_QUICK_ROUTE : absenceRouteForTab("my");
+  const items = launcherModules(user);
+  const matches = item => moduleSearchText(item.keywords).includes(moduleSearchText(moduleLauncherQuery));
   return `
     <main class="app-shell module-theme-scope ui-system-pilot ui-system-pilot--modules" ${moduleThemeStyleAttribute()}>
       ${uiSystemPilotSidebar(user, "dashboard")}
@@ -7226,13 +7246,13 @@ function homePage(user) {
         <label class="module-launcher-search"><span>Hledat modul</span><input type="search" data-module-search aria-label="Hledat modul" placeholder="Hledat modul…" autocomplete="off" value="${escapeHtml(moduleLauncherQuery)}" /></label>
         <h1 id="module-launcher-title">Moduly</h1>
         <div class="module-launcher-grid">
-          <a class="module-launcher-card" href="${routeHref(destination)}" data-link data-launcher-module ${matches ? "" : "hidden"}>
-            <span class="module-launcher-icon" aria-hidden="true">${uiSystemPilotIcon("absence")}</span>
-            <span><strong>Nepřítomnost</strong><small>Dovolená, nemoc, lékař a další nepřítomnosti</small></span>
+          ${items.map(item => `<a class="module-launcher-card" href="${routeHref(item.route)}" data-link data-launcher-module data-module-keywords="${escapeHtml(item.keywords)}" ${matches(item) ? "" : "hidden"}>
+            <span class="module-launcher-icon" aria-hidden="true">${uiSystemPilotIcon(item.id)}</span>
+            <span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.description)}</small></span>
             <span class="module-launcher-arrow" aria-hidden="true">›</span>
-          </a>
+          </a>`).join("")}
         </div>
-        <p class="module-launcher-empty" data-module-search-empty role="status" ${matches ? "hidden" : ""}>Žádný modul neodpovídá hledání.</p>
+        <p class="module-launcher-empty" data-module-search-empty role="status" ${items.some(matches) ? "hidden" : ""}>Žádný modul neodpovídá hledání.</p>
       </section>
     </main>
   `;
@@ -8209,12 +8229,12 @@ function canUseAbsenceTab(user, tabId) {
 }
 
 function absenceTabsForUser(user) {
-  const primaryTabs = new Set(["dashboard", "calendar", "my", "employee-card", "approval", "reports"]);
+  const primaryTabs = new Set(["dashboard", "calendar", "my", "approval", "reports"]);
   return ABSENCE_TABS.filter((tab) => primaryTabs.has(tab.id) && canUseAbsenceTab(user, tab.id));
 }
 
 function resolveAbsenceTab(user, tabId) {
-  return canUseAbsenceTab(user, tabId) ? tabId : "dashboard";
+  return ABSENCE_TABS.some((tab) => tab.id === tabId) && canUseAbsenceTab(user, tabId) ? tabId : "dashboard";
 }
 
 function permissionInlineNotice() {
@@ -11558,6 +11578,7 @@ function employeeCardContent(employeeId, user) {
           <p>${escapeHtml(employee.position || roleLabel(employee.role))} · ${escapeHtml(employee.department || "bez oddělení")}</p>
         </div>
         <div class="employee-card-header__actions">
+          <a class="secondary-link" href="${routeHref(EMPLOYEE_CARD_ROUTE_PREFIX)}" data-link>Zpět na zaměstnance</a>
           ${canEdit ? `<button class="primary-action" type="button" data-employee-edit-open>Upravit</button>` : ""}
           ${employeeAddButton(user, "employee-add-button--compact")}
           <select class="employee-card-switcher" data-employee-card-select aria-label="Vybrat zaměstnance">
@@ -11613,12 +11634,6 @@ function absenceActiveContent(activeTab, user, context = {}) {
     return absenceCalendar(user);
   }
 
-  if (safeTab === "employee-card") {
-    return context.employeeId
-      ? employeeCardContent(context.employeeId, user)
-      : absenceEmployees(user);
-  }
-
   if (safeTab === "reports") {
     return absenceReports(user);
   }
@@ -11634,11 +11649,30 @@ function absenceActiveContent(activeTab, user, context = {}) {
   return absenceDashboard(user);
 }
 
+function employeesModulePage(user, employeeId = "") {
+  const moduleItem = orderedModules.find((item) => item.id === "employees");
+  return `
+    <main class="app-shell module-page module-theme-scope absence-page employees-page ${employeeId ? "absence-page--employee-card" : ""}" ${moduleThemeStyleAttribute()}>
+      ${userBar(user)}
+      <nav class="topbar" aria-label="Navigace">
+        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
+        <a class="back-button" href="${routeHref(employeeId ? EMPLOYEE_CARD_ROUTE_PREFIX : "/")}" data-link>${employeeId ? "Zpět na zaměstnance" : "Zpět na moduly"}</a>
+      </nav>
+      <section class="absence-hero absence-hero--app" aria-labelledby="employees-title">
+        <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
+        <div>
+          <h1 id="employees-title">Zaměstnanci</h1>
+          <p>Karty zaměstnanců, pracovní údaje, dokumenty a lékařské prohlídky.</p>
+        </div>
+      </section>
+      ${employeeId ? employeeCardContent(employeeId, user) : absenceEmployees(user)}
+    </main>
+  `;
+}
+
 function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) {
   const requestedTab = context.tab
     ? context.tab
-    : context.employeeId
-    ? "employee-card"
     : context.quick
       ? "quick"
       : isDashboard
@@ -11655,8 +11689,7 @@ function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) 
     "module-page",
     "module-theme-scope",
     "absence-page",
-    isQuickTab ? "absence-page--quick" : "",
-    activeTab === "employee-card" ? "absence-page--employee-card" : ""
+    isQuickTab ? "absence-page--quick" : ""
   ].filter(Boolean).join(" ");
 
   return `
@@ -55092,6 +55125,30 @@ function renderAuthenticatedApp(user) {
     return;
   }
 
+  if (path === LEGACY_EMPLOYEE_ROUTE_PREFIX || path.startsWith(`${LEGACY_EMPLOYEE_ROUTE_PREFIX}/`)) {
+    const target = `${EMPLOYEE_CARD_ROUTE_PREFIX}${path.slice(LEGACY_EMPLOYEE_ROUTE_PREFIX.length)}${window.location.search}${window.location.hash}`;
+    window.history.replaceState({}, "", routeHref(target));
+    renderAuthenticatedApp(user);
+    return;
+  }
+
+  if (path === EMPLOYEE_CARD_ROUTE_PREFIX || path.startsWith(`${EMPLOYEE_CARD_ROUTE_PREFIX}/`)) {
+    if (!canViewModule(user, "employees")) {
+      app.innerHTML = forbiddenPage(user);
+      document.title = `Bez oprávnění | ${APP_NAME}`;
+      return;
+    }
+    const employeeId = routeEmployeeId(path);
+    loadEmployeeList();
+    loadAbsenceRequests();
+    app.innerHTML = employeesModulePage(user, employeeId);
+    const titleName = employeeId && employeeCardState.employee?.id === employeeId
+      ? employeeFullName(employeeCardState.employee)
+      : "Zaměstnanci";
+    document.title = `${titleName} | ${APP_NAME}`;
+    return;
+  }
+
   const routeTab = absenceTabForRoute(path);
   if (routeTab) {
     if (!canUseAbsenceTab(user, routeTab)) {
@@ -55114,23 +55171,6 @@ function renderAuthenticatedApp(user) {
         loadAbsenceApprovalRequests();
       }
     }
-    return;
-  }
-
-  const employeeId = routeEmployeeId(path);
-  if (employeeId) {
-    if (!canViewModule(user, "absence")) {
-      app.innerHTML = forbiddenPage(user);
-      document.title = `Bez oprávnění | ${APP_NAME}`;
-      return;
-    }
-
-    const moduleItem = absenceModuleItem();
-    app.innerHTML = absenceModulePage(moduleItem, user, false, { employeeId });
-    const titleName = employeeCardState.employee?.id === employeeId
-      ? employeeFullName(employeeCardState.employee)
-      : "Karta zaměstnance";
-    document.title = `${titleName} | ${APP_NAME}`;
     return;
   }
 
@@ -58922,11 +58962,12 @@ document.addEventListener("input", (event) => {
   const moduleSearch = event.target.closest("[data-module-search]");
   if (moduleSearch) {
     moduleLauncherQuery = moduleSearch.value;
-    const matches = moduleSearchText("Nepřítomnost dovolená nemoc lékař OČR volno").includes(moduleSearchText(moduleLauncherQuery));
-    const tile = app.querySelector("[data-launcher-module]");
+    const tiles = [...app.querySelectorAll("[data-launcher-module]")];
+    tiles.forEach(tile => {
+      tile.hidden = !moduleSearchText(tile.dataset.moduleKeywords).includes(moduleSearchText(moduleLauncherQuery));
+    });
     const empty = app.querySelector("[data-module-search-empty]");
-    if (tile) tile.hidden = !matches;
-    if (empty) empty.hidden = matches;
+    if (empty) empty.hidden = tiles.some(tile => !tile.hidden);
     return;
   }
 
@@ -61948,10 +61989,6 @@ document.addEventListener("click", async (event) => {
   if (absenceTab) {
     const nextTab = absenceTab.dataset.absenceTab || "dashboard";
     const resolvedTab = resolveAbsenceTab(currentUser(), nextTab);
-    if (resolvedTab === "employee-card") {
-      guardedAccessAction(() => navigateToUrl(routeHref(absenceRouteForTab("employee-card"))));
-      return;
-    }
 
     guardedAccessAction(() => {
       absenceUiState.tab = resolvedTab;

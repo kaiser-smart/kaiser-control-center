@@ -24749,6 +24749,11 @@ body:has(.data-box-page) {
   cursor: pointer;
 }
 
+.employees-page .absence-panel__head .employee-add-button,
+.employees-page .absence-panel__head .employee-add-button span {
+  color: #243116;
+}
+
 .employee-add-button span {
   min-width: 0;
   overflow-wrap: anywhere;

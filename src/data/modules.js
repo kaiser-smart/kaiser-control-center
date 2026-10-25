@@ -193,6 +193,18 @@ export const modules = [
     order: 10.2
   },
   {
+    id: "employees",
+    title: "Zaměstnanci",
+    description: "Karty zaměstnanců, pracovní údaje, dokumenty a lékařské prohlídky.",
+    route: "/zamestnanci",
+    icon: UsersRolesIcon,
+    status: "Aktivní",
+    ctaLabel: "Zobrazit zaměstnance",
+    active: true,
+    disabled: false,
+    order: 14.1
+  },
+  {
     id: "absence",
     title: "Nepřítomnosti",
     description: "Dovolené, nemoci, schvalování a přehled kdo dnes chybí.",

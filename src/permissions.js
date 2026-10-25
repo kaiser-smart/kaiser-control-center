@@ -75,6 +75,9 @@ const MODULE_ALIASES = {
   nastaveni: "settings",
   samoopravy: "self-repair",
   "dovolena-nemoc": "absence",
+  // Employee navigation keeps the existing HR/API permission scope.
+  employees: "absence",
+  zamestnanci: "absence",
   pripominky: "feedback"
 };
 

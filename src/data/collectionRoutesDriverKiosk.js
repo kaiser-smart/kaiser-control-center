@@ -47,6 +47,8 @@ export function collectionRoutesDriverKioskRedirectPath(user, pathname) {
   const path = normalizedPathname(pathname);
   return isCollectionRoutesDriverKioskPath(path)
     || path === "/"
+    || path === "/zamestnanci"
+    || path.startsWith("/zamestnanci/")
     || path === "/dovolena-nemoc"
     || path.startsWith("/dovolena-nemoc/")
     || path === COLLECTION_ROUTES_DRIVER_REPORTS_ROUTE

@@ -18,7 +18,6 @@ export const ABSENCE_TABS = [
   { id: "dashboard", label: "Dnes" },
   { id: "calendar", label: "Kalendář" },
   { id: "my", label: "Žádosti" },
-  { id: "employee-card", label: "Zaměstnanci" },
   { id: "approval", label: "Schvalování" },
   { id: "reports", label: "Reporty" },
   { id: "quick", label: "Rychlé zadání" },

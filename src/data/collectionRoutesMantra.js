@@ -38,7 +38,7 @@ export const COLLECTION_ROUTES_MANTRA = Object.freeze({
     }
   ],
   sources: [
-    { label: "Zaměstnanci", url: "/dovolena-nemoc/zamestnanci" },
+    { label: "Zaměstnanci", url: "/zamestnanci" },
     { label: "SAKO Brno", url: "https://www.sako.cz" },
     { label: "HERE Map Image API", url: "https://docs.here.com/map-rendering/docs/introduction-map-image-api" },
     { label: "HERE Tour Planning", url: "https://www.here.com/platform/here-tour-planning" },
