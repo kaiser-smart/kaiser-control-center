@@ -55,7 +55,7 @@ try{
  });
  await test('Offline event keeps only active visible unexpired map; online verifies session',async()=>{
   await context.setOffline(true);await page.waitForTimeout(100);assert.equal(await page.locator('#app').isVisible(),true);assert.equal(await page.locator('.vm-marker.is-selected').count(),1);
-  await context.setOffline(false);await page.waitForTimeout(180);assert.equal(await page.locator('#app').isVisible(),true);
+  await context.setOffline(false);await page.locator('#app').waitFor({state:'visible'});assert.equal(await page.locator('.vm-marker.is-selected').count(),1);
  });
  await test('List scroll is restored from detail and survives normal refresh',async()=>{
   await page.locator('[data-vm-back]').click();await page.locator('.vm-list').evaluate(e=>e.scrollTop=470);const scroll=await page.locator('.vm-list').evaluate(e=>e.scrollTop);
@@ -69,6 +69,16 @@ try{
  });
  await test('Hover and keyboard focus highlight without camera changes',async()=>{
   const before=await camera();await page.locator('[data-vm-row$=":synthetic-1"]').focus();await page.waitForTimeout(100);assert(await page.locator('.vm-marker.is-highlighted').count());assert.deepEqual(await camera(),before);
+ });
+ await test('Detail scroll belongs to selected vehicle: refresh preserves it, changing vehicle resets it',async()=>{
+  await scene();await page.locator('[data-vm-row$=":synthetic-1"]').click();
+  await page.locator('.vm-detail-scroll').evaluate(el=>{el.scrollTop=160;});
+  const before=await page.locator('.vm-detail-scroll').evaluate(el=>el.scrollTop);assert(before>0);
+  await page.locator('[data-vm-refresh]').click();await page.waitForTimeout(160);
+  assert.equal(await page.locator('.vm-detail-scroll').evaluate(el=>el.scrollTop),before);
+  await page.locator('.vm-marker[data-vm-marker$=":synthetic-2"]').click();await page.waitForTimeout(160);
+  assert.equal(await page.locator('.vm-detail-scroll').evaluate(el=>el.scrollTop),0);
+  assert.match(await page.locator('.vm-detail-identity').innerText(),/TEST/);
  });
  for(const count of [6,20]){
   await scene(`same${count}`);

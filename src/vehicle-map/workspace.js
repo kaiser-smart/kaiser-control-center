@@ -20,7 +20,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   const state = { selectedId: "", highlightedId: "", labelMode: "auto", query: "", category: "all", expanded: false, groupIds: [], listScroll: 0 };
   let records = new Map(), vehicles = [], filtered = [], payloadRef = null, staleAfterSeconds = 1800;
   let map = null, mapLoading = false, destroyed = false, error = "", loading = true, lastSuccess = null;
-  let dataSignature = "", detailSignature = "", historyRequest = 0, resizeFrame = 0, selectedGroup = [];
+  let dataSignature = "", detailSignature = "", detailVehicleId = "", historyRequest = 0, resizeFrame = 0, selectedGroup = [];
   let historyState = { open: false, range: "24h", text: "", points: [], vehicleId: "" };
   const rows = new Map();
   const announce = (message) => { $("[data-vm-announcement]").textContent = message; };
@@ -101,11 +101,12 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
     if (v) {
       const signature = JSON.stringify([v, selectedGroup.map((v) => v.id), !!map, state.groupIds.length, historyState]);
       if (signature !== detailSignature) {
-        const oldScroll = $(".vm-detail-scroll")?.scrollTop || 0, moreOpen = $(".vm-more")?.open;
-        $(".vm-panel-detail").innerHTML = detailHTML(v); detailSignature = signature;
+        const sameVehicle = detailVehicleId === v.id;
+        const oldScroll = sameVehicle ? $(".vm-detail-scroll")?.scrollTop || 0 : 0, moreOpen = sameVehicle && $(".vm-more")?.open;
+        $(".vm-panel-detail").innerHTML = detailHTML(v); detailSignature = signature; detailVehicleId = v.id;
         $(".vm-detail-scroll").scrollTop = oldScroll; $(".vm-more").open = !!moreOpen;
       }
-    } else { detailSignature = ""; updateRows(); }
+    } else { detailSignature = ""; detailVehicleId = ""; updateRows(); }
   }
   function update({ tick = false } = {}) {
     vehicles = normalize(records, { now: now(), staleAfterSeconds });
