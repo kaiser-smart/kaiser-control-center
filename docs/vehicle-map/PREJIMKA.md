@@ -97,3 +97,12 @@ Zachován commit `1689d262`; merge `3f023c17` přidal přesnou aktuálně nasaze
 - [Syntax](../../../outputs/integration-syntax-final.log), [build](../../../outputs/integration-build-final.log): PASS, 49 rout.
 
 Přesný seznam změn a diff tohoto kola: [integration-changed-files.txt](../../../outputs/integration-changed-files.txt), [integration.patch](../../../outputs/integration.patch). Aktuální zdrojový commit je uveden v [integration-delivery.json](../../../outputs/integration-delivery.json). Produkční nasazení vyžaduje samostatné schválení.
+
+
+## Doplnění 25. 10. 2026: skrytí modulu Firemní pošta
+
+Na výslovné upřesnění Radima je odstraněn vstup Pošta z hlavní navigace i odkaz Otevřít poštu z nastavení Forpsi. Jde o skrytí vstupů v UI; přímá chráněná cesta, schránky, zprávy, API a oprávnění zůstávají zachované. Změna je určena pro izolovaný náhled, nikoli produkční nasazení.
+
+Soubory: `src/app.js`, `src/components/ForpsiAdminPanel.js`. Ověření: dashboard test prošel, 27/27 existujících testů Forpsi administrace a čtení pošty prošlo, 755 souborů prošlo kontrolou syntaxe, build 49 rout prošel. Spuštění skutečné funkce sestavující navigaci potvrdilo nepřítomnost pošty a zachování sledování vozidel i nastavení. Nejde o nové ověření přihlášeného vzdáleného UI.
+
+Pokus otevřít vlastní schránku přes přihlášené SO.ai pro dokončení OTP byl automatickou kontrolou zamítnut: posoudila přístup k soukromým zprávám jako nepovolený v rámci pokynu ke skrytí modulu. Zprávy tímto pokusem nebyly přečteny. Ochrana náhledu se neobchází; konečné přihlášené ověření vzdálené adresy zůstává nehotové.

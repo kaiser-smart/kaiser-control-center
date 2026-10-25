@@ -2703,7 +2703,7 @@ const UI_SYSTEM_PILOT_NAV_GROUPS = [
   },
   {
     label: "Hlavní práce",
-    moduleIds: ["quick-absence", "collection-routes", "driver-reports", "vehicle-tracking", "forpsi-mail", "data-box-plus", "rcs-sms-autopilot"]
+    moduleIds: ["quick-absence", "collection-routes", "driver-reports", "vehicle-tracking", "data-box-plus", "rcs-sms-autopilot"]
   },
   {
     label: "Vozidla a servis",
@@ -2752,7 +2752,7 @@ function uiSystemPilotModulesForUser(user) {
     ? [quickAbsenceMenuItem, ...menuModules(user)]
     : menuModules(user);
 
-  return new Map([...items,{id:"forpsi-mail",title:"Pošta",route:"/dashboard?view=forpsi-mail",icon:ReportsIcon}].map((moduleItem) => [moduleItem.id, moduleItem]));
+  return new Map(items.map((moduleItem) => [moduleItem.id, moduleItem]));
 }
 
 function uiSystemPilotModuleHref(moduleItem, user) {
