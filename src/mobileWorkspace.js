@@ -56,6 +56,15 @@ function compactTabs(shell) {
       option.selected = entry.matches('[aria-selected="true"], [aria-current], .is-active') || /--active\b/.test(entry.className);
       select.append(option);
     });
+    // Some task routes (for example Quick entry) are intentionally outside the tabs.
+    // Do not pretend the first tab is active: it must remain a selectable destination.
+    if (!entries.some(entry => entry.matches('[aria-selected="true"], [aria-current], .is-active') || /--active\b/.test(entry.className))) {
+      const placeholder = el('option', '', 'Přejít do jiné sekce…');
+      placeholder.value = '';
+      placeholder.disabled = true;
+      placeholder.selected = true;
+      select.prepend(placeholder);
+    }
     select.addEventListener('change', () => entries[Number(select.value)]?.click());
     label.append(select);
     tabs.before(label);

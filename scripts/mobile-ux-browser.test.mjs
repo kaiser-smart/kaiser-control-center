@@ -32,6 +32,7 @@ let origin;
 let browser;
 let server;
 const results = [];
+const absenceSubmissions = [];
 
 try {
   execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", path.join(temp, "key.pem"), "-out", path.join(temp, "cert.pem"), "-days", "1", "-subj", "/CN=127.0.0.1"], { stdio: "ignore" });
@@ -46,6 +47,10 @@ try {
         let response;
         if (url.pathname === "/api/auth/logout" && failLogout) response = json({ error: "Simulated unavailable service" }, 503);
         else if (url.pathname === "/api/me" && failMe) response = json({ error: "Simulated unavailable service" }, 503);
+        else if (url.pathname === '/api/absence-requests') {
+          if (req.method === 'POST') { const payload=await request.json(); absenceSubmissions.push(payload); response=json({apiStatus:'ready',request:{id:'isolated-request-'+absenceSubmissions.length,...payload}}); }
+          else response=json({apiStatus:'ready',requests:[]});
+        }
         else if (url.pathname === '/api/forpsi/admin') response=json({mailboxes:[],rules:[],labels:[],queue:[],truncated:{},credentialStorageReady:false});
         else if (url.pathname === '/api/driver-reports') response=json({apiStatus:'ready',permissions:{canCreate:true,canManage:true},requests:Array.from({length:18},(_,i)=>({id:`report-${i}`,reportId:`H-${i+1}`,licensePlate:`TEST ${String(i+1).padStart(3,'0')}`,defectDescription:'Kontrola osvětlení vozidla',status:'new_report',driverName:`Řidič ${i+1}`,createdByUserId:user.id,reportedAt:'2026-10-25T06:00:00Z'}))});
         else if (url.pathname === '/api/vehicle-tracking/status') response=json({apiStatus:'ready',liveVerified:true,lastUpdatedAt:new Date().toISOString(),summary:{vehiclesTotal:24,withoutValidLocationCount:3},locations:Array.from({length:21},(_,i)=>({id:`position-${i}`,vehicleId:`mobile-${i}`,licensePlate:`TEST ${String(i+1).padStart(3,'0')}`,latitude:49.2+i/1000,longitude:16.6+i/1000,lastGpsAt:new Date().toISOString(),speedKmh:i<12?35:0}))});
@@ -97,8 +102,8 @@ try {
   const cookie=await createSessionCookie(env,user);
   await context.addCookies([{name:'__Host-smart_odpady_session',value:cookie.split(';')[0].split('=')[1],domain:'127.0.0.1',path:'/',httpOnly:true,secure:true,sameSite:'Lax'}]);
   const page=await context.newPage(); page.setDefaultTimeout(10000); page.setDefaultNavigationTimeout(15000);
-  const errors=[]; page.on('pageerror',e=>errors.push(e.message)); page.on('console',m=>{if(m.type()==='error') {console.log('CONSOLE',m.text()); if(m.text().includes('smart_odpady_render_failed')) errors.push(m.text());}});
-  for(const [width,height] of (process.env.MOBILE_FUNCTION_ONLY ? [] : process.env.MOBILE_AUDIT_FAST ? [[375,667]] : [[375,667],[390,844],[430,932]])) {
+  const errors=[]; page.on('pageerror',e=>{errors.push(e.message); console.log('PAGEERROR',page.url(),e.stack);}); page.on('console',m=>{if(m.type()==='error') {console.log('CONSOLE',m.text()); if(m.text().includes('smart_odpady_render_failed')) errors.push(m.text());}});
+  for(const [width,height] of ((process.env.MOBILE_FUNCTION_ONLY || process.env.MOBILE_REFERENCE_ONLY) ? [] : process.env.MOBILE_AUDIT_FAST ? [[375,667]] : [[375,667],[390,844],[430,932]])) {
     await page.setViewportSize({width,height});
     for (const route of routes) {
       await page.goto(origin+route); await page.locator('[data-logout]').first().waitFor({state:'attached'}); await page.waitForTimeout(500);
@@ -113,6 +118,72 @@ try {
     }
   }
   if (!process.env.MOBILE_BASELINE && !process.env.MOBILE_AUDIT_EXTRA) {
+    const navigateReference = async route => { await page.waitForLoadState('networkidle'); await page.goto(origin+route); await page.waitForLoadState('networkidle'); };
+    for (const [width,height] of [[375,667],[390,844],[430,932]]) {
+      await page.setViewportSize({width,height});
+      await navigateReference('/dovolena-nemoc/rychle-zadani');
+      await page.locator('[data-quick-type="vacation"]').waitFor();
+      const section=page.locator('.mobile-section-select select');
+      assert.equal(await section.inputValue(),'','Quick entry must not show Dnes as the current section');
+      const dashboardLoaded = page.waitForResponse(response => new URL(response.url()).pathname === '/api/absence-requests/pending' && response.status() === 200);
+      await section.selectOption({label:'Dnes'});
+      await dashboardLoaded;
+      await page.waitForURL(url=>url.pathname==='/dovolena-nemoc');
+      await navigateReference('/dovolena-nemoc/rychle-zadani');
+      await page.locator('[data-quick-type="vacation"]').click();
+      await page.locator('[data-quick-date-choice="tomorrow"]').click();
+      await page.locator('#quick-summary-title').waitFor();
+      await page.locator('[data-quick-note-toggle]').click();
+      await page.locator('[data-quick-note]').fill('Izolovaný test mobilní žádosti');
+      await page.locator('[data-quick-back="date"]').click();
+      await page.locator('[data-quick-date-choice="tomorrow"]').click();
+      assert.equal(await page.locator('[data-quick-note]').inputValue(),'Izolovaný test mobilní žádosti');
+      await page.screenshot({path:path.join(output,`quick-entry-summary-${width}.png`),fullPage:true});
+      const submit=page.locator('[data-quick-submit]');
+      await submit.scrollIntoViewIfNeeded();
+      const box=await submit.boundingBox();
+      assert.ok(box.height>=44 && box.width>=44);
+      assert.ok(box.y>=52 && box.y+box.height<=height-60,'Submit must be reachable above bottom navigation');
+      await submit.click();
+      await page.locator('#quick-success-title').waitFor();
+      assert.equal(absenceSubmissions.at(-1).type,'vacation');
+      assert.equal(absenceSubmissions.at(-1).note,'Izolovaný test mobilní žádosti');
+      await page.locator('[data-quick-reset]').click();
+      await page.locator('[data-quick-type="doctor"]').click();
+      await page.locator('[data-quick-start-time]').fill('11:00');
+      await page.locator('[data-quick-end-time]').fill('09:00');
+      const count=absenceSubmissions.length;
+      await page.locator('[data-quick-custom-continue]').click();
+      assert.match(await page.locator('.quick-absence-error').innerText(),/Čas do musí být po času od/);
+      assert.equal(absenceSubmissions.length,count,'Invalid date/time must not submit');
+      await page.locator('[data-quick-end-time]').fill('12:00');
+      const field=await page.locator('[data-quick-date-from]').evaluate(el=>{const s=getComputedStyle(el);return {radius:s.borderRadius,border:s.borderColor,background:s.backgroundColor,fontSize:s.fontSize};});
+      assert.equal(field.fontSize,'16px');
+      await page.locator('[data-quick-custom-continue]').click();
+      await page.locator('[data-quick-submit]').click();
+      await page.locator('#quick-success-title').waitFor();
+      assert.equal(absenceSubmissions.at(-1).unit,'hours');
+      assert.equal(absenceSubmissions.at(-1).startTime,'11:00');
+      assert.equal(absenceSubmissions.at(-1).endTime,'12:00');
+      await page.locator('[data-quick-reset]').click();
+      await page.screenshot({path:path.join(output,`quick-entry-${width}.png`)});
+      const reference=await page.locator('.quick-absence-card--step').evaluate(el=>{const s=getComputedStyle(el);return {radius:s.borderRadius,border:s.borderColor,background:s.backgroundColor,font:s.fontFamily,shadow:s.boxShadow};});
+      for(const [route,selector,input] of [
+        ['/hlaseni-ridicu','.driver-report-click-entry','input:not([type=hidden]):visible'],
+        ['/pohledavky','.receivables-panel',null],
+        ['/pneumatiky','.tyres-panel',null],
+        ['/uzivatele','.users-panel',null]
+      ]) {
+        await navigateReference(route);await page.locator(selector).first().waitFor();
+        const actual=await page.locator(selector).first().evaluate(el=>{const s=getComputedStyle(el);return {radius:s.borderRadius,border:s.borderColor,background:s.backgroundColor,font:s.fontFamily,shadow:s.boxShadow};});
+        assert.deepEqual(actual,reference,`Working surface matches Quick entry: ${route}`);
+        if(input){const target=page.locator(input).first();if(await target.count()){const actualField=await target.evaluate(el=>{const s=getComputedStyle(el);return {radius:s.borderRadius,border:s.borderColor,background:s.backgroundColor,fontSize:s.fontSize};});assert.deepEqual(actualField,field,`Fields match Quick entry: ${route}`);}}
+        assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+      }
+      results.push({reference:'Rychlé zadání',width,height,status:'passed',checks:['correct-section-navigation','vacation-summary-back-note-submit','doctor-invalid-time','doctor-valid-submit','submit-not-covered','shared-panels-and-fields']});
+    }
+  }
+  if (!process.env.MOBILE_BASELINE && !process.env.MOBILE_AUDIT_EXTRA && !process.env.MOBILE_REFERENCE_ONLY) {
     await page.setViewportSize({width:375,height:667});
     await page.goto(origin); await page.locator('.mobile-today').waitFor(); await page.waitForTimeout(500);
     const header=await page.locator('.mobile-header').boundingBox(); assert.equal(header.height,52);

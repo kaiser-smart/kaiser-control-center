@@ -12,11 +12,18 @@ Základ: 0.1.830 / 758685ac; aktuální produkční kód 0.1.831 / ef07b8e (vizu
 - Seznamy: maximálně 8 záznamů na stránku, ne nekonečný posun. Klíčová identita a stav v kompaktním řádku, další pole po rozbalení nebo otevření původního detailu. Žádná ztráta záznamů či akcí. Filtry v rozbalovacím panelu, zachovat hodnoty i stav po překreslení.
 - Poloha: přepínač Mapa / Vozidla, mapa využije dostupnou výšku. Ovládání mapy v rozbalení nad mapou; seznam a detail nepřidávat pod mapu. Chybějící poskytovatel mapy musí zůstat pravdivě označený.
 - Formuláře: jedno sloupcové ovládání, vstupy 16 px (bez iOS zoomu), cíle nejméně 44 px, klávesnice nesmí zakrýt aktivní pole. Jediný scroll dokumentu; menu/modální dialog je samostatná aktivní plocha se zamčeným pozadím.
-- Grafický vzor Rychlého hlášení: bílé pracovní plochy, jednotný zelený primární ovladač, stejné formuláře a rozbalování ve všech modulech. Správa uživatelů používá kompaktní seznam a samostatně otevíraný editor; původní checkboxy oprávnění zůstávají ve formuláři, po modulech a se stránkováním. Kalendář zůstává věcně beze změny.
+- Grafický vzor Rychlého zadání: bílé pracovní plochy, jednotný zelený primární ovladač, stejné formuláře a rozbalování ve všech modulech. Správa uživatelů používá kompaktní seznam a samostatně otevíraný editor; původní checkboxy oprávnění zůstávají ve formuláři, po modulech a se stránkováním. Kalendář zůstává věcně beze změny.
 - Žádné změny API, serverových oprávnění, databází ani business akcí. Původní handlery ovládají také nové mobilní vstupy.
 
 ## Akceptace
 Screenshoty původní a nové aplikace na 375×667, 390×844, 430×932; horní lišta 52 px, KPI a rychlé akce nad foldem, přepínání modulů, stránkování všech vozidel, dostupnost detailu a filtrů, správné role, návrat, klávesnice (simulace změny viewportu), desktop 1440×1000, autentizace/expirace/offline logout. Fyzický iPhone a živé napojení mapových podkladů uvést zvlášť, nepředstírat ověření.
 
 ## Upřesnění uživatele před vydáním
-Referencí je již mobilní Rychlé hlášení: jedna úloha, jedno sloupcové pracovní zobrazení, přímo dostupné hlavní ovládání a velké dotykové cíle. Stejný princip platí ve všech agendách. Nevymýšlet nové pracovní postupy; rozbalení mění pouze prezentaci původního obsahu. Zahrnout také zbývající moduly z reálné navigace do vizuální kontroly. Firemní poštu skrýt v navigaci i nastavení, starý odkaz vracet na přehled; plovoucí hlasovou ikonu skrýt na mobilu i desktopu, zachovat ovládání případného aktivního hovoru.
+Referencí je již mobilní Rychlé zadání: jedna úloha, jedno sloupcové pracovní zobrazení, přímo dostupné hlavní ovládání a velké dotykové cíle. Stejný princip platí ve všech agendách. Nevymýšlet nové pracovní postupy; rozbalení mění pouze prezentaci původního obsahu. Zahrnout také zbývající moduly z reálné navigace do vizuální kontroly. Firemní poštu skrýt v navigaci i nastavení, starý odkaz vracet na přehled; plovoucí hlasovou ikonu skrýt na mobilu i desktopu, zachovat ovládání případného aktivního hovoru.
+
+## Oprava reference 25. 10. 2026
+Správným vzorem je **Rychlé zadání** na `/dovolena-nemoc/rychle-zadani`, nikoli Hlášení řidičů. Jeho postup je typ nepřítomnosti → datum nebo čas → kontrola a odeslání. Název zůstává. Společný vizuální jazyk zahrnuje pracovní plochu, hlavní/vedlejší tlačítko a formulářová pole; seznamy a mapy si zachovávají vlastní pracovní účel. Přepínač sekcí nesmí tvrdit, že je vybraná první sekce, když aktuální úloha neleží v seznamu záložek.
+
+Návrhy případného budoucího názvu podle skutečného účelu: **Nahlásit nepřítomnost** (doporučeno), **Dovolená a nepřítomnost**, **Žádost o volno** (méně přesné pro nemoc/lékaře). Žádný není automaticky použit.
+
+Kontrola úplného postupu odhalila překrytí původního sticky tlačítka Odeslat spodní navigací. V mobilním režimu nyní respektuje výšku navigace a bezpečný okraj, při zobrazení klávesnice její skrytí. Kontrola žádosti má čtyři údaje ve dvou kompaktních řádcích.
