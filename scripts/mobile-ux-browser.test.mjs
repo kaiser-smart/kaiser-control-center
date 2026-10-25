@@ -253,7 +253,7 @@ try {
     assert.equal(await page.locator('.ai-assistant-launcher').count(),0,'Floating voice icon hidden');
     const tile=await page.locator('[data-launcher-module]').first().boundingBox(); assert.ok(tile.y+tile.height<607,'Module above fold');
     assert.equal(await page.locator('[data-launcher-module]').count(),3);
-    assert.equal(await page.locator('[data-launcher-module="jobs"]').count(),1,'Preserve production Jobs launcher');
+    assert.equal(await page.locator('[data-launcher-module][href="/zakazky"]').count(),1,'Preserve production Jobs launcher');
     assert.equal(await page.locator('.main-dashboard-kpis,.mobile-today').count(),0);
     for(const node of await page.locator('.mobile-bottom-nav a,.mobile-bottom-nav button,.mobile-header button').all()) {
       const box=await node.boundingBox(); assert.ok(box.height>=44 && box.width>=44,'Touch targets >=44');
@@ -437,8 +437,9 @@ try {
         await page.setViewportSize({width,height});
         await page.waitForFunction(mobile=>Boolean(document.querySelector('.mobile-header'))===mobile,width<721);
         await page.locator('[data-module-search]').waitFor();
-        assert.equal(await page.locator('[data-launcher-module]:visible').count(),2);
-        assert.deepEqual(await page.locator('[data-launcher-module] strong').allTextContents(),['Nepřítomnost','Zaměstnanci']);
+        const expectedLauncher = [...(hasPermission(account,'jobs','view') ? ['Zakázky'] : []),'Nepřítomnost','Zaměstnanci'];
+        assert.equal(await page.locator('[data-launcher-module]:visible').count(),expectedLauncher.length);
+        assert.deepEqual(await page.locator('[data-launcher-module] strong').allTextContents(),expectedLauncher);
         const {search,tile}=await page.evaluate(()=>({search:document.querySelector('[data-module-search]').getBoundingClientRect().toJSON(),tile:document.querySelector('[data-launcher-module]').getBoundingClientRect().toJSON()}));
         assert.ok(search.y<tile.y && tile.y+tile.height<height-(width<721?60:0),'Search and module visible without scrolling');
         assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
