@@ -86,3 +86,33 @@ test('bounded job filters preserve wall time, detect ignored filters and reject 
   ignored=true;assert.equal((await auditVistosRead(env,window)).filterEvidence.allObservedRowsMatch,false);
  }finally{globalThis.fetch=saved;}
 });
+
+
+test('missing Modified in list is verified through bounded matching details without trusting an ignored filter',async()=>{
+ const saved=globalThis.fetch;let mismatch=false,wrongId=false;const detailIds=[];
+ globalThis.fetch=async(url,init)=>{
+  const b=JSON.parse(init.body);
+  if(b.LoginParam)return Response.json({status:'OK'},{headers:{'Set-Cookie':'VistosAccessToken=fixture; Path=/'}});
+  if(b.GetSchemaEntity)return Response.json({status:'OK',data:{Columns:['Id','Modified'].map(ColumnName=>({ColumnName}))}});
+  if(b.GetByIdParam){
+   const p=b.GetByIdParam;
+   if(p.EntityName==='DbObject')return Response.json({status:'OK',data:{Id:137,Name:'wrong'}});
+   detailIds.push(p.EntityId);
+   return Response.json({status:'OK',data:{Id:wrongId?999:p.EntityId,Modified:mismatch&&p.EntityId===7?'2026-09-25T00:00:00':'2026-09-24T12:34:56.123',Phone:'private',Price:'999.99'}});
+  }
+  const start=b.GetPageParam.Start;
+  return Response.json({status:'OK',data:{recordsTotal:100,recordsFiltered:10,data:Array.from({length:5},(_,i)=>({Id:start+i+1}))}});
+ };
+ try{
+  const env={VISTOS_API_BASE_URL:'https://fixture.invalid',VISTOS_API_USERNAME:'x',VISTOS_API_PASSWORD:'x'};
+  const options={entity:'ServiceList',modifiedFrom:'2026-09-24T00:00:00',modifiedTo:'2026-09-25T00:00:00'};
+  const a=await auditVistosRead(env,options);
+  assert.equal(a.filterEvidence.allObservedRowsMatch,false);assert.equal(a.filterEvidence.listModifiedMissing,15);
+  assert.equal(a.filterEvidence.allObservedDetailsMatch,true);assert.equal(a.filterEvidence.completeProof,false);
+  assert.equal(detailIds.length,10);assert.equal(new Set(detailIds).size,10);
+  assert.ok(!JSON.stringify(a).includes('private'));assert.ok(!JSON.stringify(a).includes('999.99'));
+  mismatch=true;assert.equal((await auditVistosRead(env,options)).filterEvidence.allObservedDetailsMatch,false);
+  wrongId=true;const wrong=await auditVistosRead(env,options);assert.equal(wrong.filterEvidence.allObservedDetailsMatch,false);
+  assert.ok(wrong.filterEvidence.detailChecks.every(c=>c.errorCode==='vistos_record_identity_mismatch'));
+ }finally{globalThis.fetch=saved;}
+});
