@@ -142,6 +142,9 @@ try {
       await page.screenshot({ path: path.join(output, "iphone-landscape.png"), fullPage: true });
       await page.setViewportSize({ width: 390, height: 844 });
     }
+    // Fresh login opens modules; authenticated deep links and browser history still work.
+    await page.goto(`${origin}/pripominky`);
+    await page.locator("[data-logout]").first().waitFor({state:"attached"});
     // Real internal links and browser history; no URL/router stubs.
     const home = page.locator('a[data-link][href="/"]:visible').first();
     await home.click();

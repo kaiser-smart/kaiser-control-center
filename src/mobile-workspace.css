@@ -337,3 +337,28 @@
   #app .ui-system-v2 .quick-absence-sticky { bottom:calc(var(--mobile-bottom) + 8px); background:#fff; padding:6px 0; }
   .mobile-keyboard #app .ui-system-v2 .quick-absence-sticky { bottom:8px; }
 }
+
+/* One module launcher for every role, on phones and desktop. */
+#app .ui-system-pilot--modules { display:block; width:min(960px,calc(100% - 32px)); padding-bottom:32px; }
+#app .ui-system-pilot--modules > .ui-pilot-sidebar { display:none; }
+#app .module-launcher-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+#app .module-launcher { max-width:720px; margin:24px auto; }
+#app .module-launcher-search { display:grid; gap:6px; font-size:14px; font-weight:700; }
+#app .module-launcher-search input { box-sizing:border-box; width:100%; min-height:48px; padding:12px 14px; font:inherit; font-size:16px; border:1px solid #d7dfe2; border-radius:10px; background:#fff; color:#11191d; }
+#app .module-launcher h1 { margin:24px 0 12px; font-size:24px; }
+#app .module-launcher-grid { display:grid; gap:12px; }
+#app .module-launcher-card { display:flex; gap:14px; align-items:center; padding:18px; border:1px solid #d7dfe2; border-radius:12px; background:#fff; color:#11191d; text-decoration:none; box-shadow:none; min-height:88px; }
+#app .module-launcher-card strong { display:block; font-size:19px; }
+#app .module-launcher-card small { display:block; margin-top:4px; font-size:13px; color:#5e686d; }
+#app .module-launcher-icon { display:grid; flex:0 0 44px; height:44px; place-items:center; border-radius:10px; background:#eaf4df; color:#365a12; }
+#app .module-launcher-icon svg { width:28px; height:28px; }
+#app .module-launcher-arrow { margin-left:auto; font-size:28px; }
+#app .module-launcher-card:focus-visible { outline:3px solid #365a12; outline-offset:3px; }
+#app .module-launcher [hidden] { display:none!important; }
+#app .module-launcher-empty { margin-top:16px; color:#5e686d; }
+@media(max-width:720px) {
+  #app .ui-system-pilot--modules { width:100%; padding-bottom:calc(var(--mobile-bottom) + 16px); }
+  #app .module-launcher { margin:4px 0; }
+  #app .module-launcher h1 { margin:20px 0 12px; font-size:22px; }
+  #app .module-launcher-card { padding:14px; gap:12px; }
+}

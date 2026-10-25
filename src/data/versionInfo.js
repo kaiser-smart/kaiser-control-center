@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.833"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.834"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Společný úvod s moduly", text: "Po přihlášení se všem pracovním pozicím zobrazí stejné vyhledávání a modul Nepřítomnost. Oprávnění uvnitř modulů zůstávají zachovaná." },
   { title: "Rychlé zadání a mobilní formuláře", text: "Jednotná podoba pracovních ploch, polí a tlačítek. Odeslání žádosti zůstává nad spodní navigací a přepínač sekcí správně rozlišuje aktuální úlohu." },
   { title: "Kompaktní mobilní pracoviště", text: "Dnešní přehled, rychlé akce a spodní navigace. Seznamy mají stránkování, podrobnosti a filtry se rozbalují. Mapa a seznam vozidel mají vlastní zobrazení. Firemní pošta a plovoucí hlasová ikona jsou skryté." },
   { title: "SMART ODPADY na iPhonu", text: "Aplikaci lze přidat ze Safari na plochu. Při výpadku připojení se údaje skryjí, při návratu se ověří přihlášení a vypršení relace vyžádá nové přihlášení. Odhlášení bez připojení se dokončí po obnovení spojení." },

@@ -305,7 +305,7 @@ export function applyMobileWorkspace(app, { userId, activeModuleId, render }) {
   const open = event => { state.menuOpen = true; opener = event.currentTarget; dialog.showModal(); document.body.classList.add('mobile-menu-open'); menuTop.querySelector('button').focus(); };
   header.append(button('Více', open));
   const bottom = el('nav', 'mobile-bottom-nav'); bottom.setAttribute('aria-label', 'Hlavní mobilní navigace');
-  [['/', 'Dnes'], ['/vozovy-park', 'Vozidla'], ['/trasy-svozu', 'Trasy'], ['/hlaseni-ridicu', 'Hlášení']].forEach(([path, label]) => {
+  (shell.classList.contains('ui-system-pilot--modules') ? [['/', 'Moduly']] : [['/', 'Moduly'], ['/vozovy-park', 'Vozidla'], ['/trasy-svozu', 'Trasy'], ['/hlaseni-ridicu', 'Hlášení']]).forEach(([path, label]) => {
     const sourceLink = links.find(link => new URL(link.href).pathname === path);
     if (!sourceLink) return;
     const link = sourceLink.cloneNode(true);

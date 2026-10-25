@@ -23,7 +23,8 @@ const temp = await mkdtemp(path.join(tmpdir(), "smart-pwa-test-"));
 await mkdir(output, { recursive: true });
 const user = { id: "pwa-test", name: "Test PWA", email: "pwa@example.test", role: "admin", active: true, status: "active" };
 const reader = { id: "pwa-reader", name: "Test čtení", email: "reader@example.test", role: "readonly", active: true, status: "active" };
-const env = { AUTH_MODE: "mock", APP_ENV: "test", AUTH_USERS_JSON: JSON.stringify([user, reader]) };
+const roleUsers = ["admin","management","kancelar","garazmistr","dispecer","ridic","readonly"].map(role=>({id:`launcher-${role}`,name:`Test ${role}`,email:`${role}@example.test`,role,active:true,status:"active"}));
+const env = { AUTH_MODE: "mock", APP_ENV: "test", AUTH_USERS_JSON: JSON.stringify([user, reader, ...roleUsers]) };
 const mime = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml", ".json": "application/json", ".webmanifest": "application/manifest+json" };
 let revision = "before-update";
 let failLogout = false;
@@ -103,7 +104,7 @@ try {
   await context.addCookies([{name:'__Host-smart_odpady_session',value:cookie.split(';')[0].split('=')[1],domain:'127.0.0.1',path:'/',httpOnly:true,secure:true,sameSite:'Lax'}]);
   const page=await context.newPage(); page.setDefaultTimeout(10000); page.setDefaultNavigationTimeout(15000);
   const errors=[]; page.on('pageerror',e=>{errors.push(e.message); console.log('PAGEERROR',page.url(),e.stack);}); page.on('console',m=>{if(m.type()==='error') {console.log('CONSOLE',m.text()); if(m.text().includes('smart_odpady_render_failed')) errors.push(m.text());}});
-  for(const [width,height] of ((process.env.MOBILE_FUNCTION_ONLY || process.env.MOBILE_REFERENCE_ONLY) ? [] : process.env.MOBILE_AUDIT_FAST ? [[375,667]] : [[375,667],[390,844],[430,932]])) {
+  for(const [width,height] of ((process.env.MOBILE_FUNCTION_ONLY || process.env.MOBILE_REFERENCE_ONLY || process.env.MOBILE_LAUNCHER_ONLY) ? [] : process.env.MOBILE_AUDIT_FAST ? [[375,667]] : [[375,667],[390,844],[430,932]])) {
     await page.setViewportSize({width,height});
     for (const route of routes) {
       await page.goto(origin+route); await page.locator('[data-logout]').first().waitFor({state:'attached'}); await page.waitForTimeout(500);
@@ -117,7 +118,7 @@ try {
       console.log(route,width,metrics.height,metrics.width);
     }
   }
-  if (!process.env.MOBILE_BASELINE && !process.env.MOBILE_AUDIT_EXTRA) {
+  if (!process.env.MOBILE_BASELINE && !process.env.MOBILE_AUDIT_EXTRA && !process.env.MOBILE_LAUNCHER_ONLY) {
     const navigateReference = async route => { await page.waitForLoadState('networkidle'); await page.goto(origin+route); await page.waitForLoadState('networkidle'); };
     for (const [width,height] of [[375,667],[390,844],[430,932]]) {
       await page.setViewportSize({width,height});
@@ -183,13 +184,14 @@ try {
       results.push({reference:'Rychlé zadání',width,height,status:'passed',checks:['correct-section-navigation','vacation-summary-back-note-submit','doctor-invalid-time','doctor-valid-submit','submit-not-covered','shared-panels-and-fields']});
     }
   }
-  if (!process.env.MOBILE_BASELINE && !process.env.MOBILE_AUDIT_EXTRA && !process.env.MOBILE_REFERENCE_ONLY) {
+  if (!process.env.MOBILE_BASELINE && !process.env.MOBILE_AUDIT_EXTRA && !process.env.MOBILE_REFERENCE_ONLY && !process.env.MOBILE_LAUNCHER_ONLY) {
     await page.setViewportSize({width:375,height:667});
-    await page.goto(origin); await page.locator('.mobile-today').waitFor(); await page.waitForTimeout(500);
+    await page.goto(origin); await page.locator('.module-launcher').waitFor(); await page.waitForTimeout(500);
     const header=await page.locator('.mobile-header').boundingBox(); assert.equal(header.height,52);
     assert.equal(await page.locator('.ai-assistant-launcher').count(),0,'Floating voice icon hidden');
-    const quick=await page.locator('.mobile-quick-actions').boundingBox(); assert.ok(quick.y+quick.height<607,'All quick actions above fold');
-    assert.equal(await page.locator('.mobile-today-kpis .main-dashboard-kpi').count(),3);
+    const tile=await page.locator('[data-launcher-module]').boundingBox(); assert.ok(tile.y+tile.height<607,'Module above fold');
+    assert.equal(await page.locator('[data-launcher-module]').count(),1);
+    assert.equal(await page.locator('.main-dashboard-kpis,.mobile-today').count(),0);
     for(const node of await page.locator('.mobile-bottom-nav a,.mobile-bottom-nav button,.mobile-header button').all()) {
       const box=await node.boundingBox(); assert.ok(box.height>=44 && box.width>=44,'Touch targets >=44');
     }
@@ -202,6 +204,7 @@ try {
     await page.screenshot({path:path.join(output,'menu-375.png')});
     await page.keyboard.press('Escape');
     await page.locator('.mobile-menu').waitFor({state:'hidden'});
+    await page.goto(origin+'/dashboard'); await page.locator('.mobile-today').waitFor();
     await page.locator('.mobile-bottom-nav a').filter({hasText:'Vozidla'}).click();
     await page.waitForURL('**/vozovy-park#fleet-vehicles');
     await page.locator('.fleet-table__row').first().waitFor();
@@ -250,7 +253,7 @@ try {
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Narrow keyboard viewport');
     await page.screenshot({path:path.join(output,'keyboard-simulated-375.png')});
     await page.setViewportSize({width:1440,height:1000});
-    await page.goto(origin); await page.locator('.main-dashboard-economics').waitFor();
+    await page.goto(origin+'/dashboard'); await page.locator('.main-dashboard-economics').waitFor();
     assert.equal(await page.locator('.mobile-header').count(),0,'Desktop is not transformed');
     assert.ok(await page.locator('.ui-pilot-sidebar').isVisible());
     assert.equal(await page.locator('a[href*=forpsi-mail], .ai-assistant-launcher').count(),0,'Mail and voice icon hidden on desktop');
@@ -285,6 +288,45 @@ try {
     assert.equal((await context.request.get(origin+'/api/me')).status(),401);
     results.push({functional:'passed',checks:['header','touch-targets','quick-actions','menu-search','menu-focus','fleet-pagination-all-24','record-expand','vehicle-detail','history','filter','map-list','keyboard-resize','desktop','role-permissions','user-search-across-pages','user-editor','permission-touch-targets','vehicle-history','selected-map-detail','hidden-mail-redirect','hidden-voice-icon','logout']});
     assert.deepEqual(errors,[],'No uncaught browser errors');
+  }
+  if (!process.env.MOBILE_BASELINE && !process.env.MOBILE_AUDIT_EXTRA) {
+    await context.clearCookies();
+    for (const account of roleUsers) {
+      await page.goto(origin+'/pripominky');
+      await page.locator('[data-auth-form]').waitFor();
+      await page.locator('[name=identifier]').fill(account.email);
+      await page.locator('[data-auth-form] button[type=submit]').click();
+      await page.locator('[name=code]').waitFor();
+      await page.locator('[name=code]').fill('123456');
+      await page.locator('[data-auth-form] button[type=submit]').click();
+      await page.waitForURL(origin+'/');
+      await page.locator('.module-launcher').waitFor();
+      await page.waitForLoadState('networkidle');
+      for (const [width,height] of [[375,667],[390,844],[430,932],[1440,1000]]) {
+        await page.setViewportSize({width,height});
+        await page.waitForFunction(mobile=>Boolean(document.querySelector('.mobile-header'))===mobile,width<721);
+        await page.locator('[data-module-search]').waitFor();
+        assert.equal(await page.locator('[data-launcher-module]:visible').count(),1);
+        assert.equal(await page.locator('[data-launcher-module] strong').innerText(),'Nepřítomnost');
+        const {search,tile}=await page.evaluate(()=>({search:document.querySelector('[data-module-search]').getBoundingClientRect().toJSON(),tile:document.querySelector('[data-launcher-module]').getBoundingClientRect().toJSON()}));
+        assert.ok(search.y<tile.y && tile.y+tile.height<height-(width<721?60:0),'Search and module visible without scrolling');
+        assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+        await page.locator('[data-module-search]').fill('nepritomnost');
+        assert.equal(await page.locator('[data-launcher-module]:visible').count(),1,'Search ignores accents');
+        await page.locator('[data-module-search]').fill('vozidla');
+        assert.equal(await page.locator('[data-launcher-module]:visible').count(),0);
+        assert.ok(await page.locator('[data-module-search-empty]').isVisible());
+        await page.locator('[data-module-search]').fill('');
+        await page.screenshot({path:path.join(output,`launcher-${account.role}-${width}.png`)});
+      }
+      await page.locator('[data-launcher-module]').click();
+      if(account.role==='readonly') { await page.waitForURL('**/dovolena-nemoc/moje-zadosti'); assert.equal(await page.locator('[data-quick-type]').count(),0); }
+      else {await page.waitForURL('**/dovolena-nemoc/rychle-zadani');await page.locator('[data-quick-type="vacation"]').waitFor();}
+      if(['garazmistr','dispecer','ridic','readonly'].includes(account.role)) assert.equal((await context.request.get(origin+'/api/users')).status(),403);
+      await page.waitForLoadState('networkidle');
+      await context.request.post(origin+'/api/auth/logout');await context.clearCookies();
+      results.push({launcherRole:account.role,status:'passed',sizes:[375,390,430,1440],checks:['real-login-to-home','same-single-module','search-without-accents','empty-search-result','module-opens','permissions-preserved']});
+    }
   }
   assert.deepEqual(errors,[],'No render or browser errors');
   await writeFile(path.join(output,'audit.json'),JSON.stringify({results,errors},null,2));

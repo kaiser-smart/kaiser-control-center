@@ -2719,7 +2719,7 @@ const UI_SYSTEM_PILOT_NAV_GROUPS = [
 ];
 
 const UI_SYSTEM_PILOT_NAV_LABELS = {
-  dashboard: "Dashboard",
+  dashboard: "Moduly",
   "quick-absence": "Rychlé zadání",
   "collection-routes": "Trasy svozu",
   "driver-reports": "Hlášení z vozidel",
@@ -7213,7 +7213,32 @@ function mainDashboardOperationsSection(user) {
   `;
 }
 
+let moduleLauncherQuery = "";
+const moduleSearchText = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("cs").trim();
 function homePage(user) {
+  const matches = moduleSearchText("Nepřítomnost dovolená nemoc lékař OČR volno").includes(moduleSearchText(moduleLauncherQuery));
+  const destination = hasPermission(user, "absence", "create") ? ABSENCE_QUICK_ROUTE : absenceRouteForTab("my");
+  return `
+    <main class="app-shell module-theme-scope ui-system-pilot ui-system-pilot--modules" ${moduleThemeStyleAttribute()}>
+      ${uiSystemPilotSidebar(user, "dashboard")}
+      <div class="ui-pilot-toolbar module-launcher-toolbar"><strong>SMART ODPADY</strong>${userBar(user)}</div>
+      <section class="module-launcher" aria-labelledby="module-launcher-title">
+        <label class="module-launcher-search"><span>Hledat modul</span><input type="search" data-module-search aria-label="Hledat modul" placeholder="Hledat modul…" autocomplete="off" value="${escapeHtml(moduleLauncherQuery)}" /></label>
+        <h1 id="module-launcher-title">Moduly</h1>
+        <div class="module-launcher-grid">
+          <a class="module-launcher-card" href="${routeHref(destination)}" data-link data-launcher-module ${matches ? "" : "hidden"}>
+            <span class="module-launcher-icon" aria-hidden="true">${uiSystemPilotIcon("absence")}</span>
+            <span><strong>Nepřítomnost</strong><small>Dovolená, nemoc, lékař a další nepřítomnosti</small></span>
+            <span class="module-launcher-arrow" aria-hidden="true">›</span>
+          </a>
+        </div>
+        <p class="module-launcher-empty" data-module-search-empty role="status" ${matches ? "hidden" : ""}>Žádný modul neodpovídá hledání.</p>
+      </section>
+    </main>
+  `;
+}
+
+function companyDashboardPage(user) {
   ensureDataBoxData();
   if (canViewModule(user, "driver-reports")) {
     ensureDriverReportsData();
@@ -54732,6 +54757,9 @@ async function verifyLogin(form) {
     await loadThemeSettings({ renderAfter: false });
     await loadAbsenceSettings({ renderAfter: false });
     await loadAssistantPromo({ renderAfter: false });
+    moduleLauncherQuery = "";
+    window.history.replaceState({}, "", routeHref("/"));
+    lastRenderedUrl = window.location.href;
   } catch {
     authState = {
       ...authState,
@@ -55027,9 +55055,15 @@ function renderAuthenticatedApp(user) {
     return;
   }
 
-  if (path === "/" || path === "/dashboard") {
-    ensureCollectionRoutesSvozKaiserWatchdog(user);
+  if (path === "/") {
     app.innerHTML = homePage(user);
+    document.title = `Moduly | ${APP_NAME}`;
+    return;
+  }
+
+  if (path === "/dashboard") {
+    ensureCollectionRoutesSvozKaiserWatchdog(user);
+    app.innerHTML = companyDashboardPage(user);
     ensureDataBoxPlusHomeStatus(user);
     if (hasPermission(user, "fleet", "view") && mainDashboardCanSeeEconomics(user)) {
       void loadFleetFuelAnalytics({ period: mainDashboardUiState.period });
@@ -58885,6 +58919,17 @@ document.addEventListener("submit", async (event) => {
 let tyresSearchTimer = 0;
 
 document.addEventListener("input", (event) => {
+  const moduleSearch = event.target.closest("[data-module-search]");
+  if (moduleSearch) {
+    moduleLauncherQuery = moduleSearch.value;
+    const matches = moduleSearchText("Nepřítomnost dovolená nemoc lékař OČR volno").includes(moduleSearchText(moduleLauncherQuery));
+    const tile = app.querySelector("[data-launcher-module]");
+    const empty = app.querySelector("[data-module-search-empty]");
+    if (tile) tile.hidden = !matches;
+    if (empty) empty.hidden = matches;
+    return;
+  }
+
   const tyresSearch = event.target.closest("[data-tyres-search]");
   if (tyresSearch) {
     tyresState.inventory.q = tyresSearch.value;

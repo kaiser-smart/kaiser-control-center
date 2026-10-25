@@ -27,3 +27,6 @@ Správným vzorem je **Rychlé zadání** na `/dovolena-nemoc/rychle-zadani`, ni
 Návrhy případného budoucího názvu podle skutečného účelu: **Nahlásit nepřítomnost** (doporučeno), **Dovolená a nepřítomnost**, **Žádost o volno** (méně přesné pro nemoc/lékaře). Žádný není automaticky použit.
 
 Kontrola úplného postupu odhalila překrytí původního sticky tlačítka Odeslat spodní navigací. V mobilním režimu nyní respektuje výšku navigace a bezpečný okraj, při zobrazení klávesnice její skrytí. Kontrola žádosti má čtyři údaje ve dvou kompaktních řádcích.
+
+## Úvod s moduly — 25. 10. 2026
+Po úspěšném přihlášení otevřít `/` pro všechny role. První obsah je pole Hledat modul, pod ním nadpis Moduly a jediná položka Nepřítomnost. Stejné na mobilu i desktopu; pracovní role nemění seznam úvodních modulů. Hledání reaguje okamžitě, ignoruje diakritiku, při neshodě ukazuje prázdný výsledek a po vymazání obnoví položku. Žádné KPI ani provozní karty na úvodu. Původní firemní dashboard zůstává na `/dashboard`. Role řidiče může otevřít úvod a Nepřítomnost bez přesměrování do svozů; serverová oprávnění se nemění. Uživatel s právem create otevře Rychlé zadání, uživatel pouze s právem view vlastní žádosti.
