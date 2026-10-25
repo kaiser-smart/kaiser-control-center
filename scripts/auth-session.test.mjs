@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createSessionCookie, verifySession, clearSessionCookie } from '../functions/_lib/auth.js';
+import { createSessionCookie, verifySession, clearSessionCookie, isMockEnabled } from '../functions/_lib/auth.js';
 import { onRequestPost } from '../functions/api/auth/verify.js';
 import { DEFAULT_USERS } from '../functions/_lib/default-users.js';
 
@@ -46,4 +46,9 @@ try {
   assert.equal(await verifySession(env, requestFor(forged)), null);
   assert.match(clearSessionCookie(env), /Max-Age=0/);
 } finally { Date.now = realNow; }
+for (const production of [{APP_ENV:'production'}, {CF_PAGES_BRANCH:'main'}]) {
+  const productionEnv = {...production, AUTH_MODE:'mock'};
+  assert.equal(isMockEnabled(productionEnv),false,'Mock authentication is forbidden in production');
+  await assert.rejects(()=>createSessionCookie(productionEnv,user),/AUTH_SESSION_SECRET is missing/);
+}
 console.log('Auth session: 30 days / 12 hours, expiry, strict opt-in, invalid OTP, tampering and logout passed.');

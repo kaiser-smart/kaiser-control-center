@@ -8,9 +8,12 @@ import { verifyToken } from '../src/auth.mjs';
 import { generateKeyPair, SignJWT } from 'jose';
 
 let pilotTokens=new Map();
+// Keep synthetic messages inside the real rolling 30-day onboarding window.
+const pilotToday=new Date().toISOString().slice(0,10);
+const pilotYesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
 
 const mail = (uid, mailbox, { folder='INBOX', from='client@example.net', to=mailbox,
-  subject='Zakázka', text='Prosím o rozhodnutí.', date='2026-09-24T08:00:00Z' }={}) => ({
+  subject='Zakázka', text='Prosím o rozhodnutí.', date=`${pilotYesterday}T08:00:00Z` }={}) => ({
   reference:{folder,uid,uidValidity:folder==='Sent'?'7':'3'},
   messageId:`<${mailbox}-${uid}@example.test>`,references:[],from:[{address:from}],to:[{address:to}],
   cc:[],subject,text,date,
@@ -128,9 +131,9 @@ async function runPilot(semanticAnalyzer){
     assert.equal(restored.version,1);
     assert.equal(restored.profile.signature.shortText,`S pozdravem\n${c.signature}`);
     c.messages.push(mail(c.actor==='pilot-a'?50:60,c.address,{from:c.contact,
-      subject:c.nextNewsletter,text:'Další vydání.',date:'2026-09-25T08:00:00Z'}));
+      subject:c.nextNewsletter,text:'Další vydání.',date:`${pilotToday}T08:00:00Z`}));
     c.messages.push(mail(c.actor==='pilot-a'?51:61,c.address,{from:'new@example.net',
-      subject:'Nová poptávka',text:'Prosím o nabídku.',date:'2026-09-25T09:00:00Z'}));
+      subject:'Nová poptávka',text:'Prosím o nabídku.',date:`${pilotToday}T09:00:00Z`}));
     const list=await mcp(worker(),env,c.actor,'start_worklist',{
       mailboxId:c.box,view:'priority',limit:10});
     assert.equal(list.items.find(x=>x.subject===c.nextNewsletter).contentType,'newsletter');

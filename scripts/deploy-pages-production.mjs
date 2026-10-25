@@ -1,4 +1,5 @@
-import { target, loadRelease, validateLocalRelease, assertLiveBaseline, assertCloudflareTarget } from "./pwa-release.mjs";
+import { checkCloudflare, cloudflareClient, wranglerCommand } from "./pwa-cloudflare.mjs";
+import { target, loadRelease, validateLocalRelease, assertLiveBaseline, assertBuildFiles, needsGitFetch, assertSuccessfulDeployment } from "./pwa-release.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
@@ -62,12 +63,12 @@ function assertCleanWorktree() {
 }
 
 function assertProductionHead() {
-  if (!skipFetch) {
+  if (needsGitFetch({ localRelease, skipFetch })) {
     runVisible("git", ["fetch", "origin", REQUIRED_BRANCH]);
   }
 
   const head = git(["rev-parse", "HEAD"]);
-  const originMain = git(["rev-parse", `origin/${REQUIRED_BRANCH}`]);
+  const originMain = localRelease ? null : git(["rev-parse", `origin/${REQUIRED_BRANCH}`]);
   const branch = git(["branch", "--show-current"]);
 
   if (localRelease) {
@@ -155,7 +156,7 @@ function assertBuiltMeta(head, version) {
 assertCleanWorktree();
 const { head } = assertProductionHead();
 const version = packageVersion();
-const backupDate = buildDate();
+const backupDate = localRelease?.buildDate || buildDate();
 
 runVisible("node", ["scripts/check-syntax.mjs"]);
 runVisible("node", ["--test", "scripts/theme-settings.test.mjs"]);
@@ -204,6 +205,7 @@ if (localRelease && !process.env.VITE_GOOGLE_MAPS_API_KEY) {
   process.env.VITE_GOOGLE_MAPS_API_KEY = value;
 }
 runVisible("node", ["scripts/pwa-release.test.mjs"]);
+runVisible("node", ["scripts/pwa-package-integrity.test.mjs"]);
 runVisible("node", ["scripts/auth-session.test.mjs"]);
 runVisible("node", ["scripts/driver-parts-vin-pilot.test.mjs"]);
 runVisible("node", ["scripts/build.mjs"], {
@@ -216,25 +218,25 @@ runVisible("node", ["scripts/build.mjs"], {
 });
 assertBuiltMeta(head, version);
 runVisible("node", ["scripts/pwa.test.mjs"]);
+if (localRelease) assertBuildFiles(localRelease, "dist");
 
 if (checkOnly) {
   console.log(`Deploy guard OK: ${version} / ${REQUIRED_BRANCH} / ${head.slice(0, 7)} / ${backupDate}`);
   process.exit(0);
 }
 
+let productionApi;
 if (localRelease) {
   await assertLiveBaseline(localRelease);
   if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_ACCOUNT_ID !== target.account) fail("Wrong Cloudflare account in environment.");
   process.env.CLOUDFLARE_ACCOUNT_ID = target.account;
-  const list = run("pnpm", ["dlx", "wrangler@4.142.0", "pages", "deployment", "list", "--project-name", target.project, "--environment", "production", "--json"]);
-  assertCloudflareTarget(localRelease, JSON.parse(list));
+  productionApi = cloudflareClient();
+  await checkCloudflare(localRelease, productionApi);
   await assertLiveBaseline(localRelease);
   assertCleanWorktree();
   if (git(["rev-parse", "HEAD"]) !== head) fail("Source changed during checks.");
 }
-runVisible("pnpm", [
-  "dlx",
-  "wrangler@4.142.0",
+const [deployCommand, deployArgs] = wranglerCommand([
   "pages",
   "deploy",
   "dist",
@@ -245,7 +247,14 @@ runVisible("pnpm", [
   "--commit-dirty=false",
   "--commit-hash", head
 ]);
+if (localRelease) assertBuildFiles(localRelease, "dist");
+runVisible(deployCommand, deployArgs);
 
-console.log(`Produkce nasazena pres deploy guard: ${version} / ${REQUIRED_BRANCH} / ${head.slice(0, 7)} / ${backupDate}`);
+console.log(`Upload dokoncen, nasleduje overeni: ${version} / ${REQUIRED_BRANCH} / ${head.slice(0, 7)} / ${backupDate}`);
 
-if (localRelease) runVisible("node", ["scripts/pwa-postdeploy.mjs", releasePath]);
+if (localRelease) {
+  const project = await productionApi("/");
+  assertSuccessfulDeployment(project.canonical_deployment, head);
+  runVisible("node", ["scripts/pwa-postdeploy.mjs", releasePath]);
+  console.log(`Production verified: ${version} / ${head}`);
+}

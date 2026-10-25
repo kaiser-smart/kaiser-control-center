@@ -1,62 +1,69 @@
-# Nasazení a návrat zpět
+# SMART ODPADY PWA 0.1.831 — nasazení a rollback
 
-**Příprava není schválení. Nic v tomto balíčku se nenasazuje automaticky.**
+Příprava není schválení. Produkce nebyla změněna. Balíček je soukromá změnová sada pro existující repozitář, nikoli celý repozitář. Přesná identita a kontrolní součty jsou v `release.json` a `SHA256SUMS`.
 
-## Přenos a ověření zdrojů
+## Cíl a předpoklady
 
-Balíček je úplná změnová sada pro existující repozitář, nikoli kopie jeho soukromých fixture dat nebo historie. Potřebuje čistý checkout základu `c37cd96b3313ad5d8678e1018f76bf1b9d98f72e`. Obsahuje binární patch s nulovým kontextem, kontrolní součty, přesnou identitu releasu a nástroj `pripravit.mjs`. Ten ověří základ, čistotu a SHA-256 patch souboru, založí samostatnou větev a zrekonstruuje přesný commit ze stejných souborů a metadat. Nikdy nevolá Cloudflare ani GitHub. Již existující připravená větev žádnou aplikaci patch souboru nepotřebuje.
+- Cloudflare účet `3b25838c1e15dbfe5f3ac0c273826576`, Pages projekt `kaiser-control-center-legacy`, produkční větev `main`, doména `https://smart-odpady.ai`.
+- Živě ověřený základ 25. 10. 2026: `0.1.829`, commit `c37cd96b3313ad5d8678e1018f76bf1b9d98f72e`, úspěšný aktivní deployment `863bae5e-a256-4aa9-a6ba-7a6b552512d2`.
+- Existující cloudový build: `node scripts/pages-cloud-build.mjs`, výstup `dist`. PWA lokální režim používá stejný produkční guard; běžné ochrany main se nemění.
+- Node 24, pnpm, Git a dostupný Wrangler 4.142.0. `node` musí být v PATH. Lokální zdrojová větev `codex/smart-odpady-iphone-pwa`, čistá a s přesným HEAD z balíčku.
+- Pro přenos je nutný soukromý čistý checkout přesného základu s jeho historií; balíček nezahrnuje soukromé fixture adresáře, tajné proměnné ani historii Git.
+
+## Příprava a kontrola bez uploadu
+
+Příkazy spouští Codex nebo správce. Již připravený pracovní checkout nepotřebuje znovu aplikovat patch.
 
 ```sh
 node /cesta/k/balicku/pripravit.mjs /cesta/k/cistemu/repozitari
 node /cesta/k/balicku/nasadit.mjs /cesta/k/repozitari --check
+node /cesta/k/balicku/nasadit.mjs /cesta/k/repozitari --preflight
 ```
 
-Používat Node 24 a pnpm. Existující závislosti Forpsi se instalují jeho zamčeným pnpm-lock.yaml příkazem `pnpm install --frozen-lockfile --ignore-scripts` v `services/forpsi-connector`. Playwright je pouze externí testovací nástroj, není novou závislostí aplikace. WebKit test přijímá `PLAYWRIGHT_MODULE_PATH`, `PLAYWRIGHT_BROWSERS_PATH` a `PWA_TEST_OUTPUT`.
+`pripravit.mjs` ověří celý archiv, základ, patch a výsledný Git tree; zrekonstruuje přesný commit. Nepoužívá GitHub ani Cloudflare. Při odlišnosti zastaví. `--check` provede místní guard, testy a reprodukovatelný build; `--preflight` navíc pouze čte aktuální produkci a Cloudflare.
 
-## Jednorázové obnovení CLI přístupu
+Pro úplnou testovací sadu jsou původní závislosti instalovány `pnpm install --frozen-lockfile --ignore-scripts` v kořeni a v `services/forpsi-connector`. Playwright/WebKit je externí testovací nástroj; do aplikace se nepřidává. `scripts/pwa-run-tests.mjs` spouští místní sadu s blokováním externích HTTP požadavků. Placený Forpsi pilot zůstává vypnutý. Browser test přijímá `PLAYWRIGHT_MODULE_PATH`, `PLAYWRIGHT_BROWSERS_PATH`, `PWA_PREVIOUS_DIST` a `PWA_TEST_OUTPUT`.
 
-Při přípravě selhalo čtení dostupného přístupu z macOS Klíčenky (exit 51). Přihlášení Cloudflare v prohlížeči samo nepotvrzuje funkčnost Wrangler. Správce nebo Codex s dostupnou autorizací obnoví běžné přihlášení v terminálu stejného macOS uživatele:
+## Jediný deploy příkaz po schválení přesného releasu
 
 ```sh
-pnpm dlx wrangler@4.142.0 login
-CLOUDFLARE_ACCOUNT_ID=3b25838c1e15dbfe5f3ac0c273826576 pnpm dlx wrangler@4.142.0 pages deployment list --project-name kaiser-control-center-legacy --environment production --json
+node /cesta/k/balicku/nasadit.mjs /cesta/k/repozitari --schvaleno=<head-z-release.json>
 ```
 
-Jde o běžný OAuth login, bez kopírování tokenů do chatu nebo souborů balíčku. Pokud Klíčenka vyžádá odemknutí, uživatel ho provede v systémovém dialogu. Žádné rozšiřování oprávnění, vypínání ochrany Klíčenky ani extrakce cookie z prohlížeče. Pokud OAuth nabídne nová nebo širší oprávnění, jejich udělení vyžaduje samostatný souhlas. Ověření výpisu nesmí změnit projekt. Při trvající chybě se deploy zastaví.
+Před uploadem se ověří:
 
-## Jediný příkaz po výslovném schválení
+1. Kompletnost a součty všech souborů balíčku, přesný HEAD, čistota větve, chráněné historické commity a nezměněný `wrangler.toml`.
+2. Existující regresní guard, PWA/auth testy, syntax a build. Všechny soubory buildu musí přesně odpovídat schválenému inventáři; extra, chybějící nebo změněný soubor blokuje vydání. Datum buildu je pevně dané releasem.
+3. Aktuální verze a commit na doméně stále odpovídají základu. Lokální režim nevyžaduje `git fetch`, remote ani PR.
+4. Cloudflare účet, projekt, doména, produkční větev, přesný aktivní deployment a rollback. Rozhoduje strukturované API `latest_stage.name=deploy`, `status=success`, čas dokončení a celý commit; neurčitý textový stav se odmítá.
+5. Závěrečná čistota a HEAD, opakovaná identita produkce a součty buildu. Teprve potom připnutý Wrangler nahraje `dist` a Pages Functions. Nemění D1/R2, bindingy, tajné proměnné ani plánované workery.
+
+Wrangler čte stávající oprávnění přes podporovaný příkaz `auth token --json`; výsledek se drží pouze v paměti. Nikdy se neukládá do balíčku ani nevypisuje. `PWA_WRANGLER_PATH` slouží pro existující lokální instalaci přesně verze 4.142.0; jinak se použije `pnpm dlx wrangler@4.142.0`.
+
+Čtecí přístup byl v této přípravě funkční. Úspěšný upload zůstává nepotvrzený do schváleného nasazení. Pokud se vrátí chyba Klíčenky, zastavit bez dalších OAuth pokusů. Jednorázově je nutné nechat správcem opravit přístup přihlášeného macOS uživatele ke Klíčence a poté zopakovat pouze `--preflight`. Neexportovat tokeny do chatu, nevypínat ochrany ani neměnit způsob jejich ukládání.
+
+## Kontroly po nasazení
+
+Skript ověří úspěšný aktivní deployment s přesným celým commitem, veřejnou verzi, všech 49 tras, manifest MIME/cache/scope, vybrané klíčové assety včetně ikon a session guardu a anonymní `/api/me` a `/api/users` (401/no-store). Neposílá OTP ani obchodní požadavky. Kontrolu lze opakovat:
 
 ```sh
-node /cesta/k/balicku/nasadit.mjs /cesta/k/repozitari --schvaleno
+node /cesta/k/balicku/tools/pwa-postdeploy.mjs /cesta/k/balicku/release.json
 ```
 
-Příkaz předá přesný schválený commit do rozšířeného existujícího `scripts/deploy-pages-production.mjs`. Běžné vydávání z main zůstává chráněné původními kontrolami. Lokální režim navíc kontroluje:
+Neúspěšný postdeploy výsledek znamená NEOVĚŘENO, nikoli úspěch. Zkontrolovat výstup a použít schválený rollback; nedělat náhodné opakované uploady.
 
-1. Přesný HEAD, čistou větev, verzi, výchozí commit a nezměněný wrangler.toml. Git fetch je pouze čtecí; zápis na GitHub ani PR není podmínkou.
-2. Povinné historické ochranné commity, syntax, původní regresní sadu deploy guardu, PWA, auth a opravené náhradní díly. Znovu sestaví aplikaci. Zachová veřejnou konfiguraci Maps, identitu skutečné zdrojové větve a verzování všech importů.
-3. Aktuální veřejná produkční metadata stále odpovídají schválenému základu. Pokud mezitím vyšla jiná verze, vydání se zastaví a musí se přezkoumat nový základ; starý balíček ji nepřepíše.
-4. Cloudflare účet `3b25838c1e15dbfe5f3ac0c273826576`, projekt `kaiser-control-center-legacy`, existující produkční rollback ze stejného zdroje. Při chybě přístupu neproběhne upload.
-5. Závěrečnou kontrolu čistoty a HEAD. Až poté spustí připnutý Wrangler 4.142.0: Pages deploy `dist`, projekt výše, produkční branch `main`, přesný commit, `commit-dirty=false`. Functions se zkompilují z existujícího `functions/`; žádné soukromé fixture soubory ze `scripts/` se nevystavují jako assety. Žádné databázové migrace ani změny tajných proměnných.
-6. Automaticky zavolá `pwa-postdeploy.mjs`: identita verze/commitu, všech 49 tras a metadata, MIME/no-store manifestu, SHA-256 ikon a důležitých souborů, anonymní 401/no-store na `/api/me` a `/api/users`. Podporuje stávající kanonické redirecty, ale odmítne cizí origin. Kontrola nikdy neposílá OTP ani obchodní požadavky.
-
-Při neúspěšném postdeploy testu není vydání ověřené. Proveďte připravený rollback; nezkoušejte náhodné další uploady. Kontrola se dá spustit samostatně:
-
-```sh
-node scripts/pwa-postdeploy.mjs /cesta/k/balicku/release.json
-```
-
-Přímé lokální vydání nenahradí historii `main`. Automatické nasazování v Cloudflare zůstává zapnuté. V dalších vydáních je nutné zachovat tuto změnovou sadu v hlavním zdroji; jinak by další automatické vydání obnovilo starší chování PWA. Tento balíček kvůli tomu nemění nastavení účtu ani automaticky neposílá nic na GitHub.
+Automatická Git integrace zůstává beze změny. Přímý upload nezapíše změny do GitHub main. Před příštím běžným vydáním musí jeho zdroj zahrnovat tuto změnovou sadu, jinak by odstranil PWA změny. Tento balíček se kvůli tomu nevystavuje veřejně ani nemění automatické nasazování.
 
 ## Rollback
 
-Ověřený cíl před PWA: produkční deployment **863bae5e-a256-4aa9-a6ba-7a6b552512d2**, commit **c37cd96b3313ad5d8678e1018f76bf1b9d98f72e**, verze **0.1.829**. Cloudflare UI potvrzuje úspěšný build. Nevracet se ke starší 0.1.828, tím by se ztratila novější ochrana vozidel.
+```sh
+node /cesta/k/balicku/vratit.mjs --schvaleno=<head-z-release.json>
+```
 
-[Cloudflare – cílový projekt](https://dash.cloudflare.com/3b25838c1e15dbfe5f3ac0c273826576/pages/view/kaiser-control-center-legacy). V Deployments otevřít nabídku uvedeného úspěšného deploymentu → **Rollback to this deployment** → potvrdit. Tento cíl je nyní aktivní; volba návratu se použije po nasazení nové verze. Jde o Pages rollback, nikoli příkaz `wrangler rollback` pro jiný typ Workeru. Jeho účinek je okamžitý a nemění obsah D1/R2.
+Příkaz je samostatně chráněný schválením. Odmítne návrat, pokud aktuální produkce už neodpovídá tomuto releasu. Znovu ověří úspěšný původní deployment, provede Pages rollback a ověří vrácenou identitu, HTML a anonymní API. Nemění databáze. Během přípravy nebyl produkční rollback spuštěn; ověřen byl jeho cíl, ochranná logika a rekonstrukce balíčku. Přihlášení po rollbacku je závěrečná kontrola správce.
 
-Po návratu ověřit veřejné buildMeta `0.1.829 / c37cd96`, načtení HTML, anonymní `/api/me` 401 a přihlášení kontrolním účtem. Instalovaná ikona dál otevírá stejnou adresu. Případný úspěšný nový produkční deployment později mění vhodný rollback cíl, proto jej před vydáním pojistka znovu ověřuje. Produkční rollback během přípravy **nebyl spuštěn**; ověřena byla existence a úspěšnost cíle, místní kontrolní logika a reverzibilita patch souboru.
+Nouzově lze použít [Cloudflare Deployments](https://dash.cloudflare.com/3b25838c1e15dbfe5f3ac0c273826576/pages/view/kaiser-control-center-legacy) → odpovídající úspěšný deployment → Rollback to this deployment. [Dokumentace Pages rollbacku](https://developers.cloudflare.com/pages/configuration/rollbacks/).
 
-## Závěrečná kontrola na skutečném telefonu
+## Fyzický pilot před širším předáním
 
-Fyzický telefon nebyl dostupný. Na kontrolovaném firemním iPhonu musí před širším předáním správce ověřit instalaci podle přiloženého návodu, správný název/ikonu a běh bez lišty Safari, OTP a stejná oprávnění, přepínání aplikace/zamknutí/návrat, interní a externí odkazy, požadovanou kameru/GPS/telefon/hlas, logout i offline logout, opětovné přihlášení a načtení nové verze po úplném zavření. Neodesílat zkušební obchodní požadavky a neměnit provozní data. Existující OTP může dorazit skutečnému kontrolnímu zaměstnanci; jeho použití má být součástí schváleného pilotu.
-
-Bez této kontroly lze tvrdit pouze úspěch dostupné automatizace. **Doporučení nyní: NENASADIT do plošného provozu, dokud není obnoven CLI přístup a schválen kontrolovaný pilot s fyzickým ověřením.** Implementace je hotová; další implementační změna není předem potřebná.
+Na skutečném firemním iPhonu po schváleném nasazení ověřit Přidat na plochu, název a ikonu, standalone, skutečné OTP, stejná oprávnění, navigaci, přepnutí aplikace/zamknutí/návrat, systémový náhled, online i offline logout, opětovné přihlášení a novou verzi po úplném zavření. Podle používaných modulů ověřit GPS, kameru, telefon a hlas bez zkušebních obchodních zápisů. WebKit tento fyzický test nenahrazuje.

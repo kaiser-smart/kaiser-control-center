@@ -1,53 +1,41 @@
-# SMART ODPADY – závěrečný audit PWA
+# SMART ODPADY — finální PWA 0.1.831
 
-Stav: připraveno lokálně, **NENASAZENO**. Kontrola 24. 10. 2026. Větev `codex/smart-odpady-iphone-pwa`, verze 0.1.830. Přesný finální commit a kontrolní součty jsou v `release.json` a `SHA256SUMS` finálního balíčku.
+Stav: dokončená lokální příprava, **NENASAZENO**. Datum 25. 10. 2026. Přesný commit, základ, strom a součty uvádí `release.json`; aktuální výsledky jsou v `verification/` finálního balíčku.
 
-## Technologie a skutečný hosting
+## Implementace a zachovaný rozsah
 
-Stávající aplikace je JavaScript s nativními ES moduly a CSS; build zajišťuje Node bez nového frameworku. Zachovaný Quicksand, navigace a 49 generovaných tras. API běží jako Cloudflare Pages Functions. Existují oddělené D1 databáze, R2, servisní vazby a samostatné plánované workery; PWA je nepřenastavuje a nezavádí migrace.
+Navazuje na místní implementaci 758685ac / 0.1.830, která rozšířila původní e26e6ff9. Produkční základ c37cd96 / 0.1.829 zachovává novější opravy vozového parku. Původní checkout zůstal nedotčený; finální větev je v aktuálním pracovním prostoru.
 
-V přihlášeném Cloudflare Dashboardu byl ověřen účet `3b25838c1e15dbfe5f3ac0c273826576`, projekt `kaiser-control-center-legacy`, domény `smart-odpady.ai`, `www.smart-odpady.ai` a `kaiser-control-center.pages.dev`. Účet se v UI jmenuje `Linkedin@nanolab.cz's Account`. Produkční větev `main`, automatické nasazování zapnuté, Git repozitář `kaiser-smart/kaiser-control-center`. Gitový build používá `node scripts/pages-cloud-build.mjs`, výstup `dist`; ten volá existující produkční kontrolní skript. Překlad stránky v prohlížeči zobrazoval přeložené názvy příkazu a adresáře; originální zápis potvrzuje zdroj konfigurace.
+PWA má stabilní identitu/scope/start URL, standalone, česká metadata na 49 trasách a 404, neprůhledné ikony Apple 180 a PWA 192/512 a maskovatelnou ikonu. Zachovává Quicksand a stávající UI. Bez service workeru, offline cache, nové aplikační knihovny nebo placené služby.
 
-Ověřená běžící verze: **0.1.829 / c37cd96**, celý commit `c37cd96b3313ad5d8678e1018f76bf1b9d98f72e`. Úspěšné produkční nasazení **863bae5e-a256-4aa9-a6ba-7a6b552512d2**, dokončeno podle UI 24. 10. 2026 v 10:09. Novější změna vozového parku byla převzata rebasem, nikoli přepsána. Původní pracovní adresář uživatele nebyl měněn.
+API verify/me vrací `sessionExpiresAt`. Podepsaná relace a Secure/HttpOnly/SameSite cookie zůstávají. UI se uzamkne při offline stavu, při odchodu a ověřování návratu; expirace, zneplatnění účtu a změna oprávnění respektují server. Logout bez potvrzení serveru zůstává čekající; ukládá jen příznak, ne token/identitu/data. Po reconnectu se dokončí i přes restart. Skrytí UI není kryptografické smazání paměti a není důkaz skrytí systémového snapshotu iOS.
 
-## Implementované změny
+Verze 0.1.831 dokončuje release nástroje: bez závislosti na GitHub fetch, přesný inventář všech souborů před uploadem, reprodukovatelná identita/datum buildu, strukturované ověření Cloudflare projektu/aktivního deploymentu/rollbacku, kontrola serverového stavu po uploadu, bezpečná rekonstrukce zdrojového commitu a samostatně schvalovaný rollback. Původní main guard zůstává chráněný.
 
-- Manifest: SMART ODPADY, jazyk cs, standalone, stabilní identita a scope na kořeni domény. Funguje také při existujícím hostování pod cestou repozitáře díky původnímu dynamickému base URL.
-- Ikony: neprůhledné PNG 180×180 pro Apple, 192×192 a 512×512, poslední s bezpečnou zónou pro maskování; zdroj SVG. Zelený podklad a bílý monogram SO. Metadata jsou ve všech 49 trasách i 404.
-- Manifest má explicitní MIME a no-store, původní HTML hlavičky no-cache zůstávají. Existující verzování všech vnořených JS/CSS importů dostává verzi 0.1.830.
-- Žádný service worker, Cache Storage, offline datový sklad, nová knihovna ani placená služba. iOS webovou aplikaci lze instalovat bez service workeru. Offline start může skončit systémovou chybou Safari; otevřená aplikace ukáže vlastní stav bez zpřístupnění dat.
-- Aktivní UI se skryje při výpadku spojení, opuštění aplikace a kontrole relace. Po návratu se ověří aktuální účet a oprávnění. Selhání kontroly data neodkryje. Vypršení relace ukončí zobrazení i bez dalšího kliknutí.
-- Odhlášení bez odpovědi serveru se nevydává za dokončené. Uchová se pouze příznak požadavku na odhlášení; spojení, opětovné spuštění nebo tlačítko opakování dokončí mazání cookie. Příznak má localStorage a neidentifikační cookie jako zálohu. Změna se přenese do dalších otevřených oken stejného úložiště.
-- API přihlášení a `/api/me` vracejí čas vypršení podepsané relace; chybný formát a přesná hranice expirace jsou ošetřeny. Stávající token, účty, role a serverové kontroly zůstávají. Logout i nadále maže host-only Secure/HttpOnly/SameSite=Lax cookie. Standardní platnost je 12 hodin; explicitní „Pamatuj si mě“ 30 dní.
+Žádná migrace, změna účtů, oprávnění, konfigurace Cloudflare, tajných proměnných ani produkčních dat. Dříve převzatá úzká oprava zápisu náhradních dílů mezi databázovými doménami zůstává v původním PWA commitu; nevznikl další refaktoring.
 
-## Regrese nalezené při úplném testu
+## Bezpečnost
 
-Dva starší testy měly po rozdělení databází zastaralé vazby. Testovací prostředí bylo opraveno pro současné DB_CORE/DB_ARCHIVE/DB_MESSAGES/DB_AUDIT. Tím se odhalila skutečná dřívější chyba v `driver-part-requests-store`: kombinovaný D1 batch přes core a audit byl správně odmítnut ochranou databází. Úzká oprava používá existující `runCrossDatabaseBatch`, zachovává oddělené domény a zapisuje stav workflow; chybu auditu netají. Žádné změny schématu, produkčních dat ani pravidel přístupu. Regresní test ověřuje dokončení workflow a obě databázové domény.
+Původní nález v `scripts/serve.mjs` zahrnuje testovací/provozní kontaktní údaje, nikoli důvod veřejně publikovat server. Kompletní server, adresáře účtů, .env, privátní klíče, historie Git ani produkční exporty nejsou v archivu. Změny se přenášejí binárním patchem s nulovým kontextem; konkrétní změnou serve.mjs je pouze MIME pro manifest.
 
-## Bezpečnostní prověření distribuce
+Veřejný build neobsahuje Functions ani zdrojový testovací server. Kompilovaný server je pouze v soukromých pracovních výstupech a při nasazení jde do Pages Functions, nikoli do statických assetů. Účty nutné pro existující autentizaci se nemažou. Tři existující provozní kontaktní řetězce ve frontendových modulech odpovídají produkčnímu základu; nejde o nově přidaný seznam testovacích účtů. Veřejná konfigurace Maps zůstala zachována, její hodnota se nevypisuje; omezení klíče u poskytovatele nejsou tímto auditem potvrzena.
 
-Dřívější automatická kontrola odmítla nahrání celého vývojového `scripts/serve.mjs` do veřejného GitHubu kvůli kontaktním a provozním testovacím údajům. Nešlo o nutnou součást veřejného PWA buildu. Místo celého souboru nebo git bundle finální balíček obsahuje binární patch s nulovým okolním kontextem; u tohoto souboru pouze doplnění MIME typu. Původní kontaktní seznamy, historii repozitáře, tajné proměnné, .env, testovací TLS klíče a kompletní serverové fixture soubory balíček neobsahuje. Žádná produkční nebo uživatelská data nebyla smazána. GitHub zápis 403 nebyl opakován.
+Kontrola pokrývá statické soubory, serverové zdroje a zkompilované Functions, běžné formáty tajných klíčů, přenos citlivých fixture kontaktů a inventář archivu. Výsledky v security.json neobsahují hodnoty nálezů. Jde o konkrétní kontrolu distribuce, nikoli absolutní důkaz absence každé možné zranitelnosti. Produkční mock autentizace a fallback vývojové tajemství jsou testem zakázány.
 
-Build statické části a kompilace všech Pages Functions byly provedeny lokálně. Serverový bundle zůstává v pracovních souborech; nezveřejňuje se jako statický asset ani jako součást přenosového archivu. Patch obsahuje veškeré změny serveru a přesně se aplikuje na uvedený základ. Veřejný browserový klíč map nebyl považován za serverové tajemství ani odstraněn; jeho shoda s aktuální produkční konfigurací byla ověřena bez vypsání hodnoty.
+## Ověření
 
-Produkční anonymní GET `/api/me` a `/api/users`: 401 a Cache-Control no-store. Kořenové HTML: 200/no-cache. Některé JS zdroje na vlastní doméně mají max-age=14400; nové JS importy proto používají změněné verzované URL a kontrola nasazení čerstvý query parametr. Živé hlavičky nového manifestu budou ověřeny až po schváleném nasazení. PWA nijak nezpřístupňuje neveřejné API bez přihlášení. Již načtená paměť stránky není kryptograficky vymazána samotným skrytím při offline stavu; reload/ukončení relace ji uvolní.
+- Úplná lokální sada: viz tests.json; externí HTTP je blokované, používají se mocky. Placený opt-in Forpsi test zůstává záměrně přeskočený.
+- Zastaralá data jednoho read-only Forpsi testu byla mimo skutečné třicetidenní okno. Opravena pouze syntetická data na relativní datum; produkční logika zůstala stejná.
+- Syntaxe všech JS/MJS a kompilace všech Pages Functions přes Wrangler 4.142.0.
+- Build 49 tras a 404, PWA metadata, ikony, MIME, scope a nulové registrace service workeru/Cache Storage.
+- WebKit 26.5: mobilní iPhone profil, simulovaný standalone a desktop. Lokální HTTPS, skutečné auth obsluhy, syntetické účty/mock OTP, zakázané externí požadavky. Login/logout, cookie flagy, historie, reload, orientace, oprávnění, expirace, offline/reconnect a čekající logout.
+- Aktualizace mezi dvěma skutečnými buildy 0.1.830 → 0.1.831 s cacheovatelnými JS soubory: nový entrypoint, vnořený import a build identita. Další regrese ověřují změnu oprávnění při návratu a opožděnou odpověď kontroly relace po logoutu.
+- Negativní release testy: chybný účet/projekt, změněná produkce, neúspěšný/neznámý rollback stav, jiný HEAD, špinavý strom, poškozený/chybějící/extra soubor a symlink. Přesná rekonstrukce z balíčku probíhá v druhém čistém checkoutu bez síťového remote.
 
-## Výsledky ověření
+## Nasazení a omezení
 
-- 176 testovacích souborů v `scripts` a `services/forpsi-connector/test`: všechny prošly. První běh odhalil chybějící lokálně nainstalované zamčené závislosti Forpsi a výše popsané regrese; finální běh bez selhání. Delší Vistos test prošel s přiměřeným limitem běhu, bez změny jeho asercí.
-- Syntaxe: 725 JS/MJS souborů před finálními dokumentačními úpravami prošlo Node --check; finální kontrolní skript provádí syntax znovu.
-- Build: všech 49 tras, 404, manifest, tři neprůhledné PNG, stejné scope/identity, metadata a verzované moduly.
-- Cloudflare Wrangler 4.142.0: všechny Functions úspěšně zkompilovány. Neproveden upload ani migrace.
-- Lokální HTTPS, WebKit 26.5: mobilní profil iPhone 13, desktop, profil se simulovaným navigator.standalone a display-mode. Přihlášení přes skutečné obsluhy API se syntetickými účty/mock OTP, cookie flagy, reload, navigace/historie, orientace, logout, odmítnutí oprávnění a aktualizované HTML prošly. Žádné horizontální přetečení v ověřených obrazovkách.
-- Regrese: skrytí offline dat, reconnect, 503 při logoutu a restart, záložní cookie pro pending logout, dokončení offline logoutu, idle expirace, deaktivovaný účet při návratu, nedostupné `/api/me`, odhlášení mezi okny. Cache Storage a registrace service workerů prázdné.
-- Pojistky vydání a automatické kontroly po nasazení mají lokální negativní testy pro jiný commit, účet, projekt, změněnou produkci, nevhodný rollback, změněný asset a nechráněné API.
+Čtecí Cloudflare API přístup byl aktuálně funkční; dřívější Keychain blok se neopakoval. Ověřen projekt, domény, produkční build příkaz a úspěšný aktivní rollback cíl 863bae5e-a256-4aa9-a6ba-7a6b552512d2 / c37cd96. Veřejné API bez cookie vrací 401. Nový manifest dosud není nasazený. Upload ani produkční rollback nebyly provedeny.
 
-## Co dosud není prokázáno
+Izolované cloudové prostředí s oddělenými bindingy nebylo doloženo, proto nevznikl veřejný preview. Fyzický iPhone, Home Screen, systémové snapshoty, skutečné OTP a hardwarová oprávnění zatím nejsou ověřeny. Příprava směřuje ke schválenému kontrolovanému pilotu; plošné předání až po fyzickém ověření.
 
-Skutečná instalace na fyzickém iPhonu, systémový Home Screen/app switcher, jeho snapshoty, zamknutí telefonu, push/telefon/GPS/kamera a reálné doručení OTP nebyly tímto testem ověřeny. WebKit s mobilním viewportem a simulovaným standalone není fyzický iPhone ani kompletní Safari. Krátký seznam závěrečných kroků je v návodu nasazení. Nebyl dostupný Xcode simulátor ani připojený telefon; správce má test provést v kontrolovaném pilotu, nikoli poskytnout veřejné firemní údaje.
-
-Izolované cloudové testovací prostředí s prokazatelně oddělenými datovými vazbami nebylo doloženo; žádný preview s firemními databázemi nebyl zveřejněn. Automatické načtení CLI oprávnění z macOS Klíčenky selhalo kódem 51. Webový účet byl ověřen, oprávnění skutečného CLI uploadu proto zůstává NEOVĚŘENO. Připraven je jednorázový postup obnovení běžného přihlášení Wrangler, nikoli obcházení Klíčenky nebo získávání tokenu z prohlížeče.
-
-## Zdroje
-
-[Apple – přidání webové aplikace na iPhone](https://support.apple.com/en-gb/guide/iphone/iphea86e5236/ios), [WebKit – Safari 26 a web apps](https://webkit.org/blog/17333/webkit-features-in-safari-26-0/), [Cloudflare – Pages deploy a deployment list](https://developers.cloudflare.com/workers/wrangler/commands/pages/), [Cloudflare – Pages rollback](https://developers.cloudflare.com/pages/configuration/rollbacks/). Nasazení potvrzuje až následná kontrola domény, nikoli úspěšný lokální build.
+Zdroje: [Apple instalace webové aplikace](https://support.apple.com/en-gb/guide/iphone/iphea86e5236/ios), [Cloudflare Pages API](https://developers.cloudflare.com/api/resources/pages/subresources/projects/subresources/deployments/methods/get/), [Wrangler credential interface](https://developers.cloudflare.com/workers/wrangler/commands/general/#auth-token), [Pages rollback](https://developers.cloudflare.com/pages/configuration/rollbacks/).
