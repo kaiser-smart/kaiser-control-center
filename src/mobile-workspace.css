@@ -1,0 +1,331 @@
+/* Contract: docs/MOBILE_UX_SPEC.md. Desktop keeps its original layout. */
+.mobile-header,.mobile-bottom-nav,.mobile-menu,.mobile-today,.mobile-view-switch,.mobile-section-select,.mobile-fold__toggle,.mobile-record-toggle,.mobile-pager { display:none; }
+.mobile-fold,.mobile-fold__content { display:contents; }
+@media (max-width:720px) {
+  :root { --mobile-top:calc(52px + env(safe-area-inset-top,0px)); --mobile-bottom:calc(60px + env(safe-area-inset-bottom,0px)); }
+  html { scroll-padding-top:calc(var(--mobile-top) + 12px); scroll-padding-bottom:calc(var(--mobile-bottom) + 12px); }
+  body:has(.ui-system-v2) { background:#f1f4f5; }
+  body.mobile-menu-open { overflow:hidden; }
+  #app .ui-system-v2 { display:block; width:100%; max-width:none; margin:0; min-height:100dvh; padding:calc(var(--mobile-top) + 8px) 12px calc(var(--mobile-bottom) + 16px); font-size:14px; --ui-pilot-radius-panel:12px; --ui-pilot-radius-control:10px; --ui-pilot-shadow-panel:none; --ui-pilot-shadow-card:none; --ui-pilot-shadow-inset:none; }
+  #app .ui-system-v2 > * { min-width:0; max-width:100%; }
+  #app .ui-system-v2 :is(button,a,input,select,textarea) { touch-action:manipulation; }
+  #app .ui-system-v2 :is(button,.primary-link,.secondary-link,.primary-action,.secondary-action,.text-action,summary) { min-height:44px; }
+  #app .ui-system-v2 :is(input:not([type=checkbox]):not([type=radio]),select,textarea) { min-height:44px; font-size:16px; max-width:100%; box-sizing:border-box; }
+  #app .ui-system-v2 :is(input[type=checkbox],input[type=radio]) { min-width:22px; min-height:22px; }
+  #app .ui-system-v2 h1 { font-size:22px; line-height:1.2; }
+  #app .ui-system-v2 h2 { font-size:17px; line-height:1.3; }
+  #app .ui-system-v2 h3 { font-size:15px; }
+  #app .ui-system-v2 :is(p,h1,h2,h3) { margin-top:0; }
+  #app .ui-system-v2 :is(p,td,[role=cell],label) { overflow-wrap:anywhere; }
+  #app .ui-system-v2 > :is(.ui-pilot-sidebar,.ui-pilot-toolbar,.ui-system-v2__toolbar),
+  #app .ui-system-v2 .mobile-desktop-tabs { display:none; }
+  #app .mobile-header { position:fixed; z-index:80; inset:0 0 auto; height:var(--mobile-top); padding:env(safe-area-inset-top,0px) max(12px,env(safe-area-inset-right,0px)) 0 max(12px,env(safe-area-inset-left,0px)); display:grid; grid-template-columns:44px minmax(0,1fr) 52px; align-items:center; gap:4px; background:#fff; border-bottom:1px solid #d7dfe2; }
+  #app .mobile-header strong { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:16px; }
+  #app .mobile-header :is(a,button) { display:flex; align-items:center; justify-content:center; height:44px; padding:0; border:0; background:transparent; color:#26371b; font-size:14px; border-radius:8px; box-shadow:none; text-decoration:none; }
+  #app .mobile-header .mobile-home-link { font-size:32px; }
+  #app .mobile-bottom-nav { position:fixed; inset:auto 0 0; z-index:80; display:flex; align-items:stretch; height:var(--mobile-bottom); padding:4px env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px); background:#fff; border-top:1px solid #d7dfe2; }
+  #app .mobile-bottom-link { flex:1; min-width:0; min-height:52px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:4px 0; border:0; border-radius:8px; background:transparent; color:#455058; font-size:11px; font-weight:700; text-decoration:none; white-space:pre-line; box-shadow:none; line-height:1.1; }
+  #app .mobile-bottom-link[aria-current] { background:#eaf4df; color:#365a12; }
+  #app .mobile-bottom-link .ui-pilot-nav__icon { width:22px; height:22px; padding:0; border:0; background:none; box-shadow:none; }
+  #app .mobile-bottom-link svg { width:22px; height:22px; }
+  .mobile-keyboard #app .mobile-bottom-nav { display:none; }
+  #app .mobile-menu[open] { display:flex; flex-direction:column; position:fixed; inset:0; width:100%; height:100dvh; max-width:none; max-height:none; margin:0; padding:calc(env(safe-area-inset-top,0px) + 12px) 16px calc(env(safe-area-inset-bottom,0px) + 16px); border:0; border-radius:0; color:#11191d; background:#f8fafb; overflow:auto; box-sizing:border-box; }
+  #app .mobile-menu__head { display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+  #app .mobile-menu__head h2 { margin:0; }
+  #app .mobile-menu-nav { margin:12px 0; }
+  #app .mobile-menu .ui-pilot-nav__group { display:block; padding:0; margin-bottom:12px; border:0; }
+  #app .mobile-menu .ui-pilot-nav__group > p { font-size:11px; margin:4px 0; color:#5e686d; }
+  #app .mobile-menu .ui-pilot-nav__items { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+  #app .mobile-menu .ui-pilot-nav__item { display:flex; min-width:0; min-height:44px; padding:8px; font-size:13px; border-radius:8px; box-shadow:none; gap:8px; }
+  #app .mobile-menu .ui-pilot-nav__icon { width:22px; height:22px; flex-shrink:0; }
+  #app .mobile-menu [hidden] { display:none!important; }
+  #app .mobile-menu .user-bar { display:flex; padding:12px 0; border-top:1px solid #d7dfe2; margin-top:auto; }
+  #app .mobile-menu .user-bar__identity { display:grid; gap:4px; }
+  #app .mobile-control,#app .mobile-fold__toggle { font:inherit; font-weight:700; border:1px solid #d7dfe2; background:#fff; color:#26371b; border-radius:10px; padding:8px 12px; box-shadow:none; }
+  #app .mobile-view-switch { display:flex; gap:4px; background:#e6ecee; border-radius:12px; padding:3px; margin:0 0 12px; }
+  #app .mobile-view-switch button { flex:1; min-height:44px; background:transparent; border:0; padding:6px; }
+  #app .mobile-view-switch button[aria-pressed=true] { background:#fff; color:#365a12; }
+  #app .mobile-section-select { display:flex; align-items:center; gap:12px; padding:0; margin:0 0 8px; }
+  #app .mobile-section-select > span { font-size:12px; color:#5e686d; }
+  #app .mobile-section-select select { flex:1; min-width:0; border:1px solid #d7dfe2; background:#fff; padding:8px; border-radius:10px; color:#11191d; }
+  #app .mobile-fold { display:block; margin:0 0 8px; }
+  #app .mobile-fold__toggle { display:flex; width:100%; align-items:center; justify-content:space-between; text-align:left; font-size:13px; }
+  #app .mobile-fold__toggle::after { content:'+'; margin-left:8px; font-size:18px; }
+  #app .mobile-fold--open > .mobile-fold__toggle::after { content:'−'; }
+  #app .mobile-fold > .mobile-fold__content { display:none; }
+  #app .mobile-fold--open > .mobile-fold__content { display:block; padding-top:8px; }
+  #app .ui-system-v2 :is(.fleet-section,.tracking-operational,.collection-routes-panel,.receivables-panel,.absence-panel,.users-panel,.driver-reports-panel,.ds-plus-workspace,.tyres-panel,.module-detail) { padding:12px; border-radius:12px; margin:0 0 8px; box-shadow:none; gap:12px; min-width:0; }
+  #app .ui-system-v2 :is(.module-detail__icon,.ui-pilot-hero__icon,.module-detail__eyebrow) { display:none; }
+  #app .ui-system-v2 :is(.module-actions,.collection-routes-route-actions,.driver-report-hero__actions) { display:flex; flex-wrap:wrap; gap:8px; }
+  #app .ui-system-v2 :is(.fleet-kpi-grid,.fleet-vehicle-summary-grid,.receivables-kpi-grid,.fuel-kpis,.tracking-operational-metrics,.main-dashboard-kpis,.main-dashboard-economics-metrics,.collection-routes-stats) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+  #app .ui-system-v2 :is(.fleet-kpi,.receivables-kpi,.main-dashboard-kpi,.main-dashboard-economics-metric,.fleet-vehicle-summary-grid > article) { min-height:0; padding:10px; border-radius:10px; box-shadow:none; }
+  #app .ui-system-v2 :is(.fleet-kpi,.receivables-kpi,.main-dashboard-kpi) strong { font-size:22px; }
+  #app .ui-system-v2 :is(.fleet-overview-grid,.fleet-detail-shell,.fleet-priority-grid,.receivables-detail-grid,.absence-form,.driver-report-quick-fields,.collection-daily-route-form) { display:grid; grid-template-columns:minmax(0,1fr); gap:8px; }
+  #app .ui-system-v2 :is(.fleet-filters,.fleet-document-filters,.collection-routes-route-filter,.driver-report-filters,.tracking-operational-toolbar) { display:grid; grid-template-columns:minmax(0,1fr); padding:8px; gap:8px; }
+  #app .ui-system-v2 :is(.fleet-quick-filters,.tracking-operational-filters,.collection-routes-waste-multi) { display:flex; flex-wrap:wrap; gap:4px; }
+  #app .ui-system-v2 .fleet-quick-filters button { flex:1 1 30%; }
+  #app .ui-system-v2 :is(.fleet-tracking-bridge,.fleet-operational-note,.collection-routes-panel__head,.collection-daily-routes__head,.ds-plus-triage-header) { padding:8px 0; gap:8px; }
+  #app .ui-system-v2 :is(.fleet-section__head,.collection-routes-panel__head,.receivables-panel__head,.absence-panel__head) { margin-bottom:8px; gap:8px; }
+  #app .ui-system-v2 :is(.fleet-section__head,.collection-routes-panel__head,.receivables-panel__head) p { font-size:12px; margin-bottom:0; }
+  #app .mobile-today { display:block; }
+  #app .mobile-today h1 { margin:0 0 4px; font-size:22px; }
+  #app .mobile-today h2 { margin:16px 0 8px; font-size:14px; }
+  #app .mobile-source { color:#5e686d; font-size:12px; margin:0 0 12px; }
+  #app .mobile-today-kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+  #app .mobile-today-kpis .main-dashboard-kpi { display:flex; flex-direction:column; gap:3px; background:#fff; border:1px solid #d7dfe2; padding:10px 8px; }
+  #app .mobile-today-kpis .main-dashboard-kpi > span { font-size:11px; line-height:1.2; }
+  #app .mobile-today-kpis .main-dashboard-kpi strong { font-size:23px; }
+  #app .mobile-today-kpis .main-dashboard-kpi small { display:none; }
+  #app .mobile-quick-actions { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  #app .mobile-quick-action { display:flex; align-items:center; gap:8px; min-height:52px; padding:8px; background:#fff; border:1px solid #d7dfe2; border-radius:10px; font-size:12px; font-weight:700; color:#203113; text-decoration:none; }
+  #app .mobile-quick-action .ui-pilot-nav__icon { width:24px; height:24px; flex:0 0 24px; padding:0; border:0; box-shadow:none; }
+  #app .mobile-attention .main-dashboard-attention { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; min-height:44px; margin-bottom:4px; border-radius:8px; gap:8px; font-size:12px; box-shadow:none; }
+  #app .mobile-attention .main-dashboard-attention strong { font-size:14px; }
+  #app .mobile-attention .main-dashboard-attention span { font-size:12px; }
+  #app .ui-system-pilot--home > :is(.home-hero,.home-module-sections,.version-backup-info,.version-news-info) { display:none; }
+  #app .ui-system-pilot--home[data-mobile-home=today] > .mobile-fold { display:none; }
+  #app .ui-system-pilot--home[data-mobile-home=reports] .mobile-today { display:none; }
+  #app .ui-system-pilot--home .main-dashboard-operations-grid,#app .ui-system-pilot--home .main-dashboard-economics-grid { grid-template-columns:1fr; }
+  /* Record tables keep their original cells and event targets. */
+  #app .ui-system-v2 .mobile-records { display:block; min-width:0; width:100%; table-layout:fixed; border:0; overflow:visible; }
+  #app .mobile-records :is(thead,.fleet-table__header,.fleet-work-table__header) { display:none; }
+  #app .mobile-records tbody { display:block; width:100%; }
+  #app .mobile-records .mobile-record { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) 64px; gap:4px 8px; padding:8px; min-height:64px; background:#fff; border:1px solid #d7dfe2; border-radius:8px; margin:0 0 4px; width:100%; box-sizing:border-box; }
+  #app .mobile-records .mobile-record > :is(td,[role=cell]) { min-width:0; width:auto; max-width:100%; padding:0; border:0; overflow-wrap:anywhere; font-size:12px; }
+  #app .mobile-records .mobile-record:not(.mobile-record--open) > :not(.mobile-record-key):not(.mobile-record-toggle) { display:none; }
+  #app .mobile-records .mobile-record > .mobile-record-key { display:flex; flex-direction:column; justify-content:center; }
+  #app .mobile-records .mobile-record > .mobile-record-toggle { display:block; grid-column:3; grid-row:1; align-self:center; }
+  #app .mobile-record-toggle button { width:64px; padding:4px; font-size:12px; }
+  #app .mobile-records .mobile-record > :not(.mobile-record-key):not(.mobile-record-toggle) { grid-column:1 / -1; padding:6px 0; }
+  #app .mobile-records .mobile-record--open > :not(.mobile-record-toggle)::before { content:attr(data-mobile-label); display:block; font-size:10px; font-weight:600; color:#5e686d; }
+  #app .mobile-records .mobile-record > [role=cell]::before { flex:none; }
+  #app .mobile-records .mobile-record:not(.mobile-record--open) .mobile-record-key::before { display:none; }
+  #app .mobile-records tr:not(.mobile-record) { display:block; }
+  #app .mobile-records tr:not(.mobile-record) td { display:block; min-width:0; white-space:normal; }
+  #app .ui-system-v2 :is(.receivables-table-wrap,.users-table-wrap,.fleet-import-table-wrap,.tyres-table-wrap,.driver-report-table-wrap) { overflow:visible; max-height:none; }
+  #app .ui-system-v2 .mobile-page-hidden { display:none!important; }
+  #app .mobile-pager { display:flex; justify-content:space-between; gap:8px; align-items:center; margin:8px 0; font-size:12px; }
+  #app .mobile-pager button { padding:8px; font-size:12px; }
+  /* Map is a task viewport, with the list on a separate view. */
+  #app .tracking-operational { padding:0; border:0; background:none; }
+  #app .tracking-operational__head { display:flex; justify-content:space-between; margin:0 0 4px; }
+  #app .tracking-operational__head > div { display:none; }
+  #app .tracking-operational__head button { min-height:44px; padding:6px 10px; font-size:12px; }
+  #app .tracking-operational-metrics { display:none; }
+  #app .tracking-operational-alert { margin:4px 0; padding:8px; font-size:11px; }
+  #app .tracking-operational-alert span { font-size:11px; }
+  #app .tracking-operational-map-stage { display:flex; flex-direction:column; min-height:0; height:calc(100dvh - var(--mobile-top) - var(--mobile-bottom) - 220px); border-radius:12px; overflow:hidden; }
+  #app .tracking-operational-map-shell,#app .tracking-operational-google-map,#app .tracking-operational-map-empty { flex:1; min-height:0; height:100%; }
+  #app .tracking-operational-map-empty { justify-content:center; padding:20px; gap:8px; }
+  #app .tracking-operational-map-empty__icon { font-size:32px; }
+  #app .tracking-operational-map-empty strong { font-size:16px; }
+  #app .tracking-operational-map-empty span { font-size:12px; }
+  #app .tracking-operational-map-stage > .mobile-fold { flex:0 0 auto; margin:0; }
+  #app .tracking-operational-map-toolbar { display:flex; flex-wrap:wrap; gap:4px; padding:8px; }
+  #app .tracking-operational-map-toolbar button { font-size:12px; padding:6px; }
+  #app [data-mobile-map=map] > :is(.tracking-operational-content,.mobile-fold) { display:none; }
+  #app [data-mobile-map=list] .tracking-operational-map-stage { display:none; }
+  #app .tracking-operational-content { display:block; }
+  #app .tracking-operational-list__items { max-height:none; overflow:visible; }
+  #app .tracking-operational-list { max-height:none; overflow:visible; }
+  #app .tracking-operational-detail { max-height:none; overflow:visible; }
+  #app .tracking-operational-map-stage--maximized { height:calc(100dvh - var(--mobile-top) - var(--mobile-bottom)); }
+  #app .ds-plus-triage-mailboxes { display:block; }
+  #app .ds-plus-triage-mailbox { padding:10px; margin-bottom:6px; min-height:0; border-radius:10px; }
+  #app .ds-plus-triage-mailbox__counts { display:flex; flex-wrap:wrap; gap:8px; }
+  #app .ds-plus-triage-mailbox__counts > * { padding:4px; min-height:0; }
+  #app .ds-plus-triage-header { display:block; }
+  #app .ds-plus-triage-header h1 { font-size:20px; }
+  #app .ds-plus-triage-header__buttons { display:flex; flex-wrap:wrap; gap:4px; }
+  #app .driver-report-click-entry { margin:0; padding:12px; border-radius:12px; }
+  #app .driver-report-click-entry__head p { font-size:12px; margin:0 0 8px; }
+  #app .driver-report-pitstop-banner { padding:8px; font-size:12px; }
+  #app .driver-report-mobile-report { padding:8px; margin:4px 0; border-radius:8px; }
+  /* Assistant stays reachable without covering the bottom navigation. */
+  .ai-assistant-launcher { bottom:calc(var(--mobile-bottom) + 12px)!important; }
+}
+@media (max-width:720px) {
+  #app .ui-system-v2 p { font-size:13px; line-height:1.45; }
+  #app .ui-system-v2 :is(.module-feedback__notice,.module-feedback__error,.receivables-warning) { padding:8px 10px; font-size:12px; line-height:1.4; margin:6px 0; }
+  #app .ui-system-v2 .tracking-operational { padding:0; margin:0; display:block; }
+  #app .ui-system-v2 .tracking-operational__head { margin:0 0 4px; }
+  #app .ui-system-v2 .tracking-operational__head button { width:auto; min-width:0; box-shadow:none; }
+  #app .ui-system-v2 .tracking-operational-map-stage__bar { display:flex; flex-direction:column; padding:8px; gap:8px; }
+  #app .ui-system-v2 .tracking-operational-map-stage__bar > div:first-child { display:none; }
+  #app .ui-system-v2 .tracking-operational-map-actions { display:flex; flex-wrap:wrap; gap:4px; }
+  #app .ui-system-v2 .tracking-operational-map-shell { min-height:0; flex:1; }
+  #app .ui-system-v2 .tracking-operational-metrics { display:grid; }
+  #app .ui-system-v2 .tracking-operational-map-empty { min-height:0; height:100%; }
+  #app .ui-system-v2 .tracking-operational-map-stage { min-height:200px; }
+  #app .ui-system-v2 [data-mobile-map=map] > :is(.mobile-fold,.tracking-operational-content) { display:none; }
+  #app .ui-system-v2 [data-mobile-map=map] .tracking-operational-map-stage { height:calc(100dvh - var(--mobile-top) - var(--mobile-bottom) - 214px); }
+  #app .ui-system-v2 .main-dashboard-attention__copy small { display:none; }
+  #app .ui-system-v2 .mobile-attention .main-dashboard-attention { min-height:44px; }
+  #app .ui-system-v2 .mobile-attention .main-dashboard-attention__value { width:32px; min-width:32px; height:32px; border-radius:8px; display:grid; place-items:center; }
+  #app .ui-system-v2 .mobile-attention .main-dashboard-attention__copy { flex:1; }
+  #app .ui-system-v2 .mobile-attention .main-dashboard-attention__action { font-size:10px; max-width:70px; }
+  #app .ui-system-v2 .ds-plus-triage-header { padding:10px; border-radius:12px; }
+  #app .ui-system-v2 .ds-plus-triage-header__main { display:none; }
+  #app .ui-system-v2 .ds-plus-triage-header__buttons { display:grid; grid-template-columns:1fr 1.4fr; }
+  #app .ui-system-v2 .ds-plus-triage-header__buttons button { width:auto; min-width:0; font-size:12px; padding:8px; box-shadow:none; }
+  #app .ui-system-v2 .ds-plus-triage-header small { font-size:11px; }
+  #app .ui-system-v2 .ds-plus-section-head { margin-bottom:8px; gap:4px; }
+  #app .ui-system-v2 .ds-plus-section-head p,#app .ui-system-v2 .ds-plus-section-head > div > span { display:none; }
+  #app .ui-system-v2 .ds-plus-state-pill { font-size:10px; padding:4px 8px; }
+  #app .ui-system-v2 .ds-plus-triage-mailbox { display:grid; grid-template-columns:minmax(0,1fr) 70px; gap:4px 8px; padding:10px; margin-bottom:6px; box-shadow:none; }
+  #app .ui-system-v2 .ds-plus-triage-mailbox__head { display:block; gap:4px; }
+  #app .ui-system-v2 .ds-plus-triage-mailbox__head > div > span { display:none; }
+  #app .ui-system-v2 .ds-plus-triage-mailbox__head h2 { font-size:14px; margin:0; }
+  #app .ui-system-v2 .ds-plus-triage-mailbox__head .ds-plus-badge { font-size:10px; padding:0; background:none; }
+  #app .ui-system-v2 .ds-plus-triage-mailbox > p { grid-column:1; font-size:10px; margin:0; }
+  #app .ui-system-v2 .ds-plus-triage-mailbox__counts { grid-column:1 / -1; grid-row:3; display:flex; margin:0; gap:10px; }
+  #app .ui-system-v2 .ds-plus-triage-mailbox__counts > div { display:flex; align-items:center; gap:4px; padding:0; }
+  #app .ui-system-v2 .ds-plus-triage-mailbox__counts :is(dt,dd) { font-size:10px; margin:0; }
+  #app .ui-system-v2 .ds-plus-triage-mailbox > button { grid-column:2; grid-row:1 / 3; align-self:center; font-size:12px; min-width:0; padding:6px; box-shadow:none; }
+  #app .ui-system-v2 .quick-absence-shell { display:block; }
+  #app .ui-system-v2 .quick-absence-card { padding:12px; margin:0 0 8px; border-radius:12px; }
+  #app .ui-system-v2 .quick-absence-types { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  #app .ui-system-v2 .quick-absence-type { display:flex; gap:8px; align-items:center; padding:8px; min-height:56px; border-radius:10px; }
+  #app .ui-system-v2 .quick-absence-type__icon { width:28px; height:28px; font-size:12px; }
+  #app .ui-system-v2 .quick-absence-type strong { font-size:13px; }
+  #app .ui-system-v2 .driver-report-desktop-workspace { display:block; }
+  #app .ui-system-v2 .driver-report-filters { display:grid; }
+  #app .ui-system-v2 .driver-report-drawer { max-height:none; overflow:visible; position:static; width:100%; }
+  #app .ui-system-v2 :is(.driver-report-queue-panel,.driver-report-detail) { min-width:0; padding:8px; }
+  #app .ui-system-v2 .collection-daily-routes { padding:8px; margin:0 0 8px; gap:8px; }
+  #app .ui-system-v2 .collection-daily-routes__head { padding:0; margin:0; }
+  #app .ui-system-v2 .collection-daily-routes__saved { padding:8px; }
+  #app .ui-system-v2 .collection-daily-routes__head p { font-size:12px; }
+  #app .ui-system-v2 .collection-routes-mantra { margin:6px 0; }
+  #app .ui-system-v2 .fleet-vehicle-summary-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
+  #app .ui-system-v2 .fleet-vehicle-summary-grid > article { padding:6px; }
+  #app .ui-system-v2 .fleet-vehicle-summary-grid > article strong { font-size:18px; }
+  #app .ui-system-v2 .fleet-vehicle-summary-grid > article span { font-size:10px; }
+  #app .ui-system-v2 .fleet-section__head > div > p { display:none; }
+  #app .ui-system-v2 .fleet-operational-note { font-size:11px; margin:4px 0; }
+  #app .ui-system-v2 .receivables-kpi span { font-size:11px; }
+  #app .ui-system-v2 .receivables-kpi small { font-size:10px; }
+  #app .ui-system-v2 .receivables-kpi { padding:8px; }
+  #app .ui-system-v2 .mobile-records .mobile-record-key :is(strong,span) { font-size:12px; }
+}
+@media (max-width:720px) {
+  #app .mobile-section-select select { appearance:none; height:44px; min-height:44px; background:#fff; padding:8px 12px; }
+  #app .mobile-section-select::after { content:'⌄'; margin-left:-38px; width:26px; pointer-events:none; }
+  #app .ui-system-v2 .ds-plus-header__main { display:none; }
+  #app .ui-system-v2 .fleet-section { gap:8px; }
+  #app .ui-system-v2 .fleet-content { margin-top:0; }
+  #app .ui-system-v2 .fleet-section__head { padding:0; margin:0; }
+  #app .ui-system-v2 .fleet-vehicle-summary-grid { margin:0; }
+  #app .ui-system-v2 .fleet-operational-note { display:flex; flex-wrap:wrap; gap:4px; }
+  #app .ui-system-v2 .driver-report-click-entry__head { padding:0; background:none; border:0; }
+  #app .ui-system-v2 .driver-report-click-entry__head > div > span { display:none; }
+  #app .ui-system-v2 .driver-report-pitstop-banner,#app .ui-system-v2 .driver-report-pitstop-steps { display:none; }
+  #app .ui-system-v2 .driver-report-form--pitstop { background:#fff; padding:0; gap:8px; overflow:visible; }
+  #app .ui-system-v2 .driver-report-quick-fields { padding:0; gap:8px; }
+  #app .ui-system-v2 .driver-report-form label > span { font-size:12px; }
+  #app .ui-system-v2 .driver-report-form textarea { min-height:80px; height:80px; }
+  #app .ui-system-v2 .driver-report-form input:not([type=checkbox]) { height:44px; }
+  #app .ui-system-v2 .driver-report-form-note { font-size:11px; margin:0; }
+  #app .ui-system-v2 .driver-report-pitstop-submit { box-shadow:none; margin:0; min-height:44px; }
+  #app .ui-system-v2 .collection-daily-routes__head > div > p { display:none; }
+  #app .ui-system-v2 .collection-daily-routes__head > div > span { display:none; }
+  #app .ui-system-v2 .collection-daily-routes__empty { padding:8px; font-size:12px; border-width:1px; min-height:0; }
+  #app .ui-system-v2 .collection-daily-routes__empty :is(strong,span) { font-size:12px; }
+  #app .ui-system-v2 .collection-daily-routes__route-picker > summary { padding:8px; min-height:44px; gap:8px; }
+  #app .ui-system-v2 .collection-daily-routes__route-picker > summary :is(span,strong) { font-size:12px; }
+  #app .ui-system-v2 .collection-daily-routes__saved { padding:8px; gap:6px; }
+  #app .ui-system-v2 .collection-daily-routes__saved > div:first-child { display:flex; flex-direction:row; }
+  #app .ui-system-v2 .collection-daily-routes__saved h4 { font-size:13px; }
+  #app .ui-system-v2 .collection-daily-routes__saved button { font-size:12px; padding:6px; }
+  #app .ui-system-v2 [data-mobile-map=map] .tracking-operational-map-stage { height:calc(var(--mobile-map-space, 500px) - var(--mobile-bottom) - 12px); }
+  #app .ui-system-v2 .tracking-operational-map-empty { padding:12px; }
+  #app .ui-system-v2 .tracking-operational-alert { padding:6px 8px; font-size:11px; }
+  #app .ui-system-v2 .tracking-operational-alert strong { font-size:11px; }
+  #app .ai-assistant-launcher { width:44px; height:44px; min-width:44px; padding:0; right:16px; bottom:calc(var(--mobile-bottom) + 10px)!important; box-shadow:0 2px 8px #0002; }
+  #app .ai-assistant-launcher > span:last-child { display:none; }
+  #app .ai-assistant-launcher__icon { width:24px; height:24px; }
+  #app .ui-system-v2 .mobile-today h2 { margin-top:12px; }
+  #app .ui-system-v2 .mobile-today .mobile-pager { margin:4px 0 0; }
+}
+@media (max-width:720px) {
+  #app .ui-system-v2 .mobile-records .fleet-table__row { min-height:56px; }
+  #app .ui-system-v2 .mobile-records .fleet-table__row > [role=cell] { align-items:flex-start; }
+  #app .ui-system-v2 .fleet-table__status { order:2; }
+  #app .ui-system-v2 .fleet-table__plate { order:1; }
+  #app .ui-system-v2 .mobile-record-toggle { order:3; }
+  #app .ui-system-v2 .fleet-table__row > :not(.mobile-record-key):not(.mobile-record-toggle) { order:4; }
+  #app .ui-system-v2 .mobile-records .fleet-row-status { min-height:24px; font-size:10px; padding:4px; }
+  #app .ui-system-v2 .mobile-records .fleet-row-plate { white-space:nowrap; }
+}
+
+@media (max-width:720px) {
+  #app .ui-system-v2 .fleet-detail-card { padding:10px; border-radius:10px; box-shadow:none; min-width:0; }
+  #app .ui-system-v2 .fleet-detail-card--actions > div:first-child { display:none; }
+  #app .ui-system-v2 .fleet-detail-shell { gap:0; }
+  #app .ui-system-v2 .fleet-detail-primary-action { margin:0 0 8px; }
+  #app .ui-system-v2 .fleet-detail-card--actions { padding:0; background:none; border:0; }
+  #app .ui-system-v2 .fleet-detail-header { display:grid; grid-template-columns:1fr 1fr; padding:8px; gap:8px; }
+  #app .ui-system-v2 .fleet-detail-header > div { padding:6px; min-height:0; }
+  #app .ui-system-v2 .fleet-detail-header strong { font-size:13px; }
+  #app .ui-system-v2 .fleet-detail-header span { font-size:10px; }
+  #app .mobile-vehicle-back { display:inline-flex; align-items:center; min-height:44px; margin:8px 0; text-decoration:none; }
+  #app .mobile-vehicle-identity { font-weight:700; margin:4px 0 10px; }
+  #app .ui-system-v2 .fleet-detail-secondary-actions { display:flex; flex-wrap:wrap; gap:4px; }
+  #app .ui-system-v2 .fleet-detail-card :is(.fleet-driver-reports-kpis,.fleet-tcars-kpis) { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+  #app .ui-system-v2 .tracking-operational-content { display:flex; flex-direction:column; }
+  #app .tracking-operational-content > .mobile-fold:has(.tracking-operational-detail) { order:-1; }
+}
+
+@media (max-width:720px) {
+  #app #fleet-vehicles > .fleet-section__head { display:none; }
+  #app .mobile-fleet-summary { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:0 0 8px; }
+  #app .mobile-fleet-summary > article { display:flex; align-items:center; gap:8px; padding:8px; border-radius:8px; background:white; }
+  #app .mobile-fleet-summary span { font-size:10px; }
+  #app .mobile-fleet-summary strong { font-size:20px; }
+}
+
+/* Shared working surfaces follow the mobile report form, across every agenda. */
+@media (max-width:720px) {
+  #app .ui-system-v2 :is(.module-panel,.module-settings-panel,.notification-center,.access-form,.system-check-card,.self-repair-overview,.self-repair-list,.self-repair-detail,.absence-detail-panel,.fuel-analytics,.rcs-platform-panel) { min-width:0; padding:12px; margin:0 0 8px; border-radius:12px; background:#fff; border:1px solid #d7dfe2; box-shadow:none; }
+  #app .ui-system-v2 :is(.fleet-section,.collection-routes-panel,.receivables-panel,.absence-panel,.users-panel,.driver-report-click-entry,.ds-plus-triage-header,.tyres-panel,.quick-absence-card) { background:#fff; border:1px solid #d7dfe2; box-shadow:none; border-radius:12px; }
+  #app .ui-system-v2 :is(.primary-action,.primary-link,.driver-report-pitstop-submit) { background:#75bd25; border-color:#75bd25; color:#fff; border-radius:10px; box-shadow:none; font-size:14px; padding:10px 12px; }
+  #app .ui-system-v2 :is(.secondary-action,.secondary-link,.text-action) { border-radius:10px; box-shadow:none; font-size:13px; padding:8px 10px; }
+  #app .ui-system-v2 :is(.access-form-grid,.access-roles-grid,.absence-workspace,.absence-panels,.self-repair-workspace,.notification-filters,.customer-message-filters,.self-repair-filters,.fuel-filters) { display:grid; grid-template-columns:minmax(0,1fr); gap:8px; }
+  #app .ui-system-v2 :is(.absence-dashboard,.absence-side-rail,.system-check-grid) { display:block; gap:8px; }
+  #app .ui-system-v2 :is(.absence-kpis,.self-repair-summary) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin:0 0 8px; }
+  #app .ui-system-v2 :is(.absence-kpi,.self-repair-summary > article,.fuel-kpis > article) { padding:8px; min-height:0; border-radius:10px; box-shadow:none; }
+  #app .ui-system-v2 :is(.absence-kpi,.fuel-kpis > article,.self-repair-summary > article) strong { font-size:20px; }
+  #app .ui-system-v2 :is(.absence-kpi,.fuel-kpis > article,.self-repair-summary > article) span { font-size:11px; }
+  #app .ui-system-v2 :is(.absence-kpi,.fuel-kpis > article) small { font-size:10px; }
+  #app .ui-system-v2 :is(.absence-command-actions,.fuel-periods) { display:flex; flex-wrap:wrap; gap:4px; }
+  #app .ui-system-v2 .absence-command-actions > * { flex:1; min-width:0; font-size:12px; }
+  #app .ui-system-v2 :is(.absence-panel--quick,.absence-empty,.self-repair-empty,.fuel-data-state) { padding:8px; margin:0 0 8px; min-height:0; }
+  #app .ui-system-v2 .absence-panel--quick > div:first-child p { display:none; }
+  #app .ui-system-v2 .fuel-analytics__head { display:block; }
+  #app .ui-system-v2 .fuel-analytics__head h3 { display:none; }
+  #app .ui-system-v2 .fuel-period { padding:6px 10px; min-height:44px; font-size:12px; }
+  #app .ui-system-v2 .fuel-kpis { margin:8px 0; }
+  #app .ui-system-v2 .fuel-data-state :is(strong,span) { font-size:12px; }
+  #app .ui-system-v2 :is(.access-permissions-wrap,.fuel-table-wrap,.self-repair-list,.self-repair-detail,.absence-worklist) { max-height:none; overflow:visible; min-width:0; }
+  #app .ui-system-v2 .access-permissions-table .mobile-record { grid-template-columns:minmax(0,1fr) 0 64px; }
+  #app .ui-system-v2 .access-permissions-table .mobile-record--open > td:not(.mobile-record-key):not(.mobile-record-toggle) { display:flex; align-items:center; justify-content:space-between; min-height:44px; }
+  #app .ui-system-v2 .access-check { min-height:44px; min-width:44px; display:grid; place-items:center; }
+  #app .ui-system-v2 .users-panel__head { display:flex; flex-wrap:wrap; gap:8px; }
+  #app .ui-system-v2 .users-panel__head p { font-size:12px; margin:0; }
+  #app .ui-system-v2 .access-form-actions { display:flex; flex-wrap:wrap; gap:8px; }
+  #app .ui-system-v2 .system-check-card h2 { font-size:16px; }
+  #app .ui-system-v2 .system-check-item { padding:8px; gap:8px; }
+  #app .ui-system-v2 .self-repair-case { padding:10px; margin:0 0 6px; border-radius:10px; box-shadow:none; }
+  #app .ui-system-v2 .self-repair-list__head { display:flex; flex-wrap:wrap; gap:8px; }
+}
+
+@media (max-width:720px) {
+  #app .ui-system-v2 .mobile-records [hidden],#app .ui-system-v2 .mobile-pager[hidden] { display:none!important; }
+  #app .ui-system-v2 .absence-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  #app .ui-system-v2 .absence-kpi { background:#fff; padding:8px 4px; gap:4px; }
+  #app .ui-system-v2 .absence-kpi::before,#app .ui-system-v2 .absence-kpi::after { display:none; }
+  #app .ui-system-v2 .absence-kpi span { font-size:10px; }
+  #app .ui-system-v2 .absence-panel__head { background:transparent; padding:0; border:0; border-radius:0; }
+  #app .ui-system-v2 .absence-panel__head :is(h2,p) { color:#11191d; }
+  #app .ui-system-v2 :is(input,textarea,select) { font-weight:500; line-height:1.3; }
+}

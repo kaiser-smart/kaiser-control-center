@@ -1,6 +1,7 @@
+import { applyMobileWorkspace, revealMobileTarget } from "./mobileWorkspace.js";
 import { createSessionGuard } from "./data/sessionGuard.js";
-import { forpsiAdminSection, mountForpsiAdmin, forpsiDirtyTarget, saveForpsiDraft, discardForpsiDraft } from "./components/ForpsiAdminPanel.js";
-import { forpsiMailSection, mountForpsiMail } from "./components/ForpsiMailPanel.js";
+import { mountForpsiAdmin, forpsiDirtyTarget, saveForpsiDraft, discardForpsiDraft } from "./components/ForpsiAdminPanel.js";
+import { mountForpsiMail } from "./components/ForpsiMailPanel.js";
 import { forpsiComposerDirtyTarget, saveForpsiComposer, discardForpsiComposer } from "./components/ForpsiComposer.js";
 import { receivablesInvoicePage } from "./data/receivablesInvoicePagination.js";
 import { moduleDashboards, modules } from "./data/modules.js";
@@ -2697,7 +2698,7 @@ const UI_SYSTEM_PILOT_NAV_GROUPS = [
   },
   {
     label: "Hlavní práce",
-    moduleIds: ["quick-absence", "collection-routes", "driver-reports", "vehicle-tracking", "forpsi-mail", "data-box-plus", "rcs-sms-autopilot"]
+    moduleIds: ["quick-absence", "collection-routes", "driver-reports", "vehicle-tracking", "data-box-plus", "rcs-sms-autopilot"]
   },
   {
     label: "Vozidla a servis",
@@ -2746,7 +2747,7 @@ function uiSystemPilotModulesForUser(user) {
     ? [quickAbsenceMenuItem, ...menuModules(user)]
     : menuModules(user);
 
-  return new Map([...items,{id:"forpsi-mail",title:"Pošta",route:"/dashboard?view=forpsi-mail",icon:ReportsIcon}].map((moduleItem) => [moduleItem.id, moduleItem]));
+  return new Map(items.map((moduleItem) => [moduleItem.id, moduleItem]));
 }
 
 function uiSystemPilotModuleHref(moduleItem, user) {
@@ -4190,7 +4191,8 @@ function renderAiAssistantLayer() {
       demoStatus: aiAssistantState.demoStatus
     }),
     AiAssistantLauncher({
-      visible: !promoVisible && (collectionRoutesSpeakingHologram || ((aiAssistantState.launcherVisible && !aiAssistantState.chatOpen && !aiAssistantState.welcomeVisible) || shouldShowAiVoiceDock())),
+      // Hide the idle floating voice icon; preserve controls for a running call.
+      visible: !promoVisible && (collectionRoutesSpeakingHologram || shouldShowAiVoiceDock()),
       voiceActive: shouldShowAiVoiceDock(),
       voiceUiState: aiAssistantState.voiceUiState,
       voiceStatus: aiAssistantState.voiceStatus,
@@ -6605,6 +6607,7 @@ function focusAccessUserEditor() {
   }
 
   try {
+    revealMobileTarget(editor);
     editor.scrollIntoView({ block: "start", behavior: "auto" });
     editor.querySelector("input[name='name']")?.focus({ preventScroll: true });
   } catch (error) {
@@ -7391,7 +7394,6 @@ function settingsManagementSection(user) {
 
   return `
     ${dashboardModule ? genericModuleSettingsSection(dashboardModule) : ""}
-    ${forpsiAdminSection(user.id)}
     ${rcsTemplateCenterSection(true)}
     ${vehicleTrackingAdministrationSettings(user)}
     ${communicationInfrastructureSection(user)}
@@ -12045,7 +12047,7 @@ function fleetActiveTab(vehicleId = "") {
     return "detail";
   }
 
-  return hashTab || (vehicleId ? "detail" : "overview");
+  return hashTab || (vehicleId ? "detail" : window.matchMedia("(max-width: 720px)").matches ? "vehicles" : "overview");
 }
 
 function fleetTabHref(tabId) {
@@ -16580,6 +16582,7 @@ function syncVehicleTrackingTcarsSelectionDom(locationId) {
       ? vehicleTrackingOperationalDetail(selectedLocation)
       : vehicleTrackingTcarsLocationDetail(selectedLocation);
   }
+  document.querySelector('.tracking-operational')?.dispatchEvent(new Event('mobile-vehicle-selected'));
 
   return true;
 }
@@ -54981,12 +54984,12 @@ function renderAuthenticatedApp(user) {
     renderAuthenticatedApp(user);
     return;
   }
-  // Mailbox grants govern this workspace. Reuse the dashboard route to retain the monitoring budget.
+  // Retain the old URL as a safe redirect while the mail module is hidden.
   if(path==='/dashboard' && new URLSearchParams(window.location.search).get('view')==='forpsi-mail') {
-    app.innerHTML=`<main class="app-shell module-page module-theme-scope" ${moduleThemeStyleAttribute()}>${userBar(user)}
-      <nav class="topbar" aria-label="Navigace"><a class="back-button" href="${routeHref('/')}" data-link>Zpět na přehled</a>
-      ${hasPermission(user,'settings','manage')?`<a class="secondary-link" href="${routeHref('/nastaveni#forpsi-admin')}" data-link>Nastavení Forpsi</a>`:''}</nav>${forpsiMailSection()}</main>`;
-    document.title=`Pošta | ${APP_NAME}`;return;
+    // Company mail is hidden by product decision; retain its data and backend.
+    window.history.replaceState({}, '', routeHref('/'));
+    renderAuthenticatedApp(user);
+    return;
   }
   if (isDriverReportsPath(path) && (aiAssistantState.chatOpen || isAiVoiceSessionActive() || aiAssistantState.isListening)) {
     closeAiAssistant({ renderAfter: false });
@@ -55470,6 +55473,7 @@ function render() {
     syncCollectionRoutesDriverKioskDocumentState();
     syncCollectionDailyDriverViewportDiagnostics();
     applyUiSystemV2();
+    applyMobileWorkspace(app, { userId: authState.user?.id || null, activeModuleId: uiSystemV2ActiveModuleId(window.location.pathname), render });
     bindRcsSmsAutopilot(app, { apiJson, render });
     app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
     app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());
@@ -56629,7 +56633,9 @@ function scrollToFleetTarget(targetId) {
   }
 
   window.requestAnimationFrame(() => {
-    document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const target = document.getElementById(targetId);
+    revealMobileTarget(target);
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 }
 

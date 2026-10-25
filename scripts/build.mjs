@@ -25,6 +25,7 @@ function versionedTemplate() {
   return template
     .replace('href="src/styles.css"', `href="src/styles.css?v=${assetVersion}"`)
     .replace('href="src/ui-system-pilot.css"', `href="src/ui-system-pilot.css?v=${assetVersion}"`)
+    .replace('href="src/mobile-workspace.css"', `href="src/mobile-workspace.css?v=${assetVersion}"`)
     .replace('src="src/app.js"', `src="src/app.js?v=${assetVersion}"`);
 }
 
