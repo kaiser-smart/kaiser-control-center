@@ -253,7 +253,9 @@ runVisible(deployCommand, deployArgs);
 console.log(`Upload dokoncen, nasleduje overeni: ${version} / ${REQUIRED_BRANCH} / ${head.slice(0, 7)} / ${backupDate}`);
 
 if (localRelease) {
-  const project = await productionApi("/");
+  // Wrangler can refresh/rotate OAuth during upload. Re-read its supported
+  // credential interface instead of reusing the pre-upload token.
+  const project = await cloudflareClient()("/");
   assertSuccessfulDeployment(project.canonical_deployment, head);
   runVisible("node", ["scripts/pwa-postdeploy.mjs", releasePath]);
   console.log(`Production verified: ${version} / ${head}`);

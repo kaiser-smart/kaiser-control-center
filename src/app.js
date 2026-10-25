@@ -5231,6 +5231,7 @@ function setAccessState(nextState) {
 }
 
 function scrollToPageTop() {
+  document.querySelector("main.ui-system-v2")?.scrollTo({ top: 0, left: 0, behavior: "auto" });
   try {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   } catch {
@@ -55497,7 +55498,11 @@ function syncCollectionDailyDriverViewportDiagnostics() {
   kiosk.dataset.collectionDriverScreenHeight = String(screenHeight);
 }
 
+let mobileScrollRoute = null;
 function render() {
+  const scrollRoute = location.pathname + location.search + location.hash;
+  const scrollTop = mobileScrollRoute === scrollRoute ? (app.querySelector("main.ui-system-v2")?.scrollTop || 0) : 0;
+  mobileScrollRoute = scrollRoute;
   try {
     accessUnsavedChangesGuard.unmountModal();
     applyActiveThemeToRoot();
@@ -55508,6 +55513,8 @@ function render() {
     syncCollectionDailyDriverViewportDiagnostics();
     applyUiSystemV2();
     applyMobileWorkspace(app, { userId: authState.user?.id || null, activeModuleId: uiSystemV2ActiveModuleId(window.location.pathname), render });
+    const mobileShell = app.querySelector("main.ui-system-v2");
+    if (mobileShell) mobileShell.scrollTop = scrollTop;
     bindRcsSmsAutopilot(app, { apiJson, render });
     app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
     app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());

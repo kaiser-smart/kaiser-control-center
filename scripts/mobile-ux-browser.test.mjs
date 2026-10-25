@@ -113,12 +113,33 @@ try {
       await page.screenshot({path:path.join(output,`${slug}-${width}.png`),fullPage:true});
       await page.screenshot({path:path.join(output,`${slug}-${width}-viewport.png`)});
       if(!process.env.MOBILE_BASELINE) assert.ok(metrics.width<=width,`Horizontal overflow ${route} ${width}`);
+      if (!process.env.MOBILE_BASELINE) {
+        const native = await page.evaluate(() => {
+          const main = document.querySelector('main.ui-system-v2');
+          const header = document.querySelector('.mobile-header');
+          const nav = document.querySelector('.mobile-bottom-nav');
+          const before = [header.getBoundingClientRect().top, nav.getBoundingClientRect().top];
+          main.scrollTop = main.scrollHeight;
+          const after = [header.getBoundingClientRect().top, nav.getBoundingClientRect().top];
+          const result = {rootHeight:document.documentElement.scrollHeight, viewportHeight:innerHeight,
+            rootScroll:scrollY, mainHeight:main.clientHeight, contentHeight:main.scrollHeight, scroll:main.scrollTop, before, after,
+            smallInputs:[...document.querySelectorAll('input:not([type=checkbox]):not([type=radio]),select,textarea')].filter(x=>x.getBoundingClientRect().height && parseFloat(getComputedStyle(x).fontSize)<16).map(x=>x.name)};
+          main.scrollTop = 0;
+          return result;
+        });
+        assert.equal(native.rootHeight, height, `Document height ${route}`);
+        assert.equal(native.rootScroll, 0, `Document must not scroll ${route}`);
+        assert.deepEqual(native.before,native.after, `Navigation stays fixed ${route}`);
+        assert.deepEqual(native.smallInputs,[], `Input autozoom prevention ${route}`);
+        if (native.contentHeight>native.mainHeight) assert.ok(native.scroll>0,`Long content reachable ${route}`);
+      }
+
       if(width===375) await writeFile(path.join(output,`${slug}-dom.html`),await page.locator('main').first().innerHTML());
       results.push({route,width,height,...metrics});
       console.log(route,width,metrics.height,metrics.width);
     }
   }
-  if (!process.env.MOBILE_BASELINE && !process.env.MOBILE_AUDIT_EXTRA && !process.env.MOBILE_LAUNCHER_ONLY) {
+  if (!process.env.NATIVE_LAYOUT_ONLY && !process.env.MOBILE_BASELINE && !process.env.MOBILE_AUDIT_EXTRA && !process.env.MOBILE_LAUNCHER_ONLY) {
     const navigateReference = async route => { await page.waitForLoadState('networkidle'); await page.goto(origin+route); await page.waitForLoadState('networkidle'); };
     for (const [width,height] of [[375,667],[390,844],[430,932]]) {
       await page.setViewportSize({width,height});
@@ -289,7 +310,74 @@ try {
     results.push({functional:'passed',checks:['header','touch-targets','quick-actions','menu-search','menu-focus','fleet-pagination-all-24','record-expand','vehicle-detail','history','filter','map-list','keyboard-resize','desktop','role-permissions','user-search-across-pages','user-editor','permission-touch-targets','vehicle-history','selected-map-detail','hidden-mail-redirect','hidden-voice-icon','logout']});
     assert.deepEqual(errors,[],'No uncaught browser errors');
   }
-  if (!process.env.MOBILE_BASELINE && !process.env.MOBILE_AUDIT_EXTRA) {
+  if (process.env.NATIVE_MOBILE_CHECKS) {
+    await context.clearCookies();
+    await page.goto(origin);
+    await page.locator('[data-auth-form]').waitFor();
+    await page.locator('[name=identifier]').fill(user.email);
+    await page.locator('[data-auth-form] button[type=submit]').click();
+    await page.locator('[name=code]').fill('123456');
+    await page.locator('[data-auth-form] button[type=submit]').click();
+    await page.locator('.module-launcher').waitFor();
+    await page.setViewportSize({width:390,height:844});
+    await page.goto(origin+'/hlaseni-ridicu');
+    await page.locator('[name=defectDescription]').fill('Zachovat při otočení a klávesnici');
+    for (const [width,height] of [[844,390],[390,844],[667,375],[932,430]]) {
+      await page.setViewportSize({width,height});
+      await page.waitForTimeout(120);
+      assert.ok(await page.locator('.mobile-header').isVisible(),'Landscape keeps mobile navigation');
+      assert.equal(await page.locator('[name=defectDescription]').inputValue(),'Zachovat při otočení a klávesnici');
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),width);
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollHeight),height);
+      await page.screenshot({path:path.join(output,`orientation-${width}-${height}.png`)});
+    }
+    await page.setViewportSize({width:390,height:844});
+    await page.locator('[name=defectDescription]').focus();
+    await page.evaluate(()=>{
+      Object.defineProperty(visualViewport,'height',{configurable:true,value:380});
+      Object.defineProperty(visualViewport,'offsetTop',{configurable:true,value:0});
+      visualViewport.dispatchEvent(new Event('resize'));
+    });
+    await page.waitForTimeout(100);
+    assert.ok(await page.evaluate(()=>document.documentElement.classList.contains('mobile-keyboard')));
+    assert.equal(await page.locator('main.ui-system-v2').evaluate(el=>el.clientHeight),380);
+    const fieldBox=await page.locator('[name=defectDescription]').boundingBox();
+    assert.ok(fieldBox.y>=52 && fieldBox.y+fieldBox.height<=380,'Focused field above simulated keyboard');
+    await page.screenshot({path:path.join(output,'keyboard-visual-viewport-390.png')});
+    await page.evaluate(()=>{delete visualViewport.height;delete visualViewport.offsetTop;document.activeElement.blur();visualViewport.dispatchEvent(new Event('resize'));});
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator('main.ui-system-v2').evaluate(el=>el.clientHeight),844);
+    assert.ok(await page.locator('.mobile-bottom-nav').isVisible());
+    const gestures=await page.evaluate(()=>{
+      const target=document.querySelector('h1') || document.querySelector('main');
+      const dispatch=el=>{const event=new Event('gesturestart',{bubbles:true,cancelable:true});el.dispatchEvent(event);return event.defaultPrevented;};
+      Object.defineProperty(navigator,'standalone',{configurable:true,value:false});
+      const browser=dispatch(target);
+      Object.defineProperty(navigator,'standalone',{configurable:true,value:true});
+      const installed=dispatch(target);
+      const map=document.createElement('div');map.className='tracking-google-map';document.querySelector('main').append(map);
+      const mapAllowed=!dispatch(map);
+      const button=document.createElement('button');button.textContent='Testovat akci';document.querySelector('main').append(button);
+      let actions=0;button.addEventListener('click',()=>actions++);button.click();button.click();
+      const toggle=document.createElement('button');toggle.setAttribute('aria-expanded','false');document.querySelector('main').append(toggle);
+      let toggles=0;toggle.addEventListener('click',()=>toggles++);toggle.click();toggle.click();
+      map.append(button);button.click();button.click();
+      const data=document.createElement('a');data.textContent='Uživatelský údaj';document.querySelector('main').append(data);
+      const selection=getComputedStyle(data).userSelect;data.remove();
+      const result={browser,installed,mapAllowed,actions,toggles,selection,touch:getComputedStyle(document.querySelector('main')).touchAction,viewport:document.querySelector('meta[name=viewport]').content};
+      button.remove();toggle.remove();map.remove();delete navigator.standalone;return result;
+    });
+    assert.equal(gestures.browser,false,'Browser accessibility pinch available');
+    assert.equal(gestures.installed,true,'Installed iOS accidental page gesture suppressed');
+    assert.equal(gestures.mapAllowed,true,'Map gesture exempt');
+    assert.equal(gestures.actions,3,'One regular action plus two map actions');
+    assert.equal(gestures.toggles,2,'Intentional toggles allowed');
+    assert.notEqual(gestures.selection,'none','User data remains selectable');
+    assert.equal(gestures.touch,'manipulation','Double-tap zoom disabled without blocking pan or pinch');
+    assert.ok(!/user-scalable|maximum-scale/.test(gestures.viewport),'No accessibility viewport restriction');
+    results.push({nativeMobile:'passed',checks:['bounded-document','independent-content-scroll','fixed-navigation','all-inputs-16px','landscape-draft-preserved','synthetic-visual-viewport-keyboard','synthetic-installed-gesture','browser-pinch-preserved','map-gesture-exemption','rapid-action-guard'],physicalIPhone:false});
+  }
+  if (!process.env.NATIVE_LAYOUT_ONLY && !process.env.MOBILE_BASELINE && !process.env.MOBILE_AUDIT_EXTRA) {
     await context.clearCookies();
     for (const account of roleUsers) {
       await page.goto(origin+'/pripominky');

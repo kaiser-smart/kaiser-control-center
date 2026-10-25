@@ -1,7 +1,7 @@
 /* Contract: docs/MOBILE_UX_SPEC.md. Desktop keeps its original layout. */
 .mobile-header,.mobile-bottom-nav,.mobile-menu,.mobile-today,.mobile-view-switch,.mobile-section-select,.mobile-fold__toggle,.mobile-record-toggle,.mobile-pager { display:none; }
 .mobile-fold,.mobile-fold__content { display:contents; }
-@media (max-width:720px) {
+@media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
   :root { --mobile-top:calc(52px + env(safe-area-inset-top,0px)); --mobile-bottom:calc(60px + env(safe-area-inset-bottom,0px)); }
   html { scroll-padding-top:calc(var(--mobile-top) + 12px); scroll-padding-bottom:calc(var(--mobile-bottom) + 12px); }
   body:has(.ui-system-v2) { background:#f1f4f5; }
@@ -144,7 +144,7 @@
   /* Assistant stays reachable without covering the bottom navigation. */
   .ai-assistant-launcher { bottom:calc(var(--mobile-bottom) + 12px)!important; }
 }
-@media (max-width:720px) {
+@media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
   #app .ui-system-v2 p { font-size:13px; line-height:1.45; }
   #app .ui-system-v2 :is(.module-feedback__notice,.module-feedback__error,.receivables-warning) { padding:8px 10px; font-size:12px; line-height:1.4; margin:6px 0; }
   #app .ui-system-v2 .tracking-operational { padding:0; margin:0; display:block; }
@@ -208,7 +208,7 @@
   #app .ui-system-v2 .receivables-kpi { padding:8px; }
   #app .ui-system-v2 .mobile-records .mobile-record-key :is(strong,span) { font-size:12px; }
 }
-@media (max-width:720px) {
+@media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
   #app .mobile-section-select select { appearance:none; height:44px; min-height:44px; background:#fff; padding:8px 12px; }
   #app .mobile-section-select::after { content:'⌄'; margin-left:-38px; width:26px; pointer-events:none; }
   #app .ui-system-v2 .ds-plus-header__main { display:none; }
@@ -247,7 +247,7 @@
   #app .ui-system-v2 .mobile-today h2 { margin-top:12px; }
   #app .ui-system-v2 .mobile-today .mobile-pager { margin:4px 0 0; }
 }
-@media (max-width:720px) {
+@media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
   #app .ui-system-v2 .mobile-records .fleet-table__row { min-height:56px; }
   #app .ui-system-v2 .mobile-records .fleet-table__row > [role=cell] { align-items:flex-start; }
   #app .ui-system-v2 .fleet-table__status { order:2; }
@@ -258,7 +258,7 @@
   #app .ui-system-v2 .mobile-records .fleet-row-plate { white-space:nowrap; }
 }
 
-@media (max-width:720px) {
+@media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
   #app .ui-system-v2 .fleet-detail-card { padding:10px; border-radius:10px; box-shadow:none; min-width:0; }
   #app .ui-system-v2 .fleet-detail-card--actions > div:first-child { display:none; }
   #app .ui-system-v2 .fleet-detail-shell { gap:0; }
@@ -276,7 +276,7 @@
   #app .tracking-operational-content > .mobile-fold:has(.tracking-operational-detail) { order:-1; }
 }
 
-@media (max-width:720px) {
+@media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
   #app #fleet-vehicles > .fleet-section__head { display:none; }
   #app .mobile-fleet-summary { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:0 0 8px; }
   #app .mobile-fleet-summary > article { display:flex; align-items:center; gap:8px; padding:8px; border-radius:8px; background:white; }
@@ -285,7 +285,7 @@
 }
 
 /* Shared working surfaces follow Rychlé zadání (absence quick entry), across every agenda. */
-@media (max-width:720px) {
+@media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
   #app .ui-system-v2 :is(.module-panel,.module-settings-panel,.notification-center,.access-form,.system-check-card,.self-repair-overview,.self-repair-list,.self-repair-detail,.absence-detail-panel,.fuel-analytics,.rcs-platform-panel) { min-width:0; padding:12px; margin:0 0 8px; border-radius:12px; background:#fff; border:1px solid #d7dfe2; box-shadow:none; }
   #app .ui-system-v2 :is(.fleet-section,.collection-routes-panel,.receivables-panel,.absence-panel,.users-panel,.driver-report-click-entry,.ds-plus-triage-header,.tyres-panel,.quick-absence-card) { background:#fff; border:1px solid #d7dfe2; box-shadow:none; border-radius:12px; }
   #app .ui-system-v2 :is(.primary-action,.primary-link,.driver-report-pitstop-submit,.sarlota-absence-voice-button) { background:#75bd25; border-color:#75bd25; color:#fff; border-radius:10px; box-shadow:none; font-size:14px; padding:10px 12px; }
@@ -319,7 +319,7 @@
   #app .ui-system-v2 .self-repair-list__head { display:flex; flex-wrap:wrap; gap:8px; }
 }
 
-@media (max-width:720px) {
+@media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
   #app .ui-system-v2 .mobile-records [hidden],#app .ui-system-v2 .mobile-pager[hidden] { display:none!important; }
   #app .ui-system-v2 .absence-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); }
   #app .ui-system-v2 .absence-kpi { background:#fff; padding:8px 4px; gap:4px; }
@@ -361,4 +361,34 @@
   #app .module-launcher { margin:4px 0; }
   #app .module-launcher h1 { margin:20px 0 12px; font-size:22px; }
   #app .module-launcher-card { padding:14px; gap:12px; }
+}
+
+/* One bounded work surface; the document itself never becomes a long page. */
+@media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
+  :root { --mobile-viewport-height:100vh; --mobile-viewport-top:0px; }
+  @supports (height:100dvh) { :root { --mobile-viewport-height:100dvh; } }
+  html:has(#app > :is(.ui-system-v2,.login-shell)),
+  body:has(#app > :is(.ui-system-v2,.login-shell)) { height:100%; overflow:hidden; overscroll-behavior:none; }
+  body:has(#app > :is(.ui-system-v2,.login-shell)) { margin:0; }
+  #app > :is(.ui-system-v2,.login-shell) {
+    position:fixed; top:var(--mobile-viewport-top); left:0; right:0;
+    height:var(--mobile-viewport-height); min-height:0; max-height:var(--mobile-viewport-height);
+    width:100%; box-sizing:border-box; overflow-x:hidden; overflow-y:auto;
+    overscroll-behavior:contain; -webkit-overflow-scrolling:touch; touch-action:manipulation;
+    scroll-padding-top:calc(var(--mobile-top) + 12px); scroll-padding-bottom:calc(var(--mobile-bottom) + 16px);
+    padding-left:max(12px,env(safe-area-inset-left,0px)); padding-right:max(12px,env(safe-area-inset-right,0px));
+  }
+  #app .mobile-header { top:var(--mobile-viewport-top); }
+  #app .mobile-bottom-nav { top:calc(var(--mobile-viewport-top) + var(--mobile-viewport-height) - var(--mobile-bottom)); bottom:auto; }
+  .mobile-keyboard #app > .ui-system-v2 { padding-bottom:20px; scroll-padding-bottom:20px; }
+  #app .mobile-menu[open] { top:var(--mobile-viewport-top); bottom:auto; height:var(--mobile-viewport-height); max-height:var(--mobile-viewport-height); overscroll-behavior:contain; scroll-padding:16px; }
+  #app .mobile-menu-nav { overflow-y:auto; min-height:0; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+  #app .mobile-menu > :not(.mobile-menu-nav) { flex-shrink:0; }
+  #app > .login-shell { padding-top:max(16px,env(safe-area-inset-top,0px)); padding-bottom:max(20px,env(safe-area-inset-bottom,0px)); align-items:safe center; scroll-padding:20px; }
+  #app :is(input:not([type=checkbox]):not([type=radio]),select,textarea) { font-size:16px; min-height:44px; max-width:100%; box-sizing:border-box; }
+  #app :is(button,[role=button],summary,.mobile-header a,.mobile-bottom-nav a,.mobile-menu-nav a,.primary-link,.secondary-link,.module-launcher-card) { touch-action:manipulation; -webkit-user-select:none; user-select:none; }
+  #app .login-shell :is(button,a) { min-height:44px; }
+  #app :is(textarea,.ds-plus-message-list,.ds-plus-chat-messages,.access-modal,.modal-body) { overscroll-behavior:contain; }
+  #app :is(.tracking-operational-google-map,.gm-style,.H_map) { touch-action:auto; }
+  #app .ui-system-v2 [data-mobile-map=map] .tracking-operational-map-stage { min-height:160px; }
 }
