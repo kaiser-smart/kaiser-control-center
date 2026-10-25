@@ -244,5 +244,21 @@
     "greenOnWhite": 2.3173348970671466,
     "greenOnGraphite": 5.865539029596671,
     "note": "Green is the approved accent, not an independently contrast-compliant foreground on white. Labels remain necessary."
+  },
+  "currentCompatibility": {
+    "version": "0.1.853",
+    "baseCommit": "2d5668827d439298226d6852901526decb343638",
+    "implementationCommit": "433a2caf071522e113a600c91715b927dc48e169",
+    "tests": 21,
+    "failures": 0,
+    "browserSurfaces": 20,
+    "svgAssets": 105,
+    "svgFailures": 0,
+    "physicalIPhone": false
+  },
+  "nextScope": {
+    "newGenerationAuthorized": true,
+    "icons": 63,
+    "productionDeploymentAuthorized": false
   }
 }
