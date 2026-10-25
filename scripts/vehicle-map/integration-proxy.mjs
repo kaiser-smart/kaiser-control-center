@@ -23,8 +23,14 @@ export async function relay(request,upstreamFetch=fetch){
   const r=await upstreamFetch(UPSTREAM+u.pathname+u.search,{method:request.method,headers,body,redirect:'manual',cache:'no-store',signal:AbortSignal.timeout(25000)});
   if(r.status>=300&&r.status<400||!r.headers.get('content-type')?.includes('application/json'))return Response.json({error:'Backend neposkytl ověřenou JSON odpověď.'},{status:502});
   const h=new Headers({'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
-  for(const value of r.headers.getSetCookie?.()||[]){
+  const cookies=r.headers.getSetCookie?.() ?? r.headers.getAll?.('Set-Cookie') ?? [];
+  for(const value of cookies){
    if(value.startsWith('__Host-smart_odpady_session=')&&/;\s*Secure/i.test(value)&&/;\s*HttpOnly/i.test(value)&&!/(?:^|;)\s*Domain=/i.test(value))h.append('Set-Cookie',value);
+  }
+  // This transport owns the preview host's cookie. A successful upstream logout
+  // must expire it even when an upstream intermediary omits its deletion header.
+  if(u.pathname==='/api/auth/logout'&&request.method==='POST'&&r.ok){
+   h.set('Set-Cookie','__Host-smart_odpady_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0');
   }
   return new Response(r.body,{status:r.status,headers:h});
  }catch{return Response.json({error:'Spojení se současným backendem se nezdařilo.'},{status:503});}

@@ -16,6 +16,12 @@ assert.equal(seen.url,UPSTREAM+'/api/me');assert.equal(seen.options.headers.get(
 const failure=await relay(new Request(origin+'/api/vehicle-tracking/status'),async()=>{throw Error('network');});assert.equal(failure.status,503);assert(!JSON.stringify(await failure.json()).includes('vehicles'));
 const redirect=await relay(new Request(origin+'/api/me'),async()=>new Response(null,{status:302,headers:{location:'https://another.example'}}));assert.equal(redirect.status,502);
 const forgedCookie=await relay(new Request(origin+'/api/me'),async()=>Response.json({ok:true},{headers:{'Set-Cookie':'__Host-smart_odpady_session=bad; Domain=example.com; Secure; HttpOnly'}}));assert.equal(forgedCookie.headers.get('set-cookie'),null);
+const logoutWithoutCookie=await relay(new Request(origin+'/api/auth/logout',{method:'POST'}),async()=>Response.json({ok:true}));
+assert.equal(logoutWithoutCookie.headers.get('set-cookie'),'__Host-smart_odpady_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0');
+const failedLogout=await relay(new Request(origin+'/api/auth/logout',{method:'POST'}),async()=>Response.json({error:'unavailable'},{status:503}));
+assert.equal(failedLogout.status,503);assert.equal(failedLogout.headers.get('set-cookie'),null);
+const workersHeadersLogout=await relay(new Request(origin+'/api/auth/verify',{method:'POST',body:'{}'}),async()=>({status:200,ok:true,body:'{}',headers:{get:()=> 'application/json',getAll:name=>name==='Set-Cookie'?['__Host-smart_odpady_session=test; Path=/; Secure; HttpOnly']:[]}}));
+assert.match(workersHeadersLogout.headers.get('set-cookie'),/^__Host-smart_odpady_session=test;/);
 // Execute the transport with Worker Web APIs and no Node globals. Keep Node's
 // Request implementation outside the context so its own Buffer use is unaffected.
 const workerRelay=runInNewContext((await readFile(new URL('./integration-proxy.mjs',import.meta.url),'utf8')).replace(/^export /gm,'')+'\nrelay',{URL,Headers,Response,TextEncoder,AbortSignal});
