@@ -1,3 +1,4 @@
+import { createVehicleWorkspace } from "./vehicle-map/workspace.js";
 import { createSessionGuard } from "./data/sessionGuard.js";
 import { forpsiAdminSection, mountForpsiAdmin, forpsiDirtyTarget, saveForpsiDraft, discardForpsiDraft } from "./components/ForpsiAdminPanel.js";
 import { forpsiMailSection, mountForpsiMail } from "./components/ForpsiMailPanel.js";
@@ -924,6 +925,7 @@ let authState = {
 const sessionGuard = createSessionGuard({
   root: app,
   getUser: () => authState.user,
+  retainReadOnlyView: () => Boolean(vehicleMapWorkspace?.root.isConnected && vehicleTrackingLiveState.status && hasPermission(authState.user, "vehicle-tracking", "view")),
   onSignOut: () => {
     if (collectionRoutesPilotState.myDailyRouteNavigationActive) stopCollectionDailyDriverNavigation({ renderAfter: false });
     resetAiAssistantSession();
@@ -2186,8 +2188,12 @@ const vehicleTrackingDemoState = {
   googleMap: null,
   googleOverlays: null
 };
+let vehicleMapWorkspace = null;
+let vehicleMapOwner = "";
+let vehicleMapRequestEpoch = 0;
 const vehicleTrackingLiveState = {
   sourceMode: "tcars",
+  lastSuccess: null,
   loaded: false,
   loading: false,
   error: "",
@@ -18257,6 +18263,10 @@ function vehicleTrackingGoogleMapWimSites() {
 }
 
 function syncVehicleTrackingTcarsGoogleMap(options = {}) {
+  if (document.querySelector("[data-vehicle-map-workspace]")) {
+    syncVehicleMapWorkspace();
+    return Promise.resolve();
+  }
   const node = document.querySelector("[data-tracking-tcars-google-map]");
   if (!node || !vehicleTrackingDemoGoogleMapsKey()) {
     clearVehicleTrackingTcarsGoogleMap();
@@ -18534,6 +18544,13 @@ function setVehicleTrackingOperationalFilter(filter) {
 }
 
 async function refreshVehicleTrackingOperationalData(options = {}) {
+  if (document.querySelector("[data-vehicle-map-workspace]")) {
+    const pending = loadVehicleTrackingStatus({ force: true, renderAfter: false });
+    syncVehicleMapWorkspace();
+    await pending;
+    syncVehicleMapWorkspace();
+    return;
+  }
   const preserveCamera = options.preserveCamera === false ? null : vehicleTrackingTcarsGoogleCamera();
   await loadVehicleTrackingStatus({ force: true, renderAfter: false });
   render();
@@ -18764,43 +18781,50 @@ function vehicleTrackingAdministrationSettings(user) {
 
 function vehicleTrackingPage(moduleItem, user, context = {}) {
   vehicleTrackingLiveState.sourceMode = "tcars";
-  const summary = vehicleTrackingTcarsStatusSummary(vehicleTrackingLiveState.status || {}, vehicleTrackingLiveState.error);
-  const statusLabel = vehicleTrackingLiveState.loading && !vehicleTrackingLiveState.loaded
-    ? "Načítám polohy"
-    : summary.liveVerified
-      ? "Online"
-      : summary.apiStatus === "error"
-        ? "Vyžaduje kontrolu"
-        : "Read-only";
-
   return `
-    <main class="app-shell module-page module-theme-scope tracking-page" ${moduleThemeStyleAttribute()}>
+    <main class="app-shell module-page module-theme-scope tracking-page vm-page" ${moduleThemeStyleAttribute()}>
       ${userBar(user)}
       <nav class="topbar" aria-label="Navigace">
         <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
         <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
-      </nav>
-
-      <section class="module-detail tracking-hero" aria-labelledby="module-title">
-        <div class="module-detail__icon">${renderModuleIcon(moduleItem)}</div>
-        <div class="module-detail__body">
-          <div class="module-detail__eyebrow">SMART ODPADY / POLOHA VOZIDEL</div>
-          <h1 id="module-title">Poloha vozidel</h1>
-          <p>Aktuální poloha a stav vozidel přehledně na jedné mapě.</p>
-          <div class="module-detail__status">
-            <span>Stav</span>
-            <strong>${escapeHtml(statusLabel)}</strong>
-          </div>
-          <div class="module-actions">
-            ${vehicleTrackingAction("Otevřít Vozový park", FLEET_ROUTE)}
-            ${vehicleTrackingAction("Nastavení polohy vozidel", "/nastaveni#vehicle-tracking-settings")}
-          </div>
+        <div class="vm-shell-links">
+          ${canViewModule(user, "fleet") ? `<a href="${routeHref(FLEET_ROUTE)}" data-link>Vozový park</a>` : ""}
+          ${hasPermission(user, "settings", "view") ? `<a href="${routeHref("/nastaveni#vehicle-tracking-settings")}" data-link>Nastavení</a>` : ""}
         </div>
-      </section>
+      </nav>
+      <div data-vehicle-map-workspace></div>
+    </main>`;
+}
 
-      ${vehicleTrackingOperationalSection()}
-    </main>
-  `;
+function syncVehicleMapWorkspace() {
+  const host = document.querySelector("[data-vehicle-map-workspace]");
+  const user = currentUser();
+  const owner = String(user?.id || "");
+  if (!host || !owner || !hasPermission(user, "vehicle-tracking", "view")) {
+    vehicleMapWorkspace?.destroy(); vehicleMapWorkspace = null; vehicleMapOwner = "";
+    return;
+  }
+  if (vehicleMapOwner !== owner) { vehicleMapWorkspace?.destroy(); vehicleMapWorkspace = null; }
+  if (!vehicleMapWorkspace) {
+    vehicleMapOwner = owner;
+    vehicleMapWorkspace = createVehicleWorkspace({
+      scope: owner,
+      loadMaps: loadVehicleTrackingGoogleMaps,
+      refresh: () => refreshVehicleTrackingOperationalData(),
+      readHistory: (key, range) => apiJson(`/api/vehicle-tracking/history?vehicleKey=${encodeURIComponent(key)}&range=${encodeURIComponent(range)}`)
+    });
+  }
+  if (vehicleMapWorkspace.root.parentElement !== host) host.replaceChildren(vehicleMapWorkspace.root);
+  const background = activeThemeSettings().backgroundColor || "#ffffff";
+  const rgb = background.replace("#", "");
+  const luminance = rgb.length === 6 ? [0, 2, 4].map((i) => parseInt(rgb.slice(i, i + 2), 16)).reduce((sum, value, i) => sum + value * [0.2126, 0.7152, 0.0722][i], 0) : 255;
+  vehicleMapWorkspace.root.dataset.theme = luminance < 128 ? "dark" : "light";
+  vehicleMapWorkspace.update(vehicleTrackingLiveState.status, {
+    loading: vehicleTrackingLiveState.loading,
+    error: vehicleTrackingLiveState.error,
+    lastSuccess: vehicleTrackingLiveState.lastSuccess,
+    mapsReady: Boolean(vehicleTrackingDemoGoogleMapsKey())
+  });
 }
 
 function collectionRoutesCanViewPilot(user) {
@@ -50512,6 +50536,9 @@ function resetDataBoxState() {
 }
 
 function resetVehicleTrackingLiveState() {
+  vehicleMapRequestEpoch++;
+  vehicleMapWorkspace?.destroy(); vehicleMapWorkspace = null; vehicleMapOwner = "";
+  vehicleTrackingLiveState.lastSuccess = null;
   resetVehicleTrackingAutoRefreshTimer();
   clearVehicleTrackingTcarsGoogleMap();
   vehicleTrackingLiveState.sourceMode = "tcars";
@@ -51269,31 +51296,35 @@ function updateDataBoxMessageFilter(field) {
 
 async function loadVehicleTrackingStatus(options = {}) {
   const { force = false, renderAfter = true } = options;
-
-  if (vehicleTrackingLiveState.loading || (vehicleTrackingLiveState.loaded && !force)) {
-    return;
-  }
-
+  if (vehicleTrackingLiveState.loading || (vehicleTrackingLiveState.loaded && !force)) return;
+  if (!hasPermission(currentUser(), "vehicle-tracking", "view")) return;
+  const owner = currentUser()?.id;
+  const epoch = vehicleMapRequestEpoch;
   vehicleTrackingLiveState.loading = true;
   vehicleTrackingLiveState.error = "";
-
   try {
     const status = await apiJson("/api/vehicle-tracking/status");
+    if (epoch !== vehicleMapRequestEpoch || currentUser()?.id !== owner) return;
+    // The protected endpoint also reports provider failures in a successful HTTP envelope.
+    if (status.errorCode || status.apiStatus === "error" || status.apiStatus === "unavailable") throw new Error(status.message || VEHICLE_TRACKING_API_ERROR);
     vehicleTrackingLiveState.status = status;
+    vehicleTrackingLiveState.lastSuccess = Date.now();
     vehicleTrackingLiveState.loaded = true;
   } catch (error) {
-    vehicleTrackingLiveState.status = null;
+    if (epoch !== vehicleMapRequestEpoch || currentUser()?.id !== owner) return;
+    if (error?.status === 401 || error?.status === 403) {
+      vehicleTrackingLiveState.status = null;
+      vehicleTrackingLiveState.lastSuccess = null;
+      vehicleMapWorkspace?.destroy(); vehicleMapWorkspace = null;
+    }
     vehicleTrackingLiveState.error = error?.payload?.error || error?.message || VEHICLE_TRACKING_API_ERROR;
     vehicleTrackingLiveState.loaded = true;
   } finally {
-    vehicleTrackingLiveState.loading = false;
+    if (epoch === vehicleMapRequestEpoch && currentUser()?.id === owner) vehicleTrackingLiveState.loading = false;
   }
-
   if (renderAfter) {
-    render();
-    if (vehicleTrackingActiveSourceMode() === "tcars") {
-      queueVehicleTrackingTcarsGoogleSync({ forceFit: true });
-    }
+    if (document.querySelector("[data-vehicle-map-workspace]")) syncVehicleMapWorkspace();
+    else render();
   }
 }
 
@@ -55340,6 +55371,7 @@ function applyUiSystemV2() {
 
   if (
     !shell
+    || shell.classList.contains("vm-page")
     || !user
     || (isCollectionRoutesDriverKioskUser(user) && isCollectionRoutesDriverKioskPath(window.location.pathname))
   ) {
@@ -55465,6 +55497,7 @@ function render() {
     accessUnsavedChangesGuard.unmountModal();
     applyActiveThemeToRoot();
     renderApp();
+    syncVehicleMapWorkspace();
     mountForpsiAdmin(app, { apiJson, guard: guardedAccessAction, owner: authState.user?.id || null });
     mountForpsiMail(app, { apiJson, guard: guardedAccessAction, owner: authState.user?.id || null });
     syncCollectionRoutesDriverKioskDocumentState();
@@ -55473,6 +55506,9 @@ function render() {
     bindRcsSmsAutopilot(app, { apiJson, render });
     app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
     app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());
+    const trackingUserBar = app.querySelector(".vm-page > .user-bar");
+    const trackingLauncher = app.querySelector(".ai-assistant-launcher");
+    if (trackingUserBar && trackingLauncher) trackingUserBar.prepend(trackingLauncher);
     syncAssistantPromoVideo();
     syncVehicleTrackingDemoRuntime();
     syncCollectionRoutesTestTabletHereMap();

@@ -1,0 +1,10 @@
+import { testMaps } from './google-test-adapter.js';
+window.google={maps:testMaps};
+const bar=document.createElement('div');
+bar.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px;background:#202821;color:#fff;font:12px Quicksand,sans-serif;';
+bar.innerHTML='<strong>IZOLOVANÝ NÁHLED · SYNTETICKÁ DATA</strong><span>Testovací mapový adaptér, Google podklad neověřen</span><select aria-label="Testovací scénář"><option value="overview">Přehled 18 vozidel</option><option value="same6">6 shodných poloh</option><option value="same20">20 shodných poloh</option><option value="dense200">Hustá sada 200 vozidel</option></select><button type="button" data-preview-theme>Tmavý motiv</button><button type="button" data-preview-error>Výpadek API</button>';
+document.body.prepend(bar);
+bar.addEventListener('change',async e=>{await fetch(`/__preview/control?scene=${e.target.value}`);location.reload();});
+bar.querySelector('[data-preview-theme]').onclick=async()=>{await fetch('/__preview/control?toggleTheme=1');location.reload();};
+bar.querySelector('[data-preview-error]').onclick=async()=>{await fetch('/__preview/control?toggleError=1');document.querySelector('[data-vm-refresh]')?.click();};
+await import('/src/app.js');

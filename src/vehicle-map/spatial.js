@@ -1,0 +1,88 @@
+// Screen-space geometry, in CSS pixels. Independent of Google and testable.
+export function rect(x, y, width, height) { return { left: x - width / 2, top: y - height / 2, right: x + width / 2, bottom: y + height / 2 }; }
+export function overlaps(a, b, gap = 0) { return a.left < b.right + gap && a.right + gap > b.left && a.top < b.bottom + gap && a.bottom + gap > b.top; }
+export function inside(a, bounds) { return a.left >= bounds.left && a.right <= bounds.right && a.top >= bounds.top && a.bottom <= bounds.bottom; }
+export function markerRect(p) {
+  // Includes touch target, status badge, ring, and the external heading arrow.
+  return rect(p.x, p.y, Math.max(p.vehicle?.heading != null ? 76 : 70, p.width || 0), Math.max(p.vehicle?.heading !== null && p.vehicle?.heading !== undefined ? 76 : 58, p.height || 0));
+}
+export const clusterRect = (x, y) => ({ left: x - 30, top: y - 30, right: x + 30, bottom: y + 46 });
+const groupNode = (members) => {
+  const x = members.reduce((s, p) => s + p.x, 0) / members.length;
+  const y = members.reduce((s, p) => s + p.y, 0) / members.length;
+  return { id: members.map((p) => p.id).sort().join("|"), members, x, y,
+    bounds: members.length === 1 ? markerRect(members[0]) : clusterRect(x, y) };
+};
+/** Initial grid union, followed by convergence of actual marker/cluster rectangles. */
+export function clusterPoints(points) {
+  const sorted = [...points].sort((a, b) => a.id.localeCompare(b.id));
+  const parent = sorted.map((_, i) => i), grid = new Map();
+  const root = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+  const union = (i, j) => { parent[root(j)] = root(i); };
+  sorted.forEach((p, i) => {
+    const gx = Math.floor(p.x / 72), gy = Math.floor(p.y / 64);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -2; dy <= 2; dy++) {
+      for (const j of grid.get(`${gx + dx}:${gy + dy}`) || []) {
+        const q = sorted[j];
+        if ((Math.abs(p.x - q.x) < 72 && Math.abs(p.y - q.y) < 64) || overlaps(markerRect(p), markerRect(q), 3)) union(i, j);
+      }
+    }
+    const key = `${gx}:${gy}`;
+    if (!grid.has(key)) grid.set(key, []);
+    grid.get(key).push(i);
+  });
+  const initial = new Map();
+  sorted.forEach((p, i) => { const r = root(i); if (!initial.has(r)) initial.set(r, []); initial.get(r).push(p); });
+  let nodes = [...initial.values()].map(groupNode), changed = true;
+  while (changed) {
+    changed = false;
+    outer: for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+      if (overlaps(nodes[i].bounds, nodes[j].bounds, 6)) {
+        nodes[i] = groupNode([...nodes[i].members, ...nodes[j].members]);
+        nodes.splice(j, 1); changed = true; break outer;
+      }
+    }
+  }
+  return nodes;
+}
+/** Try radial positions, then a bounded grid. No vehicle coordinates are changed.
+ * If physical space is insufficient, the group list remains the complete access path. */
+export function spreadPoints(points, center, bounds, obstacles = []) {
+  if (points.length > 8) return null;
+  const placed = [], occupied = [...obstacles];
+  const candidates = [];
+  for (let radius = 96; radius <= 288; radius += 48) for (let i = 0; i < 16; i++) {
+    const angle = -Math.PI / 2 + i * Math.PI / 8;
+    candidates.push({ x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius });
+  }
+  for (let y = bounds.top + 42; y < bounds.bottom - 40; y += 86) for (let x = bounds.left + 38; x < bounds.right - 36; x += 82) candidates.push({ x, y });
+  for (const point of points) {
+    const candidate = candidates.find((p) => {
+      const r = markerRect({ ...point, ...p });
+      return inside(r, bounds) && !occupied.some((o) => overlaps(r, o, 8));
+    });
+    if (!candidate) return null;
+    const p = { ...point, ...candidate, anchor: { x: point.x, y: point.y } };
+    placed.push(p); occupied.push(markerRect(p));
+  }
+  return placed;
+}
+export function placeLabels(items, obstacles, bounds, measure, selectedId = "", highlightedId = "", mode = "auto") {
+  const occupied = [...obstacles], output = new Map();
+  const rank = (p) => p.id === selectedId ? 0 : p.id === highlightedId ? 1 : p.vehicle.emergency ? 2 : p.vehicle.age > 120 ? 3 : 4;
+  const ordered = [...items].sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id));
+  for (const p of ordered) {
+    if (mode === "selected" && p.id !== selectedId) continue;
+    const { width, height } = measure(p.vehicle.label);
+    const own = markerRect(p), gap = 6;
+    const candidates = [
+      { left: p.x - width / 2, top: own.bottom + gap },
+      { left: own.right + gap, top: p.y - height / 2 },
+      { left: own.left - gap - width, top: p.y - height / 2 },
+      { left: p.x - width / 2, top: own.top - gap - height }
+    ].map((r) => ({ ...r, right: r.left + width, bottom: r.top + height }));
+    const valid = candidates.find((r) => inside(r, bounds) && !occupied.some((o) => overlaps(r, o, gap)));
+    if (valid) { occupied.push(valid); output.set(p.id, valid); }
+  }
+  return output;
+}

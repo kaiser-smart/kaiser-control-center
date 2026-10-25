@@ -39,7 +39,10 @@
     "partslink24:vin-pilot": "node scripts/partslink24_vin_pilot.mjs",
     "typecheck": "node scripts/check-syntax.mjs --typecheck",
     "preview": "node scripts/serve.mjs dist",
-    "test:forpsi": "node --test scripts/forpsi-*.test.mjs services/forpsi-connector/test/*.test.mjs"
+    "test:forpsi": "node --test scripts/forpsi-*.test.mjs services/forpsi-connector/test/*.test.mjs",
+    "test:vehicle-map": "node scripts/vehicle-map/model.test.mjs",
+    "test:vehicle-map:browser": "node scripts/vehicle-map/browser.test.mjs",
+    "preview:vehicle-map": "node scripts/vehicle-map/preview-server.mjs"
   },
   "engines": {
     "node": ">=18"

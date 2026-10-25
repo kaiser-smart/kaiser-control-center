@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "file": "atlas.png",
+    "width": 4800,
+    "height": 3584,
+    "format": "png",
+    "sizeBytes": 18838901,
+    "sha256": "78514ed4c4e02ee89379fc091256cc435eb40a82b32b4d8ba2d41b80bcb1641d",
+    "provider": "OpenArt",
+    "model": "nano-banana-2-1",
+    "modelDisplayName": "Nano Banana 2.1",
+    "historyId": "RFjR59F0v68BkvJ6Avpl",
+    "hasAlpha": false,
+    "projectId": "huiFEs2kahddFGVfGyVe",
+    "resourceId": "1uCoEcAIUP0DS8DSG6tR",
+    "reviewedOn": "2026-10-25",
+    "reviewStatus": "Root visual inspection completed; no claim of user aesthetic approval or production deployment.",
+    "colorNote": "The prompt specified #75BD25 paint accents; shaded raster pixels vary. UI tokens use exact #75BD25."
+  },
+  "processing": {
+    "operations": [
+      "Exact quadrant crop",
+      "Aspect-preserving Lanczos3 resize with opaque white padding where needed",
+      "WebP encoding"
+    ],
+    "background": "Opaque white source background; original shadows and reflections retained. No background removal, no alpha transparency.",
+    "note": "Mechanical crop, resizing and encoding only. No regeneration, creative redraw or recoloring.",
+    "script": "convert.cjs",
+    "sharpVersion": "0.35.5"
+  },
+  "assets": {
+    "collection_truck": {
+      "quadrant": "top-left",
+      "sourceRectangle": {
+        "left": 0,
+        "top": 0,
+        "width": 2400,
+        "height": 1792
+      },
+      "outputs": [
+        {
+          "file": "collection_truck-256x192.webp",
+          "width": 256,
+          "height": 192,
+          "format": "webp",
+          "quality": 90,
+          "sizeBytes": 13328,
+          "hasAlpha": false
+        },
+        {
+          "file": "collection_truck-128x96.webp",
+          "width": 128,
+          "height": 96,
+          "format": "webp",
+          "quality": 88,
+          "sizeBytes": 4382,
+          "hasAlpha": false
+        }
+      ]
+    },
+    "tanker": {
+      "quadrant": "top-right",
+      "sourceRectangle": {
+        "left": 2400,
+        "top": 0,
+        "width": 2400,
+        "height": 1792
+      },
+      "outputs": [
+        {
+          "file": "tanker-256x192.webp",
+          "width": 256,
+          "height": 192,
+          "format": "webp",
+          "quality": 90,
+          "sizeBytes": 12416,
+          "hasAlpha": false
+        },
+        {
+          "file": "tanker-128x96.webp",
+          "width": 128,
+          "height": 96,
+          "format": "webp",
+          "quality": 88,
+          "sizeBytes": 3946,
+          "hasAlpha": false
+        }
+      ]
+    },
+    "skip_loader": {
+      "quadrant": "bottom-left",
+      "sourceRectangle": {
+        "left": 0,
+        "top": 1792,
+        "width": 2400,
+        "height": 1792
+      },
+      "outputs": [
+        {
+          "file": "skip_loader-256x192.webp",
+          "width": 256,
+          "height": 192,
+          "format": "webp",
+          "quality": 90,
+          "sizeBytes": 10992,
+          "hasAlpha": false
+        },
+        {
+          "file": "skip_loader-128x96.webp",
+          "width": 128,
+          "height": 96,
+          "format": "webp",
+          "quality": 88,
+          "sizeBytes": 3586,
+          "hasAlpha": false
+        }
+      ]
+    },
+    "van": {
+      "quadrant": "bottom-right",
+      "sourceRectangle": {
+        "left": 2400,
+        "top": 1792,
+        "width": 2400,
+        "height": 1792
+      },
+      "outputs": [
+        {
+          "file": "van-256x192.webp",
+          "width": 256,
+          "height": 192,
+          "format": "webp",
+          "quality": 90,
+          "sizeBytes": 6804,
+          "hasAlpha": false
+        },
+        {
+          "file": "van-128x96.webp",
+          "width": 128,
+          "height": 96,
+          "format": "webp",
+          "quality": 88,
+          "sizeBytes": 2420,
+          "hasAlpha": false
+        }
+      ]
+    }
+  }
+}
