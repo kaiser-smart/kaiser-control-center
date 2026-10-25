@@ -26,6 +26,13 @@ Ověřeno hledání konkrétní zakázky, stránka 2 se záznamy 51–61, přím
 ![Úhrady](payments-desktop.png)
 ![Nejasný výsledek pouze ověřit](payment-unknown.png)
 
+## Kontrola údajů
+
+Sloupec „Kontrola údajů“ používá malý červený vykřičník a text konkrétního problému. Důvod týkající se řidiče se zobrazuje pouze s právem na osobní údaje. Řádky bez příznaku kontroly mají neutrální text „Bez označených problémů“, který netvrdí úplnost zdrojových dat. Ověřeno v Chrome při 1440 a 390 px na syntetické zakázce; konzole bez chyb, build a syntax check prošly.
+
+![Kontrola údajů desktop](quality-warning-desktop.png)
+![Kontrola údajů mobil](quality-warning-mobile.png)
+
 ## CI při předání
 
 Vistos integration safety a Appearance settings regression prošly na původním head `7a1a1101eb0feebd3f338d8d22f4282a10402e4f`. Kontrola Forpsi odhalila pevná zářijová data syntetické pošty, která 25. října vypadla z třicetidenního okna. Navazující commit mění výhradně fixture na relativní dny (starší zprávy před dvěma dny, nové před jedním dnem); produkční poštovní kód se nemění. Konečný stav CI je uveden v PR.
