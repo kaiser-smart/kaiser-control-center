@@ -184,10 +184,10 @@
   #app .ui-system-v2 .ds-plus-triage-mailbox > button { grid-column:2; grid-row:1 / 3; align-self:center; font-size:12px; min-width:0; padding:6px; box-shadow:none; }
   #app .ui-system-v2 .quick-absence-shell { display:block; }
   #app .ui-system-v2 .quick-absence-card { padding:12px; margin:0 0 8px; border-radius:12px; }
-  #app .ui-system-v2 .quick-absence-types { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
-  #app .ui-system-v2 .quick-absence-type { display:flex; gap:8px; align-items:center; padding:8px; min-height:56px; border-radius:10px; }
-  #app .ui-system-v2 .quick-absence-type__icon { width:28px; height:28px; font-size:12px; }
-  #app .ui-system-v2 .quick-absence-type strong { font-size:13px; }
+  #app .ui-system-v2 .quick-absence-types { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  #app .ui-system-v2 .quick-absence-type { display:flex; flex-direction:column; justify-content:center; gap:10px; align-items:center; padding:14px 10px; min-height:104px; border-radius:12px; font-size:17px; line-height:1.25; text-align:center; }
+  #app .ui-system-v2 .quick-absence-type__icon { width:40px; min-width:40px; height:40px; min-height:40px; font-size:16px; flex-shrink:0; }
+  #app .ui-system-v2 .quick-absence-type > span:last-child { max-width:100%; overflow-wrap:anywhere; }
   #app .ui-system-v2 .driver-report-desktop-workspace { display:block; }
   #app .ui-system-v2 .driver-report-filters { display:grid; }
   #app .ui-system-v2 .driver-report-drawer { max-height:none; overflow:visible; position:static; width:100%; }

@@ -28637,6 +28637,11 @@ body:has(.absence-page--employee-card) {
   text-align: left;
 }
 
+.quick-absence-type {
+  min-height:84px;
+  font-size:18px;
+}
+
 .quick-absence-choice {
   grid-template-columns: minmax(0, 1fr) auto;
 }

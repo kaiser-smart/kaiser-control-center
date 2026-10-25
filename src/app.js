@@ -7886,15 +7886,6 @@ function absenceOutOfOfficePanel(user, selectedEmployee) {
   `;
 }
 
-function sarlotaAbsenceVoiceButton(label = "Hlasem přes Šarlotu") {
-  return `
-    <button class="sarlota-absence-voice-button" type="button" data-absence-sarlota-voice>
-      <span aria-hidden="true">MIC</span>
-      <span>${escapeHtml(label)}</span>
-    </button>
-  `;
-}
-
 function quickAbsenceType(typeId = quickAbsenceState.type) {
   return QUICK_ABSENCE_TYPES.find((type) => type.id === typeId) || null;
 }
@@ -8030,7 +8021,6 @@ function quickAbsenceTypeStep() {
     <section id="co-potrebujete" class="quick-absence-card quick-absence-card--step" aria-labelledby="quick-absence-title">
       <p class="quick-absence-kicker">Nepřítomnost</p>
       <h2 id="quick-absence-title">Co potřebujete nahlásit?</h2>
-      ${sarlotaAbsenceVoiceButton("Zadat hlasem")}
       <div class="quick-absence-types">
         ${QUICK_ABSENCE_TYPES.map((type) => `
           <button class="quick-absence-type" type="button" data-quick-type="${escapeHtml(type.id)}">
@@ -9182,7 +9172,6 @@ function absenceNewRequest(user) {
           <h2>Nová žádost</h2>
           <p>Dovolená, lékař, OČR, náhradní volno, neplacené volno a jiná nepřítomnost jdou ke schválení. Nemoc se pouze eviduje.</p>
         </div>
-        ${sarlotaAbsenceVoiceButton()}
       </div>
       <form class="absence-form" data-absence-request-form>
         ${employeeLoadingNotice}
