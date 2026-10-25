@@ -1,6 +1,6 @@
 import { integrationDb, integrationError, loadIntegrationContract, flushIntegrationAudit, persistVerifiedSourceReadback, assertVistosInstallation } from './vistos-integration-store.js';
 import { decimal, compareDecimal, addDecimal, fingerprint, numericId, invoiceAccountingState, referenceIds, exactJsonParse } from './vistos-values.js';
-import { executeVistosSession, loginVistosExecute } from './vistos-execute-client.js';
+import { executeVistosSession, loginVistosExecute, vistosPageSortOrder } from './vistos-execute-client.js';
 
 export const TRANSFER_LABELS={blocked:'Vyžaduje doplnění / kontrolu',ready:'Připraveno',sending:'Odesílá se',verifying:'Ověřuje se',confirmed:'Potvrzeno ve Vistosu',outcome_unknown:'Výsledek nejasný',recalculation_pending:'Přepočet čeká',failed_before_send:'Chyba před odesláním',correction_required:'Změna vyžaduje kontrolu',cancelled_before_send:'Zrušeno před přenosem',reversed_confirmed:'Zrušeno ve Vistosu',source_only:'Převzato z Vistosu'};
 const VERIFY_ONLY=new Set(['sending','verifying','outcome_unknown','recalculation_pending']);
@@ -180,7 +180,7 @@ export function paymentProvider(env,contract) {
       if(!filterField||contract.writer.invoicePaymentFilterVerified!==true)return false;
       let offset=0,total=null,sum='0',found=false,previous=0n;
       while(true){
-        const body=await execute('GetPageParam',{EntityName:'Payment',Start:offset,Length:100,Order:contract.entities.Payment.idOrder,Filter:{[filterField]:Number(p.invoiceSourceId)}});
+        const body=await execute('GetPageParam',{EntityName:'Payment',Start:offset,Length:100,SortOrder:vistosPageSortOrder(contract.entities.Payment.idOrder),Filter:{[filterField]:Number(p.invoiceSourceId)}});
         const data=body.data;if(!Number.isSafeInteger(data?.recordsFiltered)||!Array.isArray(data?.data))return false;
         if(total!==null&&total!==data.recordsFiltered)return false;total=data.recordsFiltered;
         if(data.data.length===0&&offset<total)return false;
