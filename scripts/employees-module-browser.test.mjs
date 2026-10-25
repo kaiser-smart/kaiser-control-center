@@ -56,6 +56,7 @@ try {
       if(role==='admin')await page.screenshot({path:path.join(output,`launcher-${width}.png`)});
       await page.locator('[data-launcher-module][href="/zamestnanci"]').click();
       await page.locator('.absence-table--employees').waitFor();
+      await page.waitForLoadState('networkidle');
       assert.equal(await page.locator('main[data-ui-module]').getAttribute('data-ui-module'),'employees');
       assert.equal(await page.locator('.absence-tabs').count(),0);
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`List overflow ${role} ${width}`);
@@ -73,6 +74,7 @@ try {
       if(role==='admin')await page.screenshot({path:path.join(output,`employee-card-${width}.png`)});
       await page.locator('.employee-card-header__actions a[href="/zamestnanci"]').click();
       await page.locator('.absence-table--employees').waitFor();
+      await page.waitForLoadState('networkidle');
       await page.goto(`${origin}/dovolena-nemoc/zamestnanci/test-person?source=old#detail`);
       await page.locator('#employee-card-title').waitFor();
       assert.equal(new URL(page.url()).pathname,'/zamestnanci/test-person');
@@ -80,6 +82,7 @@ try {
       assert.equal(new URL(page.url()).hash,'#detail');
       await page.goto(`${origin}/dovolena-nemoc/zamestnanci`);
       await page.locator('.absence-table--employees').waitFor();
+      await page.waitForLoadState('networkidle');
       assert.equal(new URL(page.url()).pathname,'/zamestnanci');
       await page.goto(`${origin}/dovolena-nemoc`);
       await page.locator('.absence-tabs').waitFor({state:'attached'});
