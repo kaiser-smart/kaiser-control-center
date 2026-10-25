@@ -76,18 +76,22 @@ async function transfers(scope,url,env) {
   const {results=[]}=await scope.db.prepare(`SELECT id,allocation_id,company_id,invoice_source_id,payment_source_id,state,payload_json,error_code,updated_at FROM vistos_payment_commands WHERE ${where}${status?' AND state=?':''} ORDER BY created_at DESC,id LIMIT ? OFFSET ?`).bind(...bind,...(status?[status]:[]),pageSize,(page-1)*pageSize).all();
   const {results:stats=[]}=await scope.db.prepare(`SELECT state,COUNT(*) AS count FROM vistos_payment_commands WHERE ${where} GROUP BY state`).bind(...bind).all();
   const {results:pending=[]}=await scope.db.prepare(`SELECT allocation_id,payload_json FROM vistos_allocation_confirmations WHERE ${where} AND status='confirmed' AND NOT EXISTS(SELECT 1 FROM vistos_payment_commands c WHERE c.allocation_id=vistos_allocation_confirmations.allocation_id) LIMIT 50`).bind(...bind).all();
-  const contract=await loadIntegrationContract(scope.db,scope.installation),candidates=[];
+  const contract=await loadIntegrationContract(scope.db,scope.installation),candidates=[];let candidatesMore=false;
   if(contract.bank?.verified){
-    const {results:matches=[]}=await scope.db.prepare(`SELECT m.id,m.matched_amount,m.invoice_id,p.raw_payload,p.booking_date,p.source,r.source_id,r.company_id,r.fields_json FROM receivable_payment_matches m
+    // CORE matches and ARCHIVE source records cannot participate in a D1 cross-domain JOIN.
+    const {results:matches=[]}=await scope.db.prepare(`SELECT m.id,m.matched_amount,m.invoice_id,p.raw_payload,p.booking_date,p.source,i.visto_invoice_id FROM receivable_payment_matches m
       JOIN receivable_payment_transactions p ON p.id=m.payment_transaction_id JOIN receivable_invoices i ON i.id=m.invoice_id
-      JOIN vistos_source_records r ON r.source_id=i.visto_invoice_id AND r.entity='InvoiceIssued' AND r.installation=?
-      WHERE r.company_id IN (${scope.companies.map(()=>'?')}) AND NOT EXISTS(SELECT 1 FROM vistos_allocation_confirmations a WHERE a.allocation_id=m.id) ORDER BY m.id LIMIT 50`).bind(scope.installation,...scope.companies).all();
-    for(const m of matches){try{const raw=exactJsonParse(m.raw_payload),at=path=>String(path||'').split('.').filter(Boolean).reduce((v,k)=>v?.[k],raw),currencyId=contract.bank.currencyIds?.[at(contract.bank.currencyPath)],bankAccount=at(contract.bank.accountPath);
+      WHERE NOT EXISTS(SELECT 1 FROM vistos_allocation_confirmations a WHERE a.allocation_id=m.id) ORDER BY m.id LIMIT ? OFFSET ?`).bind(pageSize,(page-1)*pageSize).all();
+    candidatesMore=matches.length===pageSize;
+    for(const m of matches){
+      const source=await scope.db.prepare(`SELECT source_id,company_id FROM vistos_source_records WHERE source_id=? AND entity='InvoiceIssued' AND installation=? AND company_id IN (${scope.companies.map(()=>'?')})`).bind(String(m.visto_invoice_id),scope.installation,...scope.companies).first();
+      if(!source)continue;
+      try{const raw=exactJsonParse(m.raw_payload),at=path=>String(path||'').split('.').filter(Boolean).reduce((v,k)=>v?.[k],raw),currencyId=contract.bank.currencyIds?.[at(contract.bank.currencyPath)],bankAccount=at(contract.bank.accountPath);
       if(m.source!==contract.bank.source||!currencyId||typeof bankAccount!=='string')continue;
-      candidates.push({id:m.id,invoiceSourceId:m.source_id,companyId:m.company_id,currencyId,bankAccount,bankDate:m.booking_date,transactionAmount:decimal(at(contract.bank.amountPath)).source,suggestedAmount:String(m.matched_amount),revision:crypto.randomUUID()});
+      candidates.push({id:m.id,invoiceSourceId:source.source_id,companyId:source.company_id,currencyId,bankAccount,bankDate:m.booking_date,transactionAmount:decimal(at(contract.bank.amountPath)).source,suggestedAmount:String(m.matched_amount),revision:crypto.randomUUID()});
     }catch{}}
   }
-  return {candidates,rows:results.map(r=>({...r,payload:JSON.parse(r.payload_json),payload_json:undefined})),pending:pending.map(r=>({id:r.allocation_id,payload:JSON.parse(r.payload_json)})),stats,page,pagination:{page,pageSize,total:stats.filter(s=>!status||s.state===status).reduce((n,s)=>n+s.count,0)},writerEnabled:String(env.VISTOS_PAYMENT_WRITE_ENABLED)==='true'};
+  return {candidates,rows:results.map(r=>({...r,payload:JSON.parse(r.payload_json),payload_json:undefined})),pending:pending.map(r=>({id:r.allocation_id,payload:JSON.parse(r.payload_json)})),stats,page,pagination:{page,pageSize,hasNext:candidatesMore||results.length===pageSize,total:stats.filter(s=>!status||s.state===status).reduce((n,s)=>n+s.count,0)},writerEnabled:String(env.VISTOS_PAYMENT_WRITE_ENABLED)==='true'};
 }
 const ERROR_TEXT={vistos_company_scope_required:'Chybí potvrzený firemní rozsah přístupu.',vistos_company_forbidden:'K této firmě nemáte přístup.',vistos_read_sync_disabled:'Načítání zatím není aktivováno.',vistos_read_contract_unverified:'Nejprve je nutné ověřit datový kontrakt Vistosu.',d1_bulk_capacity_blocked:'Import čeká na ověření kapacity databáze.',transfer_gate_blocked:'Přenos čeká na ověření účetních podmínek.',tracking_permission_required:'Nemáte oprávnění ke sledování vozidel.'};
 export async function handleVistosRequest(context,action) {

@@ -5,7 +5,7 @@ Všechny obrázky obsahují výhradně syntetická data ze `scripts/fixtures/vis
 ## Automatické kontroly
 
 - `test:vistos-jobs-payments`: 15 testů v reálném SQLite, přesnost desetinných hodnot, ochrana polí a firem, 10 073 záznamů / 101 stran, atomický pád checkpointu a replay, změna počtu, ID/hash rekonciliace bez mazání, samostatná delta, 6 101 GPS bodů přes cursor, neúplné návštěvy a soukromé jízdy, DST, source balance decrease/null/negative, potvrzení a rezervace 2 500 + 5 000, souběžné workery a ztráta lease, lookup po timeoutu Create/Save/Remove, obě faktury při převázání, writer OFF, transport statusy a rotace cookie. Testovaný dataset není 183 073 živých záznamů.
-- S01 navíc přes skutečný handler a podepsanou testovací session: finance bez výslovného práva 403, cizí firma 403, strana 3 při pageSize 25 vrací 11 z 61 záznamů, historie vrací uložený audit.
+- S01 navíc přes skutečný handler a podepsanou testovací session: finance bez výslovného práva 403, cizí firma 403, strana 3 při pageSize 25 vrací 11 z 61 záznamů, historie vrací uložený audit. Seznam návrhů alokací se ověřuje s potvrzeným bankovním kontraktem přes oddělená čtení CORE a ARCHIVE, bez nepodporovaného mezidatabázového JOIN.
 - Existující sady `test:receivables`, `test:vehicle-tracking`, `test:vistos-contacts`, `test:auth-session`, `test:test-mode-contract`, `test:fleet-vistos`, `test:database-architecture` prošly.
 - `scripts/self-repair-monitor.test.mjs`: zachovaný zákaz přetečení starého manifestu; nový manifest se pokryje ve dvou omezených bězích, každý maximálně 50 requestů včetně manifestu.
 - Všechny migrační soubory CORE, ARCHIVE a AUDIT aplikovány postupně v samostatných čistých SQLite databázích bez chyby. Nejde o Cloudflare migraci.
