@@ -111,3 +111,12 @@ Pokus otevřít vlastní schránku přes přihlášené SO.ai pro dokončení OT
 ### Nezávislé ověření souběžné produkce
 
 Readback Cloudflare a přihlášeného prohlížeče potvrzuje produkci 0.1.832 / `1c503a285b94b9a3cfd02a3252d09e4577b31c97`, deployment `385830a9-f075-43b2-9e87-465546a88b07`. Tato větev jej nenasazovala. Po obnovení původní stránky pošty aplikace přesměrovala na hlavní přehled; v hlavní navigaci ani přehledu modulů není pošta. Soukromý screenshot: `private-integration/mail-hidden-production.png` ve workspace; není součástí veřejného ZIPu ani preview payloadu. Tím je skrytí pošty ověřeno i v aktuální produkci, nezávisle na izolovaném commitu `fd509c1d`. Novější produkční mobilní změny z 1c503a2 nejsou do mapové větve automaticky převzaté; před případným budoucím produkčním merge je nutné je porovnat a zachovat.
+
+
+### Pokracovani bez Forpsi, 25. 10. 2026
+
+Forpsi se na pokyn uzivatele nepouziva zadnym rozhranim. Novy pokus v existujicim Chrome nepotvrdil Access relaci: nabehne pouze formular e-mailoveho kodu. Zadny novy kod nebyl odeslan. Smart odpady podporuje telefonni OTP, ale tim se neresi predrazena Cloudflare Access brana.
+
+Prihlasena administrace Cloudflare opakovane selhala chybou removeChild. Pravdepodobnou pricinou je automaticky preklad Chrome; volba puvodniho jazyka pro aktualni stranku po reloadu nevydrzela. Globalni nastaveni prekladace se nemenilo. Read-only pokus o precteni Access konfigurace pres existujici Wrangler autentizaci vratil HTTP 403. Zadna politika, poskytovatel identity, ucet, cookie ani autentizace nebyly zmeneny.
+
+Dalsi ovladani prohlizece zastavil nastroj: Mac je zamceny a automaticke odemceni selhalo. Je nutne mistni odemceni Macu. To samo o sobe nezarucuje prihlaseni nahledu bez Forpsi. Vzdalena prihlasena prejimka zustava NEOVERENO; predchozi dolozene lokalni integracni vysledky se nemeni. Produkcni nasazeni v tomto pokracovani neprobehlo.
