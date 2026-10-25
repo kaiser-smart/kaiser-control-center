@@ -60,7 +60,7 @@ try {
         const visible=node=>{const b=node.getBoundingClientRect();return b.width>0&&b.height>0;};
         const icons=[...document.querySelectorAll('svg.smart-icon')].filter(visible);
         return {width:innerWidth,scrollWidth:document.documentElement.scrollWidth,icons:icons.length,
-          iconProblems:icons.flatMap(node=>{const s=getComputedStyle(node),b=node.getBoundingClientRect(),g=node.querySelector('g'),a=g&&getComputedStyle(g);return (s.stroke!=='rgb(36, 49, 40)'||a?.stroke!=='rgb(117, 189, 37)'||s.strokeWidth!=='2.2px'||s.filter!=='none'||s.boxShadow!=='none'||b.width<19||b.width>29||b.height<19||b.height>29)?[{name:node.dataset.icon,width:b.width,height:b.height,stroke:s.stroke,accent:a?.stroke,strokeWidth:s.strokeWidth}]:[];}),
+          iconProblems:icons.flatMap(node=>{const s=getComputedStyle(node),b=node.getBoundingClientRect(),g=node.querySelector('g'),a=g&&getComputedStyle(g);return (s.fill!=='rgb(36, 49, 40)'||a?.fill!=='rgb(117, 189, 37)'||s.stroke!=='none'||s.filter!=='none'||s.boxShadow!=='none'||b.width<19||b.width>29||b.height<19||b.height>29)?[{name:node.dataset.icon,width:b.width,height:b.height,stroke:s.stroke,accent:a?.stroke,strokeWidth:s.strokeWidth}]:[];}),
           iconTiles:[...document.querySelectorAll('.module-launcher-icon,.ui-pilot-nav__icon,.quick-absence-type__icon,.sarlota-absence-voice-button > span:first-child')].filter(visible).filter(n=>{const s=getComputedStyle(n);return s.backgroundColor!=='rgba(0, 0, 0, 0)'||s.backgroundImage!=='none'||s.boxShadow!=='none';}).map(n=>n.className),
           rasterIcons:[...document.querySelectorAll('[data-tracking-vehicle-icon],[data-tracking-tcars-marker-icon],.ai-voice-assistant-panel__mic img')].filter(visible).filter(n=>/\.(png|webp)(\?|$)/.test(n.src)).map(n=>n.src),
           resources:performance.getEntriesByType('resource').filter(r=>r.name.startsWith(location.origin)).reduce((sum,r)=>sum+r.transferSize,0),
@@ -69,7 +69,7 @@ try {
       const slug=route==='/'?'home':route.slice(1).replaceAll('/','-');
       await page.screenshot({path:path.join(output,`${slug}-${width}.png`)});
       assert.ok(metrics.scrollWidth<=width,`Overflow ${route} @ ${width}`);
-      if(!baseline){assert.deepEqual(metrics.iconProblems,[],`SVG contract ${route} @ ${width}`);assert.deepEqual(metrics.rasterIcons,[],`Raster icons ${route}`);assert.deepEqual(metrics.iconTiles,[],`Icon backgrounds ${route}`);assert.ok(metrics.icons>0);}
+      if(!baseline){assert.deepEqual(metrics.iconProblems,[],`SVG contract ${route} @ ${width}`);assert.deepEqual(metrics.rasterIcons,[],`Raster icons ${route}`);assert.deepEqual(metrics.iconTiles,[],`Icon backgrounds ${route}`);if(route==='/sledovani-vozidel')assert.equal(await page.locator('.vm-header').count(),1,'Dedicated map workspace remains intact');else assert.ok(metrics.icons>0,`Missing icons on ${route}`);}
       results.push({route,width,height,...metrics});
       if(route==='/'&&width<721){
         if(!baseline)assert.equal(await page.locator('.mobile-home-link [data-icon=home]').count(),1);

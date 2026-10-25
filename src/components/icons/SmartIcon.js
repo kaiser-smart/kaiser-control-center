@@ -7,7 +7,7 @@ export function SmartIcon(name) {
   if (!Object.hasOwn(iconDefinitions, name)) throw new Error(`Unknown SMART ODPADY icon: ${name}`);
   if (!cache.has(name)) {
     const [outline, accent] = iconDefinitions[name];
-    cache.set(name, createSvgIcon(`${outline}<g stroke="#75BD25">${accent}</g>`, name));
+    cache.set(name, createSvgIcon(`${outline}<g data-icon-accent fill="#75BD25">${accent}</g>`, name));
   }
   return cache.get(name);
 }
