@@ -65,11 +65,13 @@ export async function onRequestPost({ request, env }) {
       .filter(Boolean);
     const statements = points.map((item) => db.prepare(`
       INSERT OR IGNORE INTO vehicle_tracking_gps_points (
-        id, vehicle_key, license_plate, latitude, longitude, speed_kmh, heading, address, recorded_at, received_at, source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, vehicle_key, license_plate, latitude, longitude, speed_kmh, heading, address, recorded_at, received_at, source,
+        provider_point_id, source_timestamp, gps_valid, ignition, provider_scope
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       item.id, item.vehicleKey, item.licensePlate, item.latitude, item.longitude,
-      item.speedKmh, item.heading, item.address, item.recordedAt, item.receivedAt, "tcars"
+      item.speedKmh, item.heading, item.address, item.recordedAt, item.receivedAt, "tcars",
+      item.providerPointId,item.sourceTimestamp,item.gpsValid===null?null:Number(item.gpsValid),item.ignition===null?null:Number(item.ignition),item.providerScope
     ));
     const writeResults = statements.length ? await db.batch(statements) : [];
     const fleetAliases = await upsertFleetVehicleAliasesFromTcars(

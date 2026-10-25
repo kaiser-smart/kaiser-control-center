@@ -1,3 +1,4 @@
+import { runVistosJobsPayments } from "../functions/_lib/vistos-jobs-runner.js";
 import { runModuleAutomationDryRun } from "../functions/_lib/module-automation-dry-run.js";
 import {
   runCollectionDailyRoutePreparationAutomation,
@@ -17,6 +18,11 @@ const ABSENCE_CRON = "15 3 * * *";
 export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil((async () => {
+      if (controller.cron === "*/10 * * * *") {
+        const result = await runVistosJobsPayments(env, {now:new Date(controller.scheduledTime)});
+        console.log("vistos_jobs_payments", {status:result.status, reads:result.reads?.length||0, commands:result.commands?.length||0});
+        return;
+      }
       if (controller.cron === COLLECTION_ROUTE_INCIDENT_REMINDER_CRON) {
         const [summary, absenceHistoryRetry, rcsSmsAutopilot] = await Promise.all([
           runCollectionRouteIncidentReminderAutomation(env, {

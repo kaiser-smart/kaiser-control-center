@@ -1,3 +1,4 @@
+import { vistosWorkspaceSection, mountVistosWorkspace } from "./components/VistosWorkspace.js";
 import { forpsiAdminSection, mountForpsiAdmin, forpsiDirtyTarget, saveForpsiDraft, discardForpsiDraft } from "./components/ForpsiAdminPanel.js";
 import { forpsiMailSection, mountForpsiMail } from "./components/ForpsiMailPanel.js";
 import { forpsiComposerDirtyTarget, saveForpsiComposer, discardForpsiComposer } from "./components/ForpsiComposer.js";
@@ -408,6 +409,7 @@ const RECEIVABLES_PHASE_NOTICE = "Pohledávkový kompas AI používá dry-run pr
 const RECEIVABLES_TABS = [
   { id: "dashboard", label: "Dashboard", route: RECEIVABLES_ROUTE },
   { id: "customers", label: "Zákazníci", route: `${RECEIVABLES_ROUTE}#receivables-customers` },
+  { id: "payments", label: "Úhrady", route: `${RECEIVABLES_ROUTE}/uhrady` },
   { id: "import", label: "Import preview", route: `${RECEIVABLES_ROUTE}/import` },
   { id: "dry-run", label: "Dry-run", route: `${RECEIVABLES_ROUTE}#receivables-dry-run` },
   { id: "settings", label: "Nastavení", route: `${RECEIVABLES_ROUTE}/settings` }
@@ -484,7 +486,7 @@ const HOME_MODULE_SECTIONS = [
     eyebrow: "Denní práce",
     title: "Dnes k řešení",
     description: "Nejdřív trasy, hlášení, zprávy a lidé mimo práci.",
-    moduleIds: ["collection-routes", "driver-reports", "data-box-plus", "quick-absence", "absence", "dashboard"]
+    moduleIds: ["jobs", "collection-routes", "driver-reports", "data-box-plus", "quick-absence", "absence", "dashboard"]
   },
   {
     id: "vehicles-service",
@@ -2679,7 +2681,7 @@ const UI_SYSTEM_PILOT_NAV_GROUPS = [
   },
   {
     label: "Hlavní práce",
-    moduleIds: ["quick-absence", "collection-routes", "driver-reports", "vehicle-tracking", "forpsi-mail", "data-box-plus", "rcs-sms-autopilot"]
+    moduleIds: ["quick-absence", "jobs", "collection-routes", "driver-reports", "vehicle-tracking", "forpsi-mail", "data-box-plus", "rcs-sms-autopilot"]
   },
   {
     label: "Vozidla a servis",
@@ -38331,6 +38333,7 @@ function routeReceivablesContext(pathname = window.location.pathname) {
   if (!rest || rest === "/" || rest === "/dashboard") {
     return { view: "dashboard", path };
   }
+  if (rest === "/uhrady") return { view: "payments", path };
   if (rest === "/import") {
     return { view: "import", path };
   }
@@ -40336,7 +40339,7 @@ function receivablesCustomerDetailSection() {
               <tbody>
                 ${visibleDetailInvoices.map((invoice) => `
                   <tr>
-                    <td data-label="Faktura">${escapeHtml(invoice.invoiceNumber)}</td>
+                    <td data-label="Faktura">${escapeHtml(invoice.invoiceNumber)}${hasPermission(currentUser(),"jobs","view_finance")&&invoice.vistoInvoiceId?`<br><a href="/pohledavky/uhrady?view=invoices&amp;invoice=${encodeURIComponent(invoice.vistoInvoiceId)}" data-link>Účetní stav dle Vistosu</a>`:""}</td>
                     <td data-label="VS">${escapeHtml(invoice.variableSymbol || "-")}</td>
                     <td data-label="Splatnost">${escapeHtml(invoice.dueDate || "-")}</td>
                     <td data-label="Celkem">${escapeHtml(formatReceivableMoney(invoice.totalAmount))}</td>
@@ -40456,7 +40459,11 @@ function receivablesCaseSection() {
 function receivablesPage(moduleItem, user, isDashboard = false, context = { view: "dashboard" }) {
   const view = context.view || "dashboard";
   const activeTab = receivablesActiveTab(view, window.location.hash);
-  const content = view === "customer"
+  if (view === "payments") return `<main class="app-shell module-page module-theme-scope receivables-page" ${moduleThemeStyleAttribute()}>${userBar(user)}
+    <nav class="receivables-tabs" aria-label="Sekce Pohledávek">${RECEIVABLES_TABS.map(tab=>`<a class="${tab.id==='payments'?'is-active':''}" href="${routeHref(tab.route)}" data-link>${escapeHtml(tab.label)}</a>`).join('')}</nav>
+    ${vistosWorkspaceSection('payments')}</main>`;
+
+  const content = view === "payments" ? vistosWorkspaceSection("payments") : view === "customer"
     ? receivablesCustomerDetailSection()
     : view === "directory-audit"
       ? receivablesDirectoryAuditSection()
@@ -45475,6 +45482,7 @@ async function runReceivablesDirectoryAudit() {
 }
 
 function ensureReceivablesData(context = { view: "dashboard" }) {
+  if (context.view === "payments") return;
   if (!receivablesState.dashboardLoaded && !receivablesState.dashboardLoading) {
     void loadReceivablesDashboard();
   }
@@ -54947,6 +54955,18 @@ function renderAuthenticatedApp(user) {
     renderAuthenticatedApp(user);
     return;
   }
+  if (path === '/zakazky' || path === '/vistos/propojeni') {
+    const integration = path === '/vistos/propojeni';
+    const allowed = hasPermission(user, integration ? 'integrations' : 'jobs', integration ? 'manage' : 'view');
+    const jobsTab = new URLSearchParams(window.location.search).get('view') || 'jobs';
+    if(!integration&&allowed&&jobsTab==='rules')ensureModuleRulesData('jobs');
+    app.innerHTML = `<main class="app-shell module-page module-theme-scope" ${moduleThemeStyleAttribute()}>${userBar(user)}
+      <nav class="topbar" aria-label="Navigace"><a class="back-button" href="${routeHref('/')}" data-link>Zpět na přehled</a></nav>
+      ${!integration&&allowed?`<nav class="receivables-tabs" aria-label="Sekce Zakázek"><a href="/zakazky" data-link>Zakázky</a><a href="/zakazky?view=rules" data-link>Seznam pravidel a automatizace</a><a href="/zakazky?view=settings" data-link>Nastavení</a></nav>`:''}
+      ${allowed ? (!integration&&jobsTab==='rules'?moduleRulesAutomationPanel({moduleKey:'jobs',moduleName:'Zakázky',user,readOnly:!hasPermission(user,'jobs','manage'),humanDetail:true,cloudNote:'Aktivace pravidla sama neobchází instalační kontrakt, kapacitní omezení ani vypínače serveru.'}):vistosWorkspaceSection(integration ? 'integration' : jobsTab==='settings'?'settings':'jobs')) : '<section class="module-detail"><h1>Přístup není povolen</h1><p>Pro tuto sekci potřebujete samostatné oprávnění.</p></section>'}</main>`;
+    document.title = `${integration ? 'Propojení Vistos' : 'Zakázky'} | ${APP_NAME}`;
+    return;
+  }
   // Mailbox grants govern this workspace. Reuse the dashboard route to retain the monitoring budget.
   if(path==='/dashboard' && new URLSearchParams(window.location.search).get('view')==='forpsi-mail') {
     app.innerHTML=`<main class="app-shell module-page module-theme-scope" ${moduleThemeStyleAttribute()}>${userBar(user)}
@@ -55436,6 +55456,7 @@ function render() {
     syncCollectionRoutesDriverKioskDocumentState();
     syncCollectionDailyDriverViewportDiagnostics();
     applyUiSystemV2();
+    mountVistosWorkspace(app, { apiJson, user: authState.user });
     bindRcsSmsAutopilot(app, { apiJson, render });
     app.insertAdjacentHTML("beforeend", renderAiAssistantLayer());
     app.insertAdjacentHTML("beforeend", renderAssistantPromoLayer());

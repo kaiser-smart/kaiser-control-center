@@ -419,6 +419,7 @@ function parseTcarsPosition(block, refs) {
 
   return {
     id: gps.id ? `tcars-position-${gps.id}` : `tcars-position-${vehicle.externalVehicleId || vehicle.licensePlate}`,
+    providerPointId: gps.id || null,
     vehicleId: "",
     externalProvider: "tcars",
     externalVehicleId: vehicle.externalVehicleId,
@@ -815,8 +816,8 @@ export async function fetchTcarsVehicleTrips(env = {}, vehicle = {}, options = {
     ${loginDataXml(config)}
     <vozidloId xsi:type="xsd:int">${xmlEscape(vehicleId || 0)}</vozidloId>
     <vozidloRz xsi:type="xsd:string">${xmlEscape(licensePlate)}</vozidloRz>
-    <datumOd xsi:type="xsd:date">${xmlEscape(from.toISOString().slice(0, 10))}</datumOd>
-    <datumDo xsi:type="xsd:date">${xmlEscape(now.toISOString().slice(0, 10))}</datumDo>
+    <datumOd xsi:type="xsd:date">${xmlEscape(/^\d{4}-\d{2}-\d{2}$/.test(options.fromDay || '') ? options.fromDay : from.toISOString().slice(0, 10))}</datumOd>
+    <datumDo xsi:type="xsd:date">${xmlEscape(/^\d{4}-\d{2}-\d{2}$/.test(options.toDay || '') ? options.toDay : now.toISOString().slice(0, 10))}</datumDo>
   `);
   return parseTcarsTripsXml(xml);
 }

@@ -62,7 +62,7 @@ export function vehicleTrackingHistoryPoint(location = {}, receivedAt = new Date
     return null;
   }
 
-  const speed = Number(location.speedKmh);
+  const speed = location.speedKmh === null || location.speedKmh === undefined || location.speedKmh === '' ? NaN : Number(location.speedKmh);
   const heading = Number(location.heading);
   return {
     id: `vehicle-point-${crypto.randomUUID()}`,
@@ -73,9 +73,31 @@ export function vehicleTrackingHistoryPoint(location = {}, receivedAt = new Date
     speedKmh: Number.isFinite(speed) ? Math.round(speed) : null,
     heading: Number.isFinite(heading) ? Math.round(heading) : null,
     address: String(location.address || "").trim(),
-    recordedAt: recordedDate.toISOString(),
+    recordedAt: /(?:Z|[+-]\d{2}:\d{2})$/.test(location.lastGpsAt || location.gpsAt || '') ? recordedDate.toISOString() : String(location.lastGpsAt || location.gpsAt || location.updatedAt || ''),
+    providerPointId: location.providerPointId || location.id || null,
+    sourceTimestamp: location.lastGpsAt || location.gpsAt || null,
+    gpsValid: typeof location.gpsValid === 'boolean' ? location.gpsValid : null,
+    ignition: typeof location.ignition === 'boolean' ? location.ignition : null,
+    providerScope: location.externalProvider || null,
     receivedAt
   };
+}
+
+export async function loadJobTrackingInterval(db,{vehicleKey,from,to,cursor=null,limit=1000,now=new Date()}) {
+  const qualified=value=>typeof value==='string' && /T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value));
+  if(!qualified(from)||!qualified(to)||Date.parse(to)<=Date.parse(from)||Date.parse(to)-Date.parse(from)>7*86400000)throw new RangeError('tracking_interval_invalid');
+  limit=Math.max(1,Math.min(1000,Math.trunc(limit)||1000));
+  const after=cursor?JSON.parse(cursor):{at:from,id:''};
+  if(!qualified(after.at)||after.at<from||after.at>to||typeof after.id!=='string')throw new RangeError('tracking_cursor_invalid');
+  const result=await db.prepare(`SELECT id,vehicle_key,latitude,longitude,speed_kmh,recorded_at,provider_point_id,source_timestamp,gps_valid,ignition,provider_scope
+    FROM vehicle_tracking_gps_points WHERE vehicle_key=? AND recorded_at>=? AND recorded_at<?
+    AND (recorded_at>? OR (recorded_at=? AND id>?)) ORDER BY recorded_at,id LIMIT ?`).bind(vehicleTrackingHistoryVehicleKey(vehicleKey),from,to,after.at,after.at,after.id,limit+1).all();
+  const rows=result.results||[],more=rows.length>limit,selected=rows.slice(0,limit),last=selected.at(-1);
+  const retentionMissing=Date.parse(from)<Date.parse(vehicleTrackingHistoryRetentionBefore(now));
+  return {points:selected.map(r=>({id:r.provider_point_id||r.id,providerId:String(vehicleKey),recordedAt:r.source_timestamp||r.recorded_at,
+    latitude:r.latitude,longitude:r.longitude,speedKmh:r.speed_kmh,gpsValid:r.gps_valid===1?true:r.gps_valid===0?false:null,ignition:r.ignition===1?true:r.ignition===0?false:null})),
+    nextCursor:more?JSON.stringify({at:last.recorded_at,id:last.id}):null,range:{from,to},retentionMissing,
+    complete:!more&&!cursor&&!retentionMissing&&selected.length>0,coverage:retentionMissing?'unavailable':more?'partial':'observed'};
 }
 
 function pointFromRow(row = {}) {

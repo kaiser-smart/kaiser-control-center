@@ -15,6 +15,8 @@ import {
 } from "../components/icons/index.js";
 
 export const modules = [
+  { id: "jobs", title: "Zakázky", description: "Zakázkové listy, jejich provedení a doklady.", route: "/zakazky", icon: VistosIcon,
+    status: "Ověřování zdrojů", ctaLabel: "Otevřít zakázky", active: true, disabled: false, order: 4.5 },
   {
     id: "dashboard",
     title: "Dashboard firmy",

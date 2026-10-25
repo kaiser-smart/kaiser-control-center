@@ -1,6 +1,8 @@
-export const ACTIONS = ["view", "create", "edit", "delete", "approve", "export", "manage", "parts-search"];
+export const ACTIONS = ["view", "create", "edit", "delete", "approve", "export", "manage", "parts-search", "view_finance", "view_personal", "vistos_write"];
 export const PERMISSION_MODULES = [
   "dashboard",
+  "jobs",
+  "integrations",
   "fleet",
   "vehicle-tracking",
   "data-box-plus",
@@ -55,6 +57,7 @@ const ROLE_ALIASES = {
 };
 
 const MODULE_ALIASES = {
+  zakazky: "jobs",
   "vozovy-park": "fleet",
   "sledovani-vozidel": "vehicle-tracking",
   "datova-schranka": "data-box-plus",
@@ -256,6 +259,13 @@ export function hasPermission(user, moduleId, action = "view") {
   const normalizedModuleId = normalizeModuleId(moduleId);
   const normalizedAction = String(action || "view").trim();
   const role = normalizeRole(user?.role);
+
+  // New integration privileges require an explicit grant, including technical administrators.
+  // Existing wildcard roles do not silently expose finance/personal data or enable writes.
+  if (normalizedModuleId === 'jobs' || normalizedModuleId === 'integrations' || (normalizedModuleId === 'receivables' && normalizedAction === 'vistos_write')) {
+    const grant = explicitPermission(user, normalizedModuleId, normalizedAction);
+    return role !== 'ridic' && grant?.allowed === true;
+  }
 
   if (normalizedModuleId === "data-box" && !["admin", "management"].includes(role)) {
     return false;

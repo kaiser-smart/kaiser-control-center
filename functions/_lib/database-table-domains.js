@@ -56,7 +56,16 @@ export const DATABASE_TABLES = Object.freeze({
     "users",
     "vehicle_tracking_user_preferences",
     "vehicle_wim_devices",
-    "vehicle_wim_sites"
+    "vehicle_wim_sites",
+    "vistos_allocation_confirmations",
+    "vistos_command_events",
+    "vistos_company_access",
+    "vistos_execution_confirmations",
+    "vistos_finance_locks",
+    "vistos_integration_contracts",
+    "vistos_payment_commands",
+    "vistos_request_budget",
+    "vistos_user_preferences"
   ]),
   messages: Object.freeze([
     "communication_events",
@@ -87,6 +96,7 @@ export const DATABASE_TABLES = Object.freeze({
     "rcs_sms_idempotency_keys",
     "rcs_sms_messages",
     "rcs_sms_requests",
+    "rcs_sms_review_send_grants",
     "rcs_sms_runtime_config",
     "rcs_sms_tool_runs",
     "rcs_sms_webhook_events",
@@ -131,6 +141,8 @@ export const DATABASE_TABLES = Object.freeze({
     "vehicle_tracking_analytics_runs",
     "vehicle_tracking_history_runs",
     "vehicle_wim_alert_events",
+    "vistos_integration_events",
+    "vistos_sync_runs",
     "workflow_attempts"
   ]),
   archive: Object.freeze([
@@ -151,6 +163,7 @@ export const DATABASE_TABLES = Object.freeze({
     "employee_work_history",
     "fleet_orwii_fuel_transactions",
     "fleet_trip_job_allocations",
+    "job_execution_evidence",
     "receivable_import_batches",
     "receivable_import_rows",
     "receivable_legal_handoff_packages",
@@ -159,7 +172,15 @@ export const DATABASE_TABLES = Object.freeze({
     "self_repair_case_evidence",
     "vehicle_tracking_daily_metrics",
     "vehicle_tracking_gps_points",
-    "vehicle_tracking_trip_summaries"
+    "vehicle_tracking_trip_summaries",
+    "vistos_detail_refresh_queue",
+    "vistos_evidence_events",
+    "vistos_execution_checks",
+    "vistos_source_records",
+    "vistos_sync_checkpoints",
+    "vistos_sync_entity_locks",
+    "vistos_sync_seen",
+    "vistos_tcars_trip_days"
   ]),
 });
 
