@@ -354,6 +354,15 @@ export async function executeVistosSession(env, session, methodName, payload, {r
   }
 }
 
+export function vistosPageSortOrder(order) {
+  if (order == null) return undefined;
+  const parts = typeof order === 'string' ? /^([A-Za-z][A-Za-z0-9_]*) (asc|desc)$/i.exec(order) : null;
+  const normalized = parts ? [{ColumnName: parts[1], Direction: parts[2].toLowerCase()}] : order;
+  if (!Array.isArray(normalized) || normalized.length !== 1 || !/^[A-Za-z][A-Za-z0-9_]*$/.test(normalized[0]?.ColumnName || '')
+      || !['asc', 'desc'].includes(normalized[0]?.Direction)) throw new TypeError('vistos_invalid_sort_order');
+  return normalized.map(({ColumnName, Direction}) => ({ColumnName, Direction}));
+}
+
 export async function getVistosPage(env, session, entityName, columns, filter = null, start = 0, length = DEFAULT_PAGE_SIZE, options = {}) {
   const request = {
     EntityName: entityName,
@@ -365,7 +374,7 @@ export async function getVistosPage(env, session, entityName, columns, filter = 
   if (filter && Object.keys(filter).length) {
     request.Filter = filter;
   }
-  if (options.order) request.Order = options.order;
+  if (options.order) request.SortOrder = vistosPageSortOrder(options.order);
 
   const result = await executeVistosSession(env, session, "GetPageParam", request);
   const rows = extractVistosRows(result.body);
