@@ -1,3 +1,4 @@
+import { isMobileViewport, mobileViewportQuery } from './mobileViewport.js';
 // Presentation only. Existing links, permissions and action handlers remain authoritative.
 const states = new Map();
 let owner = null;
@@ -5,7 +6,7 @@ let renderAfterResize = null;
 let resizeMap = null;
 let lastMobilePath = null;
 let paginationObservers = [];
-const mobile = () => matchMedia('(max-width: 720px)').matches;
+const mobile = isMobileViewport;
 const stateFor = key => {
   if (!states.has(key)) states.set(key, { folds: {}, pages: {}, view: 'today', map: 'map' });
   return states.get(key);
@@ -209,7 +210,7 @@ function mapWorkspace(shell, state) {
   const stage = map.querySelector('.tracking-operational-map-stage');
   const size = () => {
     if (mobile() && stage?.isConnected && state.map === 'map') {
-      stage.style.setProperty('--mobile-map-space', `${Math.max(220, innerHeight - stage.getBoundingClientRect().top + scrollY)}px`);
+      stage.style.setProperty('--mobile-map-space', `${Math.max(220, (window.visualViewport?.height || innerHeight) - stage.getBoundingClientRect().top - shell.scrollTop)}px`);
     }
   };
   sync();
@@ -266,7 +267,7 @@ export function applyMobileWorkspace(app, { userId, activeModuleId, render }) {
   if (!shell || shell.querySelector('.mobile-header')) return;
   if (lastMobilePath !== location.pathname) {
     lastMobilePath = location.pathname;
-    requestAnimationFrame(() => window.scrollTo({top:0, behavior:'instant'}));
+    requestAnimationFrame(() => shell.scrollTo({top:0, behavior:'instant'}));
   }
   const state = stateFor(location.pathname + location.search);
   const sidebar = shell.querySelector('.ui-pilot-sidebar');
@@ -402,17 +403,9 @@ export function applyMobileWorkspace(app, { userId, activeModuleId, render }) {
 // VisualViewport reports keyboard occlusion without guessing device-specific keyboard heights.
 if (typeof window !== 'undefined') {
   window.addEventListener('resize', () => resizeMap?.());
-  const keyboard = () => {
-    const editable = document.activeElement?.matches('input, textarea, select, [contenteditable="true"]');
-    document.documentElement.classList.toggle('mobile-keyboard', Boolean(mobile() && editable && window.visualViewport && innerHeight - visualViewport.height > 120));
-  };
-  window.visualViewport?.addEventListener('resize', keyboard);
-  document.addEventListener('focusin', keyboard);
-  document.addEventListener('focusout', keyboard);
-  matchMedia('(max-width: 720px)').addEventListener('change', () => {
+  matchMedia(mobileViewportQuery).addEventListener('change', () => {
     document.querySelector('dialog.mobile-menu[open]')?.close();
     document.body.classList.remove('mobile-menu-open');
-    keyboard();
     renderAfterResize?.();
   });
 }
