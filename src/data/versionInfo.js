@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.879"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.880"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -21,6 +21,7 @@ export const versionInfo = {
 
 export const versionNews = [
   { title: "Červený bod nedostupné GPS", text: "Nedostupná GPS je místo oranžového bodu označená červeně v mapě, seznamu, detailu i přehledu. Zelené označení dostupné GPS zůstává zachované." },
+  { title: "Favicon K.", text: "Záložka aplikace má bílé K. písmem Quicksand na zeleném podkladu." },
   { title: "Ikony podle doplněného přiřazení", text: "Zapracováno všech 12 voleb z vašeho návrhu: kompaktní kontejnery a cisterna, minibusy, servisní dodávka a oba stroje Manitou. Ostatní přiřazení i původní grafika zůstávají zachované." },
   { title: "Návrat k vybranému vozidlu", text: "Šipka na mapě při otevřeném detailu přiblíží a vystředí vybrané vozidlo. Bez výběru zobrazí celou flotilu podle filtru. U vozidla bez polohy je neaktivní." },
   { title: "Jízda všech vozidel a přiblížení při výběru", text: "Každé zobrazené vozidlo s potvrzenou aktuální jízdou jemně pulzuje. Výběr vozidla přiblíží mapu na úroveň ulice a vystředí jej mimo panel detailu. Obnova GPS zachovává váš pohled. Otevření shluku směřuje ke skutečným vozidlům; z mapy zmizela legenda, počítadlo výřezu a volba popisků. Detail má jednu tečku u GPS." },

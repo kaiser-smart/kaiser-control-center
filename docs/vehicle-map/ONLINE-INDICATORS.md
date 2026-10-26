@@ -4,7 +4,7 @@
 
 - Online: existující normalizace poskytuje platnou polohu, nejde o minulý náhradní vzorek, kategorie není stale/missing a čas je ověřený. Používá se stávající limit stáří z API (`staleAfterSeconds`, výchozí 1800 s), žádná nová GPS klasifikace ani síťový ping.
 - Offline: starý, chybějící, neověřený či náhradní minulý vzorek. Zobrazení nezaměňuje chybějící data za online.
-- Zelená `#75BD25`, od verze 0.1.879 červená `#EF4444`; pouze indikátor, žádná změna obrázků vozidel.
+- Zelená `#75BD25`, od verze 0.1.880 červená `#EF4444`; pouze indikátor, žádná změna obrázků vozidel.
 - Stávající filtr se starým interním klíčem `stale` je ve workspace označen Offline a zahrnuje všechny červené body včetně vozidel bez polohy. Původní normalizace, ostatní filtry a GPS kontrakty se nemění.
 - Jede/Stojí a skutečná rychlost zůstávají. Výběr, shlukování, bílé SPZ, zeměpisné kotvy a hranice 120 s pro pulz všech samostatně zobrazených jedoucích vozidel jsou zachované. Mimořádná událost má samostatný původní vykřičník, nepřebarvuje GPS indikátor.
 - Puntíky se aktualizují také při stárnutí vzorku bez nového načtení. Neměnný obrázkový DOM zůstává zachovaný.
@@ -13,4 +13,4 @@ Testy: jednotkové testy online/offline pro pohyb, stání, starou/chybějící/
 
 Bez změny API, DB, oprávnění, ukládání GPS nebo ostatních modulů. Fyzická instalace PWA není browser testem doložena.
 
-Od verze 0.1.879 na požadavek uživatele červený bod nahrazuje oranžový ve všech společných indikátorech GPS (seznam, mapa, shluk, detail a přehled). Jde pouze o změnu barvy; podmínky Online/Offline zůstávají stejné.
+Od verze 0.1.880 na požadavek uživatele červený bod nahrazuje oranžový ve všech společných indikátorech GPS (seznam, mapa, shluk, detail a přehled). Jde pouze o změnu barvy; podmínky Online/Offline zůstávají stejné.
