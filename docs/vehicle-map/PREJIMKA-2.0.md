@@ -1,8 +1,8 @@
-# Poloha vozidel 2.0 — přejímka vydání 0.1.861
+# Poloha vozidel 2.0 — přejímka vydání 0.1.863
 
 Stav: **implementováno a lokálně ověřeno; produkční nasazení a následná živá přejímka se evidují samostatně**.
 
-Větev: `codex/vehicle-location-2`. Výchozí hlavní větev před vydáním: `7f092b72` (0.1.860). Zachovány souběžné změny mobilního auditu a společných ikon.
+Větev: `codex/vehicle-location-2`. Výchozí hlavní větev před vydáním: `1f7f3b25` (0.1.862). Zachovány souběžné změny mobilního auditu a společných ikon.
 
 ## Aktuální závazná předloha
 
@@ -39,11 +39,11 @@ Test prokázal původní 503, poté 200, načtení bodu a auditu ze správných 
 ## Provedené ověření
 
 - 58/58 Chromium a 58/58 WebKit po převzetí main 0.1.860: hledání názvu/SPZ/přiřazeného řidiče, filtry, 200 vozidel, shluky 6 a 20 vozidel, výběr, historie a změna období, obnova, 401/403, expirace, návrat online, odhlášení, klávesnicová dostupnost a zmenšený viewport při otevření klávesnice.
-- Skutečné Google Maps se syntetickými vozidly: skutečný mapový podklad, obrys ČR, ovládání, 4 požadované rozměry, dva skutečné 60sekundové intervaly GPS obnovy a zotavení z výpadku. Výsledky závěrečného běhu jsou v `../outputs/v3-google/verification.json`; syntetická data nejsou produkční přejímka GPS.
+- 15/15 skutečné Google Maps se syntetickými vozidly: skutečný mapový podklad, obrys ČR, ovládání, 4 požadované rozměry, dva skutečné 60sekundové intervaly GPS obnovy a zotavení z výpadku. Výsledky závěrečného běhu jsou v `../outputs/v3-google/verification.json`; syntetická data nejsou produkční přejímka GPS.
 - Přihlášený integrační náhled: skutečných 57 vozidel; hledání, výběr, stav/rychlost/čas GPS/adresa, denní analytika, filtry, shluky, ruční obnova, zachování mapy a výpadek/obnova. Dříve ověřené skutečné odhlášení a následné přihlášení uživatelem. Historie staré produkční verze vracela 503; tato chyba se nevydává za úspěch.
 - Testy `test:vehicle-tracking`, modelu a dashboardu, ochrany `test:collection-routes`, mobilního auditu, ikon a databázové architektury prošly. Prošly všechny testovací příkazy oficiálního deployment guardu, syntax check a standardní build 52 rout.
 - PWA kontrakt: 52 rout + 404, metadata, ikony, stejnooriginová identita, žádná offline cache GPS. WebKit přes lokální HTTPS: iPhone profil, simulované standalone prostředí, desktop a bezpečnostní scénáře relace. Fyzická instalace na iPhone nebyla provedena.
-- Vizuální srovnání: tmavé kompaktní panely, limetkový akcent, geografická mapa ČR, legenda, kruhový ukazatel, obraz vozidla, telemetry tracks, události a tabulka odpovídají vybranému směru. Stávající hlavní navigace nahrazuje duplicitní navigaci z mockupu; data jsou skutečná nebo výslovně nedostupná.
+- Vizuální srovnání: tmavé kompaktní panely, limetkový akcent, geografická mapa ČR, legenda, kruhový ukazatel, obraz vozidla, pruhové ukazatele telemetrie, události a tabulka odpovídají vybranému směru. Stávající hlavní navigace nahrazuje duplicitní navigaci z mockupu; data jsou skutečná nebo výslovně nedostupná.
 
 Lokální důkazy mimo Git: `../outputs/v3-861-chromium`, `../outputs/v3-861-webkit`, `../outputs/v3-google`, `../outputs/v3-pwa`, `../outputs/v3-live`. Živé GPS screenshoty 1440 × 900, 1024 × 768, 390 × 844 a 320 × 700 zůstávají mimo veřejný PR. Log předmerge kontrol: `/private/tmp/vehicle-map-release-validation.log`.
 

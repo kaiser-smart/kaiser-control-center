@@ -1,3 +1,4 @@
+import { modules } from "../src/data/modules.js";
 import { searchNavigation } from "../src/data/globalSearch.js";
 import { hasPermission } from "../src/permissions.js";
 // Optional integration test. Uses external Playwright tooling, not an app dependency.
@@ -442,6 +443,13 @@ try {
         const expectedLauncher = [...(hasPermission(account,'jobs','view') ? ['Zakázky'] : []),'Nepřítomnost','Zaměstnanci'];
         assert.equal(await page.locator('[data-launcher-module]:visible').count(),expectedLauncher.length);
         assert.deepEqual(await page.locator('[data-launcher-module] strong').allTextContents(),expectedLauncher);
+        const primaryIds = new Set(['jobs','absence','employees']);
+        const expectedAdditional = modules.filter(item=>item.active!==false&&!item.disabled&&!primaryIds.has(item.id)&&hasPermission(account,item.id,'view')).map(item=>({id:item.id,route:item.route}));
+        if(hasPermission(account,'feedback','view'))expectedAdditional.push({id:'feedback',route:'/pripominky'});
+        const actualAdditional = await page.locator('[data-launcher-additional]').evaluateAll(nodes=>nodes.map(n=>({id:n.dataset.launcherAdditional,route:new URL(n.href).pathname})));
+        assert.deepEqual(actualAdditional.sort((a,b)=>a.id.localeCompare(b.id)),expectedAdditional.sort((a,b)=>a.id.localeCompare(b.id)),'Home exposes every other permitted module at its actual route');
+        assert.equal(await page.locator('[data-launcher-additional]:visible').count(),expectedAdditional.length);
+        assert.equal(await page.locator('[data-launcher-additional] svg.smart-icon').count(),expectedAdditional.length,'Every link has its approved icon');
         const {search,tile}=await page.evaluate(()=>({search:document.querySelector('[data-module-search]').getBoundingClientRect().toJSON(),tile:document.querySelector('[data-launcher-module]').getBoundingClientRect().toJSON()}));
         assert.ok(search.y<tile.y && tile.y+tile.height<height-(width<721?60:0),'Search and module visible without scrolling');
         assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -449,10 +457,12 @@ try {
         assert.ok(await page.locator('[data-global-search-results] a').count() > 0,'Search ignores accents');
         await page.locator('[data-module-search]').fill('vozidla');
         assert.equal(await page.locator('[data-launcher-module]:visible').count(),0);
+        assert.equal(await page.locator('[data-launcher-additional]:visible').count(),0,'Secondary modules hide while searching');
         assert.equal(await page.locator('[data-global-search-results] a[href="/vozovy-park"]').count(),hasPermission(account,'fleet','view') ? 1 : 0,'Search respects module permissions');
         await page.locator('[data-module-search]').fill('zzzz-no-match');
         assert.equal(await page.locator('[data-global-search-results] a').count(),0);
         await page.locator('[data-module-search]').fill('');
+        assert.equal(await page.locator('[data-launcher-additional]:visible').count(),expectedAdditional.length,'Clearing search restores direct navigation');
         await page.screenshot({path:path.join(output,`launcher-${account.role}-${width}.png`)});
       }
       await page.locator('[data-launcher-module]').filter({hasText:'Nepřítomnost'}).click();

@@ -7259,7 +7259,7 @@ function paintGlobalSearch() {
   const target = app.querySelector("[data-global-search-results]");
   if (target) target.innerHTML = globalSearchHtml(currentUser());
   const searching = Boolean(moduleLauncherQuery.trim());
-  for (const element of app.querySelectorAll(".module-launcher-grid, #module-launcher-title")) element.hidden = searching;
+  for (const element of app.querySelectorAll(".module-launcher-grid, #module-launcher-title, [data-launcher-more]")) element.hidden = searching;
 }
 function updateGlobalSearch(value) {
   moduleLauncherQuery = value.slice(0, 100);
@@ -7314,6 +7314,8 @@ function launcherModules(user) {
 
 function homePage(user) {
   const items = launcherModules(user);
+  const primaryIds = new Set(items.map(item => item.id));
+  const moreItems = menuModules(user).filter(item => !primaryIds.has(item.id) && item.active !== false && !item.disabled);
   return `
     <main class="app-shell module-theme-scope ui-system-pilot ui-system-pilot--modules" ${moduleThemeStyleAttribute()}>
       ${uiSystemPilotSidebar(user, "dashboard")}
@@ -7329,6 +7331,15 @@ function homePage(user) {
             <span class="module-launcher-arrow" aria-hidden="true">${SmartIcon("chevron-right")}</span>
           </a>`).join("")}
         </div>
+        ${moreItems.length ? `<nav class="module-launcher-more" aria-labelledby="module-launcher-more-title" data-launcher-more ${moduleLauncherQuery.trim() ? "hidden" : ""}>
+          <h2 id="module-launcher-more-title">Další moduly</h2>
+          <div class="module-launcher-more-grid">
+            ${moreItems.map(item => `<a class="module-launcher-card module-launcher-card--compact" href="${routeHref(routeForModuleCard(item, user))}" data-link data-launcher-additional="${escapeHtml(item.id)}">
+              <span class="module-launcher-secondary-icon" aria-hidden="true">${renderModuleIcon(item)}</span>
+              <strong>${escapeHtml(item.title)}</strong>
+            </a>`).join("")}
+          </div>
+        </nav>` : ""}
       </section>
     </main>
   `;
