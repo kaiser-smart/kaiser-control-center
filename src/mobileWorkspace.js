@@ -55,19 +55,24 @@ function compactTabs(shell) {
     entries.forEach((entry, index) => {
       const option = el('option', '', entry.textContent.trim());
       option.value = String(index);
-      option.selected = entry.matches('[aria-selected="true"], [aria-current], .is-active') || /--active\b/.test(entry.className);
+      option.selected = entry.matches('[aria-selected="true"], [aria-current]:not([aria-current="false"]), .is-active') || /--active\b/.test(entry.className);
       select.append(option);
     });
     // Some task routes (for example Quick entry) are intentionally outside the tabs.
     // Do not pretend the first tab is active: it must remain a selectable destination.
-    if (!entries.some(entry => entry.matches('[aria-selected="true"], [aria-current], .is-active') || /--active\b/.test(entry.className))) {
+    if (!entries.some(entry => entry.matches('[aria-selected="true"], [aria-current]:not([aria-current="false"]), .is-active') || /--active\b/.test(entry.className))) {
       const placeholder = el('option', '', 'Přejít do jiné sekce…');
       placeholder.value = '';
       placeholder.disabled = true;
       placeholder.selected = true;
       select.prepend(placeholder);
     }
-    select.addEventListener('change', () => entries[Number(select.value)]?.click());
+    const activeValue = select.value;
+    select.addEventListener('change', () => {
+      const index = Number(select.value);
+      select.value = activeValue; // A cancelled unsaved-changes dialog must keep the current section.
+      entries[index]?.click();
+    });
     label.append(select);
     tabs.before(label);
     tabs.classList.add('mobile-desktop-tabs');
@@ -118,7 +123,9 @@ function compactTables(shell, state) {
       cells.forEach((cell, i) => {
         const label = cell.dataset.label || headers[i] || '';
         cell.dataset.mobileLabel = label;
-        const key = table.matches('.access-permissions-table') ? i === 0 : table.matches('.fleet-table') ? /^(SPZ|Stav)$/.test(label) : i < 2;
+        const semantic = table.matches('.absence-table') ? /^(Zaměstnanec|Typ|Od|Do|Rozsah|Stav)$/i : table.matches('.notification-table') ? /^(Datum \/ čas|Zaměstnanec|Typ|Stav)$/i : /^(Zaměstnanec|Název|Zakázka|Zákazník|Adresa|Místo|SPZ|Vozidlo|Název vozidla|Datum|Litry|Hodnota ORWII|Značka a model|Rozměr)$/i;
+        const hasSemantic = cells.some((candidate, j) => semantic.test(candidate.dataset.label || headers[j] || ''));
+        const key = table.matches('.access-permissions-table') ? i === 0 : hasSemantic ? semantic.test(label) : i < 2;
         cell.classList.toggle('mobile-record-key', key);
       });
       const host = el(cells[0].tagName.toLowerCase(), 'mobile-record-toggle');
@@ -132,7 +139,8 @@ function compactTables(shell, state) {
       };
       host.append(toggle); row.append(host); sync();
     });
-    paginate(table, rows, `table-${tableIndex}`, state);
+    // A server page already has an authoritative total and navigation.
+    if (!table.matches(".tyres-data-table")) paginate(table, rows, `table-${tableIndex}`, state);
   });
   for (const selector of ['.tracking-operational-list__items', '.driver-report-mobile-reports__list', '.ds-plus-triage-mailboxes']) {
     const list = shell.querySelector(selector);

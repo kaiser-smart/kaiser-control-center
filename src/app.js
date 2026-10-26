@@ -1,3 +1,4 @@
+import { fleetCalendarDate } from "./data/fleetDate.js";
 import { createVehicleWorkspace } from "./vehicle-map/workspace.js";
 import { vistosWorkspaceSection, mountVistosWorkspace } from "./components/VistosWorkspace.js";
 import { searchNavigation } from "./data/globalSearch.js";
@@ -2155,6 +2156,9 @@ const fleetUiState = {
   message: "",
   error: "",
   savingAssignmentVehicleId: "",
+  assignmentEditorId: "",
+  assignmentDraft: null,
+  assignmentDirty: false,
   vehicleFilters: {
     quick: "all",
     status: "all",
@@ -6197,7 +6201,7 @@ function currentTyresDirtyTarget() {
 
   const form = [
     ...document.querySelectorAll("[data-tyres-tyre-form], [data-tyres-measurement-form], [data-tyres-service-form]")
-  ].find((candidate) => tyresFormIsDirty(candidate));
+  ].find((candidate) => (candidate.matches("[data-tyres-service-form]") && tyresServiceDirty) || tyresFormIsDirty(candidate));
 
   if (!form) return null;
 
@@ -6234,6 +6238,8 @@ function currentDriverReportDirtyTarget() {
 }
 
 function currentDirtyTarget() {
+  if (currentFleetAssignmentDirtyTarget()) return currentFleetAssignmentDirtyTarget();
+  if (currentAbsenceRequestDirtyTarget()) return currentAbsenceRequestDirtyTarget();
   if (forpsiComposerDirtyTarget()) return forpsiComposerDirtyTarget();
   if (forpsiDirtyTarget()) return forpsiDirtyTarget();
   const accessTarget = currentAccessDirtyTarget();
@@ -7954,7 +7960,7 @@ function quickAbsenceDaysLabel() {
 
   return formatAbsenceDays(countAbsenceDays(
     quickAbsenceState.dateFrom,
-    quickAbsenceState.dateTo || quickAbsenceState.dateFrom,
+    quickAbsenceState.dateTo,
     quickAbsenceState.halfDay,
     false
   ));
@@ -8060,12 +8066,12 @@ function quickAbsenceCustomDate(type) {
     <div class="quick-absence-custom-date">
       <label>
         <span>Od</span>
-        <input type="date" value="${escapeHtml(quickAbsenceState.dateFrom || today)}" data-quick-date-from />
+        <input type="date" value="${escapeHtml(quickAbsenceState.dateFrom)}" data-quick-date-from />
       </label>
       ${showRange ? `
         <label>
           <span>Do</span>
-          <input type="date" value="${escapeHtml(quickAbsenceState.dateTo || quickAbsenceState.dateFrom || today)}" data-quick-date-to />
+          <input type="date" value="${escapeHtml(quickAbsenceState.dateTo)}" data-quick-date-to />
         </label>
       ` : ""}
       <button class="primary-action quick-absence-wide-action" type="button" data-quick-custom-continue>
@@ -8082,17 +8088,17 @@ function quickAbsenceDoctorDateTime() {
     <div class="quick-absence-custom-date quick-absence-time-grid">
       <label>
         <span>Datum</span>
-        <input type="date" value="${escapeHtml(quickAbsenceState.dateFrom || today)}" data-quick-date-from />
+        <input type="date" value="${escapeHtml(quickAbsenceState.dateFrom)}" data-quick-date-from />
       </label>
       <label>
         <span>Čas od</span>
-        <input type="time" step="1800" value="${escapeHtml(quickAbsenceState.startTime || "09:00")}" data-quick-start-time />
+        <input type="time" step="1800" value="${escapeHtml(quickAbsenceState.startTime)}" data-quick-start-time />
       </label>
       <label>
         <span>Čas do</span>
-        <input type="time" step="1800" value="${escapeHtml(quickAbsenceState.endTime || "11:00")}" data-quick-end-time />
+        <input type="time" step="1800" value="${escapeHtml(quickAbsenceState.endTime)}" data-quick-end-time />
       </label>
-      <p class="quick-absence-hint">Rozsah: ${escapeHtml(formatAbsenceHours(countAbsenceHours(quickAbsenceState.startTime, quickAbsenceState.endTime)))}</p>
+      <p class="quick-absence-hint" data-quick-hours-preview aria-live="polite">Rozsah: ${escapeHtml(formatAbsenceHours(countAbsenceHours(quickAbsenceState.startTime, quickAbsenceState.endTime)))}</p>
       <button class="primary-action quick-absence-wide-action" type="button" data-quick-custom-continue>
         Pokračovat
       </button>
@@ -8136,12 +8142,8 @@ function quickAbsenceOptionalFields() {
           <textarea rows="3" placeholder="Volitelná poznámka" data-quick-note>${escapeHtml(quickAbsenceState.note)}</textarea>
         </label>
       ` : ""}
-      <button class="quick-absence-option-toggle" type="button" data-quick-attachment-toggle>
-        Přidat přílohu
-      </button>
-      ${quickAbsenceState.attachmentOpen ? `
-        <p class="quick-absence-api-note">Přílohy čekají na samostatné cloudové API.</p>
-      ` : ""}
+      <button class="quick-absence-option-toggle" type="button" disabled aria-describedby="quick-attachment-unavailable">Přidat přílohu</button>
+      <p class="quick-absence-hint" id="quick-attachment-unavailable">Přílohy zatím nelze připojit. Žádost můžete odeslat bez přílohy.</p>
     </div>
   `;
 }
@@ -8173,7 +8175,7 @@ function quickAbsenceSummaryStep() {
         </article>
         <article>
           <span>Stav</span>
-          <strong>${escapeHtml(quickAbsenceStatusLabel(type))}</strong>
+          <strong>Koncept · dosud neodesláno</strong>
         </article>
       </div>
       ${quickAbsenceOptionalFields()}
@@ -8951,7 +8953,7 @@ function absenceDashboard(user) {
     ? `<a class="primary-action" href="${routeHref(absenceRouteForTab("new"))}" data-link>Nová dovolená</a>`
     : "";
   const newRequestButton = hasPermission(user, "absence", "create")
-    ? '<button class="secondary-link" type="button" data-absence-tab="new">Přidat nemoc</button>'
+    ? '<button class="secondary-link" type="button" data-absence-tab="new" data-absence-new-type="Nemoc">Přidat nemoc</button>'
     : "";
 
   return `
@@ -9033,7 +9035,7 @@ function absenceMyRequests(user) {
     ? `<a class="primary-action" href="${routeHref(absenceRouteForTab("new"))}" data-link>Nová žádost</a>`
     : "";
   const newRequestButton = hasPermission(user, "absence", "create")
-    ? '<button class="secondary-link" type="button" data-absence-tab="new">Přidat nemoc</button>'
+    ? '<button class="secondary-link" type="button" data-absence-tab="new" data-absence-new-type="Nemoc">Přidat nemoc</button>'
     : "";
 
   return `
@@ -9240,7 +9242,7 @@ function absenceNewRequest(user) {
         ${absenceOutOfOfficePanel(user, selectedEmployee)}
         <label>
           <span>Příloha</span>
-          <input name="attachment" type="file" multiple />
+          <input name="attachment" type="file" multiple disabled aria-describedby="absence-attachment-unavailable" /><small id="absence-attachment-unavailable">Přílohy zatím nelze připojit.</small>
         </label>
         <label class="absence-form__wide">
           <span>Poznámka</span>
@@ -9249,7 +9251,7 @@ function absenceNewRequest(user) {
         <div class="absence-form__summary">
           <span data-absence-duration-title>Počet dnů</span>
           <strong data-absence-days-preview>1 den</strong>
-          <small data-absence-status-preview>${initialStatusForAbsenceType("Dovolená")}</small>
+          <small data-absence-status-preview>Koncept · dosud neodesláno</small>
         </div>
         <button class="primary-action absence-form__submit" type="submit" data-absence-submit>
           ${absenceSubmitLabel("Dovolená")}
@@ -9381,8 +9383,9 @@ function absenceReports(user) {
     employeeId: absenceUiState.employeeFilter,
     month: absenceUiState.monthFilter
   });
-  const totals = monthlyAbsenceTotals(reportRequests);
-  const doctorHours = monthlyAbsenceDoctorHours(reportRequests);
+  const totals = monthlyAbsenceTotals(reportRequests, absenceUiState.monthFilter);
+  const pendingTotals = monthlyAbsenceTotals(reportRequests, absenceUiState.monthFilter, { pending: true });
+  const doctorHours = monthlyAbsenceDoctorHours(reportRequests, absenceUiState.monthFilter);
 
   return `
     <section class="absence-panel">
@@ -9397,6 +9400,9 @@ function absenceReports(user) {
         </div>
       </div>
       ${absenceFilterPanel(user, "reports")}
+      ${displayState.requests.length >= 100 ? '<p class="module-feedback__error">Načteno pouze posledních 100 žádostí. Součty ani export nemusí obsahovat celé období.</p>' : ""}
+      <p>Součty zahrnují pouze schválené a evidované kalendářní dny ve vybraném měsíci. Zamítnuté a zrušené žádosti se do čerpání nezapočítávají.</p>
+      <p>Čekající dovolená: ${formatAbsenceDays(pendingTotals.Dovolená)}. Čekající nepřítomnost celkem: ${formatAbsenceDays(Object.values(pendingTotals).reduce((sum, value) => sum + value, 0))}; lékař: ${formatAbsenceHours(monthlyAbsenceDoctorHours(reportRequests, absenceUiState.monthFilter, { pending: true }))}.</p>
       <div class="absence-report-grid">
         <article>
           <span>Období</span>
@@ -11728,6 +11734,31 @@ function employeesModulePage(user, employeeId = "") {
   `;
 }
 
+let linkedAbsence = { key: "", loading: false, request: null, error: "" };
+function linkedAbsenceId() { return new URLSearchParams(location.search).get("request") || ""; }
+async function loadLinkedAbsenceRequest() {
+  const id = linkedAbsenceId();
+  const key = `${authState.user?.id || ""}:${id}`;
+  if (!id || linkedAbsence.key === key) return;
+  linkedAbsence = { key, loading: true, request: null, error: "" };
+  try {
+    const result = await apiJson(`/api/absence-requests/${encodeURIComponent(id)}`);
+    if (linkedAbsence.key !== key) return;
+    linkedAbsence.request = normalizedApiAbsenceRequests([result.request])[0] || null;
+    if (!linkedAbsence.request) linkedAbsence.error = "Žádost nebyla nalezena.";
+  } catch (error) {
+    if (linkedAbsence.key === key) linkedAbsence.error = error.payload?.error || "Žádost není dostupná nebo k ní nemáte přístup.";
+  } finally {
+    if (linkedAbsence.key === key) { linkedAbsence.loading = false; render(); }
+  }
+}
+function linkedAbsenceContent(user) {
+  const key = `${user?.id || ""}:${linkedAbsenceId()}`;
+  if (linkedAbsence.key !== key || linkedAbsence.loading) return '<p role="status">Načítám vybranou žádost…</p>';
+  if (linkedAbsence.error) return `<p role="alert">${escapeHtml(linkedAbsence.error)}</p>`;
+  return absenceDetailPanel(linkedAbsence.request, user);
+}
+
 function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) {
   const requestedTab = context.tab
     ? context.tab
@@ -11766,7 +11797,7 @@ function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) 
         </div>
         ${isQuickTab ? "" : `<div class="absence-command-actions absence-command-actions--hero">
           ${hasPermission(user, "absence", "create") ? `<a class="primary-action" href="${routeHref(absenceRouteForTab("new"))}" data-link>Nová dovolená</a>` : ""}
-          ${hasPermission(user, "absence", "create") ? '<button class="secondary-link" type="button" data-absence-tab="new">Přidat nemoc</button>' : ""}
+          ${hasPermission(user, "absence", "create") ? '<button class="secondary-link" type="button" data-absence-tab="new" data-absence-new-type="Nemoc">Přidat nemoc</button>' : ""}
           ${canUseAbsenceTab(user, "approval") ? `<a class="secondary-link" href="${routeHref(absenceRouteForTab("approval"))}" data-link>Schvalování</a>` : ""}
         </div>`}
       </section>
@@ -11785,7 +11816,7 @@ function absenceModulePage(moduleItem, user, isDashboard = false, context = {}) 
 
       ${absenceUiState.message ? `<p class="module-feedback__notice">${escapeHtml(absenceUiState.message)}</p>` : ""}
       ${absenceUiState.error ? `<p class="module-feedback__error">${escapeHtml(absenceUiState.error)}</p>` : ""}
-      ${absenceActiveContent(activeTab, user, context)}
+      ${linkedAbsenceId() ? linkedAbsenceContent(user) : absenceActiveContent(activeTab, user, context)}
     </main>
   `;
 }
@@ -12295,10 +12326,8 @@ function fleetTabId(tabId = "") {
 }
 
 function fleetSafeDate(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return null;
-  const date = new Date(raw.length <= 10 ? `${raw}T00:00:00` : raw);
-  return Number.isNaN(date.getTime()) ? null : date;
+  const iso = fleetCalendarDate(value);
+  return iso ? new Date(`${iso}T00:00:00`) : null;
 }
 
 function fleetToday() {
@@ -12348,7 +12377,7 @@ function fleetTermStatusLabel(days) {
 }
 
 function fleetTermRecommendation(label, days) {
-  if (!Number.isFinite(days)) return "Datum není ve Vistosu načtené.";
+  if (!Number.isFinite(days)) return "Datum chybí nebo není platné. Ověřte termín ve zdroji.";
   if (days < 0) return `${label} je prošlá. Vozidlo označit jako rizikové.`;
   if (days === 0) return `${label} končí dnes. Domluvit okamžitou kontrolu.`;
   if (days <= 30) {
@@ -12723,6 +12752,11 @@ function fleetMissingVehicleTerms(vehicle = {}) {
     .filter((term) => !term.date || !Number.isFinite(term.days));
 }
 
+function fleetInvalidTermsNotice(vehicle = {}) {
+  const terms = fleetVehicleTerms(vehicle).filter(term => (term.date && !fleetSafeDate(term.date)) || vehicle.vistosTermSources?.[term.id]?.invalid);
+  return terms.length ? `<p class="module-feedback__error" role="status">${escapeHtml(vehicle.licensePlate || "Vozidlo")}: ${escapeHtml(terms.map(term => term.label).join(", "))} — neplatné datum ve zdroji, k prověření. Platnost nelze potvrdit.</p>` : "";
+}
+
 function fleetTermsDetail(vehicle = {}) {
   const readableTerms = fleetReadableVehicleTerms(vehicle);
   const missingTerms = fleetMissingVehicleTerms(vehicle);
@@ -12737,6 +12771,7 @@ function fleetTermsDetail(vehicle = {}) {
         </div>
         <span>${escapeHtml(readableTerms.length ? `${readableTerms.length} načteno` : "bez termínů")}</span>
       </div>
+      ${fleetInvalidTermsNotice(vehicle)}
       ${readableTerms.length ? `
         <div class="fleet-term-list fleet-term-list--available">
           ${readableTerms.map((term) => `
@@ -13020,21 +13055,29 @@ function fuelVehicleTable() {
   `;
 }
 
+const fuelModuleFilters = new Map();
+function currentFuelFilters() {
+  const module = uiSystemV2ActiveModuleId(window.location.pathname) || "fleet";
+  const key = `${authState.user?.id || ""}:${module}`;
+  if (!fuelModuleFilters.has(key)) fuelModuleFilters.set(key, { search: "", status: "all", fuelType: "all" });
+  return fuelModuleFilters.get(key);
+}
+
 function fuelFilters() {
   const fuelTypes = [...new Set((fleetFuelState.analytics?.recentTransactions || []).map((item) => item.fuelType || "Neuvedeno"))].sort();
   return `
     <div class="fuel-filters">
-      <label><span>Hledat</span><input type="search" value="${escapeHtml(fleetFuelState.search)}" placeholder="Název vozidla, SPZ, čip nebo ID" data-fuel-filter="search"></label>
+      <label><span>Hledat</span><input type="search" value="${escapeHtml(currentFuelFilters().search)}" placeholder="Název vozidla, SPZ, čip nebo ID" data-fuel-filter="search"></label>
       <label><span>Spárování</span><select data-fuel-filter="status">
-        ${[["all", "Vše"], ["matched", "Spárováno"], ["unmatched", "Nespárováno"], ["ambiguous", "Nejednoznačné"]].map(([value, label]) => `<option value="${value}" ${fleetFuelState.status === value ? "selected" : ""}>${label}</option>`).join("")}
+        ${[["all", "Vše"], ["matched", "Spárováno"], ["unmatched", "Nespárováno"], ["ambiguous", "Nejednoznačné"]].map(([value, label]) => `<option value="${value}" ${currentFuelFilters().status === value ? "selected" : ""}>${label}</option>`).join("")}
       </select></label>
-      <label><span>Palivo</span><select data-fuel-filter="fuelType"><option value="all">Všechna paliva</option>${fuelTypes.map((value) => `<option value="${escapeHtml(value)}" ${fleetFuelState.fuelType === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}</select></label>
+      <label><span>Palivo</span><select data-fuel-filter="fuelType"><option value="all">Všechna paliva</option>${fuelTypes.map((value) => `<option value="${escapeHtml(value)}" ${currentFuelFilters().fuelType === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}</select></label>
     </div>
   `;
 }
 
 function fuelTransactionsTable() {
-  const rows = filterOrwiiFuelTransactions(fleetFuelState.analytics?.recentTransactions || [], fleetFuelState);
+  const rows = filterOrwiiFuelTransactions(fleetFuelState.analytics?.recentTransactions || [], currentFuelFilters());
   if (!rows.length) return `<div class="fuel-data-state"><strong>Žádné tankování neodpovídá filtru.</strong><span>Změň období nebo filtr.</span></div>`;
   return `
     <div class="fuel-table-wrap">
@@ -13065,7 +13108,7 @@ function fuelAnalyticsPanel(options = {}) {
         ${options.showPeriods === false ? "" : fuelPeriodControls()}
       </header>
       ${fuelStatusMarkup()}
-      ${hasData ? `${fuelKpis()}${fuelCoverageNotice()}${options.showTrend ? fuelTrend() : ""}${options.showVehicles ? fuelVehicleTable() : ""}${options.showFilters ? fuelFilters() : ""}${options.showTransactions ? fuelTransactionsTable() : ""}` : ""}
+      ${hasData ? `<p>Souhrny za celé vybrané období; filtry níže omezují seznam tankování.</p>${fuelKpis()}${fuelCoverageNotice()}${options.showTrend ? fuelTrend() : ""}${options.showVehicles ? fuelVehicleTable() : ""}${options.showFilters || options.showTransactions ? fuelFilters() : ""}${options.showTransactions ? fuelTransactionsTable() : ""}` : ""}
       <footer class="fuel-source-note">Zdroj se synchronizuje v Cloudflare každou hodinu. Otevření stránky synchronizaci nespouští. Cena je transakční hodnota CZK z ORWII, nikoli automaticky ověřený účetní pořizovací náklad PHM.</footer>
     </div>
   `;
@@ -13580,6 +13623,25 @@ function fleetPrimaryAction(vehicle = {}) {
   });
 }
 
+function fleetAssignmentEditor(vehicle) {
+  if (fleetUiState.assignmentEditorId !== vehicle.id || !hasPermission(currentUser(), "fleet", "edit")) return "";
+  const draft = fleetUiState.assignmentDraft || { assignedDriverId: vehicle.assignedDriverId || "", note: vehicle.driverAssignmentNote || "" };
+  const candidates = fleetVehiclesState.driverCandidates || [];
+  const selectedKnown = !draft.assignedDriverId || candidates.some(item => item.id === draft.assignedDriverId);
+  return `<form class="absence-form" data-fleet-driver-assignment-form data-vehicle-id="${escapeHtml(vehicle.id)}">
+    <h3>Řidič vozidla ${escapeHtml(vehicle.licensePlate)}</h3>
+    <label><span>Řidič</span><select name="assignedDriverId"><option value="">Bez přiřazení</option>${!selectedKnown ? `<option value="${escapeHtml(draft.assignedDriverId)}" selected>Aktuální řidič (není v načteném seznamu)</option>` : ""}${candidates.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === draft.assignedDriverId ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select></label>
+    <label><span>Poznámka k přiřazení řidiče</span><textarea name="note" maxlength="2000">${escapeHtml(draft.note)}</textarea></label>
+    <p>Volba Bez přiřazení vymaže přiřazení i jeho poznámku. Změna se provede až po uložení.</p>
+    <button class="primary-action" type="submit" ${fleetUiState.savingAssignmentVehicleId ? "disabled" : ""}>Uložit řidiče</button>
+    <button class="secondary-link" type="button" data-fleet-action="closeAssignment">Zavřít</button>
+  </form>`;
+}
+function currentFleetAssignmentDirtyTarget() {
+  const form = document.querySelector("[data-fleet-driver-assignment-form]");
+  return form && fleetUiState.assignmentDirty ? { form, isDirty: true } : null;
+}
+
 function fleetDetailActions(vehicle = {}) {
   return `
     <section class="fleet-detail-card fleet-detail-card--actions" aria-labelledby="fleet-detail-actions-title">
@@ -13591,12 +13653,13 @@ function fleetDetailActions(vehicle = {}) {
         ${fleetPrimaryAction(vehicle)}
       </div>
       <div class="fleet-detail-secondary-actions">
-        ${fleetActionButton("Přidat poznámku", "settings", { vehicleId: vehicle.id, help: "Otevře nastavení pro poznámku. Poznámka se neuloží bez potvrzení přes backend." })}
-        ${fleetActionButton("Změnit řidiče", "settings", { vehicleId: vehicle.id, help: "Přejde na přiřazení řidiče. Změna se uloží pouze přes cloud API a zapíše k vozidlu." })}
+        <div><button class="secondary-link" type="button" disabled>Přidat poznámku</button><small>Samostatná poznámka k vozidlu zatím není dostupná. Poznámku k přiřazení řidiče lze upravit přes Změnit řidiče.</small></div>
+        ${hasPermission(currentUser(), "fleet", "edit") ? fleetActionButton("Změnit řidiče", "assignDriver", { vehicleId: vehicle.id, help: "Otevře přiřazení řidiče tohoto vozidla." }) : ""}
         ${fleetActionButton("Přidat fakturu", "costs", { vehicleId: vehicle.id, help: "Přejde do nákladů. Faktura se nevytvoří ani neodešle bez potvrzení člověka." })}
         ${fleetActionButton("Zobrazit historii", "timeline", { vehicleId: vehicle.id, help: "Zobrazí časovou osu událostí vozidla. Nic se tím nemění." })}
         ${fleetActionLink("Přejít do Hlášení řidičů", DRIVER_REPORT_ROUTE, "Otevře samostatný modul Hlášení řidičů. Vozový park nepřebírá jeho workflow.")}
       </div>
+      ${fleetAssignmentEditor(vehicle)}
     </section>
   `;
 }
@@ -14730,6 +14793,7 @@ function fleetTermsSection(activeId) {
         "Provozní a právní platnosti podle priority.",
         { badge: false }
       )}
+      ${fleetVehiclesState.vehicles.map(fleetInvalidTermsNotice).join("")}
       <div class="fleet-priority-bands" aria-label="Priorita termínů">
         ${[
           ["Prošlé", rows.filter(({ term }) => term.days < 0).length, "risk"],
@@ -40782,7 +40846,7 @@ function legacyTyresInventoryForm(user) {
           <label><span>Pozice kola</span><input name="position" maxlength="80" placeholder="např. HL vnější" value="${escapeHtml(fields.position)}" /></label>
           <label><span>Aktuální dezén (mm)</span><input name="currentTread" inputmode="decimal" type="number" min="0" max="100" step="0.1" value="${escapeHtml(fields.currentTread)}" /></label>
           <label><span>Tlak (bar)</span><input name="pressure" inputmode="decimal" type="number" min="0" max="30" step="0.1" value="${escapeHtml(fields.pressure)}" /></label>
-          <label><span>Cena bez DPH</span><input name="priceEx" inputmode="decimal" type="number" min="0" max="1000000" step="1" value="${escapeHtml(fields.priceEx)}" /></label>
+          <label><span>Cena bez DPH</span><input name="priceEx" inputmode="decimal" type="number" min="0" max="1000000" step="0.01" value="${escapeHtml(fields.priceEx)}" /></label>
           <label><span>Dodavatel</span><input name="supplier" maxlength="180" value="${escapeHtml(fields.supplier)}" /></label>
           <label><span>Datum nákupu</span><input name="purchaseDate" type="date" value="${escapeHtml(fields.purchaseDate)}" /></label>
           <label><span>Faktura</span><input name="invoice" maxlength="120" value="${escapeHtml(fields.invoice)}" /></label>
@@ -40837,9 +40901,9 @@ function legacyTyresServiceForm(user) {
         <label><span>Typ zásahu *</span><input name="type" required maxlength="120" placeholder="např. přezutí" /></label>
         <label><span>Technik</span><input name="person" maxlength="180" /></label>
         <label><span>Dodavatel</span><input name="supplier" maxlength="180" /></label>
-        <label><span>Práce bez DPH</span><input name="labor" inputmode="decimal" type="number" min="0" max="10000000" step="1" /></label>
-        <label><span>Materiál bez DPH</span><input name="material" inputmode="decimal" type="number" min="0" max="10000000" step="1" /></label>
-        <label><span>Pneumatiky bez DPH</span><input name="tireCost" inputmode="decimal" type="number" min="0" max="10000000" step="1" /></label>
+        <label><span>Práce bez DPH</span><input name="labor" inputmode="decimal" type="number" min="0" max="10000000" step="0.01" /></label>
+        <label><span>Materiál bez DPH</span><input name="material" inputmode="decimal" type="number" min="0" max="10000000" step="0.01" /></label>
+        <label><span>Pneumatiky bez DPH</span><input name="tireCost" inputmode="decimal" type="number" min="0" max="10000000" step="0.01" /></label>
         <label><span>Faktura</span><input name="invoice" maxlength="120" /></label>
         <label class="tyres-form__wide"><span>Poznámka</span><textarea name="note" maxlength="4000" rows="2" placeholder="Volitelná poznámka k servisu"></textarea></label>
       </div>
@@ -41086,7 +41150,7 @@ function tyresNumber(value, digits = 1) {
 function tyresCurrency(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return "Neuvedeno";
-  return new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(number);
+  return new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(number);
 }
 
 function tyresDate(value) {
@@ -41111,7 +41175,7 @@ function tyresFormBaseline(fields) {
 function tyresDraftFields(form) {
   let baseline = {};
   try { baseline = JSON.parse(form?.dataset?.tyresBaseline || "{}"); } catch { baseline = {}; }
-  return Object.fromEntries(Object.keys(baseline).map((name) => [name, String(form?.elements?.[name]?.value ?? "").trim()]));
+  return Object.fromEntries(Object.keys(baseline).map((name) => [name, String(name === "tyreIds" ? new FormData(form).getAll(name).join(",") : form?.elements?.[name]?.value ?? "").trim()]));
 }
 
 function tyresFormIsDirty(form) {
@@ -41275,9 +41339,9 @@ function tyresMeasurementView(user) {
 function tyresServiceView(user) {
   if (!tyresCanEdit(user)) return tyresEmpty("Nemáte oprávnění zapisovat servis", "Servisní historie zůstává dostupná v záložce Historie.");
   const fields = { date: new Date().toISOString().slice(0, 10), vehicle: "", type: "", person: "", supplier: "", labor: "", material: "", tireCost: "", invoice: "", note: "", ...(tyresState.serviceDraft || {}) };
-  if (!fields.date) fields.date = new Date().toISOString().slice(0, 10);
-  const linkedTyres = tyresState.serviceVehicleDetail?.tyres || [];
-  return `<section class="tyres-panel"><div class="tyres-panel__head"><div><p class="module-feedback__eyebrow">Servisní karta</p><h2>Servis a náklady</h2><p>Částky se sčítají před uložením; zápis vznikne až po odeslání formuláře.</p></div></div><form class="tyres-service-form" data-tyres-service-form data-tyres-baseline="${tyresFormBaseline(fields)}"><fieldset><legend>Datum a vozidlo</legend><label><span>Datum *</span><input name="date" type="date" required value="${escapeHtml(fields.date)}" /></label><label><span>Vozidlo</span><select name="vehicle" data-tyres-service-vehicle>${tyresVehicleOptions(fields.vehicle)}</select></label></fieldset><fieldset><legend>Typ zásahu</legend><label><span>Typ zásahu *</span><input name="type" required maxlength="120" value="${escapeHtml(fields.type)}" placeholder="Např. přezutí" /></label></fieldset><fieldset><legend>Technik a dodavatel</legend><label><span>Technik</span><input name="person" maxlength="180" value="${escapeHtml(fields.person)}" /></label><label><span>Dodavatel</span><input name="supplier" maxlength="180" value="${escapeHtml(fields.supplier)}" /></label></fieldset><fieldset><legend>Práce, materiál a pneumatiky</legend><label><span>Práce bez DPH</span><input name="labor" inputmode="decimal" type="number" min="0" max="10000000" step="1" value="${escapeHtml(fields.labor)}" /></label><label><span>Materiál bez DPH</span><input name="material" inputmode="decimal" type="number" min="0" max="10000000" step="1" value="${escapeHtml(fields.material)}" /></label><label><span>Pneumatiky bez DPH</span><input name="tireCost" inputmode="decimal" type="number" min="0" max="10000000" step="1" value="${escapeHtml(fields.tireCost)}" /></label>${linkedTyres.length ? `<div class="tyres-service-tyres"><span>Dotčené pneumatiky</span>${linkedTyres.map((item) => `<label><input type="checkbox" name="tyreIds" value="${escapeHtml(item.id)}" ${(fields.tyreIds || []).includes(item.id) ? "checked" : ""} /> ${escapeHtml(`${item.position} · ${item.manufacturer} ${item.model}`)}</label>`).join("")}</div>` : ""}</fieldset><fieldset><legend>Faktura a poznámka</legend><label><span>Faktura</span><input name="invoice" maxlength="120" value="${escapeHtml(fields.invoice)}" /></label><label class="tyres-form__wide"><span>Poznámka</span><textarea name="note" maxlength="4000" rows="3">${escapeHtml(fields.note)}</textarea></label></fieldset><div class="tyres-service-total"><span>Celkem bez DPH</span><strong data-tyres-service-total>${tyresCurrency(Number(fields.labor || 0) + Number(fields.material || 0) + Number(fields.tireCost || 0))}</strong></div><button class="primary-action" type="submit" ${tyresState.saving ? "disabled" : ""}>${tyresState.saving ? "Ukládám servis…" : "Uložit servisní záznam"}</button></form></section>`;
+  if (!fields.date && !tyresServiceDirty) fields.date = new Date().toISOString().slice(0, 10);
+  const linkedTyres = tyresState.serviceVehicleDetail?.tyres || ((tyresState.serviceDraft?.tyreIds || []).includes(tyresState.tyreDetail?.tyre?.id) ? [tyresState.tyreDetail.tyre] : []);
+  return `<section class="tyres-panel"><div class="tyres-panel__head"><div><p class="module-feedback__eyebrow">Servisní karta</p><h2>Servis a náklady</h2><p>Částky se sčítají před uložením; zápis vznikne až po odeslání formuláře.</p></div></div><form class="tyres-service-form" data-tyres-service-form data-tyres-baseline="${tyresFormBaseline(fields)}"><fieldset><legend>Datum a vozidlo</legend><label><span>Datum *</span><input name="date" type="date" required value="${escapeHtml(fields.date)}" /></label><label><span>Vozidlo</span><select name="vehicle" data-tyres-service-vehicle>${tyresVehicleOptions(fields.vehicle)}</select></label></fieldset><fieldset><legend>Typ zásahu</legend><label><span>Typ zásahu *</span><input name="type" required maxlength="120" value="${escapeHtml(fields.type)}" placeholder="Např. přezutí" /></label></fieldset><fieldset><legend>Technik a dodavatel</legend><label><span>Technik</span><input name="person" maxlength="180" value="${escapeHtml(fields.person)}" /></label><label><span>Dodavatel</span><input name="supplier" maxlength="180" value="${escapeHtml(fields.supplier)}" /></label></fieldset><fieldset><legend>Práce, materiál a pneumatiky</legend><label><span>Práce bez DPH</span><input name="labor" inputmode="decimal" type="number" min="0" max="10000000" step="0.01" value="${escapeHtml(fields.labor)}" /></label><label><span>Materiál bez DPH</span><input name="material" inputmode="decimal" type="number" min="0" max="10000000" step="0.01" value="${escapeHtml(fields.material)}" /></label><label><span>Pneumatiky bez DPH</span><input name="tireCost" inputmode="decimal" type="number" min="0" max="10000000" step="0.01" value="${escapeHtml(fields.tireCost)}" /></label>${linkedTyres.length ? `<div class="tyres-service-tyres"><span>Dotčené pneumatiky</span>${linkedTyres.map((item) => `<label><input type="checkbox" name="tyreIds" value="${escapeHtml(item.id)}" ${(fields.tyreIds || []).includes(item.id) ? "checked" : ""} /> ${escapeHtml(`${item.position} · ${item.manufacturer} ${item.model}`)}</label>`).join("")}</div>` : ""}</fieldset><fieldset><legend>Faktura a poznámka</legend><label><span>Faktura</span><input name="invoice" maxlength="120" value="${escapeHtml(fields.invoice)}" /></label><label class="tyres-form__wide"><span>Poznámka</span><textarea name="note" maxlength="4000" rows="3">${escapeHtml(fields.note)}</textarea></label></fieldset><div class="tyres-service-total"><span>Celkem bez DPH</span><strong data-tyres-service-total>${tyresCurrency(Number(fields.labor || 0) + Number(fields.material || 0) + Number(fields.tireCost || 0))}</strong></div><button class="primary-action" type="submit" ${tyresState.saving ? "disabled" : ""}>${tyresState.saving ? "Ukládám servis…" : "Uložit servisní záznam"}</button></form></section>`;
 }
 
 function captureTyresServiceDraft(form) {
@@ -41324,14 +41388,14 @@ function tyresDetailDrawer(user) {
   const detail = tyresState.tyreDetail;
   if (tyresState.detailLoading || !detail) return `<div class="tyres-drawer-backdrop" data-tyres-close-detail></div><aside class="tyres-detail-drawer" aria-label="Načítám detail pneumatiky"><button class="icon-button" type="button" data-tyres-close-detail aria-label="Zavřít detail">${SmartIcon("close")}</button>${tyresSkeleton(8)}</aside>`;
   const tyre = detail.tyre;
-  return `<div class="tyres-drawer-backdrop" data-tyres-close-detail></div><aside class="tyres-detail-drawer" aria-labelledby="tyres-detail-title"><header><div><p class="module-feedback__eyebrow">Detail pneumatiky</p><h2 id="tyres-detail-title">${escapeHtml(`${tyre.manufacturer} ${tyre.model}`.trim())}</h2><p>${escapeHtml(tyre.size)} · ${escapeHtml(tyre.id)}</p></div><button class="icon-button" type="button" data-tyres-close-detail aria-label="Zavřít detail">${SmartIcon("close")}</button></header>${tyresCanEdit(user) ? `<div class="tyres-detail-actions"><button class="primary-action" type="button" data-tyres-edit="${escapeHtml(tyre.id)}"><span aria-hidden="true">✎</span> Upravit</button><button type="button" data-tyres-detail-measure><span aria-hidden="true">${SmartIcon("measure")}</span> Zapsat měření</button><button type="button" data-tyres-detail-fit><span aria-hidden="true">↔</span> Přesunout / osadit</button><button type="button" data-tyres-detail-service><span aria-hidden="true">Kč</span> Zapsat servis</button></div>` : ""}<section><h3>Základní údaje</h3><dl class="tyres-detail-list"><div><dt>Typ</dt><dd>${escapeHtml(tyresText(tyre.type))}</dd></div><div><dt>DOT</dt><dd>${escapeHtml(tyresText(tyre.dot))}</dd></div><div><dt>Nosnostní index</dt><dd>${escapeHtml(tyresText(tyre.loadIndex))}</dd></div><div><dt>Cena bez DPH</dt><dd>${tyresCurrency(tyre.priceEx)}</dd></div><div><dt>Dodavatel</dt><dd>${escapeHtml(tyresText(tyre.supplier))}</dd></div></dl></section><section><h3>Aktuální umístění</h3><p>${escapeHtml(tyre.vehicle ? `${tyre.vehicle} · ${tyresText(tyre.position)}` : tyre.state === "sklad" ? "Sklad" : tyresText(tyre.state))}</p></section><section><h3>Stav a poslední měření</h3><dl class="tyres-detail-list"><div><dt>Dezén</dt><dd>${tyre.currentTread == null ? "Neuvedeno" : `${tyresNumber(tyre.currentTread)} mm`}</dd></div><div><dt>Tlak</dt><dd>${tyre.pressure == null ? "Neuvedeno" : `${tyresNumber(tyre.pressure)} bar`}</dd></div><div><dt>Poslední měření</dt><dd>${escapeHtml(tyresDate(tyre.lastMeasurementAt))}</dd></div><div><dt>Nájezd pneumatiky</dt><dd>${tyre.mileage ? `${tyresNumber(tyre.mileage, 0)} km` : "Neuvedeno"}</dd></div></dl></section><details open><summary>Historie měření (${detail.measurements.length})</summary>${detail.measurements.length ? `<ol class="tyres-compact-history">${detail.measurements.map((item) => `<li><strong>${tyresDate(item.measuredAt)}</strong><span>${tyresNumber(item.tread)} mm${item.pressure == null ? "" : ` · ${tyresNumber(item.pressure)} bar`} · ${escapeHtml(item.position)}</span></li>`).join("")}</ol>` : tyresEmpty("Bez měření")}</details><details><summary>Historie servisu (${detail.services.length})</summary>${detail.services.length ? `<ol class="tyres-compact-history">${detail.services.map((item) => `<li><strong>${escapeHtml(item.type)} · ${tyresDate(item.date)}</strong><span>${tyresCurrency(tyresServiceTotal(item))}</span></li>`).join("")}</ol>` : tyresEmpty("Bez doloženého servisu", "Starší vozidlové záznamy bez vazby na konkrétní pneumatiku se sem nedopočítávají.")}</details><details><summary>Náklady</summary><p class="tyres-detail-cost">${tyresCurrency(detail.costs)}</p></details><details><summary>Audit změn (${detail.audit.length})</summary>${detail.audit.length ? `<ol class="tyres-compact-history">${detail.audit.map((item) => `<li><strong>${escapeHtml(item.action)}</strong><span>${tyresDate(item.createdAt)} · ${escapeHtml(tyresText(item.actor, "Systém"))}</span></li>`).join("")}</ol>` : tyresEmpty("Bez auditních událostí")}</details></aside>`;
+  return `<div class="tyres-drawer-backdrop" data-tyres-close-detail></div><aside class="tyres-detail-drawer" aria-labelledby="tyres-detail-title"><header><div><p class="module-feedback__eyebrow">Detail pneumatiky</p><h2 id="tyres-detail-title">${escapeHtml(`${tyre.manufacturer} ${tyre.model}`.trim())}</h2><p>${escapeHtml(tyre.size)} · ${escapeHtml(tyre.id)}</p></div><button class="icon-button" type="button" data-tyres-close-detail aria-label="Zavřít detail">${SmartIcon("close")}</button></header>${tyresCanEdit(user) ? `<div class="tyres-detail-actions"><button class="primary-action" type="button" data-tyres-edit="${escapeHtml(tyre.id)}"><span aria-hidden="true">✎</span> Upravit</button><button type="button" data-tyres-detail-measure ${tyre.vehicle ? "" : 'disabled aria-describedby="tyre-measure-unavailable"'}><span aria-hidden="true">${SmartIcon("measure")}</span> Zapsat měření</button><button type="button" data-tyres-detail-fit><span aria-hidden="true">↔</span> Přesunout / osadit</button><button type="button" data-tyres-detail-service><span aria-hidden="true">Kč</span> Zapsat servis</button>${tyre.vehicle ? "" : '<p id="tyre-measure-unavailable">Měření je dostupné po osazení pneumatiky na vozidlo.</p>'}</div>` : ""}<section><h3>Základní údaje</h3><dl class="tyres-detail-list"><div><dt>Typ</dt><dd>${escapeHtml(tyresText(tyre.type))}</dd></div><div><dt>DOT</dt><dd>${escapeHtml(tyresText(tyre.dot))}</dd></div><div><dt>Nosnostní index</dt><dd>${escapeHtml(tyresText(tyre.loadIndex))}</dd></div><div><dt>Cena bez DPH</dt><dd>${tyresCurrency(tyre.priceEx)}</dd></div><div><dt>Dodavatel</dt><dd>${escapeHtml(tyresText(tyre.supplier))}</dd></div></dl></section><section><h3>Aktuální umístění</h3><p>${escapeHtml(tyre.vehicle ? `${tyre.vehicle} · ${tyresText(tyre.position)}` : tyre.state === "sklad" ? "Sklad" : tyresText(tyre.state))}</p></section><section><h3>Stav a poslední měření</h3><dl class="tyres-detail-list"><div><dt>Dezén</dt><dd>${tyre.currentTread == null ? "Neuvedeno" : `${tyresNumber(tyre.currentTread)} mm`}</dd></div><div><dt>Tlak</dt><dd>${tyre.pressure == null ? "Neuvedeno" : `${tyresNumber(tyre.pressure)} bar`}</dd></div><div><dt>Poslední měření</dt><dd>${escapeHtml(tyresDate(tyre.lastMeasurementAt))}</dd></div><div><dt>Nájezd pneumatiky</dt><dd>${tyre.mileage ? `${tyresNumber(tyre.mileage, 0)} km` : "Neuvedeno"}</dd></div></dl></section><details open><summary>Historie měření (${detail.measurements.length})</summary>${detail.measurements.length ? `<ol class="tyres-compact-history">${detail.measurements.map((item) => `<li><strong>${tyresDate(item.measuredAt)}</strong><span>${tyresNumber(item.tread)} mm${item.pressure == null ? "" : ` · ${tyresNumber(item.pressure)} bar`} · ${escapeHtml(item.position)}</span></li>`).join("")}</ol>` : tyresEmpty("Bez měření")}</details><details><summary>Historie servisu (${detail.services.length})</summary>${detail.services.length ? `<ol class="tyres-compact-history">${detail.services.map((item) => `<li><strong>${escapeHtml(item.type)} · ${tyresDate(item.date)}</strong><span>${tyresCurrency(tyresServiceTotal(item))}</span></li>`).join("")}</ol>` : tyresEmpty("Bez doloženého servisu", "Starší vozidlové záznamy bez vazby na konkrétní pneumatiku se sem nedopočítávají.")}</details><details><summary>Náklady</summary><p class="tyres-detail-cost">${tyresCurrency(detail.costs)}</p></details><details><summary>Audit změn (${detail.audit.length})</summary>${detail.audit.length ? `<ol class="tyres-compact-history">${detail.audit.map((item) => `<li><strong>${escapeHtml(item.action)}</strong><span>${tyresDate(item.createdAt)} · ${escapeHtml(tyresText(item.actor, "Systém"))}</span></li>`).join("")}</ol>` : tyresEmpty("Bez auditních událostí")}</details></aside>`;
 }
 
 function tyresEditorDialog(user) {
   if (!tyresState.editingId || !tyresCanEdit(user)) return "";
   const editing = tyresState.editingId === "new" ? null : tyresState.tyreDetail?.tyre || (tyresDashboardData().tyres || []).find((item) => item.id === tyresState.editingId) || null;
   const fields = { tyreId: editing?.id || "", manufacturer: editing?.manufacturer || "", model: editing?.model || "", size: editing?.size || "", type: editing?.type || "nová", state: editing?.state || "sklad", vehicle: editing?.vehicle || "", position: editing?.position || "", currentTread: editing?.currentTread ?? "", pressure: editing?.pressure ?? "", priceEx: editing?.priceEx ?? "", supplier: editing?.supplier || "", purchaseDate: editing?.purchaseDate || "", invoice: editing?.invoice || "", dot: editing?.dot || "", loadIndex: editing?.loadIndex || "", mounted: editing?.mounted || "", mountedOdo: editing?.mountedOdo ?? "", mileage: editing?.mileage ?? "", defects: editing?.defects ?? "" };
-  return `<div class="tyres-dialog-backdrop"></div><section class="tyres-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="tyres-editor-title"><header><div><p class="module-feedback__eyebrow">Evidence</p><h2 id="tyres-editor-title">${editing ? "Upravit pneumatiku" : "Nová pneumatika"}</h2></div><button type="button" class="icon-button" data-tyres-edit-cancel aria-label="Zavřít formulář">${SmartIcon("close")}</button></header><form class="tyres-form" data-tyres-tyre-form data-tyres-baseline="${tyresFormBaseline(fields)}"><input type="hidden" name="tyreId" value="${escapeHtml(fields.tyreId)}" /><div class="tyres-form__grid"><label><span>Výrobce *</span><input name="manufacturer" required maxlength="120" value="${escapeHtml(fields.manufacturer)}" /></label><label><span>Model</span><input name="model" maxlength="160" value="${escapeHtml(fields.model)}" /></label><label><span>Rozměr *</span><input name="size" required maxlength="120" value="${escapeHtml(fields.size)}" placeholder="315/80 R22,5" /></label><label><span>Typ</span><input name="type" maxlength="80" value="${escapeHtml(fields.type)}" /></label><label><span>Stav</span><select name="state"><option value="sklad" ${fields.state === "sklad" ? "selected" : ""}>Sklad</option><option value="na vozidle" ${fields.state === "na vozidle" ? "selected" : ""}>Na vozidle</option><option value="vyřazená" ${fields.state === "vyřazená" ? "selected" : ""}>Vyřazená</option></select></label><label><span>Vozidlo</span><select name="vehicle">${tyresVehicleOptions(fields.vehicle)}</select></label><label><span>Pozice kola</span><input name="position" maxlength="80" value="${escapeHtml(fields.position)}" /></label><label><span>Aktuální dezén mm</span><input name="currentTread" inputmode="decimal" type="number" min="0" max="100" step="0.1" value="${escapeHtml(fields.currentTread)}" /></label><label><span>Tlak bar</span><input name="pressure" inputmode="decimal" type="number" min="0" max="30" step="0.1" value="${escapeHtml(fields.pressure)}" /></label><label><span>Cena bez DPH</span><input name="priceEx" inputmode="decimal" type="number" min="0" max="1000000" step="1" value="${escapeHtml(fields.priceEx)}" /></label><label><span>Dodavatel</span><input name="supplier" maxlength="180" value="${escapeHtml(fields.supplier)}" /></label><label><span>Datum nákupu</span><input name="purchaseDate" type="date" value="${escapeHtml(fields.purchaseDate)}" /></label><label><span>Faktura</span><input name="invoice" maxlength="120" value="${escapeHtml(fields.invoice)}" /></label><label><span>DOT</span><input name="dot" maxlength="40" value="${escapeHtml(fields.dot)}" /></label><label><span>Nosnostní index</span><input name="loadIndex" maxlength="80" value="${escapeHtml(fields.loadIndex)}" /></label><label><span>Datum montáže</span><input name="mounted" type="date" value="${escapeHtml(fields.mounted)}" /></label><label><span>Stav km při montáži</span><input name="mountedOdo" inputmode="numeric" type="number" min="0" max="10000000" value="${escapeHtml(fields.mountedOdo)}" /></label><label><span>Nájezd km</span><input name="mileage" inputmode="numeric" type="number" min="0" max="10000000" value="${escapeHtml(fields.mileage)}" /></label><label><span>Počet závad</span><input name="defects" inputmode="numeric" type="number" min="0" max="999" value="${escapeHtml(fields.defects)}" /></label></div><div class="tyres-form__actions"><button class="primary-action" type="submit" ${tyresState.saving ? "disabled" : ""}>${tyresState.saving ? "Ukládám…" : editing ? "Uložit změny pneumatiky" : "Přidat pneumatiku do evidence"}</button><button class="secondary-link" type="button" data-tyres-edit-cancel>Zrušit</button></div></form></section>`;
+  return `<div class="tyres-dialog-backdrop"></div><section class="tyres-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="tyres-editor-title"><header><div><p class="module-feedback__eyebrow">Evidence</p><h2 id="tyres-editor-title">${editing ? "Upravit pneumatiku" : "Nová pneumatika"}</h2></div><button type="button" class="icon-button" data-tyres-edit-cancel aria-label="Zavřít formulář">${SmartIcon("close")}</button></header><form class="tyres-form" data-tyres-tyre-form data-tyres-baseline="${tyresFormBaseline(fields)}"><input type="hidden" name="tyreId" value="${escapeHtml(fields.tyreId)}" /><div class="tyres-form__grid"><label><span>Výrobce *</span><input name="manufacturer" required maxlength="120" value="${escapeHtml(fields.manufacturer)}" /></label><label><span>Model</span><input name="model" maxlength="160" value="${escapeHtml(fields.model)}" /></label><label><span>Rozměr *</span><input name="size" required maxlength="120" value="${escapeHtml(fields.size)}" placeholder="315/80 R22,5" /></label><label><span>Typ</span><input name="type" maxlength="80" value="${escapeHtml(fields.type)}" /></label><label><span>Stav</span><select name="state"><option value="sklad" ${fields.state === "sklad" ? "selected" : ""}>Sklad</option><option value="na vozidle" ${fields.state === "na vozidle" ? "selected" : ""}>Na vozidle</option><option value="vyřazená" ${fields.state === "vyřazená" ? "selected" : ""}>Vyřazená</option></select></label><label><span>Vozidlo</span><select name="vehicle">${tyresVehicleOptions(fields.vehicle)}</select></label><label><span>Pozice kola</span><input name="position" maxlength="80" value="${escapeHtml(fields.position)}" /></label><label><span>Aktuální dezén mm</span><input name="currentTread" inputmode="decimal" type="number" min="0" max="100" step="0.1" value="${escapeHtml(fields.currentTread)}" /></label><label><span>Tlak bar</span><input name="pressure" inputmode="decimal" type="number" min="0" max="30" step="0.1" value="${escapeHtml(fields.pressure)}" /></label><label><span>Cena bez DPH</span><input name="priceEx" inputmode="decimal" type="number" min="0" max="1000000" step="0.01" value="${escapeHtml(fields.priceEx)}" /></label><label><span>Dodavatel</span><input name="supplier" maxlength="180" value="${escapeHtml(fields.supplier)}" /></label><label><span>Datum nákupu</span><input name="purchaseDate" type="date" value="${escapeHtml(fields.purchaseDate)}" /></label><label><span>Faktura</span><input name="invoice" maxlength="120" value="${escapeHtml(fields.invoice)}" /></label><label><span>DOT</span><input name="dot" maxlength="40" value="${escapeHtml(fields.dot)}" /></label><label><span>Nosnostní index</span><input name="loadIndex" maxlength="80" value="${escapeHtml(fields.loadIndex)}" /></label><label><span>Datum montáže</span><input name="mounted" type="date" value="${escapeHtml(fields.mounted)}" /></label><label><span>Stav km při montáži</span><input name="mountedOdo" inputmode="numeric" type="number" min="0" max="10000000" value="${escapeHtml(fields.mountedOdo)}" /></label><label><span>Nájezd km</span><input name="mileage" inputmode="numeric" type="number" min="0" max="10000000" value="${escapeHtml(fields.mileage)}" /></label><label><span>Počet závad</span><input name="defects" inputmode="numeric" type="number" min="0" max="999" value="${escapeHtml(fields.defects)}" /></label></div><div class="tyres-form__actions"><button class="primary-action" type="submit" ${tyresState.saving ? "disabled" : ""}>${tyresState.saving ? "Ukládám…" : editing ? "Uložit změny pneumatiky" : "Přidat pneumatiku do evidence"}</button><button class="secondary-link" type="button" data-tyres-edit-cancel>Zrušit</button></div></form></section>`;
 }
 
 function tyresQuickMeasure(user) {
@@ -41361,27 +41425,42 @@ function tyresMarkLoaded(view) {
   if (!tyresState.loadedViews.includes(view)) tyresState.loadedViews.push(view);
 }
 
+let queuedTyresView = null;
 async function loadTyresView(view = tyresState.activeTab, options = {}) {
   const force = Boolean(options.force);
   const normalizedView = tyresTab(view);
-  if (!authState.user || tyresState.loadingView || (!force && tyresState.loadedViews.includes(normalizedView))) return;
+  if (!authState.user) return;
+  if (tyresState.loadingView) {
+    if (force || normalizedView !== tyresState.loadingView) queuedTyresView = normalizedView;
+    return;
+  }
+  if (!force && tyresState.loadedViews.includes(normalizedView)) return;
+  const inventoryQuery = tyresInventoryQuery(tyresState.inventory);
   tyresState.loading = true; tyresState.loadingView = normalizedView; tyresState.error = "";
   if (options.renderBefore !== false) render();
   try {
     let result;
-    if (normalizedView === "inventory") result = await apiJson(tyresInventoryQuery(tyresState.inventory));
+    if (normalizedView === "inventory") result = await apiJson(inventoryQuery);
     else if (normalizedView === "vehicles") result = await apiJson("/api/tyres?view=vehicles");
     else if (normalizedView === "history") result = await apiJson(tyresHistoryQuery(tyresState.history));
     else if (normalizedView === "settings") result = await apiJson("/api/tyres?view=settings");
     else result = await apiJson("/api/tyres?view=overview");
-    if (["overview", "measurement", "service"].includes(normalizedView)) { tyresState.data.summary = result.summary || tyresState.data.summary; tyresState.data.attention = Array.isArray(result.attention) ? result.attention : tyresState.data.attention; tyresState.data.activity = Array.isArray(result.activity) ? result.activity : tyresState.data.activity; tyresState.data.vehicles = Array.isArray(result.vehicles) ? result.vehicles : tyresState.data.vehicles; tyresState.data.latestImport = result.latestImport || tyresState.data.latestImport; tyresMarkLoaded("overview"); tyresMarkLoaded("measurement"); tyresMarkLoaded("service"); }
+    if (normalizedView === "inventory" && inventoryQuery !== tyresInventoryQuery(tyresState.inventory)) {
+      queuedTyresView = "inventory";
+    } else if (["overview", "measurement", "service"].includes(normalizedView)) { tyresState.data.summary = result.summary || tyresState.data.summary; tyresState.data.attention = Array.isArray(result.attention) ? result.attention : tyresState.data.attention; tyresState.data.activity = Array.isArray(result.activity) ? result.activity : tyresState.data.activity; tyresState.data.vehicles = Array.isArray(result.vehicles) ? result.vehicles : tyresState.data.vehicles; tyresState.data.latestImport = result.latestImport || tyresState.data.latestImport; tyresMarkLoaded("overview"); tyresMarkLoaded("measurement"); tyresMarkLoaded("service"); }
     else if (normalizedView === "inventory") { tyresState.data.tyres = Array.isArray(result.items) ? result.items : []; tyresState.data.total = Number(result.total || 0); tyresState.data.facets = result.facets || tyresState.data.facets; tyresState.inventory.page = Number(result.page || tyresState.inventory.page); }
     else if (normalizedView === "vehicles") { tyresState.data.vehicles = Array.isArray(result.vehicles) ? result.vehicles : []; tyresMarkLoaded("overview"); }
     else if (normalizedView === "history") { if (result.type === "services") tyresState.data.services = Array.isArray(result.items) ? result.items : []; else tyresState.data.measurements = Array.isArray(result.items) ? result.items : []; tyresState.history.total = Number(result.total || 0); tyresState.history.page = Number(result.page || tyresState.history.page); }
     else if (normalizedView === "settings") { tyresState.data.audit = Array.isArray(result.audit) ? result.audit : []; tyresState.data.latestImport = result.latestImport || null; }
     tyresState.apiStatus = result.apiStatus || "ready"; tyresState.loaded = true; tyresMarkLoaded(normalizedView);
   } catch (error) { tyresState.apiStatus = error.payload?.apiStatus || "waiting"; tyresState.error = error.payload?.error || "Evidenci Pneumatik se teď nepodařilo načíst."; }
-  finally { tyresState.loading = false; tyresState.loadingView = ""; }
+  finally {
+    tyresState.loading = false; tyresState.loadingView = "";
+    if (queuedTyresView) {
+      const next = queuedTyresView; queuedTyresView = null;
+      void loadTyresView(next, { force: true });
+    }
+  }
   if (options.renderAfter !== false && normalizePath(window.location.pathname) === "/pneumatiky") render();
 }
 
@@ -41447,7 +41526,7 @@ async function submitTyresServiceForm(form) {
   if (tyresState.saving) return false;
   captureTyresServiceDraft(form);
   tyresState.saving = true; tyresState.error = ""; tyresState.message = ""; render();
-  try { const values = { ...tyresState.serviceDraft }; await apiJson("/api/tyres/services", { method: "POST", body: JSON.stringify(values) }); tyresState.message = "Servisní záznam byl uložen včetně nákladů."; tyresState.serviceVehicleDetail = null; tyresState.serviceDraft = { date: "", vehicle: "", type: "", person: "", supplier: "", labor: "", material: "", tireCost: "", invoice: "", note: "", tyreIds: [] }; invalidateTyresViews(); await loadTyresView("overview", { force: true, renderBefore: false, renderAfter: false }); return true; }
+  try { const values = { ...tyresState.serviceDraft }; await apiJson("/api/tyres/services", { method: "POST", body: JSON.stringify(values) }); tyresServiceDirty = false; tyresState.message = "Servisní záznam byl uložen včetně nákladů."; tyresState.serviceVehicleDetail = null; tyresState.serviceDraft = { date: "", vehicle: "", type: "", person: "", supplier: "", labor: "", material: "", tireCost: "", invoice: "", note: "", tyreIds: [] }; invalidateTyresViews(); await loadTyresView("overview", { force: true, renderBefore: false, renderAfter: false }); return true; }
   catch (error) { tyresState.error = error.payload?.error || "Servisní záznam se nepodařilo uložit."; return false; }
   finally { tyresState.saving = false; render(); }
 }
@@ -42065,6 +42144,8 @@ function notificationErrorSummary(item) {
 }
 
 function notificationSummaryCards() {
+  if (notificationCenterState.loading || !notificationCenterState.loaded) return '<p role="status">Načítám souhrn notifikací…</p>';
+  if (notificationCenterState.error) return '<p>Souhrn notifikací není dostupný.</p>';
   const summary = notificationCenterState.summary;
   const cards = [
     ["E-maily odeslané", summary.emailSent],
@@ -42141,7 +42222,7 @@ function notificationFiltersForm() {
 
 function notificationRow(item) {
   const requestButton = item.absenceRequestId
-    ? `<a class="text-action" href="${routeHref(`/dovolena-nemoc/ke-schvaleni`)}" data-link>Otevřít</a>`
+    ? `<a class="text-action" href="${routeHref(`${absenceRouteForTab("my")}?request=${encodeURIComponent(item.absenceRequestId)}`)}" data-link>Otevřít</a>`
     : '<span class="notification-muted">bez vazby</span>';
   const canRetry = item.status === "failed" || item.status === "not_sent";
   const lastError = notificationHasError(item)
@@ -42258,7 +42339,7 @@ function notificationDetailPanel() {
         <div><dt>Selhalo</dt><dd>${escapeHtml(formatDateTime(item.failedAt))}</dd></div>
         <div><dt>Vazba na žádost</dt><dd>${escapeHtml(item.absenceRequestId || "neuvedeno")}</dd></div>
       </dl>
-      ${item.absenceRequestId ? `<a class="secondary-link" href="${routeHref("/dovolena-nemoc/ke-schvaleni")}" data-link>Otevřít žádost</a>` : ""}
+      ${item.absenceRequestId ? `<a class="secondary-link" href="${routeHref(`${absenceRouteForTab("my")}?request=${encodeURIComponent(item.absenceRequestId)}`)}" data-link>Otevřít žádost</a>` : ""}
     </section>
   `;
 }
@@ -51842,12 +51923,14 @@ function updateFleetVehicleInState(vehicle) {
 }
 
 async function submitFleetDriverAssignment(form) {
+  if (!form.reportValidity()) return false;
+  captureAuditFormDraft({ target: form });
   const vehicleId = String(form?.dataset?.vehicleId || "").trim();
 
   if (!vehicleId) {
     fleetUiState.error = "Chybí ID vozidla.";
     render();
-    return;
+    return false;
   }
 
   const formData = new FormData(form);
@@ -51866,12 +51949,15 @@ async function submitFleetDriverAssignment(form) {
       method: "PATCH",
       body: JSON.stringify(payload)
     });
+    fleetUiState.assignmentDraft = null; fleetUiState.assignmentDirty = false; fleetUiState.assignmentEditorId = "";
     updateFleetVehicleInState(result.vehicle);
     fleetUiState.message = result.vehicle?.assignedDriverName
       ? `Řidič ${result.vehicle.assignedDriverName} je uložený k vozidlu.`
       : "Přiřazení řidiče bylo vymazáno.";
+    return true;
   } catch (error) {
     fleetUiState.error = error?.payload?.error || error?.message || "Řidiče se teď nepodařilo uložit.";
+    return false;
   } finally {
     fleetUiState.savingAssignmentVehicleId = "";
     render();
@@ -53067,6 +53153,7 @@ function mergeAbsenceRequest(request) {
     return;
   }
 
+  if (linkedAbsence.request?.id === request.id) linkedAbsence.request = normalizedApiAbsenceRequests([request])[0];
   const pendingWasLoaded = absenceApiState.pendingLoaded;
   absenceApiState.requests = [
     request,
@@ -53122,12 +53209,12 @@ function continueQuickCustomDate() {
   const toInput = document.querySelector("[data-quick-date-to]");
   const startInput = document.querySelector("[data-quick-start-time]");
   const endInput = document.querySelector("[data-quick-end-time]");
-  const from = fromInput?.value || quickAbsenceState.dateFrom || isoDateAfter(0);
-  const to = toInput?.value || from;
+  const from = fromInput ? fromInput.value : quickAbsenceState.dateFrom;
+  const to = toInput ? toInput.value : from;
 
   if (type?.id === "doctor") {
-    const startTime = startInput?.value || quickAbsenceState.startTime;
-    const endTime = endInput?.value || quickAbsenceState.endTime;
+    const startTime = startInput ? startInput.value : quickAbsenceState.startTime;
+    const endTime = endInput ? endInput.value : quickAbsenceState.endTime;
     const hours = countAbsenceHours(startTime, endTime);
 
     if (!from || !startTime || !endTime) {
@@ -53182,6 +53269,8 @@ function updateQuickDateField(field, value) {
   if (field === "endTime") {
     quickAbsenceState.endTime = value;
   }
+  const preview = document.querySelector("[data-quick-hours-preview]");
+  if (preview) preview.textContent = `Rozsah: ${formatAbsenceHours(countAbsenceHours(quickAbsenceState.startTime, quickAbsenceState.endTime))}`;
 }
 
 async function submitQuickAbsenceRequest() {
@@ -53209,7 +53298,7 @@ async function submitQuickAbsenceRequest() {
         employeeId: user.id,
         type: type.id,
         dateFrom: quickAbsenceState.dateFrom,
-        dateTo: quickAbsenceState.dateTo || quickAbsenceState.dateFrom,
+        dateTo: quickAbsenceState.dateTo,
         halfDay: quickAbsenceState.halfDay,
         unit: type.id === "doctor" ? "hours" : "days",
         startTime: type.id === "doctor" ? quickAbsenceState.startTime : "",
@@ -55257,6 +55346,7 @@ function renderAuthenticatedApp(user) {
     }
 
     absenceUiState.tab = routeTab;
+    void loadLinkedAbsenceRequest();
     const moduleItem = absenceModuleItem();
     loadEmployeeList();
     app.innerHTML = absenceModulePage(moduleItem, user, false, { tab: routeTab });
@@ -55434,6 +55524,10 @@ function renderAuthenticatedApp(user) {
     }
     if (moduleItem.id === "costs" || moduleItem.id === "reports") {
       void loadFleetFuelAnalytics();
+    }
+    if (moduleItem.id === "reports") {
+      loadNotificationCenter();
+      loadCustomerMessaging();
     }
     if (moduleItem.id === "driver-reports") {
       ensureDriverReportsData();
@@ -55637,8 +55731,53 @@ function syncCollectionDailyDriverViewportDiagnostics() {
   kiosk.dataset.collectionDriverScreenHeight = String(screenHeight);
 }
 
+let absenceRequestDraft = null;
+let absenceRequestDirty = false;
+let tyresServiceDirty = false;
+let formDraftOwner = null;
+
+function captureAuditFormDraft(event) {
+  const assignment = event.target.closest("[data-fleet-driver-assignment-form]");
+  if (assignment) {
+    fleetUiState.assignmentDraft = { assignedDriverId: assignment.elements.assignedDriverId.value, note: assignment.elements.note.value };
+    fleetUiState.assignmentDirty = true;
+  }
+  const form = event.target.closest("[data-absence-request-form]");
+  if (form) {
+    absenceRequestDraft = Object.fromEntries([...form.elements].filter(field => field.name && field.type !== "file").map(field => [field.name, field.type === "checkbox" ? field.checked : field.value]));
+    absenceRequestDirty = true;
+  }
+  const service = event.target.closest("[data-tyres-service-form]");
+  if (service) { captureTyresServiceDraft(service); tyresServiceDirty = true; }
+}
+
+function restoreAbsenceRequestDraft() {
+  const form = document.querySelector("[data-absence-request-form]");
+  if (!form) return;
+  for (const field of form.elements) {
+    if (!Object.hasOwn(absenceRequestDraft || {}, field.name) || field.type === "file") continue;
+    if (field.type === "checkbox") field.checked = absenceRequestDraft[field.name];
+    else field.value = absenceRequestDraft[field.name];
+  }
+  updateAbsenceFormPreview(form);
+}
+
+function currentAbsenceRequestDirtyTarget() {
+  const form = document.querySelector("[data-absence-request-form]");
+  return form && absenceRequestDirty ? { type: "absence-request", form, isDirty: true } : null;
+}
+
 let mobileScrollRoute = null;
 function render() {
+  const draftOwner = authState.status === "authenticated" ? authState.user?.id : null;
+  if (formDraftOwner !== draftOwner) {
+    absenceRequestDraft = null; absenceRequestDirty = false; tyresServiceDirty = false; fuelModuleFilters.clear();
+    fleetUiState.assignmentDraft = null; fleetUiState.assignmentDirty = false; fleetUiState.assignmentEditorId = "";
+    formDraftOwner = draftOwner;
+    linkedAbsence = { key: "", loading: false, request: null, error: "" };
+  }
+  const focusedSearch = document.activeElement?.matches("[data-tyres-search]")
+    ? { input: document.activeElement, start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd } : null;
   if (location.pathname !== "/" && moduleLauncherQuery) updateGlobalSearch("");
   const searchOwner = authState.status === "authenticated" ? authState.user?.id : null;
   if (globalSearchOwner !== searchOwner) {
@@ -55652,6 +55791,7 @@ function render() {
     accessUnsavedChangesGuard.unmountModal();
     applyActiveThemeToRoot();
     renderApp();
+    restoreAbsenceRequestDraft();
     syncVehicleMapWorkspace();
     mountForpsiAdmin(app, { apiJson, guard: guardedAccessAction, owner: authState.user?.id || null });
     mountForpsiMail(app, { apiJson, guard: guardedAccessAction, owner: authState.user?.id || null });
@@ -55680,6 +55820,14 @@ function render() {
     scrollToQuickAbsenceEntry();
     scrollToVehicleTrackingSettingsHash();
     scheduleVehicleTrackingAutoRefresh();
+    if (focusedSearch) {
+      const replacement = app.querySelector("[data-tyres-search]");
+      if (replacement) {
+        replacement.replaceWith(focusedSearch.input);
+        focusedSearch.input.focus({ preventScroll: true });
+        focusedSearch.input.setSelectionRange(focusedSearch.start, focusedSearch.end);
+      }
+    }
   } catch (error) {
     console.error("smart_odpady_render_failed", error);
     app.innerHTML = appErrorPage();
@@ -56862,6 +57010,15 @@ function handleFleetAction(button) {
   const vehicleId = String(button.dataset.fleetVehicleId || "").trim();
   const target = String(button.dataset.fleetTarget || "").trim();
 
+  if (action === "assignDriver") {
+    guardedAccessAction(async () => {
+      fleetUiState.assignmentEditorId = vehicleId; fleetUiState.assignmentDraft = null; fleetUiState.assignmentDirty = false;
+      await loadFleetVehicleDetail(vehicleId); render();
+    }); return;
+  }
+  if (action === "closeAssignment") {
+    guardedAccessAction(() => { fleetUiState.assignmentEditorId = ""; fleetUiState.assignmentDraft = null; render(); }); return;
+  }
   if (action === "openModule") {
     guardedAccessAction(() => navigateToUrl(routeHref(FLEET_ROUTE)));
     return;
@@ -56929,11 +57086,13 @@ function handleFleetAction(button) {
 }
 
 async function submitAbsenceRequest(form) {
+  if (!form.reportValidity()) return false;
+  captureAuditFormDraft({ target: form });
   const user = currentUser();
   if (!hasPermission(user, "absence", "create")) {
     setAbsenceNotice("", "Nemáte oprávnění vytvořit žádost.");
     render();
-    return;
+    return false;
   }
 
   const type = form.elements.type.value;
@@ -56950,22 +57109,22 @@ async function submitAbsenceRequest(form) {
   if (!dateFrom || (!isDoctor && (!dateTo || daysCount <= 0))) {
     setAbsenceNotice("", "Zkontrolujte prosím datum od a do.");
     render();
-    return;
+    return false;
   }
 
   if (isDoctor && (!startTime || !endTime || hoursCount <= 0)) {
     setAbsenceNotice("", "U lékaře zadejte čas od a čas do. Čas do musí být po času od.");
     render();
-    return;
+    return false;
   }
 
   const employees = absenceSelectableEmployees(user);
-  const selectedEmployee = employees.find((employee) => employee.id === form.elements.employeeId.value) || employees[0];
+  const selectedEmployee = employees.find((employee) => employee.id === form.elements.employeeId.value);
 
   if (!selectedEmployee?.id) {
     setAbsenceNotice("", "Vyberte prosím zaměstnance.");
     render();
-    return;
+    return false;
   }
 
   try {
@@ -56984,6 +57143,7 @@ async function submitAbsenceRequest(form) {
       })
     });
 
+    absenceRequestDraft = null; absenceRequestDirty = false;
     mergeAbsenceRequest(result.request);
     absenceUiState.tab = "my";
     const isApprovalRequest = requestStatusLabel(result.request) === "Čeká na schválení";
@@ -56996,9 +57156,11 @@ async function submitAbsenceRequest(form) {
         : ""
     );
     navigateToUrl(routeHref(absenceRouteForTab("my")));
+    return true;
   } catch (error) {
     setAbsenceNotice("", error.payload?.error || "Žádost se nepodařilo uložit přes cloud API.");
     render();
+    return false;
   }
 }
 
@@ -57114,7 +57276,7 @@ function updateAbsenceFormPreview(form) {
   }
 
   if (statusPreview) {
-    statusPreview.textContent = initialStatusForAbsenceType(type);
+    statusPreview.textContent = "Koncept · dosud neodesláno";
   }
 
   if (submitButton) {
@@ -57284,7 +57446,7 @@ function generateAbsenceMonthlyReport() {
     return;
   }
 
-  const result = generateMonthlyAbsenceReport(absenceDisplayState(), user);
+  const result = generateMonthlyAbsenceReport(absenceDisplayState(), user, { month: absenceUiState.monthFilter, type: absenceUiState.typeFilter, employeeId: absenceUiState.employeeFilter });
   const period = `${String(result.report.periodMonth).padStart(2, "0")}-${result.report.periodYear}`;
 
   downloadCsv(
@@ -58144,6 +58306,9 @@ async function saveTyresDirtyChanges() {
 }
 
 async function saveDirtyChanges() {
+  if (currentFleetAssignmentDirtyTarget()) return submitFleetDriverAssignment(currentFleetAssignmentDirtyTarget().form);
+  const absenceRequest = currentAbsenceRequestDirtyTarget();
+  if (absenceRequest) return submitAbsenceRequest(absenceRequest.form);
   if (forpsiComposerDirtyTarget()) return saveForpsiComposer();
   if (forpsiDirtyTarget()) return saveForpsiDraft();
   const accessTarget = currentAccessDirtyTarget();
@@ -58215,6 +58380,8 @@ async function saveDirtyChanges() {
 }
 
 function discardDirtyChanges() {
+  if (currentFleetAssignmentDirtyTarget()) { fleetUiState.assignmentDraft = null; fleetUiState.assignmentDirty = false; fleetUiState.assignmentEditorId = ""; render(); return; }
+  if (currentAbsenceRequestDirtyTarget()) { absenceRequestDraft = null; absenceRequestDirty = false; render(); return; }
   if (forpsiComposerDirtyTarget()) return discardForpsiComposer();
   if (forpsiDirtyTarget()) return discardForpsiDraft();
   const accessTarget = currentAccessDirtyTarget();
@@ -58267,6 +58434,7 @@ function discardDirtyChanges() {
 
   if (tyresTarget?.isDirty) {
     tyresState.editingId = "";
+    if (tyresTarget.form.matches("[data-tyres-service-form]")) { tyresState.serviceDraft = {}; tyresState.serviceVehicleDetail = null; tyresServiceDirty = false; }
     tyresState.message = "Neuložené změny Pneumatik byly zahozeny.";
     tyresState.error = "";
     render();
@@ -59076,6 +59244,7 @@ document.addEventListener("submit", async (event) => {
 let tyresSearchTimer = 0;
 
 document.addEventListener("input", (event) => {
+  captureAuditFormDraft(event);
   const moduleSearch = event.target.closest("[data-module-search]");
   if (moduleSearch) {
     updateGlobalSearch(moduleSearch.value);
@@ -59151,7 +59320,7 @@ document.addEventListener("input", (event) => {
   if (fuelSearch) {
     const start = fuelSearch.selectionStart;
     const end = fuelSearch.selectionEnd;
-    fleetFuelState.search = fuelSearch.value || "";
+    currentFuelFilters().search = fuelSearch.value || "";
     render();
     requestAnimationFrame(() => {
       const input = document.querySelector("[data-fuel-filter='search']");
@@ -59366,6 +59535,7 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", async (event) => {
+  captureAuditFormDraft(event);
   const feedbackWorkflowAttachment = event.target.closest("[data-feedback-workflow-report-form] input[name='attachment']");
   if (feedbackWorkflowAttachment) {
     const file = feedbackWorkflowAttachment.files?.[0] || null;
@@ -59494,6 +59664,7 @@ document.addEventListener("change", async (event) => {
   const serviceVehicle = event.target.closest("[data-tyres-service-vehicle]");
   if (serviceVehicle) {
     captureTyresServiceDraft(serviceVehicle.closest("[data-tyres-service-form]"));
+    tyresState.serviceDraft.tyreIds = [];
     tyresState.serviceVehicleDetail = null;
     if (serviceVehicle.value) await loadTyresVehicle(serviceVehicle.value, "service"); else render();
     return;
@@ -59547,8 +59718,8 @@ document.addEventListener("change", async (event) => {
   const fuelFilter = event.target.closest("[data-fuel-filter]");
   if (fuelFilter) {
     const key = fuelFilter.dataset.fuelFilter;
-    if (key === "status") fleetFuelState.status = fuelFilter.value || "all";
-    if (key === "fuelType") fleetFuelState.fuelType = fuelFilter.value || "all";
+    if (key === "status") currentFuelFilters().status = fuelFilter.value || "all";
+    if (key === "fuelType") currentFuelFilters().fuelType = fuelFilter.value || "all";
     render();
     return;
   }
@@ -59950,10 +60121,12 @@ document.addEventListener("click", async (event) => {
   const tyresTabButton = event.target.closest("[data-tyres-tab]");
   if (tyresTabButton) {
     event.preventDefault();
-    tyresState.activeTab = tyresTab(tyresTabButton.dataset.tyresTab);
-    tyresState.message = ""; tyresState.error = "";
-    render();
-    await loadTyresView(tyresState.activeTab);
+    guardedAccessAction(async () => {
+      tyresState.activeTab = tyresTab(tyresTabButton.dataset.tyresTab);
+      tyresState.message = ""; tyresState.error = "";
+      render();
+      await loadTyresView(tyresState.activeTab);
+    });
     return;
   }
 
@@ -60043,7 +60216,16 @@ document.addEventListener("click", async (event) => {
 
   if (event.target.closest("[data-tyres-detail-measure]")) { event.preventDefault(); const tyre = tyresState.tyreDetail?.tyre; if (tyre?.vehicle) { tyresState.measurement.vehicle = tyre.vehicle; tyresState.measurement.position = tyre.position; tyresState.selectedTyreId = ""; tyresState.activeTab = "measurement"; await loadTyresVehicle(tyre.vehicle, "measurement"); await loadTyresView("measurement"); } return; }
   if (event.target.closest("[data-tyres-detail-fit]")) { event.preventDefault(); const tyre = tyresState.tyreDetail?.tyre; tyresState.selectedTyreId = ""; tyresState.activeTab = "vehicles"; render(); await loadTyresView("vehicles"); if (tyre?.vehicle) await loadTyresVehicle(tyre.vehicle, "vehicle"); return; }
-  if (event.target.closest("[data-tyres-detail-service]")) { event.preventDefault(); const tyre = tyresState.tyreDetail?.tyre; tyresState.selectedTyreId = ""; tyresState.activeTab = "service"; render(); await loadTyresView("service"); if (tyre?.vehicle) await loadTyresVehicle(tyre.vehicle, "service"); return; }
+  if (event.target.closest("[data-tyres-detail-service]")) {
+    event.preventDefault(); const tyre = tyresState.tyreDetail?.tyre;
+    guardedAccessAction(async () => {
+      tyresState.serviceDraft = { vehicle: tyre?.vehicle || "", tyreIds: tyre?.id ? [tyre.id] : [] };
+      tyresServiceDirty = false; tyresState.serviceVehicleDetail = null;
+      tyresState.selectedTyreId = ""; tyresState.activeTab = "service";
+      render(); await loadTyresView("service");
+      if (tyre?.vehicle) await loadTyresVehicle(tyre.vehicle, "service");
+    }); return;
+  }
 
   const tyresRefresh = event.target.closest("[data-tyres-refresh]");
   if (tyresRefresh) {
@@ -62102,6 +62284,7 @@ document.addEventListener("click", async (event) => {
     const resolvedTab = resolveAbsenceTab(currentUser(), nextTab);
 
     guardedAccessAction(() => {
+      if (resolvedTab === "new" && absenceTab.dataset.absenceNewType) { absenceRequestDraft = { type: absenceTab.dataset.absenceNewType }; absenceRequestDirty = false; }
       absenceUiState.tab = resolvedTab;
       setAbsenceNotice("");
       navigateToUrl(routeHref(absenceRouteForTab(resolvedTab)));
@@ -62187,6 +62370,10 @@ document.addEventListener("click", async (event) => {
   if (absenceDetail) {
     event.preventDefault();
     absenceUiState.detailRequestId = absenceDetail.dataset.absenceDetail || "";
+    if (linkedAbsenceId() && !absenceUiState.detailRequestId) {
+      const url = new URL(location.href); url.searchParams.delete("request");
+      history.replaceState({}, "", url); lastRenderedUrl = location.href;
+    }
     render();
     return;
   }
@@ -62435,8 +62622,8 @@ document.addEventListener("click", async (event) => {
     quickAbsenceState.type = quickType.dataset.quickType || "";
     quickAbsenceState.step = "date";
     quickAbsenceState.dateMode = "";
-    quickAbsenceState.dateFrom = "";
-    quickAbsenceState.dateTo = "";
+    quickAbsenceState.dateFrom = isoDateAfter(0);
+    quickAbsenceState.dateTo = isoDateAfter(0);
     quickAbsenceState.halfDay = false;
     quickAbsenceState.startTime = "09:00";
     quickAbsenceState.endTime = "11:00";

@@ -309,7 +309,7 @@ export function buildOrwiiFuelAnalytics(rows = [], options = {}) {
     transactions,
     (row) => row.fuel_type || "Neuvedeno"
   ).sort((left, right) => right.liters - left.liters);
-  const recentTransactions = transactions.slice(0, 200).map((row) => ({
+  const recentTransactions = transactions.map((row) => ({
     externalId: cleanString(row.external_id),
     occurredAt: cleanString(row.occurred_at),
     fuelType: cleanString(row.fuel_type),
