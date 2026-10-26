@@ -51,3 +51,10 @@ Otevírání shluku je testováno na skutečných Google Maps z celorepublikové
 ## Kontextové vystředění — 0.1.878
 
 Šipka nad zoomem vrací mapu k vybranému vozidlu (stejné vystředění a minimální zoom 16 jako výběr). Bez výběru přizpůsobí výřez platným polohám filtrované flotily. Název a nápověda odpovídají právě aktivnímu cíli; při výběru bez GPS je tlačítko neaktivní i tehdy, když ostatní vozidla polohu mají. Obnova GPS sama kameru nemění. Regresní test pokrývá oddálení, posunutí, návrat, bližší ruční zoom, chybějící GPS a návrat na celou flotilu. Test skutečných Google Maps ověřuje šipku na desktopu a v mobilních šířkách.
+
+
+## SPZ na okraji mapy — 0.1.881
+
+Oprava reprodukované chyby: horizontální ořez souřadnice štítku držel SPZ na hraně mapy, i když její vozidlo bylo mimo výřez. Štítek nyní vzniká pouze pro celý viditelný marker a má pevný vodorovný střed shodný s vozidlem. Pokud se do mapy nevejde celý marker nebo štítek, popisek se skryje; po návratu se opět zobrazí na původní kotvě. Priorita výběru a kolize zůstávají zachované. GPS, samotné markery, grafika, shlukování a kamera se nemění.
+
+Jednotkové testy pokrývají čtyři hrany, částečně oříznutý marker i přesný střed štítku. `label-anchor.browser.test.mjs` reprodukuje chybu před opravou a ověřuje odjezd i návrat přes všechny čtyři hrany skutečných Google Maps na desktopu (1440 px) a mobilu (390 px), v Chromium a WebKit. Screenshoty a výsledky jsou v pracovním `outputs/label-anchor/`.

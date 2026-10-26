@@ -14,6 +14,16 @@ assert.deepEqual([...first.keys()],['a']);assert.deepEqual([...second.keys()],['
 assert.equal(first.get('a').top,177);assert.equal(second.get('b').top,177);
 assert.equal(first.get('a').left,150);assert.equal(second.get('b').left,230);
 assert.equal(labelMarkerRect({...rows[0],vehicle:{heading:180}}).bottom,180);
+// A selected plate must not stick to an edge after its vehicle leaves the view.
+for(const [x,y] of [[-80,150],[580,150],[200,-10],[200,460],[20,150],[480,150],[200,20]]) {
+  const p={...rows[0],x,y};
+  assert.equal(placeLabels([p],[],bounds,measure,p.id).size,0,`clipped vehicle/plate at ${x},${y}`);
+}
+for(const x of [50,450]) {
+  const p={...rows[0],x};
+  assert.equal(placeLabels([p],[],bounds,measure,p.id).get(p.id).left,x-50);
+}
+console.log('PASS offscreen/clipped vehicles have no orphan plate; visible plates keep their exact anchor');
 const hashes={'atlas.png':'d05712ae2dd761000135e33f8f47b6a84c40bcc005b19330daf0204701ad9f96','collection-truck.png':'95bd74b192c2cde146fad83e425ff71679447e5430f96bcd6100ae244d20699a','skip-loader.png':'81e0a59777996d732482463572868963f9acd512f778295acbc645baf7c186ee'};
 for(const [file,hash]of Object.entries(hashes))assert.equal(createHash('sha256').update(await readFile('public/vehicles/openart-2/'+file)).digest('hex'),hash);
 console.log('PASS current-motion eligibility, 120-second boundary, stable plate priority, heading clearance, unchanged original PNG hashes');
