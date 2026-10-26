@@ -1,6 +1,6 @@
 # Rychlost vedle SPZ – schválená varianta 2
 
-Verze 0.1.885. Jeden téměř bílý štítek pod vozidlem obsahuje SPZ, tenký svislý oddělovač a rychlost v km/h. Původní PNG, kruh, pulsování, GPS bod a souřadnicová kotva se nemění.
+Verze 0.1.887. Jeden téměř bílý štítek pod vozidlem obsahuje SPZ, tenký svislý oddělovač a rychlost v km/h. Původní PNG, kruh, pulsování, GPS bod a souřadnicová kotva se nemění.
 
 Číslo pochází z existující normalizované rychlosti T-Cars. Zobrazuje se jen u platného aktuálního bodu (stáří nejvýše 120 sekund, bez historické náhradní polohy a s konečnou nezápornou rychlostí). Nula zůstává 0 km/h. Nedostupné nebo staré měření má `— km/h`; skutečný stav a integrační logika se nemění. Zestárnutí se projeví i bez nového načtení dat.
 
