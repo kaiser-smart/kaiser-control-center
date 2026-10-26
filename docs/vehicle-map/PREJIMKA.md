@@ -1,3 +1,5 @@
+> **Aktuální práce 2.0 (26. 10. 2026):** [přejímací report](PREJIMKA-2.0.md), [nové parametry vzhledu](DESIGN_TOKENS-2.0.json). Nasazení 2.0 není dokončeno. Následující původní text popisuje výhradně historickou implementaci 1.3.
+
 # Integrační přejímka mapy vozidel v1.3
 
 25. 10. 2026. Navazuje na commit `1689d262`. **Tato práce nenasadila ani nezměnila produkční aplikaci.** Tato přejímka již obsahuje skutečnou Google mapu a přihlášený T-Cars backend; původní report je zachován v [PREJIMKA_1689d262.md](../../../outputs/PREJIMKA_1689d262.md).

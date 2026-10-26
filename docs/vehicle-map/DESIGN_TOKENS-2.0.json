@@ -1,0 +1,20 @@
+{
+  "version": "2.0",
+  "reference": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2-1_1792962308423_0222f768.png",
+  "decision": "User replaced original light reference with this exact dark/lime dashboard on 2026-10-26.",
+  "colors": {
+    "background": "#080f14",
+    "surface": "#0d1a22",
+    "text": "#e7ecee",
+    "muted": "#8d9ba3",
+    "border": "#28363e",
+    "accent": "#b4e52b"
+  },
+  "desktop": {
+    "vehicleList": 240,
+    "rightPanel": 280,
+    "bottomPanels": 205
+  },
+  "mobile": "Map / Vehicles / Overview; essential vehicle data precedes collapsible imagery and telemetry; existing navigation retained.",
+  "artwork": "User-supplied unchanged OpenArt atlas plus collection/RAM attachments. Existing illustrative type images in the detail; not claimed as a photograph of the actual vehicle."
+}

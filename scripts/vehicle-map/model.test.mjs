@@ -87,6 +87,11 @@ test('label priority, actual measured widths and control exclusion', () => {
   placed.forEach((r) => occupied.forEach((o) => assert(!overlaps(r, o, 6))));
   for (let i = 0; i < placed.length; i++) for (let j = i + 1; j < placed.length; j++) assert(!overlaps(placed[i], placed[j], 6));
 });
+test('new supplied equipment artwork uses explicit declared type, never nickname', () => {
+ for (const [declared,expected] of [['Bagr','excavator'],['VZV','forklift'],['Nákladní vůz','truck']]) assert.equal(presentationType({vehicleType:declared}).key,expected);
+ assert.equal(presentationType({name:'VZV Bagr'}).key,'unknown');
+ assert.equal(presentationType({name:'VZV',vehicleType:'car'}).key,'car');
+});
 const timings = [];
 for (let i = 0; i < 100; i++) { const start = performance.now(); clusterPoints(points(200, false)); timings.push(performance.now() - start); }
 timings.sort((a, b) => a - b);
