@@ -53718,3 +53718,27 @@ body.collection-driver-blackview-simulator-active #app {
 }
 .vm .vm-list-heading h2 { white-space:nowrap; font-size:15px; }
 .vm .vm-list-heading h2 span { margin-left:4px; font-size:12px; }
+
+/* Map readability: original artwork/crop/filter/opacity are unchanged. */
+.vm .vm-marker:not(.vm-cluster),
+.vm .vm-marker:not(.vm-cluster):is(:hover,:focus,:active,.is-selected) { background:transparent; box-shadow:none; }
+.vm .vm-marker:not(.vm-cluster)::before,
+.vm .vm-marker:not(.vm-cluster)::after { content:""; position:absolute; width:42px; height:42px; left:3px; top:1px; border:1px solid #b8c6cf; border-radius:50%; pointer-events:none; }
+.vm .vm-marker:not(.vm-cluster)::before { background:rgb(15 25 33 / 90%); z-index:0; }
+.vm .vm-marker:not(.vm-cluster)::after { opacity:0; z-index:0; }
+.vm .vm-marker:not(.vm-cluster) > .vm-art { position:relative; z-index:1; }
+.vm .vm-marker:not(.vm-cluster) > :is(.vm-badge,.vm-heading) { z-index:2; }
+.vm .vm-marker:not(.vm-cluster).is-selected::before { border-color:#b4e52b; border-width:2px; }
+.vm .vm-marker:not(.vm-cluster).is-highlighted:not(.is-selected) { outline:0; }
+.vm .vm-marker:not(.vm-cluster).is-highlighted:not(.is-selected)::before { border-color:#e5edf1; }
+.vm .vm-marker.has-current-motion.is-selected::after { border-color:#b4e52b; animation:vm-selected-drive-pulse 2.5s ease-out infinite; }
+@keyframes vm-selected-drive-pulse {
+  0% { transform:scale(1); opacity:0; }
+  18% { opacity:.45; }
+  100% { transform:scale(1.35); opacity:0; }
+}
+.vm .vm-label { background:#fafcfd; color:#1b262d; border:1px solid #71838e; border-radius:7px; font-size:14px; line-height:18px; font-weight:700; padding:3px 7px; }
+.vm .vm-label.is-selected { border-color:#4f6718; outline:1px solid #b4e52b; }
+@media(prefers-reduced-motion:reduce) {
+  .vm .vm-marker.has-current-motion.is-selected::after { animation:none; opacity:0; }
+}

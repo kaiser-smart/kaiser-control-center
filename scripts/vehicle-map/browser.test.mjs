@@ -151,7 +151,7 @@ try{
    images.forEach(i=>{assert.equal(i.w,36);assert.match(i.filter,/vm-white-canvas/);assert.equal(i.bg,'rgba(0, 0, 0, 0)');});
   });
   await page.locator('[data-vm-row$=":synthetic-2"]').click();await page.waitForTimeout(100);
-  await test(`${theme} ${width}: selected stale silhouette and user-selected lime accent`,async()=>{assert.equal(await page.locator('.vm').getAttribute('data-theme'),'dark');assert.match(await page.locator('.vm-marker.is-selected').evaluate(e=>getComputedStyle(e).boxShadow),/rgb\(180, 229, 43\)/);});
+  await test(`${theme} ${width}: selected stale silhouette and user-selected lime accent`,async()=>{assert.equal(await page.locator('.vm').getAttribute('data-theme'),'dark');assert.match(await page.locator('.vm-marker.is-selected').evaluate(e=>getComputedStyle(e,'::before').borderColor),/rgb\(180, 229, 43\)/);});
   await screenshot(`stale-${theme}-${width}`);
  }
  await scene();

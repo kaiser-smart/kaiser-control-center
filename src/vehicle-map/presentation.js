@@ -29,3 +29,10 @@ export function legendHTML() {
   return `<h2>Ikony a stavy</h2><p>Dodaná sada OpenArt. Popelářský vůz, ramenový nakladač RAM a hákový nosič mají vlastní dodané siluety; typ určuje doložená evidence. Přívěs, neurčená a obecná speciální technika používají neutrální zkratku, protože v sadě nemají vlastní ikonu.</p><div class="vm-legend-art">${Object.entries(TYPES).map(([key, t]) => `<div>${artwork({ key, ...t })}<span>${escape(t.label)}</span></div>`).join("")}</div>
     <p>Typ vychází z doložené evidence. Neurčená nástavba zůstává označená otazníkem.</p><p>› Jede · ■ Stojí · ◷ Stará poloha · ? Neověřeno</p><p>Stará poloha zůstává na mapě s původním časem GPS. Obnova dat neznamená nový GPS vzorek.</p>`;
 }
+
+// Presentation eligibility only: reuse the existing 120 s current-GPS window
+// used by heading/detail; never change the underlying movement/category.
+export function hasCurrentMotion(v) {
+  return Boolean(v.point && !v.previousPoint && v.category === "moving" && v.movement === "moving"
+    && Number.isFinite(v.age) && v.age >= 0 && v.age <= 120);
+}
