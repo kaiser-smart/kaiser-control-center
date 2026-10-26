@@ -1,4 +1,4 @@
-import { TYPES, SYMBOLS, ageText, statusText } from "./model.js";
+import { TYPES, statusText } from "./model.js";
 export function escape(value) { return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 // Exact pixels supplied by the user in OpenArt. These bounds only select each
 // item from the unchanged atlas; no drawing, recoloring or generated replacement.
@@ -21,13 +21,25 @@ export function artwork(type, size = "list") {
   return `<span class="vm-art vm-art--${size}" aria-hidden="true"><span class="vm-sprite" data-vm-artwork="${key}" style="width:${w*scale}px;height:${h*scale}px"><img src="vehicles/openart-2/${source[0]}" alt="" width="${source[1]}" height="${source[2]}" decoding="async" style="width:${source[1]*scale}px;height:${source[2]*scale}px;left:${-x*scale}px;top:${-y*scale}px"></span></span>`;
 }
 
-export function markerHTML(v) {
-  return `${artwork(v.type, "map")}<span class="vm-badge" aria-hidden="true">${v.emergency ? "!" : SYMBOLS[v.category]}</span>${v.heading !== null ? `<span class="vm-heading" style="transform:rotate(${v.heading}deg)" aria-hidden="true"><i></i></span>` : ""}`;
+// Availability is presentation only; the normalized GPS category remains unchanged.
+export function isOnline(v) {
+  return Boolean(v.point && !v.previousPoint && v.category !== "stale" && v.category !== "missing" && Number.isFinite(v.age) && v.age >= 0);
 }
-export function markerName(v) { return `${v.label}, ${v.type.label}, ${statusText(v)}, ${v.previousPoint ? "poslední známá poloha, " : ""}${ageText(v)}`; }
+export function connectionName(v) { return isOnline(v) ? "Online" : "Offline"; }
+export function connectionHTML(v, extraClass = "") {
+  return `<span class="vm-connection ${isOnline(v) ? "vm-online" : "vm-offline"} ${extraClass}" data-vm-connection="${escape(v.id)}" role="img" aria-label="${connectionName(v)}" title="${connectionName(v)}"></span>`;
+}
+export function movementText(v) { return ["stale", "missing"].includes(v.category) ? "" : statusText(v); }
+export function stateHTML(v, speed = false) {
+  return `<span class="vm-state">${connectionHTML(v)}${escape(movementText(v))}${speed && v.speed !== null && v.category === "moving" ? ` · ${v.speed} km/h` : ""}</span>`;
+}
+export function markerHTML(v) {
+  return `${artwork(v.type, "map")}${connectionHTML(v, "vm-badge")}${v.emergency ? '<span class="vm-emergency-badge" aria-label="Mimořádná událost">!</span>' : ""}${v.heading !== null ? `<span class="vm-heading" style="transform:rotate(${v.heading}deg)" aria-hidden="true"><i></i></span>` : ""}`;
+}
+export function markerName(v) { return [v.label, v.type.label, movementText(v), connectionName(v)].filter(Boolean).join(", "); }
 export function legendHTML() {
   return `<h2>Ikony a stavy</h2><p>Dodaná sada OpenArt. Popelářský vůz, ramenový nakladač RAM a hákový nosič mají vlastní dodané siluety; typ určuje doložená evidence. Přívěs, neurčená a obecná speciální technika používají neutrální zkratku, protože v sadě nemají vlastní ikonu.</p><div class="vm-legend-art">${Object.entries(TYPES).map(([key, t]) => `<div>${artwork({ key, ...t })}<span>${escape(t.label)}</span></div>`).join("")}</div>
-    <p>Typ vychází z doložené evidence. Neurčená nástavba zůstává označená otazníkem.</p><p>› Jede · ■ Stojí · ◷ Stará poloha · ? Neověřeno</p><p>Stará poloha zůstává na mapě s původním časem GPS. Obnova dat neznamená nový GPS vzorek.</p>`;
+    <p>Typ vychází z doložené evidence. Neurčená nástavba zůstává označená otazníkem.</p><p><span class="vm-connection vm-online" aria-hidden="true"></span> Online · <span class="vm-connection vm-offline" aria-hidden="true"></span> Offline</p>`;
 }
 
 // Presentation eligibility only: reuse the existing 120 s current-GPS window

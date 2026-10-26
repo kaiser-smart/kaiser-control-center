@@ -1,6 +1,6 @@
 import { CZECH_BOUNDARY } from "./czech-boundary.js";
 import { clusterPoints, clusterRect, markerRect, labelMarkerRect, overlaps, inside, rect, spreadPoints, placeLabels } from "./spatial.js";
-import { markerHTML, markerName, escape, hasCurrentMotion } from "./presentation.js";
+import { markerHTML, markerName, escape, hasCurrentMotion, isOnline } from "./presentation.js";
 
 export const ROAD_STYLES = [
   { elementType: "geometry", stylers: [{ color: "#15232e" }] },
@@ -170,12 +170,12 @@ export function createGoogleMap(node, maps, callbacks) {
         el.addEventListener("blur", () => callbacks.onHighlight(""));
         elements.set(p.id, el); overlay.layer.append(el);
       }
-      const stale = p.members.filter((m) => m.category === "stale").length;
-      const html = cluster ? `<b>${p.members.length}</b><span class="vm-cluster-word">vozidel</span>${stale ? '<span class="vm-cluster-clock" aria-hidden="true">◷</span>' : ""}` : markerHTML(v);
+      const offline = p.members.filter(m => !isOnline(m)).length;
+      const html = cluster ? `<b>${p.members.length}</b><span class="vm-cluster-word">vozidel</span>${offline ? '<span class="vm-cluster-clock vm-connection vm-offline" aria-hidden="true"></span>' : ""}` : markerHTML(v);
       if (el.dataset.htmlSignature !== html) { el.innerHTML = html; el.dataset.htmlSignature = html; }
       el.className = `vm-marker ${cluster ? "vm-cluster" : `vm-marker--${v.category}`} ${!cluster && v.ignition === true && v.movement === "stopped" && v.category !== "stale" ? "vm-marker--ignition" : ""} ${!cluster && v.emergency ? "vm-marker--emergency" : ""} ${!cluster && selectedId === v.id ? "is-selected" : ""} ${p.members.some((m) => m.id === highlightedId) ? "is-highlighted" : ""}`;
       el.classList.toggle("has-current-motion", !cluster && hasCurrentMotion(v));
-      el.setAttribute("aria-label", cluster ? `${p.members.length} vozidel, ${stale} se starou polohou. Otevřít skupinu.` : markerName(v));
+      el.setAttribute("aria-label", cluster ? `${p.members.length} vozidel, ${offline} offline. Otevřít skupinu.` : markerName(v));
       el.setAttribute("aria-pressed", String(!cluster && selectedId === v.id));
       el.style.left = `${p.x}px`; el.style.top = `${p.y}px`;
       if (!cluster) labelItems.push({ id: v.id, vehicle: v, x: p.x, y: p.y });
