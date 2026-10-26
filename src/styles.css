@@ -53790,10 +53790,10 @@ body.collection-driver-blackview-simulator-active #app {
   .vm .vm-marker.has-current-motion::after { animation:none; opacity:0; }
 }
 
-/* GPS availability: one green/orange dot, no relative-age labels. */
+/* GPS availability: one green/red dot, no relative-age labels. */
 .vm .vm-connection { display:inline-block; flex:none; width:8px; height:8px; border-radius:50%; vertical-align:middle; }
 .vm .vm-connection.vm-online { background:#75BD25; }
-.vm .vm-connection.vm-offline { background:#F5A623; }
+.vm .vm-connection.vm-offline { background:#EF4444; }
 .vm .vm-badge.vm-connection { width:10px; height:10px; }
 .vm .vm-cluster-clock.vm-connection { width:10px; height:10px; border:1px solid #fff; }
 .vm .vm-emergency-badge { position:absolute; top:-2px; right:0; z-index:2; width:12px; height:12px; border-radius:50%; background:#b42318; color:#fff; font:bold 10px/12px sans-serif; text-align:center; }

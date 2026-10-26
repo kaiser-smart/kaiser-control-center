@@ -69,7 +69,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
     const time = lastSuccess ? new Intl.DateTimeFormat("cs-CZ", { timeStyle: "medium", timeZone: "Europe/Prague" }).format(lastSuccess) : "dosud žádná";
     $("[data-vm-refresh-status]").textContent = error ? `Obnova se nezdařila · poslední úspěšná aktualizace ${time}` : loading ? "Načítám polohy…" : `Živá data · ${time}`;
     root.classList.toggle("has-error", !!error);
-    $("[data-vm-refresh-status]").title = "Čas načtení dat z API. Dostupnost GPS označuje zelený nebo oranžový bod. Obnova po 60 s.";
+    $("[data-vm-refresh-status]").title = "Čas načtení dat z API. Dostupnost GPS označuje zelený nebo červený bod. Obnova po 60 s.";
     $("[data-vm-refresh]").disabled = loading;
   }
   function rowHTML(v) {
@@ -157,7 +157,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   function update({ tick = false } = {}) {
     vehicles = normalize(records, { now: now(), staleAfterSeconds });
     const result = filterVehicles(vehicles, state.query, state.category === "stale" ? "all" : state.category);
-    // Keep the internal filter key, but Offline includes every orange dot.
+    // Keep the internal filter key, but Offline includes every red dot.
     result.counts.stale = filterVehicles(vehicles, state.query).vehicles.filter(v => !isOnline(v)).length;
     filtered = state.category === "stale" ? result.vehicles.filter(v => !isOnline(v)) : result.vehicles;
     if (state.selectedId && !filtered.some((v) => v.id === state.selectedId)) {
