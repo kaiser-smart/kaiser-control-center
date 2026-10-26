@@ -38,6 +38,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   let analytics = null, analyticsError = "", analyticsLoading = false;
   let historyState = { open: false, range: "24h", text: "", points: [], vehicleId: "" };
   const rows = new Map();
+  const listScroller = () => $(isMobileViewport() ? ".vm-panel" : ".vm-list");
   const iconAssignment = createIconAssignment({ root, getVehicles: () => vehicles });
   let openAssignmentsOnLoad = new URLSearchParams(location.search).get("ikony") === "1";
   const announce = (message) => { $("[data-vm-announcement]").textContent = message; };
@@ -52,17 +53,17 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   }
   function select(id) {
     const v = filtered.find((v) => v.id === id); if (!v) return;
-    if (!state.selectedId) state.listScroll = $(".vm-list").scrollTop;
+    if (!state.selectedId || state.view === "list") state.listScroll = listScroller().scrollTop;
     if (state.selectedId !== id) { historyRequest++; historyState = { ...historyState, open: false, text: "", points: [], vehicleId: "" }; map?.history([]); }
     state.selectedId = id; state.view = "map"; updatePanel(); updateMap(); map?.select(id);
     $("[data-vm-back]")?.focus({ preventScroll: true }); resize();
   }
   function back() {
     const previous = state.selectedId; state.selectedId = ""; historyRequest++; historyState.open = false; map?.history([]);
-    updatePanel(); updateMap(); $(".vm-list").scrollTop = state.listScroll;
+    updatePanel(); updateMap(); listScroller().scrollTop = state.listScroll;
     (isMobileViewport() ? $('[data-vm-view="list"]') : rows.get(previous))?.focus({ preventScroll: true }); resize();
   }
-  function closeGroup() { state.groupIds = []; state.page = 0; map?.closeGroup(); updatePanel(); updateMap(); }
+  function closeGroup() { state.groupIds = []; state.page = 0; state.listScroll = 0; listScroller().scrollTop = 0; map?.closeGroup(); updatePanel(); updateMap(); }
   function highlight(id) { if (state.highlightedId !== id) { state.highlightedId = id; updateMap(); } }
   function updateMap() { map?.update(filtered, state); }
   function updateStatus() {
@@ -77,7 +78,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   }
 
   function updateRows() {
-    const list = $(".vm-list"); const scroll = list.scrollTop; const matching = state.groupIds.length ? filtered.filter((v) => state.groupIds.includes(v.id)) : filtered;
+    const list = $(".vm-list"), scroller = listScroller(); const scroll = scroller.scrollTop; const matching = state.groupIds.length ? filtered.filter((v) => state.groupIds.includes(v.id)) : filtered;
     const mobile = isMobileViewport();
     const pages = Math.max(1, Math.ceil(matching.length / 8)); state.page = Math.min(state.page, pages - 1);
     const shown = mobile ? matching.slice(state.page * 8, state.page * 8 + 8) : matching;
@@ -100,7 +101,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
       const index = shown.indexOf(v); if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);
     }
     if (!shown.length) list.innerHTML = `<p class="vm-empty">${loading ? "Načítám vozidla…" : records.size ? "Žádná vozidla neodpovídají hledání a filtru." : "Nejsou dostupná žádná oprávněná vozidla."}</p>`;
-    list.scrollTop = scroll;
+    scroller.scrollTop = scroll;
     $("[data-vm-total]").textContent = vehicles.length;
     $("[data-vm-count]").textContent = `${matching.length} z ${vehicles.length} vozidel`;
     $("[data-vm-page-number]").textContent = `${state.page + 1} / ${pages}`;
@@ -253,8 +254,12 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
     if (button.hasAttribute("data-vm-center")) map?.select(state.selectedId, true);
     if (button.hasAttribute("data-vm-selected-group")) map?.openGroup(selectedGroup);
     if (button.hasAttribute("data-vm-close-group")) closeGroup();
-    if (button.hasAttribute("data-vm-view")) { state.view = button.dataset.vmView; document.activeElement?.blur(); updatePanel(); resize(); }
-    if (button.hasAttribute("data-vm-page")) { state.page = Math.max(0, state.page + Number(button.dataset.vmPage)); updateRows(); $(".vm-list").scrollTop = 0; }
+    if (button.hasAttribute("data-vm-view")) {
+      if (state.view === "list") state.listScroll = listScroller().scrollTop;
+      state.view = button.dataset.vmView; document.activeElement?.blur(); updatePanel(); resize();
+      if (state.view === "list") listScroller().scrollTop = state.listScroll;
+    }
+    if (button.hasAttribute("data-vm-page")) { state.page = Math.max(0, state.page + Number(button.dataset.vmPage)); updateRows(); state.listScroll = 0; listScroller().scrollTop = 0; }
     if (button.hasAttribute("data-vm-history-show")) void loadHistory();
     if (button.hasAttribute("data-vm-history-toggle")) { historyState.open = !historyState.open; updatePanel(); }
     if (button.hasAttribute("data-vm-zoom")) map?.zoom(Number(button.dataset.vmZoom));

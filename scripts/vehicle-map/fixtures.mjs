@@ -1,6 +1,6 @@
 // Test data only. Never imported by src or copied into dist.
 export function fixture(scene = 'overview', now = Date.now(), revision = 0) {
-  const count = scene === 'dense200' ? 200 : scene === 'same20' ? 20 : scene === 'same6' ? 6 : 18;
+  const count = scene === 'mobile57' ? 57 : scene === 'dense200' ? 200 : scene === 'same20' ? 20 : scene === 'same6' ? 6 : 18;
   const types = ['collection_truck', 'tanker', 'skip_loader', 'van', 'hook_loader', 'car', 'trailer', 'special', 'unknown'];
   const vehicles = [], locations = [];
   for (let i = 0; i < count; i++) {
@@ -15,6 +15,11 @@ export function fixture(scene = 'overview', now = Date.now(), revision = 0) {
       speedKmh: i % 3 === 0 ? 26 + i : i === 7 ? null : 0, ignition: i % 4 === 0 ? null : i % 3 === 1, heading: i * 30 % 360,
       address: 'Syntetická testovací poloha', odometerKm: 150000 + i * 100, voltage: 24.5 };
     if (i === 11 && scene === 'overview') { s.gpsValid = false; s.latitude = null; }
+    if (scene === 'mobile57') {
+      s.lastGpsAt = new Date(now - (i >= 35 && i < 56 ? 47 * 60 : 30) * 1000).toISOString();
+      s.speedKmh = i < 12 ? 30 : 0;
+      if (i === 56) { s.gpsValid = false; s.latitude = null; }
+    }
     locations.push(s);
   }
   return { provider: 'tcars', apiStatus: 'ready', dataMode: 'live-readonly', configured: true, isDemo: false, vehicles, locations, lastKnownLocations: [], summary: { staleAfterSeconds: 1800 }, lastFetchedAt: new Date(now).toISOString() };

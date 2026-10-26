@@ -53378,6 +53378,12 @@ body.collection-driver-blackview-simulator-active #app {
   .vm-work { display:block; }
   .vm-map-shell { height:100%; }
   .vm-panel { position:absolute; inset:0; border:0; z-index:10; display:none; }
+  /* One scroll surface keeps every vehicle reachable below Safari controls and the keyboard. */
+  #app .vm .vm-panel { padding:0; border-radius:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; }
+  #app .vm .vm-panel-list { height:auto; min-height:100%; }
+  #app .vm .vm-list { flex:none; overflow:visible; }
+  #app .vm .vm-list-footer { margin-top:auto; }
+  #app #vm-search { background:#111e27; color:var(--vm-ink); border-color:var(--vm-border); font-size:16px; }
   .vm[data-view=list] .vm-panel { display:block; }
   .vm[data-view=list] .vm-map-shell { visibility:hidden; }
   .vm-search input { font-size:16px; }
@@ -53597,7 +53603,7 @@ body.collection-driver-blackview-simulator-active #app {
  .vm-insights { display:contents; }
  .vm-insights > section { display:none; }
  .vm-dashboard-bottom { display:none; }
- .vm-insights .vm-panel-detail { position:absolute; inset:auto 8px 28px; width:auto; max-height:57%; overflow:hidden; }
+ .vm-insights .vm-panel-detail { position:absolute; inset:auto 8px 28px; width:auto; max-height:57%; overflow:hidden; z-index:9; }
  .vm-insights .vm-detail-scroll { overflow:auto; }
  .vm-map-legend { bottom:55px; left:8px; }
  .vm.is-detail .vm-map-legend { display:none; }
