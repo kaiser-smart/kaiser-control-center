@@ -26,7 +26,7 @@ Výsledky před vydáním: model a GPS kontrakty PASS, marker jednotkové testy 
 
 Screenshoty před/po a logy jsou mimo Git v pracovním `outputs/marker-visibility/`. Automatická data nejsou skutečné GPS. Produkční screenshoty se pořizují samostatně nad autorizovaným účtem. Fyzický telefon/PWA instalace nejsou simulací browser viewportu doloženy. Přesný produkční commit a výsledek guardu uvádí závěrečný přejímací report po vydání.
 
-## Dotažení pulzu — 0.1.872
+## Dotažení pulzu — 0.1.873
 
 Read-only kontrola produkce 0.1.870 / `16674ac` na vybraném jedoucím vozidle potvrdila aktivní animaci a platnou třídu `has-current-motion`. Kruh nebyl oříznutý ani vypnutý: problém byl jeho slabý vizuální odstup od pevného obrysu. Při 625 ms původní cyklus dosahoval odstupu pouze 2,78 px a opacity 0,388; v 1500 ms už jen 0,136. Pouhý test názvu animace a změny transformace tuto chybu čitelnosti nezachytil.
 

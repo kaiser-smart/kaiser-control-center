@@ -37,7 +37,7 @@
   #app .mobile-menu .ui-pilot-nav__group > p { font-size:11px; margin:4px 0; color:#5e686d; }
   #app .mobile-menu .ui-pilot-nav__items { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
   #app .mobile-menu .ui-pilot-nav__item { display:flex; min-width:0; min-height:44px; padding:8px; font-size:13px; border-radius:8px; box-shadow:none; gap:8px; }
-  #app .mobile-menu .ui-pilot-nav__icon { width:22px; height:22px; flex-shrink:0; }
+  #app .mobile-menu .ui-pilot-nav__icon { width:28px; height:28px; flex-shrink:0; }
   #app .mobile-menu [hidden] { display:none!important; }
   #app .mobile-menu .user-bar { display:flex; padding:12px 0; border-top:1px solid #d7dfe2; margin-top:auto; }
   #app .mobile-menu .user-bar__identity { display:grid; gap:4px; }
