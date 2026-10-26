@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.884"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.885"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Rychlost vedle SPZ", text: "Mapa zobrazuje SPZ a aktuální rychlost v jednom čitelném štítku pod vozidlem. Stará nebo nedostupná rychlost je označená pomlčkou. Širší štítky respektují kolize a výběr vozidla." },
   { title: "Použitelný seznam vozidel na mobilu", text: "Seznam se posouvá společně s filtry a stránkováním, takže jsou dostupná všechna vozidla i na nízkém displeji. Změna filtru vrací první stránku, návrat z detailu zachová místo v seznamu. Zavření detailu je dostupné i naležato." },
   { title: "Poloha vedle rychlosti", text: "V detailu vozidla je adresa s původní ikonkou polohy vedle rychlosti. Zelený nebo červený indikátor GPS je u SPZ v záhlaví, takže nezabírá samostatnou buňku." },
   { title: "SPZ u viditelného vozidla", text: "Popisek zůstává přímo pod autem. Když vozidlo opustí výřez mapy, jeho SPZ se už nepřichytává k okraji bez ikony." },

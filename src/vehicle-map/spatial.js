@@ -47,7 +47,7 @@ export function clusterPoints(points) {
 }
 /** Try radial positions, then a bounded grid. No vehicle coordinates are changed.
  * If physical space is insufficient, the group list remains the complete access path. */
-export function spreadPoints(points, center, bounds, obstacles = []) {
+export function spreadPoints(points, center, bounds, obstacles = [], footprint = markerRect) {
   if (points.length > 8) return null;
   const placed = [], occupied = [...obstacles];
   const candidates = [];
@@ -58,12 +58,12 @@ export function spreadPoints(points, center, bounds, obstacles = []) {
   for (let y = bounds.top + 42; y < bounds.bottom - 40; y += 86) for (let x = bounds.left + 38; x < bounds.right - 36; x += 82) candidates.push({ x, y });
   for (const point of points) {
     const candidate = candidates.find((p) => {
-      const r = markerRect({ ...point, ...p });
+      const r = footprint({ ...point, ...p });
       return inside(r, bounds) && !occupied.some((o) => overlaps(r, o, 8));
     });
     if (!candidate) return null;
     const p = { ...point, ...candidate, anchor: { x: point.x, y: point.y } };
-    placed.push(p); occupied.push(markerRect(p));
+    placed.push(p); occupied.push(footprint(p));
   }
   return placed;
 }
@@ -99,7 +99,7 @@ export function placeLabels(items, obstacles, bounds, measure, selectedId = "", 
   const ordered = [...items].sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id));
   for (const p of ordered) {
     if (mode === "selected" && p.id !== selectedId) continue;
-    const { width, height } = measure(p.vehicle.label);
+    const { width, height } = measure(p.vehicle.label, p.vehicle);
     const own = labelMarkerRect(p), gap = 5;
     // Never detach a plate from a vehicle clipped by the map viewport.
     if (!inside(own, bounds)) continue;

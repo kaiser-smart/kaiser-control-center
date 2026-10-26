@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.884",
+  "version": "0.1.885",
   "private": true,
   "type": "module",
   "scripts": {
@@ -52,7 +52,7 @@
     "test:repair": "node scripts/repair.test.mjs && node scripts/repair-store.test.mjs",
     "test:vehicle-map:icons": "node scripts/vehicle-map/icon-assignment.test.mjs",
     "test:vehicle-map:icons:browser": "node scripts/vehicle-map/icon-assignment.browser.test.mjs",
-    "test:vehicle-map:markers": "node scripts/vehicle-map/marker-visibility.test.mjs",
+    "test:vehicle-map:markers": "node scripts/vehicle-map/marker-visibility.test.mjs && node scripts/vehicle-map/speed-label.test.mjs",
     "test:vehicle-map:markers:browser": "node scripts/vehicle-map/marker-visibility.browser.test.mjs",
     "test:vistos-jobs:browser": "node scripts/vistos-jobs-browser.test.mjs && node scripts/vistos-job-detail-browser.test.mjs"
   },
