@@ -116,7 +116,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
       <div class="vm-detail-scroll">
       ${v.emergency ? '<p class="vm-emergency">Hlášená mimořádná událost</p>' : ""}
       ${!v.point ? `<p>${escape(v.reason)}</p>` : ""}
-      <dl class="vm-detail-metrics">${field("Rychlost", v.speed !== null ? `${v.speed} km/h` : "Neověřeno")}<div class="vm-location-metric"><dt>Poloha</dt><dd>${escape(v.address || (v.point ? `${v.point.lat.toFixed(6)}, ${v.point.lng.toFixed(6)}` : "Bez ověřené polohy"))}</dd></div></dl>
+      <dl class="vm-detail-metrics">${field("Rychlost", v.speed !== null ? `${v.speed} km/h` : "Neověřeno")}<div class="vm-location-metric"><dt>Poloha</dt><dd>${SmartIcon("tracking")}<span>${escape(v.address || (v.point ? `${v.point.lat.toFixed(6)}, ${v.point.lng.toFixed(6)}` : "Bez ověřené polohy"))}</span></dd></div></dl>
       ${v.assignedDriver ? `<p class="vm-driver">${SmartIcon("users")}<span>Přiřazený řidič: ${escape(v.assignedDriver)}</span></p>` : ""}
       <div class="vm-detail-actions"><button type="button" class="vm-primary" data-vm-history-show ${!v.historyKey ? "disabled" : ""}>${SmartIcon("routes")}Zobrazit trasu</button><button type="button" data-vm-history-toggle aria-expanded="${historyState.open}" ${!v.historyKey ? "disabled" : ""}>${SmartIcon("reports")}Historie jízd</button></div>
 

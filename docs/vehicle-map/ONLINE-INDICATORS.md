@@ -19,3 +19,5 @@ Od verze 0.1.880 na požadavek uživatele červený bod nahrazuje oranžový ve 
 ## Umístění v detailu — 0.1.882
 
 Indikátor dostupnosti je v záhlaví detailu vedle SPZ. Zachovává barvu, dostupnostní logiku i přístupný název Online/Offline. Původní buňku GPS napravo od rychlosti nahrazuje Poloha; samostatný řádek polohy pod metrikami se odstranil. Dlouhá adresa se zalamuje, při chybějící adrese zůstává původní fallback na souřadnice či Bez ověřené polohy. Výběr, GPS data ani grafika vozidel se nemění.
+
+Doplnění 0.1.883: buňka Polohy zachovává původní SmartIcon tracking (špendlík) vedle adresy. Text se zalamuje ve zbývající šířce; název Poloha je zarovnaný s adresou.

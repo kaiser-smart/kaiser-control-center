@@ -53680,7 +53680,9 @@ body.collection-driver-blackview-simulator-active #app {
 .vm .vm-detail-meta > span:last-child { min-width:0; overflow-wrap:anywhere; }
 .vm .vm-detail-metrics { grid-template-columns:minmax(0, .8fr) minmax(0, 1.2fr); margin-bottom:12px; }
 .vm .vm-detail-metrics > div { min-width:0; }
-.vm .vm-detail-metrics .vm-location-metric dd { font-size:13px; font-weight:600; line-height:1.4; overflow-wrap:anywhere; }
+.vm .vm-detail-metrics .vm-location-metric dd { display:flex; align-items:flex-start; gap:6px; font-size:13px; font-weight:600; line-height:1.4; overflow-wrap:anywhere; }
+.vm .vm-location-metric dd > span { min-width:0; }
+.vm .vm-location-metric dt { padding-left:26px; }
 @media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
  .vm-detail-identity .vm-vehicle-picture { width:58px; height:44px; }
 }
