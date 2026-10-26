@@ -1,6 +1,6 @@
 import { CZECH_BOUNDARY } from "./czech-boundary.js";
 import { clusterPoints, clusterRect, markerRect, labelMarkerRect, overlaps, inside, rect, spreadPoints, placeLabels, focusTarget, fittedCamera } from "./spatial.js";
-import { markerHTML, markerName, escape, hasCurrentMotion, isOnline } from "./presentation.js";
+import { markerHTML, markerName, markerLabelHTML, escape, hasCurrentMotion, isOnline } from "./presentation.js";
 
 export const ROAD_STYLES = [
   { elementType: "geometry", stylers: [{ color: "#15232e" }] },
@@ -89,10 +89,22 @@ export function createGoogleMap(node, maps, callbacks) {
     const p = overlay.getProjection()?.fromLatLngToContainerPixel(new maps.LatLng(v.point.lat, v.point.lng));
     return p ? { id: v.id, vehicle: v, x: p.x, y: p.y } : null;
   };
-  function measure(text) {
-    const cacheKey = `${getComputedStyle(measureNode).font}:${text}`;
-    if (!measurements.has(cacheKey)) { measureNode.textContent = text; const r = measureNode.getBoundingClientRect(); measurements.set(cacheKey, { width: r.width, height: r.height }); }
+  function measure(text, vehicle) {
+    const html = vehicle ? markerLabelHTML(vehicle) : escape(text);
+    const cacheKey = `${getComputedStyle(measureNode).font}:${html}`;
+    if (!measurements.has(cacheKey)) {
+      // Speeds vary during long-running sessions; keep measurement memory bounded.
+      if (measurements.size >= 512) measurements.clear();
+      measureNode.innerHTML = html;
+      const r = measureNode.getBoundingClientRect(); measurements.set(cacheKey, { width: r.width, height: r.height });
+    }
     return measurements.get(cacheKey);
+  }
+  function markerWithLabelRect(p) {
+    const marker = markerRect(p), label = measure(p.vehicle.label, p.vehicle);
+    return { left: Math.min(marker.left, p.x - label.width / 2), top: marker.top,
+      right: Math.max(marker.right, p.x + label.width / 2),
+      bottom: Math.max(marker.bottom, labelMarkerRect(p).bottom + 5 + label.height) };
   }
   function scheduleLayout() { if (!destroyed && !frame) frame = requestAnimationFrame(() => { frame = 0; layout(); }); }
   function positionNodes() {
@@ -126,7 +138,7 @@ export function createGoogleMap(node, maps, callbacks) {
         const memberIds = new Set(members.map((p) => p.id));
         const other = plans.filter((p) => !p.members.some((v) => memberIds.has(v.id)));
         const center = { x: members.reduce((s, p) => s + p.x, 0) / members.length, y: members.reduce((s, p) => s + p.y, 0) / members.length };
-        const spread = spreadPoints(members, center, visibleBounds, [...obstacleRects, ...other.map((p) => p.bounds)]);
+        const spread = spreadPoints(members, center, visibleBounds, [...obstacleRects, ...other.map((p) => p.bounds)], markerWithLabelRect);
         if (spread) plans = [...other, ...spread.map((p) => ({ id: p.id, x: p.x, y: p.y, members: [p.vehicle], bounds: markerRect(p), offsetX: p.x - p.anchor.x, offsetY: p.y - p.anchor.y, anchor: p.anchor }))];
       }
     }
@@ -136,7 +148,7 @@ export function createGoogleMap(node, maps, callbacks) {
     if (selectedGroup) {
       const selected = points.find((p) => p.id === selectedId);
       const rest = selectedGroup.members.filter((v) => v.id !== selectedId);
-      const blockers = [...obstacleRects, ...plans.filter((p) => p !== selectedGroup).map((p) => p.bounds), markerRect(selected)];
+      const blockers = [...obstacleRects, ...plans.filter((p) => p !== selectedGroup).map((p) => p.bounds), markerWithLabelRect(selected)];
       const candidate = spreadPoints([{ id: "remaining", vehicle: { heading: null }, x: selectedGroup.x, y: selectedGroup.y }], selected, visibleBounds, blockers)?.[0];
       plans = plans.filter((p) => p !== selectedGroup);
       plans.push({ id: selected.id, x: selected.x, y: selected.y, members: [selected.vehicle], bounds: markerRect(selected) });
@@ -192,7 +204,7 @@ export function createGoogleMap(node, maps, callbacks) {
       let el = labels.get(id);
       if (!el) { el = document.createElement("span"); el.className = "vm-label"; labels.set(id, el); overlay.layer.append(el); }
       const v = vehicles.find((item) => item.id === id);
-      el.textContent = v.label; el.classList.toggle("is-selected", id === selectedId);
+      const html = markerLabelHTML(v); if (el.innerHTML !== html) el.innerHTML = html; el.classList.toggle("is-selected", id === selectedId);
       el.hidden = false; el.style.left = `${r.left}px`; el.style.top = `${r.top}px`;
     }
     for (const [id, el] of labels) if (!vehicles.some((v) => v.id === id)) { el.remove(); labels.delete(id); }
@@ -245,11 +257,11 @@ export function createGoogleMap(node, maps, callbacks) {
       const n = node.getBoundingClientRect(), r = detail.getBoundingClientRect();
       // Keep the full plate clear of the context panel on explicit selection.
       // Center in the usable map area; the geographic marker anchor is fixed.
-      const label = measure(v.label), footprint = labelMarkerRect({ ...p, vehicle: v });
+      const label = measure(v.label, v), footprint = labelMarkerRect({ ...p, vehicle: v });
       if (r.width < n.width * .8) safe.right = Math.max(safe.left + 20, r.left - n.left - Math.max(40, label.width / 2 + 8));
       else safe.bottom = Math.max(safe.top + 20, r.top - n.top - Math.max(40, footprint.bottom - p.y + 5 + label.height + 8));
     }
-    const target = focusTarget(v, safe, bounds(), controls(), measure(v.label));
+    const target = focusTarget(v, safe, bounds(), controls(), measure(v.label, v));
     const dx = p.x - target.x;
     const dy = p.y - target.y;
     // One pan avoids competing panTo/panBy animations. Repeated selection at

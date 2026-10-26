@@ -39,7 +39,18 @@ export function vehicleArtworkType(v) { return v.artworkKey ? { key: v.artworkKe
 export function markerHTML(v) {
   return `${artwork(vehicleArtworkType(v), "map")}${connectionHTML(v, "vm-badge")}${v.emergency ? '<span class="vm-emergency-badge" aria-label="Mimořádná událost">!</span>' : ""}${v.heading !== null ? `<span class="vm-heading" style="transform:rotate(${v.heading}deg)" aria-hidden="true"><i></i></span>` : ""}`;
 }
-export function markerName(v) { return [v.label, v.type.label, movementText(v), connectionName(v)].filter(Boolean).join(", "); }
+// A speed label is current only within the existing 120 s GPS window.
+// Never present the last known historical speed as a current reading.
+export function currentSpeed(v) {
+  return v.point && !v.previousPoint && !["stale", "missing"].includes(v.category)
+    && Number.isFinite(v.age) && v.age >= 0 && v.age <= 120
+    && Number.isFinite(v.speed) && v.speed >= 0 ? v.speed : null;
+}
+export function markerLabelHTML(v) {
+  const speed = currentSpeed(v);
+  return `<span class="vm-label-plate">${escape(v.label)}</span><span class="vm-label-speed" title="${speed === null ? "Aktuální rychlost není dostupná" : "Aktuální rychlost"}">${speed === null ? "—" : escape(speed)}<span class="vm-label-unit"> km/h</span></span>`;
+}
+export function markerName(v) { return [v.label, v.type.label, movementText(v), currentSpeed(v) === null ? "" : `${currentSpeed(v)} km/h`, connectionName(v)].filter(Boolean).join(", "); }
 export function legendHTML() {
   return `<h2>Ikony a stavy</h2><p>Dodaná sada OpenArt. Popelářský vůz, ramenový nakladač RAM a hákový nosič mají vlastní dodané siluety; typ určuje doložená evidence. Přívěs, neurčená a obecná speciální technika používají neutrální zkratku, protože v sadě nemají vlastní ikonu.</p><div class="vm-legend-art">${Object.entries(TYPES).map(([key, t]) => `<div>${artwork({ key, ...t })}<span>${escape(t.label)}</span></div>`).join("")}</div>
     <p>Typ vychází z doložené evidence. Neurčená nástavba zůstává označená otazníkem.</p><p><span class="vm-connection vm-online" aria-hidden="true"></span> Online · <span class="vm-connection vm-offline" aria-hidden="true"></span> Offline</p>`;

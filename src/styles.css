@@ -53798,6 +53798,11 @@ body.collection-driver-blackview-simulator-active #app {
   100% { transform:scale(1.7); opacity:0; }
 }
 .vm .vm-label { background:#fafcfd; color:#1b262d; border:1px solid #71838e; border-radius:7px; font-size:14px; line-height:18px; font-weight:700; padding:3px 7px; }
+/* Approved variant 2: plate and current speed share one measured pill. */
+.vm .vm-label { font-family:var(--theme-font-main, "Quicksand"),sans-serif; }
+.vm .vm-label-plate,.vm .vm-label-speed { display:inline-block; vertical-align:baseline; line-height:inherit; }
+.vm .vm-label-speed { margin-left:7px; padding-left:7px; border-left:1px solid #a7b2b8; font-variant-numeric:tabular-nums; }
+.vm .vm-label-unit { font-size:11px; font-weight:600; }
 .vm .vm-label.is-selected { border-color:#4f6718; outline:1px solid #b4e52b; }
 @media(prefers-reduced-motion:reduce) {
   .vm .vm-marker.has-current-motion::after { animation:none; opacity:0; }
