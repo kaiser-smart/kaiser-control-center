@@ -340,3 +340,27 @@ test('jobs progress remains visible with empty filters and cannot include anothe
  assert.equal(data.rows.length,0);assert.equal(data.stats.total,0);
  assert.deepEqual({...data.importProgress},{total:3,lastReceivedAt:'2026-10-26T01:00:00Z',itemsPending:3});db.sqlite.close();
 });
+
+
+test('Job items: paging beyond 100, company isolation and explicit scoped refresh permission',async()=>{
+ const db=fixtureDb(),env={...environment(db),AUTH_MODE:'mock'};
+ const user={id:'items-user',role:'admin',permissions:[]};env.AUTH_USERS_JSON=JSON.stringify([user]);
+ db.sqlite.prepare('INSERT INTO vistos_company_access VALUES(?,?,?)').run(user.id,'test','1');
+ const cookie=(await createSessionCookie(env,user)).split(';')[0];
+ const call=(action,id='parent',query='',method='GET',body={})=>handleVistosRequest({env,params:{id},request:new Request('https://fixture.invalid/api/jobs/'+id+query,{method,headers:{Cookie:cookie},...(method==='POST'?{body:JSON.stringify(body)}:{})})},action);
+ const insert=db.sqlite.prepare("INSERT INTO vistos_source_records(id,installation,entity,source_id,company_id,parent_id,number,fields_json,fingerprint,received_at,mapping_version) VALUES(?,'test',?,?,?,?,?,'{}','fp','2026-10-26T01:00:00Z','test')");
+ insert.run('parent','ServiceList','1','1',null,'JOB');insert.run('foreign','ServiceList','2','2',null,'OTHER');
+ for(let i=0;i<101;i++)insert.run('item-'+i,'ServiceListItem',String(i+1),'1','1','ITEM');
+ insert.run('foreign-item','ServiceListItem','102','2','1','SECRET');
+ const first=await (await call('job-detail')).json(),second=await (await call('job-detail','parent','?itemsPage=2')).json();
+ assert.equal(first.items.length,100);assert.equal(first.itemsPagination.total,101);assert.equal(first.itemsPagination.hasNext,true);
+ assert.equal(second.items.length,1);assert.equal(second.itemsPagination.hasNext,false);assert.ok(!first.items.some(i=>i.id==='foreign-item'));
+ assert.equal((await call('job-detail','parent','?itemsPage=-1')).status,400);
+ assert.equal((await call('job-items-refresh','parent','','POST')).status,403);
+ user.permissions.push({moduleId:'integrations',action:'manage',allowed:true});env.AUTH_USERS_JSON=JSON.stringify([user]);
+ assert.equal((await call('job-items-refresh','foreign','','POST')).status,404);
+ assert.equal((await call('job-items-refresh')).status,405);
+ // Valid permission reaches the existing sync gate; caller cannot redirect to finance or a different parent.
+ env.VISTOS_READ_SYNC_ENABLED='false';const disabled=await call('job-items-refresh','parent','','POST',{entity:'Payment',mode:'parent:2'});
+ assert.equal(disabled.status,503);assert.equal((await disabled.json()).code,'vistos_read_sync_disabled');db.sqlite.close();
+});

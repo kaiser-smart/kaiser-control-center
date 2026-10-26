@@ -10,7 +10,7 @@ const root=path.resolve(import.meta.dirname,'..'),output=process.env.VISTOS_TEST
 const html=`<!doctype html><html lang="cs"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/src/vistos-workspace.css"><style>body{margin:0;padding:16px;font:16px sans-serif;box-sizing:border-box}*{box-sizing:border-box}</style><main></main><script type="module">
 import {vistosWorkspaceSection,mountVistosWorkspace} from '/src/components/VistosWorkspace.js';
 const app=document.querySelector('main');app.innerHTML=vistosWorkspaceSection();
-mountVistosWorkspace(app,{user:{role:'admin'},apiJson:async url=>{const r=await fetch(url);const b=await r.json();if(!r.ok)throw new Error(b.error);return b;}});
+mountVistosWorkspace(app,{user:{role:'admin'},apiJson:async (url,options)=>{const r=await fetch(url,options);const b=await r.json();if(!r.ok)throw new Error(b.error);return b;}});
 </script></html>`;
 const server=createServer(async(req,res)=>{
  const url=new URL(req.url,'http://localhost');
@@ -27,13 +27,14 @@ const payload=rows=>({rows,stats:{total:rows.length,inProgress:0,unassigned:rows
 try{
  await mkdir(output,{recursive:true});browser=await webkit.launch({headless:true});
  for(const width of [390,1440]){
-  const context=await browser.newContext({viewport:{width,height:900},serviceWorkers:'block'});let fail=true,empty=false,slowRelease;
+  const context=await browser.newContext({viewport:{width,height:900},serviceWorkers:'block'});let fail=true,empty=false,slowRelease,detailReads=0,itemPosts=0,itemsLoaded=false,manage=true;
   await context.route('**/*',async route=>{
    const url=new URL(route.request().url());if(url.origin!==origin)return route.abort();
    if(!url.pathname.startsWith('/api/'))return route.continue();
+   if(url.pathname==='/api/jobs/fixture-1/items/refresh'&&route.request().method()==='POST'){itemPosts++;itemsLoaded=true;return route.fulfill({json:{status:'compared'}});}
    if(route.request().method()!=='GET')throw Error('unexpected mutation');
    if(url.pathname==='/api/jobs/preferences')return route.fulfill({json:{columns:[]}});
-   if(url.pathname==='/api/jobs/fixture-1')return route.fulfill({json:{job:record,items:[],itemsAvailable:false,rights:{}}});
+   if(url.pathname==='/api/jobs/fixture-1'){detailReads++;const second=url.searchParams.get('itemsPage')==='2';return route.fulfill({json:{job:record,items:itemsLoaded?[{fields:{Name:field(second?'Poslední položka':'Čištění <img src=x onerror=alert(1)>')}}]:[],itemsAvailable:true,itemsPartial:!itemsLoaded,itemsPagination:{page:second?2:1,total:itemsLoaded?101:0,hasNext:itemsLoaded&&!second},rights:{manage}}});}
    if(url.pathname==='/api/jobs'){
     const search=url.searchParams.get('q');if(search==='slow')await new Promise(r=>{slowRelease=r;});
     return route.fulfill({status:fail?403:200,json:fail?{error:'Chybí potvrzený firemní rozsah přístupu.'}:payload(empty||search==='none'?[]:[{...record,number:search==='fast'?'ZL-FAST':record.number}])});
@@ -51,10 +52,21 @@ try{
   assert.equal(await page.locator('.vj-load-error').count(),0);assert.ok(await page.locator('.vj-quality-mark').count()>0);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   const detail=page.getByRole('button',{name:'Detail ZL-TEST-1',exact:true}).filter({visible:true}).first();await detail.click();
-  await page.getByRole('dialog').waitFor();await page.getByRole('button',{name:'Všechna data',exact:true}).click();
+  await page.getByRole('dialog').waitFor();
+  // Items are refreshed on tab entry, without importing merely by viewing.
+  itemsLoaded=true;await page.getByRole('button',{name:'Položky',exact:true}).click();
+  await page.getByText('Načteno položek: 101',{exact:true}).waitFor();assert.equal(itemPosts,0);assert.ok(detailReads>=2);
+  assert.equal(await page.locator('dialog img').count(),0);
+  await page.getByRole('button',{name:'Další položky',exact:true}).click();await page.getByText('Test: Poslední položka',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Načíst položky z Vistosu',exact:true}).click();await page.getByText('Položky byly porovnány s Vistosem.',{exact:true}).waitFor();assert.equal(itemPosts,1);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await page.screenshot({path:path.join(output,`items-${width}.png`)});
+  manage=false;await page.getByRole('button',{name:'Obnovit zobrazení položek',exact:true}).click();await page.getByText('Test: Poslední položka',{exact:true}).waitFor();assert.equal(await page.locator('[data-items-import]').count(),0);
+  await page.getByRole('button',{name:'Všechna data',exact:true}).click();
   assert.equal(await page.locator('dialog img').count(),0);assert.ok((await page.locator('dialog').textContent()).includes('<img src=x'));
   await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'detached'});
   assert.equal(await page.locator('button:focus').getAttribute('data-vj-action'),'detail');
+  await page.getByRole('button',{name:'Položky ZL-TEST-1',exact:true}).filter({visible:true}).first().click();await page.getByText('Načteno položek: 101',{exact:true}).waitFor();await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'detached'});
   // A failed new filter must not keep showing the old result under the new filter.
   fail=true;await page.getByLabel('Hledání',{exact:true}).fill('error');await page.getByRole('alert').waitFor();
   assert.equal(await page.locator('.vj-kpis,.vj-mobile-cards,.vj-table').count(),0);
@@ -66,7 +78,7 @@ try{
   await page.getByLabel('Hledání',{exact:true}).fill('fast');await page.getByRole('button',{name:'Detail ZL-FAST',exact:true}).filter({visible:true}).first().waitFor();
   const response=page.waitForResponse(r=>new URL(r.url()).searchParams.get('q')==='slow');slowRelease();await response;
   await page.waitForLoadState('networkidle');assert.ok(await page.getByRole('button',{name:'Detail ZL-FAST',exact:true}).filter({visible:true}).first().isVisible());
-  await page.screenshot({path:path.join(output,`loaded-${width}.png`)});checks.push({width,errorsDistinctFromEmpty:true,retry:true,filterFailureClearsStaleRows:true,escapeAndFocus:true,safeSourceText:true,noOverflow:true,staleResponseIgnored:true});await context.close();
+  await page.screenshot({path:path.join(output,`loaded-${width}.png`)});checks.push({width,errorsDistinctFromEmpty:true,retry:true,filterFailureClearsStaleRows:true,escapeAndFocus:true,safeSourceText:true,noOverflow:true,staleResponseIgnored:true,itemsRefreshOnEntry:true,itemsPageTwo:true,explicitImportOnly:true,itemsPermission:true,directItemsButton:true});await context.close();
  }
  assert.deepEqual(errors,[]);await writeFile(path.join(output,'results.json'),JSON.stringify({synthetic:true,productionVerified:false,checks},null,2));console.log(JSON.stringify({synthetic:true,checks}));
 }finally{await browser?.close();await new Promise(r=>server.close(r));}

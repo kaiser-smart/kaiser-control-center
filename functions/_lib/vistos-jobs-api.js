@@ -132,11 +132,20 @@ export async function handleVistosRequest(context,action) {
       const row=await scope.db.prepare('SELECT columns_json FROM vistos_user_preferences WHERE user_id=?').bind(scope.user.id).first();return json({columns:JSON.parse(row?.columns_json||'[]')});
     }
     const job=await readScopedRecord(scope,params.id);
+    if(action==='job-items-refresh') {
+      if(!mutating)throw integrationError('method_not_allowed',405);
+      if(!scope.rights.manage)throw integrationError('integration_manage_required',403);
+      return json(await syncVistosBatch(env,{installation:scope.installation,entity:'ServiceListItem',mode:'parent:'+job.source_id,actor:scope.user.id}));
+    }
     if(action==='job-detail') {
-      const {results:items=[]}=await scope.db.prepare(`SELECT * FROM vistos_source_records WHERE entity='ServiceListItem' AND installation=? AND parent_id=? AND company_id IN (${scope.companies.map(()=>'?')}) ORDER BY source_id LIMIT 101`).bind(scope.installation,job.source_id,...scope.companies).all();
+      const page=Number(url.searchParams.get('itemsPage')||1),pageSize=100;
+      if(!Number.isSafeInteger(page)||page<1||page>100000)throw integrationError('invalid_page',400);
+      const itemScope="entity='ServiceListItem' AND installation=? AND parent_id=? AND company_id IN ("+scope.companies.map(()=>'?')+")";
+      const total=(await scope.db.prepare(`SELECT COUNT(*) AS total FROM vistos_source_records WHERE ${itemScope}`).bind(scope.installation,job.source_id,...scope.companies).first()).total;
+      const {results:items=[]}=await scope.db.prepare(`SELECT * FROM vistos_source_records WHERE ${itemScope} ORDER BY source_id,id LIMIT ? OFFSET ?`).bind(scope.installation,job.source_id,...scope.companies,pageSize,(page-1)*pageSize).all();
       const contract=await loadIntegrationContract(scope.db,scope.installation);
       const coverage=await scope.db.prepare("SELECT status,comparison_json FROM vistos_sync_checkpoints WHERE installation=? AND entity='ServiceListItem' AND mode=?").bind(scope.installation,'parent:'+job.source_id).first();
-      return json({job:publicSourceRecord(job,scope.rights),items:items.slice(0,100).map(r=>publicSourceRecord(r,scope.rights)),itemsPartial:items.length>100||coverage?.status!=='compared'||JSON.parse(coverage?.comparison_json||'null')?.parentFingerprint!==job.fingerprint,
+      return json({job:publicSourceRecord(job,scope.rights),items:items.map(r=>publicSourceRecord(r,scope.rights)),itemsPagination:{page,pageSize,total,hasNext:page*pageSize<total},itemsPartial:coverage?.status!=='compared'||JSON.parse(coverage?.comparison_json||'null')?.parentFingerprint!==job.fingerprint,
         itemsAvailable:contract.entities?.ServiceListItem?.readVerified===true&&Boolean(contract.entities.ServiceListItem.parentField),attachmentsAvailable:false,rights:scope.rights});
     }
     if(action==='job-history') {
