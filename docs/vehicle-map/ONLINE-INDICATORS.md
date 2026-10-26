@@ -1,0 +1,14 @@
+# Online / offline místo textového stáří GPS
+
+Úprava na výslovný požadavek uživatele 26. 10. 2026. Od verze 0.1.870 rozhraní nezobrazuje „Stará poloha“, relativní stáří GPS ani čas poslední GPS v detailu a seznamu. Tyto údaje nahrazuje pouze zelený/oranžový bod s přístupným názvem a tooltipem Online/Offline. Legenda a souhrny používají stejné názvy. Časy skutečných událostí a období historie zůstávají zachované.
+
+- Online: existující normalizace poskytuje platnou polohu, nejde o minulý náhradní vzorek, kategorie není stale/missing a čas je ověřený. Používá se stávající limit stáří z API (`staleAfterSeconds`, výchozí 1800 s), žádná nová GPS klasifikace ani síťový ping.
+- Offline: starý, chybějící, neověřený či náhradní minulý vzorek. Zobrazení nezaměňuje chybějící data za online.
+- Zelená `#75BD25`, oranžová `#F5A623`; pouze indikátor, žádná změna obrázků vozidel.
+- Stávající filtr se starým interním klíčem `stale` je ve workspace označen Offline a zahrnuje všechny oranžové body včetně vozidel bez polohy. Původní normalizace, ostatní filtry a GPS kontrakty se nemění.
+- Jede/Stojí a skutečná rychlost zůstávají. Výběr, shlukování, bílé SPZ, zeměpisné kotvy a hranice 120 s pro pulz vybraného jedoucího vozidla jsou zachované. Mimořádná událost má samostatný původní vykřičník, nepřebarvuje GPS indikátor.
+- Puntíky se aktualizují také při stárnutí vzorku bez nového načtení. Neměnný obrázkový DOM zůstává zachovaný.
+
+Testy: jednotkové testy online/offline pro pohyb, stání, starou/chybějící/neověřenou/náhradní polohu; browser kontrola absence textového stáří, skutečných CSS barev, Offline filtru a automatického přechodu po zestárnutí. Existující regrese ověřují shluky, historii, mobile viewporty a autentizaci. Cílená sada skutečného Google SDK ověřuje zachování čitelnosti SPZ, kotvy a pulzu. Produkční výsledek, screenshoty a logy jsou v lokálním přejímacím reportu, nejsou produkčními GPS přidávanými do Gitu.
+
+Bez změny API, DB, oprávnění, ukládání GPS nebo ostatních modulů. Fyzická instalace PWA není browser testem doložena.
