@@ -14,8 +14,14 @@
   background:none; background-image:none; border:0; box-shadow:none; filter:none;
   border-radius:0; padding:0; color:#243128;
 }
-#app :is(.module-icon,.module-detail__icon,.ui-pilot-hero__icon,.module-launcher-icon) svg.smart-icon { width:28px; height:28px; }
-#app :is(.ui-pilot-nav__icon,.mobile-bottom-link) svg.smart-icon { width:22px; height:22px; }
+/* Larger primary symbols fit the existing 40–60px icon slots without growing cards. */
+#app :is(.module-icon,.module-detail__icon,.ui-pilot-hero__icon,.module-launcher-icon,.quick-absence-type__icon) svg.smart-icon { width:36px; height:36px; }
+#app .ui-pilot-nav__icon svg.smart-icon { width:22px; height:22px; }
+#app .mobile-bottom-link svg.smart-icon { width:28px; height:28px; }
+#app .mobile-bottom-link .ui-pilot-nav__icon { width:28px; height:28px; }
+@media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
+  #app :is(.module-icon,.module-detail__icon,.ui-pilot-hero__icon,.module-launcher-icon,.quick-absence-type__icon) svg.smart-icon { width:32px; height:32px; }
+}
 #app :is(.module-launcher-arrow,button:not(.mobile-bottom-link),.feedback-workflow-back) > svg.smart-icon { width:20px; height:20px; }
 #app .mobile-home-link > svg.smart-icon { width:26px; height:26px; }
 #app .mobile-vehicle-back { gap:8px; }
