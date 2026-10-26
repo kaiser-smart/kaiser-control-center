@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.885"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.886"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Originální k. z loga Kaiser", text: "Ikona záložky i aplikace na ploše používá původní malé k a tečku přímo z dodaného loga Kaiser." },
   { title: "K. také na ploše telefonu", text: "Ikona při přidání aplikace na plochu používá stejné K. písmem Quicksand jako záložka. Doplněny ikony pro iPhone i Android." },
   { title: "Použitelný seznam vozidel na mobilu", text: "Seznam se posouvá společně s filtry a stránkováním, takže jsou dostupná všechna vozidla i na nízkém displeji. Změna filtru vrací první stránku, návrat z detailu zachová místo v seznamu. Zavření detailu je dostupné i naležato." },
   { title: "Poloha vedle rychlosti", text: "V detailu vozidla je adresa s původní ikonkou polohy vedle rychlosti. Zelený nebo červený indikátor GPS je u SPZ v záhlaví, takže nezabírá samostatnou buňku." },
