@@ -13,10 +13,13 @@ export function fleetStatsHTML(vehicles, analytics, analyticsError) {
 export function driverHTML(vehicle) {
   return `<header><h2>Řidič dne</h2></header><div class="vm-driver-profile"><span class="vm-driver-avatar">${SmartIcon('users')}</span><div><strong>${vehicle?.assignedDriver ? escape(vehicle.assignedDriver) : 'Přiřazení neověřeno'}</strong><p>${vehicle?.assignedDriver ? 'Přiřazený ve Vozovém parku' : 'Pro dnešní směnu chybí ověřený údaj.'}</p></div></div><div class="vm-telemetry-label"><span>Skóre bezpečné jízdy</span><span>—</span></div><div class="vm-meter-unavailable" role="img" aria-label="Skóre bezpečné jízdy není dostupné"></div><p class="vm-data-note">${vehicle?.assignedDriver ? 'Přiřazení nepotvrzuje, kdo právě řídí. ' : ''}Hodnocení řidiče není dostupné.</p>`;
 }
-export function telemetryHTML(v) {
+export function vehiclePictureHTML(v) {
   const illustrations = {tanker:'man-cisterna-mala.png',collection_truck:'mercedes-popelarske.png',skip_loader:'mercedes-ramenac-v2.png',container_truck:'daf-abroll.png'};
   const file = illustrations[v.type.key];
-  return `<div class="vm-vehicle-visual">${file ? `<img src="vehicles/icons/${file}" alt="Ilustrační zobrazení typu ${escape(v.type.label)}" decoding="async">` : artwork(v.type, 'detail')}<dl><div><dt>Celkem najeto</dt><dd>${v.odometer === null ? '—' : fmt(v.odometer) + ' km'}</dd></div><div><dt>Napětí</dt><dd>${v.voltage === null ? '—' : fmt(v.voltage) + ' V'}</dd></div></dl></div><div class="vm-telemetry-label"><span>Palivo</span><span>Údaj není dostupný</span></div><div class="vm-meter-unavailable" role="img" aria-label="Stav paliva není dostupný"></div><div class="vm-telemetry-label"><span>AdBlue</span><span>Údaj není dostupný</span></div><div class="vm-meter-unavailable" role="img" aria-label="Stav AdBlue není dostupný"></div>`;
+  return file ? `<img class="vm-vehicle-picture" src="vehicles/icons/${file}" alt="Ilustrační zobrazení typu ${escape(v.type.label)}" decoding="async">` : artwork(v.type, 'detail');
+}
+export function telemetryHTML(v) {
+  return `<div class="vm-vehicle-visual">${vehiclePictureHTML(v)}<dl><div><dt>Celkem najeto</dt><dd>${v.odometer === null ? '—' : fmt(v.odometer) + ' km'}</dd></div><div><dt>Napětí</dt><dd>${v.voltage === null ? '—' : fmt(v.voltage) + ' V'}</dd></div></dl></div><div class="vm-telemetry-label"><span>Palivo</span><span>Údaj není dostupný</span></div><div class="vm-meter-unavailable" role="img" aria-label="Stav paliva není dostupný"></div><div class="vm-telemetry-label"><span>AdBlue</span><span>Údaj není dostupný</span></div><div class="vm-meter-unavailable" role="img" aria-label="Stav AdBlue není dostupný"></div>`;
 }
 export function activityHTML(vehicles) {
   const latest = vehicles.filter(v => v.point && v.lastGpsAt).sort((a,b) => Date.parse(b.lastGpsAt) - Date.parse(a.lastGpsAt)).slice(0,12);

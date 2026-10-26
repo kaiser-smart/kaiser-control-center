@@ -1,4 +1,4 @@
-import { fleetStatsHTML, driverHTML, telemetryHTML, activityHTML, overviewHTML, mapLegendHTML } from "./dashboard.js";
+import { fleetStatsHTML, driverHTML, telemetryHTML, vehiclePictureHTML, activityHTML, overviewHTML, mapLegendHTML } from "./dashboard.js";
 import { reconcile, normalize, filterVehicles, CATEGORIES, ageText, gpsTime, statusText, validateSample } from "./model.js";
 import { escape, artwork, artworkFilterHTML, legendHTML } from "./presentation.js";
 import { SmartIcon } from "../components/icons/SmartIcon.js";
@@ -101,7 +101,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   function detailHTML(v) {
     const field = (label, value) => `<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`;
     const historical = !v.point || v.previousPoint || v.age > 120;
-    return `<header class="vm-detail-head"><div class="vm-detail-identity">${artwork(v.type, "detail")}<div><h2>${escape(v.name || v.label)}</h2><p>${escape(v.name ? `${v.label} · ${v.type.label}` : v.type.label)}</p><p class="vm-state vm-state--${v.category}"><i aria-hidden="true"></i>${escape(statusText(v))}</p></div></div><button type="button" data-vm-back aria-label="Zavřít detail vozidla" title="Zavřít detail">${SmartIcon("close")}</button></header>
+    return `<header class="vm-detail-head"><div class="vm-detail-identity">${vehiclePictureHTML(v)}<div><h2>${escape(v.name || v.label)}</h2><p>${escape(v.name ? `${v.label} · ${v.type.label}` : v.type.label)}</p><p class="vm-state vm-state--${v.category}"><i aria-hidden="true"></i>${escape(statusText(v))}</p></div></div><button type="button" data-vm-back aria-label="Zavřít detail vozidla" title="Zavřít detail">${SmartIcon("close")}</button></header>
       <div class="vm-detail-scroll">
       ${v.emergency ? '<p class="vm-emergency">Hlášená mimořádná událost</p>' : ""}
       ${v.previousPoint ? `<p class="vm-old-time">Poslední známá poloha · ${escape(v.reason)}</p>` : !v.point ? `<p>${escape(v.reason)}</p>` : ""}
@@ -111,7 +111,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
       ${v.assignedDriver ? `<p class="vm-driver">${SmartIcon("users")}<span>Přiřazený řidič: ${escape(v.assignedDriver)}</span></p>` : ""}
       <div class="vm-detail-actions"><button type="button" class="vm-primary" data-vm-history-show ${!v.historyKey ? "disabled" : ""}>${SmartIcon("routes")}Zobrazit trasu</button><button type="button" data-vm-history-toggle aria-expanded="${historyState.open}" ${!v.historyKey ? "disabled" : ""}>${SmartIcon("reports")}Historie jízd</button></div>
 
-      <details class="vm-telemetry-box" ${isMobileViewport() ? "" : "open"}><summary>Obrázek a telemetrie</summary>${telemetryHTML(v)}</details>
+      <details class="vm-telemetry-box" ><summary>Obrázek a telemetrie</summary>${telemetryHTML(v)}</details>
       <details class="vm-history" ${historyState.open ? "open" : ""}><summary>Období a GPS body trasy</summary><label>Období <select data-vm-history-range><option value="24h" ${historyState.range === "24h" ? "selected" : ""}>24 hodin</option><option value="7d" ${historyState.range === "7d" ? "selected" : ""}>7 dní</option><option value="today" ${historyState.range === "today" ? "selected" : ""}>Dnes</option></select></label><button type="button" data-vm-history-load ${!v.historyKey ? "disabled" : ""}>Načíst historii</button><p data-vm-history-status role="status">${escape(historyState.text || "Trasa z uložených GPS bodů za zvolené období.")}</p></details>
       <details class="vm-more"><summary>Další údaje a ovládání</summary><div class="vm-detail-secondary"><button type="button" data-vm-center ${!v.point || !map ? "disabled" : ""}>${SmartIcon("navigate")}Vystředit vozidlo</button>${selectedGroup.length ? `<button type="button" data-vm-selected-group>Vozidla ve skupině (${selectedGroup.length})</button>` : ""}</div><dl>${field("Typ", v.type.label)}${field("SPZ", v.plate || "Neověřeno")}${field("Řidič právě ve vozidle", "Neověřeno")}${field("Zapalování", v.ignition === null ? "Neověřeno" : v.ignition ? "Zapnuto" : "Vypnuto")}${v.internal ? field("Interní číslo", v.internal) : ""}${v.odometer !== null ? field("Tachometr", `${v.odometer} km`) : ""}${v.voltage !== null ? field("Napětí", `${v.voltage} V`) : ""}${historical ? field("Historický provozní stav", CATEGORIES[v.movement]) : ""}${field("Jednoznačná identita", v.id)}</dl></details></div>`;
   }
@@ -129,7 +129,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
       const signature = JSON.stringify([v, selectedGroup.map((v) => v.id), !!map, state.groupIds.length, historyState, isMobileViewport()]);
       if (signature !== detailSignature) {
         const sameVehicle = detailVehicleId === v.id;
-        const oldScroll = sameVehicle ? $(".vm-detail-scroll")?.scrollTop || 0 : 0, moreOpen = sameVehicle && $(".vm-more")?.open, telemetryOpen = sameVehicle && detailMobile === isMobileViewport() ? $(".vm-telemetry-box")?.open : !isMobileViewport();
+        const oldScroll = sameVehicle ? $(".vm-detail-scroll")?.scrollTop || 0 : 0, moreOpen = sameVehicle && $(".vm-more")?.open, telemetryOpen = sameVehicle && detailMobile === isMobileViewport() ? $(".vm-telemetry-box")?.open : false;
         const active = document.activeElement;
         const focusAttribute = sameVehicle && $(".vm-panel-detail").contains(active)
           ? Array.from(active.attributes).find((attribute) => attribute.name.startsWith("data-vm-"))?.name : null;

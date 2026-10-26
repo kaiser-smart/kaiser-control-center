@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.858"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.859"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Poloha vozidel: dispečerské pracoviště", text: "Tmavá mapa ČR s limetkovým akcentem, seznam a hledání vozidel, detail s obrázkem, GPS hlášení a denní statistika. Telefon má vlastní přepínání mapy, vozidel a přehledu. Čtení historie správně rozlišuje databázi GPS bodů a audit synchronizací." },
   { title: "Čitelnější ikony", text: "Ikony Nepřítomnosti a modulů jsou větší: 32 px na mobilu a 36 px na desktopu, ve spodní navigaci 28 px. Velikost karet a délka stránky zůstávají stejné." },
   { title: "Ikony podle schválené předlohy", text: "Schválená šestice a 63 nových ikon z OpenArt tvoří jednotnou vzdušnou SVG sadu. Samostatné ikony se správně načítají a návrat ze seznamu vozidel má samostatnou šipku." },
   { title: "Zakázky: ověřené zdrojové vazby", text: "Import rozlišuje výstavce a uživatele, používá skutečný číselník vozidel a zachovává názvy zdrojových vazeb. Správcovská kontrola ověřuje filtry a velikost detailů před načtením historie." },

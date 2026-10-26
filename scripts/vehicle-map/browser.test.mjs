@@ -31,6 +31,7 @@ try{
   assert(await page.locator('.vm-map-legend').isVisible());
   await page.locator('.vm-event-list [data-vm-select]').first().click();
   assert(await page.locator('.vm-panel-detail').isVisible());
+  await page.locator('.vm-telemetry-box summary').click();
   assert.match(await page.locator('.vm-panel-detail').innerText(),/Palivo[\s\S]*Údaj není dostupný[\s\S]*AdBlue/);
   await page.locator('[data-vm-back]').click();
  });

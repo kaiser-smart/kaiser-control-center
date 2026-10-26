@@ -53601,10 +53601,10 @@ body.collection-driver-blackview-simulator-active #app {
 }
 .vm-detail-scroll { display:flex; flex-direction:column; }
 .vm-detail-scroll > * { flex-shrink:0; }
-.vm-telemetry-box { order:-1; }
+.vm-telemetry-box { order:0; border-top:1px solid var(--vm-border); margin-top:10px; }
 .vm-telemetry-box > summary { font-size:12px; }
 @media (min-width:721px) and (min-height:501px), (min-width:1001px) {
- .vm-telemetry-box > summary { display:none; }
+ .vm-telemetry-box > summary { display:block; }
  .vm-gauge > div { gap:1px; }
  .vm-gauge strong { line-height:1.2; }
 }
@@ -53622,4 +53622,16 @@ body.collection-driver-blackview-simulator-active #app {
  .vm .vm-detail-actions button { min-height:44px; }
  .vm-page .mobile-header,.vm-page .mobile-bottom-nav { background:#080f14; color:#e7ecee; border-color:#28363e; }
  .vm-page .mobile-header :is(a,button,strong),.vm-page .mobile-bottom-nav :is(a,button,span) { color:#e7ecee; }
+}
+@media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
+ #app .vm-page.ui-system-v2 .mobile-header,#app .vm-page.ui-system-v2 .mobile-bottom-nav { background:#080f14!important; border-color:#28363e!important; color:#e7ecee!important; }
+ #app .vm-page .mobile-header :is(a,button,strong,span),#app .vm-page .mobile-bottom-nav :is(a,button,span,strong) { color:#e7ecee!important; }
+}
+
+.vm-detail-identity .vm-vehicle-picture { width:78px; height:58px; object-fit:contain; flex-shrink:0; }
+.vm .vm-detail-identity > .vm-art { display:inline-flex; width:56px; }
+.vm-insights .vm-detail-identity h2 { font-size:14px; }
+.vm-insights .vm-detail-metrics { margin-top:0!important; }
+@media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
+ .vm-detail-identity .vm-vehicle-picture { width:58px; height:44px; }
 }
