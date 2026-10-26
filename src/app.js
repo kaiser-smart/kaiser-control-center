@@ -11655,10 +11655,15 @@ function employeeCardContent(employeeId, user) {
         <div class="employee-card-header__actions">
           <a class="secondary-link" href="${routeHref(EMPLOYEE_CARD_ROUTE_PREFIX)}" data-link>Zpět na zaměstnance</a>
           ${canEdit ? `<button class="primary-action" type="button" data-employee-edit-open>Upravit</button>` : ""}
+        </div>
+        <div class="employee-card-header__toolbar">
+          <label class="employee-card-header__switcher" for="employee-card-switcher">
+            <span id="employee-card-switcher-label">Přejít na zaměstnance</span>
+            <select id="employee-card-switcher" class="employee-card-switcher" data-employee-card-select aria-labelledby="employee-card-switcher-label">
+              ${employeeOptionList(employee.id)}
+            </select>
+          </label>
           ${employeeAddButton(user, "employee-add-button--compact")}
-          <select class="employee-card-switcher" data-employee-card-select aria-label="Vybrat zaměstnance">
-            ${employeeOptionList(employee.id)}
-          </select>
         </div>
       </div>
 
