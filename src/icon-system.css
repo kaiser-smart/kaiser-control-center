@@ -16,18 +16,21 @@
 }
 /* Larger primary symbols fit the existing 40–60px icon slots without growing cards. */
 #app :is(.module-icon,.module-detail__icon,.ui-pilot-hero__icon,.module-launcher-icon,.quick-absence-type__icon) svg.smart-icon { width:36px; height:36px; }
+#app .module-launcher-icon svg.smart-icon { width:44px; height:44px; }
 #app .ui-pilot-nav__icon svg.smart-icon { width:22px; height:22px; }
 #app .mobile-bottom-link svg.smart-icon { width:28px; height:28px; }
 #app .mobile-bottom-link .ui-pilot-nav__icon { width:28px; height:28px; }
 @media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
   #app :is(.module-icon,.module-detail__icon,.ui-pilot-hero__icon,.module-launcher-icon,.quick-absence-type__icon) svg.smart-icon { width:32px; height:32px; }
+  #app .module-launcher-icon svg.smart-icon { width:40px; height:40px; }
 }
 #app :is(.module-launcher-arrow,button:not(.mobile-bottom-link),.feedback-workflow-back) > svg.smart-icon { width:20px; height:20px; }
-#app .mobile-home-link > svg.smart-icon { width:26px; height:26px; }
+#app .mobile-home-link > svg.smart-icon { width:34px; height:34px; }
 #app .mobile-vehicle-back { gap:8px; }
 #app .mobile-vehicle-back > svg.smart-icon { width:20px; height:20px; }
 #app .smart-brand-name { display:inline-flex; align-items:center; gap:8px; }
 #app .smart-brand-name svg.smart-icon { width:24px; height:24px; }
+#app .module-launcher-toolbar .smart-brand-name svg.smart-icon { width:36px; height:36px; }
 #app .ui-pilot-brand__copy .smart-brand-name { gap:5px; }
 #app .ui-pilot-brand__copy .smart-brand-name svg.smart-icon { width:20px; height:20px; }
 #app :is(.ai-assistant-launcher__icon,.ai-voice-start-button__icon) { display:inline-flex; align-items:center; width:24px; height:24px; }

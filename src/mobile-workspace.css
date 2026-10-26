@@ -288,7 +288,7 @@
 @media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
   #app .ui-system-v2 :is(.module-panel,.module-settings-panel,.notification-center,.access-form,.system-check-card,.self-repair-overview,.self-repair-list,.self-repair-detail,.absence-detail-panel,.fuel-analytics,.rcs-platform-panel) { min-width:0; padding:12px; margin:0 0 8px; border-radius:12px; background:#fff; border:1px solid #d7dfe2; box-shadow:none; }
   #app .ui-system-v2 :is(.fleet-section,.collection-routes-panel,.receivables-panel,.absence-panel,.users-panel,.driver-report-click-entry,.ds-plus-triage-header,.tyres-panel,.quick-absence-card) { background:#fff; border:1px solid #d7dfe2; box-shadow:none; border-radius:12px; }
-  #app .ui-system-v2 :is(.primary-action,.primary-link,.driver-report-pitstop-submit,.sarlota-absence-voice-button) { background:#75bd25; border-color:#75bd25; color:#fff; border-radius:10px; box-shadow:none; font-size:14px; padding:10px 12px; }
+  #app .ui-system-v2 :is(.primary-action,.primary-link,.driver-report-pitstop-submit,.sarlota-absence-voice-button) { background:#75bd25; border-color:#75bd25; color:#18310a; border-radius:10px; box-shadow:none; font-size:14px; padding:10px 12px; }
   #app .ui-system-v2 :is(.secondary-action,.secondary-link,.text-action) { border-radius:10px; box-shadow:none; font-size:13px; padding:8px 10px; }
   #app .ui-system-v2 :is(.access-form-grid,.access-roles-grid,.absence-workspace,.absence-panels,.self-repair-workspace,.notification-filters,.customer-message-filters,.self-repair-filters,.fuel-filters) { display:grid; grid-template-columns:minmax(0,1fr); gap:8px; }
   #app .ui-system-v2 :is(.absence-dashboard,.absence-side-rail,.system-check-grid) { display:block; gap:8px; }

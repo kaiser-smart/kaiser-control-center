@@ -565,7 +565,7 @@ function fleetVehicleFromVistos(vehicle = {}, tcarsVehicle = null) {
     externalVehicleId: vistosVehicleId,
     internalNumber: name,
     licensePlate: registrationPlate || cleanString(tcarsVehicle?.licensePlate || tcarsVehicle?.tcarsLicensePlate),
-    vehicleType: cleanString(vehicle.category || tcarsVehicle?.vehicleType || "Vozidlo"),
+    vehicleType: [vehicle.category, tcarsVehicle?.vehicleType].map(cleanString).find(value => value && !/^\d+$/.test(value)) || "Typ neuveden",
     brand: "",
     model: name,
     vin: cleanString(vehicle.vinMasked || tcarsVehicle?.vin),

@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.859"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.861"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -21,6 +21,9 @@ export const versionInfo = {
 
 export const versionNews = [
   { title: "Poloha vozidel: dispečerské pracoviště", text: "Tmavá mapa ČR s limetkovým akcentem, seznam a hledání vozidel, detail s obrázkem, GPS hlášení a denní statistika. Telefon má vlastní přepínání mapy, vozidel a přehledu. Čtení historie správně rozlišuje databázi GPS bodů a audit synchronizací." },
+  { title: "Výraznější úvodní ikony", text: "Ikony úvodních modulů jsou větší a domeček vedle názvu aplikace je čitelnější. Karty, navigace a délka stránek si zachovávají původní rozměry." },
+  { title: "Opravy po mobilním auditu", text: "Zachování rozepsaných žádostí a servisu, správný měsíc exportu a součty nepřítomnosti podle období a stavu. Čekající žádosti se zobrazují samostatně." },
+  { title: "Spolehlivější mobilní ovládání", text: "Přepínač sekcí odpovídá obsahu, hledání pneumatik zachovává rozepsaný dotaz a servis podporuje haléře. Neplatné termíny vyžadují prověření; notifikace otevírají konkrétní žádost." },
   { title: "Čitelnější ikony", text: "Ikony Nepřítomnosti a modulů jsou větší: 32 px na mobilu a 36 px na desktopu, ve spodní navigaci 28 px. Velikost karet a délka stránky zůstávají stejné." },
   { title: "Ikony podle schválené předlohy", text: "Schválená šestice a 63 nových ikon z OpenArt tvoří jednotnou vzdušnou SVG sadu. Samostatné ikony se správně načítají a návrat ze seznamu vozidel má samostatnou šipku." },
   { title: "Zakázky: ověřené zdrojové vazby", text: "Import rozlišuje výstavce a uživatele, používá skutečný číselník vozidel a zachovává názvy zdrojových vazeb. Správcovská kontrola ověřuje filtry a velikost detailů před načtením historie." },
