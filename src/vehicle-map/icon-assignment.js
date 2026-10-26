@@ -68,7 +68,7 @@ export function createIconAssignment({ root, getVehicles }) {
     select.disabled = !rows.length;
     $('[data-ia-matches]').textContent = `${rows.length} z ${all.length} vozidel`;
     const v = all.find(v => v.id === selected), chosen = ICON_CHOICES.find(i => i.key === choices.get(selected));
-    $('[data-ia-vehicle]').innerHTML = v ? `<div class="vm-assignment-current">${artwork(chosen || v.type)}<div><h3>${escape(v.name || v.label)}</h3><p>${escape(v.plate || v.label)}</p><small>${chosen ? `Váš výběr: ${escape(chosen.label)}` : `Nyní na mapě: ${escape(v.type.label)}`}</small></div></div>` : '<p>Vyhledávání neodpovídá žádné vozidlo se stabilní identitou.</p>';
+    $('[data-ia-vehicle]').innerHTML = v ? `<div class="vm-assignment-current">${artwork(chosen || ICON_CHOICES.find(icon => icon.key === v.artworkKey) || v.type)}<div><h3>${escape(v.name || v.label)}</h3><p>${escape(v.plate || v.label)}</p><small>${chosen ? `Váš výběr: ${escape(chosen.label)}` : `Nyní na mapě: ${escape(ICON_CHOICES.find(icon => icon.key === v.artworkKey)?.label || v.type.label)}`}</small></div></div>` : '<p>Vyhledávání neodpovídá žádné vozidlo se stabilní identitou.</p>';
     dialog.querySelectorAll('[data-ia-icon]').forEach(button => { button.disabled = !v; button.setAttribute('aria-pressed', String(button.dataset.iaIcon === chosen?.key)); });
     $('[data-ia-clear]').disabled = !chosen;
     $('[data-ia-next]').disabled = !all.some(v => v.id !== selected && !choices.has(v.id));

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFile, mkdir } from 'node:fs/promises';
 import { startPreview } from './preview-server.mjs';
+import { fixture } from './fixtures.mjs';
 const require=createRequire(import.meta.url);
 const {chromium,webkit}=require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
 const engine=process.env.VEHICLE_MAP_BROWSER || 'chromium';
@@ -70,6 +71,28 @@ try {
   await page.screenshot({path:`${output}/${engine}-${width}x${height}.png`});
  }
  console.log('PASS 1440, 1024, 390, 320 px; touch targets, download and close/reopen persistence');
+ // Isolated response with a reviewed identity; all coordinates remain synthetic.
+ const reviewed=fixture();
+ for(const v of [reviewed.vehicles[0],reviewed.locations[0]])Object.assign(v,{externalVehicleId:'892',licensePlate:'3BP 5305',type:'special'});
+ await page.route('**/api/vehicle-tracking/status',route=>route.fulfill({json:reviewed}));
+ await page.setViewportSize({width:1440,height:900});
+ await page.goto(`${url}/sledovani-vozidel?ikony=1`);
+ await page.locator('.vm-icon-assignment[open]').waitFor();
+ await page.locator('#vm-assignment-vehicle').selectOption('synthetic-preview-admin:tcars:vehicle:892');
+ assert.match(await page.locator('[data-ia-vehicle]').innerText(),/Nyní na mapě: Vůz s kontejnerem/);
+ assert.equal(await page.locator('[data-ia-vehicle] [data-vm-artwork]').getAttribute('data-vm-artwork'),'container');
+ assert.match(await page.locator('[data-ia-progress]').innerText(),/^0 \/ /);
+ await page.keyboard.press('Escape');
+ const assignedRow=page.locator('[data-vm-row="synthetic-preview-admin:tcars:vehicle:892"]');
+ assert.equal(await assignedRow.locator('[data-vm-artwork]').getAttribute('data-vm-artwork'),'container');
+ await assignedRow.click();
+ assert.equal(await page.locator('.vm-marker.is-selected [data-vm-artwork]').getAttribute('data-vm-artwork'),'container');
+ assert.equal(await page.locator('.vm-detail-head [data-vm-artwork]').getAttribute('data-vm-artwork'),'container');
+ await page.screenshot({path:`${output}/${engine}-approved-desktop.png`});
+ await page.setViewportSize({width:390,height:844});
+ assert.equal(await page.locator('.vm-detail-head [data-vm-artwork]').getAttribute('data-vm-artwork'),'container');
+ await page.screenshot({path:`${output}/${engine}-approved-mobile.png`});
+ console.log('PASS approved artwork in picker, list, selected map marker and desktop/mobile detail; no choices prefilled');
  assert.deepEqual(writes,[]);assert.deepEqual(errors,[]);
  console.log('PASS no API writes and no JavaScript errors');
 } finally {await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

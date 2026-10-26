@@ -35,8 +35,9 @@ export function movementText(v) { return ["stale", "missing"].includes(v.categor
 export function stateHTML(v, speed = false) {
   return `<span class="vm-state">${connectionHTML(v)}${escape(movementText(v))}${speed && v.speed !== null && v.category === "moving" ? ` · ${v.speed} km/h` : ""}</span>`;
 }
+export function vehicleArtworkType(v) { return v.artworkKey ? { key: v.artworkKey } : v.type; }
 export function markerHTML(v) {
-  return `${artwork(v.type, "map")}${connectionHTML(v, "vm-badge")}${v.emergency ? '<span class="vm-emergency-badge" aria-label="Mimořádná událost">!</span>' : ""}${v.heading !== null ? `<span class="vm-heading" style="transform:rotate(${v.heading}deg)" aria-hidden="true"><i></i></span>` : ""}`;
+  return `${artwork(vehicleArtworkType(v), "map")}${connectionHTML(v, "vm-badge")}${v.emergency ? '<span class="vm-emergency-badge" aria-label="Mimořádná událost">!</span>' : ""}${v.heading !== null ? `<span class="vm-heading" style="transform:rotate(${v.heading}deg)" aria-hidden="true"><i></i></span>` : ""}`;
 }
 export function markerName(v) { return [v.label, v.type.label, movementText(v), connectionName(v)].filter(Boolean).join(", "); }
 export function legendHTML() {

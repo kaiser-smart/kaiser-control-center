@@ -10,7 +10,7 @@ Jde o skutečný editor předávacího dokumentu, nikoli nové cloudové nastave
 
 JSON obsahuje pouze formát/verzi, účel proposal, čas vytvoření a explicitní přiřazení stabilního ID, SPZ, názvu a klíče ikony. Neobsahuje GPS ani samostatné údaje řidiče nebo relaci. Import kontroluje formát, klíče, duplicity, velikost do 1 MB / 1 000 řádků, aktuální oprávněná ID i SPZ. Nepáruje automaticky podle podobného názvu nebo SPZ. Konfliktní rozpracovanou volbu nepřepíše. Není použita localStorage/sessionStorage/IndexedDB ani API zápis.
 
-Zůstává beze změny backend, DB, oprávnění, autentizace, GPS, typ vozidla, současné přiřazení mapových ikon i ostatní moduly. Původní PNG jsou beze změny; chybějící ikony se negenerují.
+Zůstává beze změny backend, DB, oprávnění, autentizace, GPS, typ vozidla, ostatní moduly. Původní PNG jsou beze změny; chybějící ikony se negenerují.
 
 ## Ověření
 
@@ -26,3 +26,11 @@ Testovací flotila v automatických scénářích je izolovaná. Živý náhled 
 Přidány tři samostatné volby z příloh uživatele: `box_body_compact` (Vůz s kontejnerem – 2 nápravy), `van_passenger` (Dodávka / minibus) a `tanker_compact` (Cisterna – 2 nápravy). Celkem 16 možností včetně tří neutrálních zástupných voleb. Původní klíče a jejich obrázky nejsou nahrazené. Nové klíče patří pouze do prezentační nabídky a předávacího dokumentu; nemění fleet enumy ani automaticky nepřiřazují vozidla.
 
 PNG jsou přesné kopie dodaných screenshotů. CSS vybírá siluetu bez okolního okraje/části sousedního obrázku, používá dosavadní renderer a jeho průhledné vykreslení bílého plátna. Provenance uvádí původ, rozměry, výřez a SHA-256. Jednotkové testy ověřují shodu souborů a import/export každého nového klíče; browser testy ověřují dekódování, výběr, stažení a mobilní ovládání ve dvou enginech.
+
+## Zapracovaný návrh 26. 10. 2026
+
+Verze 0.1.871 zapracovává 42 explicitních voleb ze souboru předaného uživatelem (čas exportu 2026-10-26T06:41:07.451Z). `approved-icons.js` obsahuje pouze minimální prezentační vazby: T-Cars ID + SPZ + klíč grafiky. Žádné názvy, řidiče ani GPS. Názvy ani značky aut se nepoužívají k odhadu. Prefix ID v exportu je scope přihlášeného recenzenta, proto se nepoužívá jako identita organizace.
+
+Vazba se aplikuje pouze na stabilní vozidlo z aktuální oprávněné odpovědi API. Musí souhlasit externí ID a SPZ; rozporná identita mezi evidencí a GPS vzorkem vazbu odmítne. Ostatní vozidla zachovávají dosavadní grafiku. Jde o oddělený `artworkKey`, nikoli změnu doloženého typu vozidla. Stejná volba se vykreslí na mapě, v seznamu, detailu, přehledu a současné ikoně v editoru. Editor stále exportuje jen nové explicitní volby uživatele.
+
+Žádný z 42 řádků nevybral novou kompaktní variantu; všechny původní zvolené klíče se proto zachovávají přesně. Tři doplněné varianty jsou dostupné pro další návrhy. Žádný zápis DB/API, přenos GPS ani změna oprávnění není součástí této implementace.

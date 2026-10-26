@@ -36,3 +36,37 @@ for (const [key,file,hash] of [
  assert.equal(createHash('sha256').update(await readFile('public/vehicles/openart-2/'+file)).digest('hex'),hash);
 }
 console.log('PASS three added variants: original PNG hashes, rendered source and proposal export/import');
+
+// Approved artwork never changes fleet type, telemetry or permissions.
+const { APPROVED_ICON_ASSIGNMENTS, approvedArtworkKey } = await import('../../src/vehicle-map/approved-icons.js');
+const { reconcile, normalize } = await import('../../src/vehicle-map/model.js');
+const { markerHTML } = await import('../../src/vehicle-map/presentation.js');
+const { vehiclePictureHTML, overviewHTML } = await import('../../src/vehicle-map/dashboard.js');
+assert.equal(APPROVED_ICON_ASSIGNMENTS.length,42);
+assert.equal(new Set(APPROVED_ICON_ASSIGNMENTS.map(row=>row[0])).size,42);
+const now=Date.parse('2026-10-26T10:00:00Z');
+for(const [id,plate,key] of APPROVED_ICON_ASSIGNMENTS) {
+ assert.ok(ICON_CHOICES.some(icon=>icon.key===key));
+ const vehicle={externalProvider:'tcars',externalVehicleId:id,licensePlate:plate,type:'special'};
+ const sample={...vehicle,latitude:49.2,longitude:16.6,speedKmh:23,lastGpsAt:new Date(now).toISOString()};
+ const record={stable:true,vehicle,latest:sample};
+ assert.equal(approvedArtworkKey(record),key);
+ for(const bad of [
+  {...record,stable:false},
+  {...record,vehicle:{...vehicle,externalVehicleId:'unassigned'}},
+  {...record,vehicle:{...vehicle,licensePlate:'OTHER'}},
+  {...record,latest:{...sample,externalProvider:'other'}},
+  {...record,latest:{...sample,externalVehicleId:'different'}},
+  {...record,latest:{...sample,licensePlate:'CHANGED'}},
+ ]) assert.equal(approvedArtworkKey(bad),'');
+ const [v]=normalize(reconcile({vehicles:[vehicle],locations:[sample]},new Map(),{scope:'another-authorized-user',now}),{now});
+ assert.equal(v.artworkKey,key);
+ const [without]=normalize(reconcile({vehicles:[{...vehicle,externalVehicleId:'unassigned'}],locations:[{...sample,externalVehicleId:'unassigned'}]},new Map(),{now}),{now});
+ assert.deepEqual(v.type,without.type);
+ for(const field of ['point','speed','category','movement','lastGpsAt'])assert.deepEqual(v[field],without[field]);
+ const sprite=artwork({key},'map');assert.ok(markerHTML(v).startsWith(sprite));assert.ok(overviewHTML([v]).includes(sprite));
+ assert.equal(vehiclePictureHTML(v),artwork({key},'detail'));
+}
+assert.equal(approvedArtworkKey({stable:true,vehicle:{licensePlate:'3BN3558',externalUnitId:'891'}}),'');
+assert.equal(approvedArtworkKey({stable:true,vehicle:{externalVehicleId:'891'}}),'');
+console.log('PASS 42 approved assignments: exact ID + plate, conflict rejection, all renderers, original fleet type/GPS unchanged');
