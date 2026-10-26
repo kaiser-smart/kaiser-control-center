@@ -6,9 +6,10 @@ import { SmartIcon } from '../components/icons/SmartIcon.js';
 // Only explicit choices are exported. GPS, drivers and authentication are omitted.
 export const ICON_CHOICES = Object.freeze([
   ['collection_truck', 'Popelářský vůz'], ['tanker', 'Cisterna'],
+  ['tanker_compact', 'Cisterna – 2 nápravy'],
   ['skip_loader', 'RAM / ramenový nakladač'], ['container_truck', 'Hákový nosič'],
-  ['box_body', 'Vůz s kontejnerem'], ['truck', 'Nákladní vůz'],
-  ['van', 'Dodávka'], ['car', 'Osobní vůz'], ['excavator', 'Bagr'],
+  ['box_body', 'Vůz s kontejnerem'], ['box_body_compact', 'Vůz s kontejnerem – 2 nápravy'], ['truck', 'Nákladní vůz'],
+  ['van', 'Dodávka'], ['van_passenger', 'Dodávka / minibus'], ['car', 'Osobní vůz'], ['excavator', 'Bagr'],
   ['forklift', 'Vysokozdvižný vozík'], ['trailer', 'Přívěs – bez dodané ikony'],
   ['special', 'Speciální – bez dodané ikony'], ['unknown', 'Nevím / doplnit podklad']
 ].map(([key, label]) => Object.freeze({ key, label, monogram: TYPES[key]?.monogram })));

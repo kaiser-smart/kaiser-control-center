@@ -21,8 +21,16 @@ const download=async()=>{await page.waitForTimeout(450);try {const [file]=await 
 try {
  await page.goto(`${url}/sledovani-vozidel?ikony=1`);
  await page.locator('.vm-icon-assignment[open]').waitFor();
- assert.equal(await page.locator('[data-ia-icon]').count(),13);
+ assert.equal(await page.locator('[data-ia-icon]').count(),16);
  const firstId=await page.locator('#vm-assignment-vehicle').inputValue();
+ for(const key of ['box_body_compact','van_passenger','tanker_compact']) {
+  const button=page.locator(`[data-ia-icon="${key}"]`);
+  await button.locator('img').evaluate(async img=>{await img.decode();if(!img.naturalWidth)throw new Error('Missing supplied icon');});
+  await button.click();assert.equal(await button.getAttribute('aria-pressed'),'true');
+  const chosen=await download();assert.equal(chosen.assignments[0].icon,key);
+  assert.equal(await page.locator('[data-ia-vehicle] img').count(),1);
+ }
+ console.log('PASS all three supplied icons decode, select and export');
  await page.locator('[data-ia-icon="skip_loader"]').click();
  assert.equal(await page.locator('[data-ia-icon="skip_loader"]').getAttribute('aria-pressed'),'true');
  const draft=await download();assert.equal(draft.assignments[0].vehicleId,firstId);assert.equal(draft.assignments[0].icon,'skip_loader');
@@ -54,9 +62,9 @@ try {
  for(const [width,height] of [[1024,768],[390,844],[320,700]]) {
   await page.setViewportSize({width,height});
   assert.equal(await page.locator('.vm-icon-assignment').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,`no horizontal overflow ${width}`);
-  await page.locator('[data-ia-icon="van"]').click();
-  assert.equal(await page.locator('[data-ia-icon="van"]').getAttribute('aria-pressed'),'true');
-  const rect=await page.locator('[data-ia-icon="van"]').boundingBox();assert.ok(rect.height>=44 && rect.width>=44);
+  await page.locator('[data-ia-icon="van_passenger"]').click();
+  assert.equal(await page.locator('[data-ia-icon="van_passenger"]').getAttribute('aria-pressed'),'true');
+  const rect=await page.locator('[data-ia-icon="van_passenger"]').boundingBox();assert.ok(rect.height>=44 && rect.width>=44);
   await page.locator('[data-ia-download]').scrollIntoViewIfNeeded();await download();
   await page.locator('#vm-assignment-search').scrollIntoViewIfNeeded();
   await page.screenshot({path:`${output}/${engine}-${width}x${height}.png`});

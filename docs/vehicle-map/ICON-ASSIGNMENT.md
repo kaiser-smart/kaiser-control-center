@@ -2,7 +2,7 @@
 
 Uživatelský požadavek: online přehled, ve kterém Radim přiřadí správnou dodanou ikonu konkrétnímu autu a předá výsledek k zapracování.
 
-Vstup je v modulu Poloha vozidel přes **Přiřadit ikony**, případně `/sledovani-vozidel?ikony=1`. Seznam vychází výhradně z právě oprávněné flotily s ověřenou stabilní identitou. Zahrnuje hledání podle názvu/SPZ, 10 dodaných siluet, tři pravdivě označené možnosti bez samostatného obrázku, filtr nevybraných a přechod na další vozidlo. Žádná ikona není předem potvrzena za uživatele.
+Vstup je v modulu Poloha vozidel přes **Přiřadit ikony**, případně `/sledovani-vozidel?ikony=1`. Seznam vychází výhradně z právě oprávněné flotily s ověřenou stabilní identitou. Zahrnuje hledání podle názvu/SPZ, 13 dodaných siluet, tři pravdivě označené možnosti bez samostatného obrázku, filtr nevybraných a přechod na další vozidlo. Žádná ikona není předem potvrzena za uživatele.
 
 ## Ukládání a předání
 
@@ -20,3 +20,9 @@ Zůstává beze změny backend, DB, oprávnění, autentizace, GPS, typ vozidla,
 - Chráníme dialog při přepnutí existujícího mobilního obalu (přesun DOM musí obnovit modální vrstvu). Automatický test respektuje stávající 400ms ochranu proti dvojímu klepnutí.
 
 Testovací flotila v automatických scénářích je izolovaná. Živý náhled potvrdil načtení 57 vozidel, žádné skutečné přiřazení není automaticky zvoleno. Fyzický iPhone nebyl použit. Produkční stav ověřit při vydání přes skutečný buildMeta a otevření chráněného přehledu.
+
+## Doplnění 26. 10. 2026 — 0.1.871
+
+Přidány tři samostatné volby z příloh uživatele: `box_body_compact` (Vůz s kontejnerem – 2 nápravy), `van_passenger` (Dodávka / minibus) a `tanker_compact` (Cisterna – 2 nápravy). Celkem 16 možností včetně tří neutrálních zástupných voleb. Původní klíče a jejich obrázky nejsou nahrazené. Nové klíče patří pouze do prezentační nabídky a předávacího dokumentu; nemění fleet enumy ani automaticky nepřiřazují vozidla.
+
+PNG jsou přesné kopie dodaných screenshotů. CSS vybírá siluetu bez okolního okraje/části sousedního obrázku, používá dosavadní renderer a jeho průhledné vykreslení bílého plátna. Provenance uvádí původ, rozměry, výřez a SHA-256. Jednotkové testy ověřují shodu souborů a import/export každého nového klíče; browser testy ověřují dekódování, výběr, stažení a mobilní ovládání ve dvou enginech.

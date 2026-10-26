@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {artwork} from '../../src/vehicle-map/presentation.js';
 import { assignmentDocument, readAssignments, ICON_CHOICES } from '../../src/vehicle-map/icon-assignment.js';
 const vehicles = [
  { id:'company:vehicle:1', stable:true, plate:'1AB 2345', name:'Svoz A', latitude:50, assignedDriver:'Do not export' },
@@ -19,5 +22,17 @@ assert.throws(()=>readAssignments({...doc,assignments:[{...doc.assignments[0],ic
 assert.throws(()=>readAssignments({...doc,assignments:[doc.assignments[0],doc.assignments[0]]},vehicles));
 assert.throws(()=>readAssignments({...doc,assignments:Array(1001).fill(doc.assignments[0])},vehicles));
 assert.throws(()=>readAssignments({...doc,assignments:[null]},vehicles));
-assert.equal(ICON_CHOICES.length,13);
+assert.equal(ICON_CHOICES.length,16);
 console.log('PASS assignment export/import: stable IDs, plate mismatch, cross-scope isolation, allowlist, bounds, duplicates, no GPS or driver data');
+
+for (const [key,file,hash] of [
+ ['box_body_compact','container-compact.png','f8c7a98185d1a02ce2928207c2f4a065c56b9ea786a4b52a46148253a6530635'],
+ ['van_passenger','van-passenger.png','80e6d742630b86f7dee1839e4fcd6fc2a0fd9f228dd824d5c70657bb39f7a261'],
+ ['tanker_compact','tanker-compact.png','0482162f1d927e35272ab94cf948261eb21da6cce2360c91a311848d20c58336']
+]) {
+ const proposal=assignmentDocument(vehicles,new Map([[vehicles[0].id,key]]));
+ assert.equal(readAssignments(proposal,vehicles).choices.get(vehicles[0].id),key);
+ assert.ok(artwork({key}).includes(file));
+ assert.equal(createHash('sha256').update(await readFile('public/vehicles/openart-2/'+file)).digest('hex'),hash);
+}
+console.log('PASS three added variants: original PNG hashes, rendered source and proposal export/import');
