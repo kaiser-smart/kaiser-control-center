@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { readFile, mkdir } from 'node:fs/promises';
+import { startPreview } from './preview-server.mjs';
+const require=createRequire(import.meta.url);
+const {chromium,webkit}=require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
+const engine=process.env.VEHICLE_MAP_BROWSER || 'chromium';
+const output=process.env.VEHICLE_MAP_OUTPUT || '../outputs/icon-assignment';
+await mkdir(output,{recursive:true});
+const {server,url}=await startPreview(0);
+const browser=await(engine==='webkit'?webkit.launch({headless:true}):chromium.launch({headless:true,channel:'chrome'}));
+const page=await browser.newPage({viewport:{width:1440,height:900},acceptDownloads:true});
+const errors=[],writes=[];
+page.on('pageerror',e=>errors.push(e.message));
+page.on('request',r=>{if(!['GET','HEAD'].includes(r.method()))writes.push(r.url());});
+page.on('dialog',d=>{console.log('DIALOG',d.type());d.dismiss();});
+await page.route('https://**/*',r=>r.abort());
+const status=()=>page.locator('[data-ia-status]').innerText();
+// Existing mobile tap guard intentionally suppresses the same action for 400 ms.
+const download=async()=>{await page.waitForTimeout(450);try {const [file]=await Promise.all([page.waitForEvent('download',{timeout:8000}),page.locator('[data-ia-download]').click()]);return JSON.parse(await readFile(await file.path(),'utf8'));} catch(e) {await page.screenshot({path:`${output}/${engine}-failure.png`});console.log('DOWNLOAD STATUS',await status(),await page.evaluate(()=>{const d=document.querySelector('.vm-icon-assignment'),b=d.querySelector('[data-ia-download]'),r=b.getBoundingClientRect();return {open:d.open,modal:d.matches(':modal'),rect:{x:r.x,y:r.y,width:r.width,height:r.height},hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.outerHTML.slice(0,400),dialogCount:document.querySelectorAll('.vm-icon-assignment').length};}));throw e;}};
+try {
+ await page.goto(`${url}/sledovani-vozidel?ikony=1`);
+ await page.locator('.vm-icon-assignment[open]').waitFor();
+ assert.equal(await page.locator('[data-ia-icon]').count(),13);
+ const firstId=await page.locator('#vm-assignment-vehicle').inputValue();
+ await page.locator('[data-ia-icon="skip_loader"]').click();
+ assert.equal(await page.locator('[data-ia-icon="skip_loader"]').getAttribute('aria-pressed'),'true');
+ const draft=await download();assert.equal(draft.assignments[0].vehicleId,firstId);assert.equal(draft.assignments[0].icon,'skip_loader');
+ assert.equal(Object.hasOwn(draft.assignments[0],'latitude'),false);
+ console.log('PASS open, choose RAM, export explicit assignment without GPS');
+ await page.locator('[data-ia-next]').click();
+ assert.notEqual(await page.locator('#vm-assignment-vehicle').inputValue(),firstId);
+ await page.locator('[data-ia-icon="collection_truck"]').click();
+ await page.locator('[data-ia-only]').check();
+ assert.equal(await page.locator(`#vm-assignment-vehicle option[value="${firstId}"]`).count(),0);
+ await page.locator('[data-ia-only]').uncheck();
+ await page.locator('#vm-assignment-search').fill('ZZZ-NOT-A-CAR');
+ assert.equal(await page.locator('[data-ia-icon="tanker"]').isEnabled(),false);
+ await page.locator('#vm-assignment-search').fill('');
+ console.log('PASS next unassigned, review filter and empty search');
+ const setFile=data=>page.locator('[data-ia-file]').setInputFiles({name:'review.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(data))});
+ await setFile(draft);await page.waitForFunction(()=>document.querySelector('[data-ia-status]').textContent.startsWith('Načteno'));
+ await setFile({...draft,assignments:[{...draft.assignments[0],icon:'tanker'}]});
+ await page.waitForFunction(()=>document.querySelector('[data-ia-status]').textContent.includes('liší'));
+ assert.match(await status(),/výběr zůstal zachován/);
+ await setFile({...draft,version:99});await page.waitForFunction(()=>document.querySelector('[data-ia-status]').textContent.includes('není platný'));
+ assert.equal((await download()).assignments.length,2);
+ console.log('PASS validated import, conflict preservation and invalid file leaves draft intact');
+ await page.keyboard.press('Escape');
+ assert.equal(await page.locator('.vm-icon-assignment').evaluate(el=>el.open),false);
+ await page.locator('[data-vm-assign-icons]').click();
+ assert.match(await page.locator('[data-ia-progress]').innerText(),/^2 \/ /);
+ await page.screenshot({path:`${output}/${engine}-1440x900.png`});
+ for(const [width,height] of [[1024,768],[390,844],[320,700]]) {
+  await page.setViewportSize({width,height});
+  assert.equal(await page.locator('.vm-icon-assignment').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,`no horizontal overflow ${width}`);
+  await page.locator('[data-ia-icon="van"]').click();
+  assert.equal(await page.locator('[data-ia-icon="van"]').getAttribute('aria-pressed'),'true');
+  const rect=await page.locator('[data-ia-icon="van"]').boundingBox();assert.ok(rect.height>=44 && rect.width>=44);
+  await page.locator('[data-ia-download]').scrollIntoViewIfNeeded();await download();
+  await page.locator('#vm-assignment-search').scrollIntoViewIfNeeded();
+  await page.screenshot({path:`${output}/${engine}-${width}x${height}.png`});
+ }
+ console.log('PASS 1440, 1024, 390, 320 px; touch targets, download and close/reopen persistence');
+ assert.deepEqual(writes,[]);assert.deepEqual(errors,[]);
+ console.log('PASS no API writes and no JavaScript errors');
+} finally {await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

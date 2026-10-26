@@ -9,7 +9,7 @@ export const VEHICLE_SPRITES = Object.freeze({
   car: [174, 569, 259, 118], van: [567, 544, 302, 144],
   excavator: [167, 707, 319, 216], forklift: [575, 730, 261, 187]
 });
-const typeSprite = { collection_truck: "collection", truck: "truck", tanker: "tanker", skip_loader: "skip", container_truck: "hook", car: "car", van: "van", excavator: "excavator", forklift: "forklift" };
+const typeSprite = { box_body: "container", collection_truck: "collection", truck: "truck", tanker: "tanker", skip_loader: "skip", container_truck: "hook", car: "car", van: "van", excavator: "excavator", forklift: "forklift" };
 // Remove the supplied near-white canvas at render time, including white wheel
 // and window openings. The original atlas remains byte-for-byte unchanged.
 export const artworkFilterHTML = `<svg class="vm-art-filters" aria-hidden="true"><defs><filter id="vm-white-canvas" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 -1.4 0 1.33"/></filter></defs></svg>`;

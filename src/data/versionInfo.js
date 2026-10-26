@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Poloha vozidel: přiřazení ikon", text: "Vyberte správnou dodanou siluetu pro každé auto. Návrh lze stáhnout a znovu načíst; slouží k předání přiřazení, provozní mapu ani evidenci vozidel automaticky nemění." },
   { title: "Opravit: jednoduché hlášení problému", text: "Nový formulář doplní stránku, autora a datum. Přidejte popis a případně fotografii; stav najdete ve svých hlášeních. Automatické opravy čekají na ověření serverových integrací." },
   { title: "Položky přímo ze zakázky", text: "Položky otevřete rovnou ze seznamu zakázek. Detail načítá aktuální data, nabízí obnovu a stránkování všech načtených položek. Oprávněný správce může přednostně načíst položky konkrétní zakázky z Vistosu." },
   { title: "Poloha vozidel: dispečerské pracoviště", text: "Tmavá mapa ČR s limetkovým akcentem, seznam a hledání vozidel, detail s obrázkem, GPS hlášení a denní statistika. Telefon má vlastní přepínání mapy, vozidel a přehledu. Čtení historie správně rozlišuje databázi GPS bodů a audit synchronizací." },

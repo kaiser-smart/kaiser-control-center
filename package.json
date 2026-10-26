@@ -49,7 +49,9 @@
     "test:icons:browser": "node scripts/icon-system-browser.test.mjs",
     "test:vistos-jobs-browser": "node scripts/vistos-jobs-browser.test.mjs",
     "test:vistos-jobs-payments": "node --test scripts/vistos-jobs-payments.test.mjs scripts/vistos-read-audit.test.mjs scripts/vistos-field-storage.test.mjs scripts/vistos-jobs-server-bridge.test.mjs",
-    "test:repair": "node scripts/repair.test.mjs && node scripts/repair-store.test.mjs"
+    "test:repair": "node scripts/repair.test.mjs && node scripts/repair-store.test.mjs",
+    "test:vehicle-map:icons": "node scripts/vehicle-map/icon-assignment.test.mjs",
+    "test:vehicle-map:icons:browser": "node scripts/vehicle-map/icon-assignment.browser.test.mjs"
   },
   "engines": {
     "node": ">=18"
