@@ -54,15 +54,15 @@ try{
   const detail=page.getByRole('button',{name:'Detail ZL-TEST-1',exact:true}).filter({visible:true}).first();await detail.click();
   await page.getByRole('dialog').waitFor();
   // Items are refreshed on tab entry, without importing merely by viewing.
-  itemsLoaded=true;await page.getByRole('button',{name:'Položky',exact:true}).click();
+  itemsLoaded=true;await page.getByRole('tab',{name:'Položky',exact:true}).click();
   await page.getByText('Načteno položek: 101',{exact:true}).waitFor();assert.equal(itemPosts,0);assert.ok(detailReads>=2);
   assert.equal(await page.locator('dialog img').count(),0);
-  await page.getByRole('button',{name:'Další položky',exact:true}).click();await page.getByText('Test: Poslední položka',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Další položky',exact:true}).click();await page.getByText('Poslední položka',{exact:true}).first().waitFor();
   await page.getByRole('button',{name:'Načíst položky z Vistosu',exact:true}).click();await page.getByText('Položky byly porovnány s Vistosem.',{exact:true}).waitFor();assert.equal(itemPosts,1);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.screenshot({path:path.join(output,`items-${width}.png`)});
-  manage=false;await page.getByRole('button',{name:'Obnovit zobrazení položek',exact:true}).click();await page.getByText('Test: Poslední položka',{exact:true}).waitFor();assert.equal(await page.locator('[data-items-import]').count(),0);
-  await page.getByRole('button',{name:'Všechna data',exact:true}).click();
+  manage=false;await page.getByRole('button',{name:'Obnovit zobrazení položek',exact:true}).click();await page.getByText('Poslední položka',{exact:true}).first().waitFor();assert.equal(await page.locator('[data-items-import]').count(),0);
+  await page.getByRole('tab',{name:'Všechna data',exact:true}).click();
   assert.equal(await page.locator('dialog img').count(),0);assert.ok((await page.locator('dialog').textContent()).includes('<img src=x'));
   await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'detached'});
   assert.equal(await page.locator('button:focus').getAttribute('data-vj-action'),'detail');

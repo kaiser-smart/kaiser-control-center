@@ -218,7 +218,11 @@ test('J10/S01: authenticated backend paging/history and forbidden finance/compan
  await syncVistosBatch(env,{installation:'test',entity:'ServiceList',source:async()=>({rows:Array.from({length:61},(_,i)=>({Id:i+1,Number:'fixture-'+i,Modified:'2026-10-25T01:00:00Z'})),filtered:61,countEvidence:{filteredReported:true}})});
  const response=await call('jobs-list','/api/jobs?period=all&pageSize=25&page=3');assert.equal(response.status,200);assert.equal((await response.json()).rows.length,11);
  const id=db.sqlite.prepare('SELECT id FROM vistos_source_records LIMIT 1').get().id;
- const history=await call('job-history','/api/jobs/'+id+'/history',{id});assert.equal(history.status,200);assert.equal((await history.json()).events.length,1);
+ const history=await call('job-history','/api/jobs/'+id+'/history',{id});assert.equal(history.status,200);const historyBody=await history.json();assert.equal(historyBody.events.length,1);assert.equal(historyBody.events[0].actor,null);
+ db.sqlite.prepare('UPDATE vistos_integration_events SET fields_json=? WHERE entity_id=?').run(JSON.stringify(['Number','Phone','PriceWithTax','UnknownSecret']),id);
+ const filteredHistory=await (await call('job-history','/api/jobs/'+id+'/history',{id})).json();
+ assert.deepEqual(filteredHistory.events[0].changedFields.map(f=>f.field),['Number']);
+ assert.ok(!JSON.stringify(filteredHistory).includes('fields_json'));
  const contract={...mapping,entities:{...mapping.entities,InvoiceIssued:{fixedCompanyId:'1'}},bank:{verified:true,source:'KB',amountPath:'amount',currencyPath:'currency',accountPath:'account',currencyIds:{CZK:'2'}}};environment(db,contract);
  await persistVerifiedSourceReadback(db,'test','InvoiceIssued',{Id:10,Modified:'2026-10-25T01:00:00Z',AmountPaid:'0',RemainToPay:'100'},contract);
  db.sqlite.exec("ALTER TABLE receivable_payment_matches ADD COLUMN matched_amount REAL;INSERT INTO receivable_invoices VALUES('invoice','10');INSERT INTO receivable_payment_matches VALUES('match','invoice','tx',25);");
