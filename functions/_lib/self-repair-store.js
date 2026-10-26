@@ -763,6 +763,10 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
       )
     ];
 
+    if (options.repair) {
+      statements.push(db.prepare(`INSERT INTO repair_queue(case_id,reporter_id,dedupe_key,created_at,updated_at) VALUES(?,?,?,?,?)`).bind(caseId,report.reporterUserId,options.repair.dedupeKey,now,now));
+    }
+
     if (attachment) {
       statements.push(db.prepare(`
         INSERT INTO self_repair_case_attachments (
@@ -806,6 +810,7 @@ export async function createUserReportedSelfRepairCase(env, currentUser, input =
       }
     }
     const errorMessage = cleanText(error?.message, 1000).toLowerCase();
+    if (options.repair && errorMessage.includes("repair_daily_limit")) throw new SelfRepairStoreError("Dnes jste již odeslali 20 hlášení. Další prosím přidejte zítra.",429,"repair_daily_limit");
     if (report.clientRequestId && (errorMessage.includes("unique") || errorMessage.includes("constraint"))) {
       const existingRow = await db.prepare(`
         SELECT *
@@ -1269,7 +1274,7 @@ export async function getSelfRepairAttachmentFile(env, currentUser, caseIdValue,
     }
 
     const caseRow = await db
-      .prepare("SELECT reporter_user_id FROM self_repair_cases WHERE id = ? LIMIT 1")
+      .prepare("SELECT reporter_user_id, technical_context_json FROM self_repair_cases WHERE id = ? LIMIT 1")
       .bind(caseId)
       .first();
     const sameReporter = cleanText(caseRow?.reporter_user_id, 200).toLowerCase()
@@ -1278,7 +1283,8 @@ export async function getSelfRepairAttachmentFile(env, currentUser, caseIdValue,
     const canRead = hasPermission(currentUser, "self-repair", "view")
       || (publicAttachment && hasPermission(currentUser, "feedback", "view"))
       || (sameReporter && hasPermission(currentUser, "feedback", "view"));
-    if (!canRead) {
+    const privateRepair = parseJson(caseRow?.technical_context_json, {}).repairModule === true;
+    if (!canRead || (privateRepair && !sameReporter && !hasPermission(currentUser, "self-repair", "manage"))) {
       throw new SelfRepairStoreError("Nemáte oprávnění zobrazit tuto přílohu.", 403, "self_repair_attachment_forbidden");
     }
 

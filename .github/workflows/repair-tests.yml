@@ -1,0 +1,28 @@
+name: Opravit safety
+on:
+  pull_request:
+    paths:
+      - 'functions/**'
+      - 'src/components/RepairModule.js'
+      - 'src/app.js'
+      - 'scripts/repair*'
+      - 'scripts/repair/**'
+      - 'migrations/modular/core/**'
+      - '.github/workflows/repair*.yml'
+      - '.github/codex/repair-prompt.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm run test:repair
+      - run: npm run test:self-repair
+      - run: npm run test:auth-session
+      - run: npm run lint
+      - run: npm run build

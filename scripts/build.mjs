@@ -83,6 +83,7 @@ async function versionCopiedModuleImports(directory) {
 }
 
 const fixedRouteEntries = [
+  { path: "/opravit", moduleKey: "feedback", label: "Opravit" },
   { path: "/pohledavky/uhrady", moduleKey: "receivables", label: "Úhrady" },
   { path: "/vistos/propojeni", moduleKey: "integrations", label: "Propojení Vistos" },
   { path: "/", moduleKey: "dashboard", label: "Hlavní stránka" },

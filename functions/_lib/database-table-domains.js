@@ -43,6 +43,8 @@ export const DATABASE_TABLES = Object.freeze({
     "receivable_payment_transactions",
     "receivable_promises_to_pay",
     "receivable_settings",
+    "repair_queue",
+    "repair_queue_events",
     "retention_policies",
     "sarlota_content_documents",
     "sarlota_user_memory",
