@@ -16,7 +16,7 @@ test('internal jobs route requires its dedicated token and never accepts a user-
  assert.deepEqual(await r.json(),{status:'partial',reads:2,blocked:1});assert.equal(calls,1);assert.equal((await onRequestGet()).status,405);
 });
 test('scheduler uses the fixed Pages origin, no redirects and no raw response or credentials in output',async()=>{
- let calls=0;const fetcher=async(url,init)=>{calls++;assert.equal(url,'https://smart-odpady.ai/api/integrations/vistos/jobs-run-internal');assert.equal(init.redirect,'error');assert.equal(init.headers.Authorization,'Bearer '+token);assert.equal(init.body,'{}');return Response.json({status:'partial',reads:2,blocked:0,secret:token});};
+ let calls=0;const fetcher=async(url,init)=>{calls++;assert.equal(url,'https://smart-odpady.ai/api/integrations/vistos/jobs-run-internal');assert.equal(init.redirect,'manual');assert.equal(init.headers.Authorization,'Bearer '+token);assert.equal(init.body,'{}');return Response.json({status:'partial',reads:2,blocked:0,secret:token});};
  assert.equal((await runVistosJobsServerBridge({}, {fetcher})).status,'disabled');
  assert.equal((await runVistosJobsServerBridge({...flags,APP_BASE_URL:'https://untrusted.invalid'},{fetcher})).code,'vistos_jobs_runner_origin_invalid');assert.equal(calls,0);
  assert.deepEqual(await runVistosJobsServerBridge(flags,{fetcher}),{status:'partial',reads:2,blocked:0});assert.equal(calls,1);
@@ -30,3 +30,5 @@ test('jobs-only scheduler cannot query payment commands or invoice refresh even 
  assert.equal(result.reads.length,0);assert.equal(result.commands.length,0);
  assert.ok(sqls.some(s=>s.includes("entity IN ('ServiceList','ServiceListItem')")));
 });
+
+test('worker-compatible manual mode rejects redirects without forwarding the service token',async()=>{let calls=0;const result=await runVistosJobsServerBridge(flags,{fetcher:async(url,init)=>{calls++;assert.equal(init.redirect,'manual');return new Response('',{status:302,headers:{Location:'https://untrusted.invalid'}});}});assert.deepEqual(result,{status:'blocked',code:'vistos_jobs_redirect_rejected'});assert.equal(calls,1);});
