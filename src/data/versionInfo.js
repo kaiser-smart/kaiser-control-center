@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.874"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.875"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Zřetelný kruh při jízdě", text: "Kruh vybraného jedoucího vozidla se oddělí od pevného obrysu a pomalu se rozšíří. Původní ikony i čitelné SPZ zůstávají beze změny; stará nebo neověřená GPS neanimuje." },
   { title: "Ikony podle velikosti pracovního místa", text: "Velká záhlaví a postranní navigace mají výraznější ikony. Mobilní nabídka je čitelnější a samostatná ikonová tlačítka mají větší plochu pro klepnutí. Zachováváme schválenou tenkou kresbu." },
   { title: "Přehlednější karta zaměstnance", text: "Návrat a úprava jsou oddělené od přepínání zaměstnanců a přidání nového. Ovládání zůstává přehledné i na mobilu a u dlouhých jmen." },
   { title: "Přehledný detail zakázky", text: "Položky mají stručné řádky a rozbalovací podrobnosti. Šest záložek odděluje přehled, provedení, doklady, zdrojová data a historii. Na mobilu se položky zobrazují jako karty; nedoložené jednotky a časy zůstávají výslovně označené." },
