@@ -24,7 +24,7 @@ const results=[],errors=[],writes=[];let browser;
 try{
  browser=await webkit.launch({headless:true});
  for(const role of baseline?['admin']:['admin','management','kancelar','garazmistr','dispecer','ridic','readonly']){
-  for(const width of [375,390,768,1440,1920]){
+  for(const width of [320,375,390,430,768,1024,1440,1920]){
    const context=await browser.newContext({...width<720?devices['iPhone 13']:{deviceScaleFactor:1},viewport:{width,height:900},serviceWorkers:'block'});
    await context.route('**/*',async route=>{
     const url=new URL(route.request().url());
