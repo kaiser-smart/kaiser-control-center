@@ -2,6 +2,7 @@ import { getVistosById, loginVistosExecute } from './vistos-execute-client.js';
 import { integrationDb, loadIntegrationContract, syncVistosBatch, refreshSourceDetail, persistVerifiedSourceReadback, flushIntegrationAudit, assertVistosInstallation } from './vistos-integration-store.js';
 import { processPaymentCommand } from './vistos-payment-outbox.js';
 import { enrichJobExecution } from './vistos-tracking-enrichment.js';
+import {runJobsReadQueue,JOBS_RUN_BUDGET_MS} from './vistos-jobs-read-queue.js';
 
 // Short, sequential tasks share the existing connector budget. No browser polling starts an import.
 export async function runVistosJobsPayments(env,{now=new Date(),maxBatches=12,onlyJobs=false}={}) {
@@ -10,6 +11,7 @@ export async function runVistosJobsPayments(env,{now=new Date(),maxBatches=12,on
   const {results:contracts=[]}=await db.prepare('SELECT installation FROM vistos_integration_contracts ORDER BY installation').all();
   const {results:ruleRows=[]}=await db.prepare("SELECT id FROM module_rules WHERE id IN ('jobs-vistos-read','jobs-tcars-evidence','receivables-vistos-writer') AND status='active'").all();
   const active=new Set(ruleRows.map(r=>r.id));
+  const deadline=Date.now()+JOBS_RUN_BUDGET_MS;
   let batches=0;
   for(const {installation}of contracts){
     const contract=await loadIntegrationContract(db,installation);
@@ -21,20 +23,9 @@ export async function runVistosJobsPayments(env,{now=new Date(),maxBatches=12,on
     }
     if(String(env.VISTOS_READ_SYNC_ENABLED)==='true'&&active.has('jobs-vistos-read')) {
       if(onlyJobs) {
-        // A parent item stream gets a turn on every invocation; history cannot starve it.
-        const header=contract.entities?.ServiceList;
-        if(header?.readVerified&&batches<maxBatches) {
-          const cp=await db.prepare("SELECT status FROM vistos_sync_checkpoints WHERE installation=? AND entity='ServiceList' AND mode='priority_backfill'").bind(installation).first();
-          const mode=header.priorityFilterVerified&&cp?.status!=='compared'?'priority_backfill':'initial_backfill';
-          summary.reads.push(await safe('ServiceList:'+mode,()=>syncVistosBatch(env,{installation,entity:'ServiceList',mode})));batches++;
-        }
-        if(contract.entities?.ServiceListItem?.readVerified&&batches<maxBatches) {
-          const parent=contract.entities.ServiceListItem.parentFilterVerified?await db.prepare(`SELECT r.source_id FROM vistos_source_records r
-            LEFT JOIN vistos_sync_checkpoints c ON c.installation=r.installation AND c.entity='ServiceListItem' AND c.mode='parent:'||r.source_id
-            WHERE r.installation=? AND r.entity='ServiceList' AND r.company_id IS NOT NULL AND (c.status IS NULL OR c.status<>'compared')
-            ORDER BY r.planned_day DESC,r.source_id DESC LIMIT 1`).bind(installation).first():null;
-          const mode=parent?'parent:'+parent.source_id:'initial_backfill';
-          summary.reads.push(await safe('ServiceListItem:'+mode,()=>syncVistosBatch(env,{installation,entity:'ServiceListItem',mode})));batches++;
+        if((contract.entities?.ServiceList?.readVerified||contract.entities?.ServiceListItem?.readVerified)&&batches<maxBatches&&Date.now()+10000<deadline){
+          const reads=await runJobsReadQueue(env,db,contract,{maxBatches:maxBatches-batches,deadline});
+          summary.reads.push(...reads);batches+=reads.length;
         }
       }
       for(const entity of (onlyJobs?[]:['ServiceList','ServiceListItem','InvoiceIssued','Payment'])) {
@@ -58,7 +49,7 @@ export async function runVistosJobsPayments(env,{now=new Date(),maxBatches=12,on
       }));
       }
       const {results:details=[]}=await db.prepare(`SELECT id,entity FROM vistos_source_records WHERE installation=? AND (${onlyJobs?"entity IN ('ServiceList','ServiceListItem') AND":''} (detail_at IS NULL OR detail_at<source_modified)) ORDER BY COALESCE(detail_at,''),received_at DESC LIMIT 4`).bind(installation).all();
-      for(const record of details)if(contract.entities?.[record.entity]?.detailVerified)summary.reads.push(await safe('detail',()=>refreshSourceDetail(env,installation,record.id)));
+      for(const record of details)if(contract.entities?.[record.entity]?.detailVerified&&(!onlyJobs||(batches++<maxBatches&&Date.now()+10000<deadline)))summary.reads.push(await safe('detail',()=>refreshSourceDetail(onlyJobs?{...env,syncRequestDeadline:deadline}:env,installation,record.id)));
     }
     if(String(env.VISTOS_JOB_EXECUTION_ENABLED)==='true'&&active.has('jobs-tcars-evidence')){
       const {results:jobs=[]}=await db.prepare(`SELECT r.* FROM vistos_source_records r LEFT JOIN vistos_execution_checks c ON c.job_id=r.id

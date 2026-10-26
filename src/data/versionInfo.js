@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.860"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.861"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Průběžné doplňování zakázek", text: "Import průběžně doplňuje více sad položek a ukazuje počet načtených zakázek i čas poslední změny. Prázdný filtr umožňuje otevřít všechny dostupné zakázky; neúplná historie zůstává označená." },
   { title: "Výraznější úvodní ikony", text: "Ikony úvodních modulů jsou větší a domeček vedle názvu aplikace je čitelnější. Karty, navigace a délka stránek si zachovávají původní rozměry." },
   { title: "Opravy po mobilním auditu", text: "Zachování rozepsaných žádostí a servisu, správný měsíc exportu a součty nepřítomnosti podle období a stavu. Čekající žádosti se zobrazují samostatně." },
   { title: "Spolehlivější mobilní ovládání", text: "Přepínač sekcí odpovídá obsahu, hledání pneumatik zachovává rozepsaný dotaz a servis podporuje haléře. Neplatné termíny vyžadují prověření; notifikace otevírají konkrétní žádost." },
