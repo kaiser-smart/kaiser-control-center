@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.868"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.869"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Čitelnější vozidla a SPZ na mapě", text: "Původní siluety mají jemný tmavý kruhový podklad a SPZ světlé štítky. Pouze vybrané jedoucí auto s aktuální GPS jemně pulzuje; při omezení animací zůstává statické." },
   { title: "Poloha vozidel: přiřazení ikon", text: "Vyberte správnou dodanou siluetu pro každé auto. Návrh lze stáhnout a znovu načíst; slouží k předání přiřazení, provozní mapu ani evidenci vozidel automaticky nemění." },
   { title: "Opravit: jednoduché hlášení problému", text: "Nový formulář doplní stránku, autora a datum. Přidejte popis a případně fotografii; stav najdete ve svých hlášeních. Automatické opravy čekají na ověření serverových integrací." },
   { title: "Položky přímo ze zakázky", text: "Položky otevřete rovnou ze seznamu zakázek. Detail načítá aktuální data, nabízí obnovu a stránkování všech načtených položek. Oprávněný správce může přednostně načíst položky konkrétní zakázky z Vistosu." },

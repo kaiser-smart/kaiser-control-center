@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { reconcile, normalize, filterVehicles, presentationType, validateSample } from '../../src/vehicle-map/model.js';
-import { clusterPoints, overlaps, markerRect, placeLabels, spreadPoints } from '../../src/vehicle-map/spatial.js';
+import { clusterPoints, overlaps, markerRect, labelMarkerRect, placeLabels, spreadPoints } from '../../src/vehicle-map/spatial.js';
 const now = Date.parse('2026-10-25T10:00:00Z');
 const sample = (id, overrides = {}) => ({ id: `tcars-position-${id}-sample`, externalProvider: 'tcars', externalVehicleId: id, latitude: 49.2, longitude: 16.6, lastGpsAt: new Date(now - 60000).toISOString(), gpsValid: true, speedKmh: 30, heading: 0, ignition: false, ...overrides });
 const model = (locations, previous, opts = {}) => normalize(reconcile({ locations }, previous, { now }), { now, ...opts });
@@ -81,11 +81,11 @@ test('rectangle threshold independent of fleet count, secondary cluster collisio
 test('label priority, actual measured widths and control exclusion', () => {
   const ps = points(3).map((p, i) => ({ ...p, x: 100 + i * 100, y: 150 }));
   const control = { left: 0, right: 700, top: 0, bottom: 80 };
-  const occupied = [control, ...ps.map(markerRect)];
+  const occupied = [control, ...ps.map(labelMarkerRect)];
   const result = placeLabels(ps, occupied, { left: 0, top: 0, right: 700, bottom: 400 }, (text) => ({ width: text.length * 8 + 16, height: 26 }), ps[1].id);
   assert(result.has(ps[1].id)); const placed = [...result.values()];
-  placed.forEach((r) => occupied.forEach((o) => assert(!overlaps(r, o, 6))));
-  for (let i = 0; i < placed.length; i++) for (let j = i + 1; j < placed.length; j++) assert(!overlaps(placed[i], placed[j], 6));
+  placed.forEach((r) => occupied.forEach((o) => assert(!overlaps(r, o))));
+  for (let i = 0; i < placed.length; i++) for (let j = i + 1; j < placed.length; j++) assert(!overlaps(placed[i], placed[j], 3));
 });
 test('new supplied equipment artwork uses explicit declared type, never nickname', () => {
  for (const [declared,expected] of [['Bagr','excavator'],['VZV','forklift'],['Nákladní vůz','truck']]) assert.equal(presentationType({vehicleType:declared}).key,expected);

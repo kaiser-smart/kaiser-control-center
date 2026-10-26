@@ -1,6 +1,6 @@
 import { CZECH_BOUNDARY } from "./czech-boundary.js";
-import { clusterPoints, clusterRect, markerRect, overlaps, inside, rect, spreadPoints, placeLabels } from "./spatial.js";
-import { markerHTML, markerName, escape } from "./presentation.js";
+import { clusterPoints, clusterRect, markerRect, labelMarkerRect, overlaps, inside, rect, spreadPoints, placeLabels } from "./spatial.js";
+import { markerHTML, markerName, escape, hasCurrentMotion } from "./presentation.js";
 
 export const ROAD_STYLES = [
   { elementType: "geometry", stylers: [{ color: "#15232e" }] },
@@ -149,7 +149,7 @@ export function createGoogleMap(node, maps, callbacks) {
     drawn = plans;
     const ids = new Set(plans.map((p) => p.id));
     for (const [id, el] of elements) if (!ids.has(id)) { el.remove(); elements.delete(id); }
-    const labelItems = [], occupied = [...obstacleRects, ...plans.map((p) => p.bounds)];
+    const labelItems = [], occupied = [...obstacleRects, ...plans.map((p) => p.members.length > 1 || p.forceGroup ? p.bounds : labelMarkerRect({ ...p, vehicle: p.members[0] }))];
     overlay.lines.replaceChildren();
     overlay.lines.setAttribute("width", node.clientWidth); overlay.lines.setAttribute("height", node.clientHeight);
     for (const p of plans) {
@@ -174,6 +174,7 @@ export function createGoogleMap(node, maps, callbacks) {
       const html = cluster ? `<b>${p.members.length}</b><span class="vm-cluster-word">vozidel</span>${stale ? '<span class="vm-cluster-clock" aria-hidden="true">◷</span>' : ""}` : markerHTML(v);
       if (el.dataset.htmlSignature !== html) { el.innerHTML = html; el.dataset.htmlSignature = html; }
       el.className = `vm-marker ${cluster ? "vm-cluster" : `vm-marker--${v.category}`} ${!cluster && v.ignition === true && v.movement === "stopped" && v.category !== "stale" ? "vm-marker--ignition" : ""} ${!cluster && v.emergency ? "vm-marker--emergency" : ""} ${!cluster && selectedId === v.id ? "is-selected" : ""} ${p.members.some((m) => m.id === highlightedId) ? "is-highlighted" : ""}`;
+      el.classList.toggle("has-current-motion", !cluster && hasCurrentMotion(v));
       el.setAttribute("aria-label", cluster ? `${p.members.length} vozidel, ${stale} se starou polohou. Otevřít skupinu.` : markerName(v));
       el.setAttribute("aria-pressed", String(!cluster && selectedId === v.id));
       el.style.left = `${p.x}px`; el.style.top = `${p.y}px`;
@@ -232,8 +233,11 @@ export function createGoogleMap(node, maps, callbacks) {
     const detail = node.parentElement.querySelector(".vm-panel-detail:not([hidden])");
     if (detail && getComputedStyle(detail).visibility !== "hidden" && detail.getBoundingClientRect().left < node.getBoundingClientRect().right) {
       const n = node.getBoundingClientRect(), r = detail.getBoundingClientRect();
-      if (r.width < n.width * .8) safe.right = Math.max(safe.left + 20, r.left - n.left - 40);
-      else safe.bottom = Math.max(safe.top + 20, r.top - n.top - 40);
+      // Keep the full plate clear of the context panel on explicit selection.
+      // Pan the viewport only when needed; the geographic marker anchor is fixed.
+      const label = measure(v.label), footprint = labelMarkerRect({ ...p, vehicle: v });
+      if (r.width < n.width * .8) safe.right = Math.max(safe.left + 20, r.left - n.left - Math.max(40, label.width / 2 + 8));
+      else safe.bottom = Math.max(safe.top + 20, r.top - n.top - Math.max(40, footprint.bottom - p.y + 5 + label.height + 8));
     }
     // A country overview cannot pan far enough to expose southern vehicles above
     // a phone sheet. Zoom only on explicit selection, never on GPS refresh.
@@ -265,7 +269,7 @@ export function createGoogleMap(node, maps, callbacks) {
       for (const d of drawn) {
         if (d.members.length !== 1 || d.forceGroup) continue;
         const v = byId.get(d.members[0].id), el = elements.get(d.id);
-        if (v && el) { const name = markerName(v); if (el.getAttribute("aria-label") !== name) el.setAttribute("aria-label", name); }
+        if (v && el) { el.classList.toggle("has-current-motion", hasCurrentMotion(v)); const name = markerName(v); if (el.getAttribute("aria-label") !== name) el.setAttribute("aria-label", name); }
       }
     },
     fit, fitCountry, select, openGroup,
