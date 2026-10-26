@@ -288,11 +288,13 @@ try {
     await page.waitForURL('**/vozovy-park/mobile-0**');
     await page.locator('#fleet-detail').waitFor();
     await page.waitForTimeout(150); assert.ok(await page.locator('.mobile-vehicle-back').isVisible());
+    assert.ok(await page.locator('.mobile-vehicle-back svg[data-icon="arrow-left"]').isVisible());
+    assert.equal(await page.locator('.mobile-vehicle-back svg').getAttribute('aria-hidden'),'true');
     await page.screenshot({path:path.join(output,'vehicle-detail-375.png')});
     await page.getByRole('button',{name:'Další akce vozidla',exact:true}).click();
     await page.getByRole('button',{name:'Zobrazit historii',exact:true}).click();
     await page.locator('#fleet-timeline').waitFor({state:'visible'});
-    await page.goBack(); await page.waitForURL('**/vozovy-park#fleet-vehicles'); await page.locator('.fleet-table').waitFor();
+    await page.locator('.mobile-vehicle-back').click(); await page.waitForURL('**/vozovy-park#fleet-vehicles'); await page.locator('.fleet-table').waitFor();
     await page.getByRole('button',{name:'Hledat a filtrovat vozidla',exact:true}).click();
     await page.locator('[data-fleet-filter][name=search]').fill('TEST 024');
     await page.locator('[data-fleet-filter][name=search]').dispatchEvent('change');

@@ -380,7 +380,8 @@ export function applyMobileWorkspace(app, { userId, activeModuleId, render }) {
   if (vehicleDetail) {
     const identity = vehicleDetail.querySelector('.fleet-detail-header');
     const summary = el('p', 'mobile-vehicle-identity', [identity?.children[0]?.querySelector('strong')?.textContent, identity?.children[6]?.querySelector('strong')?.textContent].filter(Boolean).join(' · '));
-    const back = el('a', 'mobile-control mobile-vehicle-back', '‹ Všechna vozidla');
+    const back = el('a', 'mobile-control mobile-vehicle-back', 'Všechna vozidla');
+    back.insertAdjacentHTML('afterbegin', SmartIcon('arrow-left'));
     back.href = '/vozovy-park#fleet-vehicles'; back.dataset.link = '';
     vehicleDetail.before(back, summary);
     const actions = vehicleDetail.querySelector('.fleet-detail-card--actions');

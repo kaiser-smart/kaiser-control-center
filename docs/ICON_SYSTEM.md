@@ -1,97 +1,69 @@
-# SMART ODPADY · sjednocení ikon
+# SMART ODPADY — dokončená SVG sada podle originálu
 
-Stav: **PŘIPRAVENO KE KONTROLE, NENASAZENO**. Datum: 25. 10. 2026.
+Stav k 26. 10. 2026: **implementováno lokálně, otestováno, NENASAZENO**. Základ 0.1.853 (`2d5668827d439298226d6852901526decb343638`), větev `codex/approved-icon-integration-current`. Nejde o tvrzení, že tato verze je stále nejnovější produkcí; před případným nasazením je nutné znovu ověřit hlavní větev a použít release guard.
 
-Implementace vychází z aktuálního zdroje `work/mobile-app`, základ `1169737c` (verze 0.1.840), větev `codex/unified-2d-icons`. Původní složka `app` není aktuální zdroj a nebyla upravena. Nebyl proveden push, deploy, změna oprávnění ani zápis do produkčních služeb.
+## Rozsah a původ
 
-## Výsledek
+- Zachováno šest přímo schválených ikon z `docs/icon-reference/approved-icons.png`. Hash přílohy: `163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98`. Jejich SVG se při doplnění sady nezměnila.
+- Doplněno všech **63 ikon z OpenArt** podle této přílohy. Uživatel výslovně povolil nové generování odpovědí „Ano, vytvořit 63 ikon podle originálu“. Projekt: [OpenArt SMART ODPADY](https://openart.ai/suite/image?projectId=Se5cXknUSHaom3A8Jq3B). Byly použity dokončené výstupy 11 listů; příliš silné první varianty pěti listů byly nahrazeny opravami. Nejde o tvrzení individuálního schválení všech výsledků: `userApprovedExact` zůstává true pouze u původní šestice.
+- Výsledek: **69 UI ikon a 36 SVG aliasů vozidel**. Registry pokrývá všech 21 skutečných modulů; veřejné soubory jsou v `public/icons/ui` a `public/vehicles/icons`. SVG mají viewBox 24 × 24 a obě barvy #243128 / #75BD25. Bez rastrových obrázků, gradientů, filtrů, stínů a podkladových dlaždic.
+- Ikony se propisují přes stávající `SmartIcon` do navigace, modulů, záhlaví a tlačítek. Textový znak návratu v detailu vozidla byl nahrazen SVG šipkou vlevo; cíl odkazu a obsluha zůstávají stejné.
 
-- 69 samostatných SVG, společná mřížka 24 × 24 a oblé linky 2,2 px. Každá ikona obsahuje #243128 a #75BD25; bez rastru, filtrů, gradientů a stínů.
-- Jednotné ikony pro všech 20 modulů, navigaci, záhlaví, výběr nepřítomnosti, mapy, ovládací tlačítka a hlasového pomocníka. Domeček se zelenou střechou vedle názvu aplikace na mobilu i desktopu.
-- Odstraněny podkladové dlaždice ikon a samostatné CSS/textové symboly. U tlačítek se zeleným podkladem a novou ikonou je použit neutrální povrch, aby zelený akcent nezanikl. Dlouhé názvy mobilního menu se zalamují.
-- Mapování 36 dodaných ikon vozidel převedeno na SVG. Zachováno přiřazení SPZ a typů; šest mapových siluet směřuje na sever, proto je odstraněna původní grafická korekce 135°. GPS azimut, zdroje, interakce a stavové popisky se nemění. Známé staré PNG/WebP adresy jsou normalizovány na nové SVG, vlastní uživatelské obrazové URL zůstávají daty.
-- SVG jsou dekorativní (`aria-hidden`, `focusable=false`); ovládací prvky zachovávají názvy a původní obsluhu. Neviditelné prvky nezískávají nová oprávnění.
+## Převod a výjimka u pauzy
 
-Původní loga, fotografie, avatary a PNG požadované PWA manifestem/Apple touch ikonou nejsou ikony ovládacího rozhraní a zůstávají zachované. Staré rasterové soubory vozidel zůstávají na disku pro kompatibilitu, vestavěná mapa je už nevybírá.
+68 ikon je přímo trasovaných ze zdrojových pixelů (6 z přílohy + 62 z OpenArt) pomocí dvou barevných masek a Potrace 2.1.8. Podkladové černé rožky, které některé generace převzaly z přílohy, jsou před výpočtem výřezu odstraněny jako malé izolované komponenty v rozích. Do obrázku uvnitř ikony se nepřikresluje.
 
-## Schválené vzory
+Pauza měla i po opravě generátorem silné svislice. Pro její SVG jsou změřeny osy a svislé meze obou skutečných OpenArt pruhů; export je vyjádří zaoblenými obdélníky o šířce **1 px při velikosti 24 px**. Osy, výška a umístění barev se zachovávají. Jde o výslovnou korekci šířky, nikoli pixelově totožnou stopu. Je zaznamenána jako `vectorAdjustment` v manifestu a ověřena zvlášť; není skrytá v toleranci testu věrnosti.
 
-Použity dvě dokončené 2D sady z OpenArt projektu `Se5cXknUSHaom3A8Jq3B` (projekt má historický název „SMART ODPADY | 3D ikony“, ale vybrané vzory jsou výslovně 2D):
+Zdrojové PNG, ID generací, URL, hashe, výřezy, transformační matice a hashe SVG jsou dohledatelné v `docs/openart-source-input.json` a `docs/icon-provenance.json`. Velké zdrojové PNG slouží pouze přípravě v pracovním výstupu a nejsou vložené do aplikace. Geometrie se neupravuje ručně v `definitions.js`; reprodukuje ji převodní skript.
 
-- `jBrggqXVTmQUWteApJ9n`: domeček, moduly, nepřítomnost, poloha, zakázky, více.
-- `Zw32HlusnZqNioouvOcO`: vozidlo, faktura, tým, dashboard, nastavení, notifikace.
+## Ověření
 
-Oba vzory byly načteny z OpenArt a vizuálně zkontrolovány. SVG jsou ručně vytvořené vektorové implementace stejného stylu, nikoli vložené rastrové výřezy. Nebyla spuštěna nová generace návrhu.
+- Build **52 cest**, cílené testy **21/21**, kontrola syntaxe **811 JS/MJS souborů**, bez chyby. Po doplnění posledních kontrol prošel také samostatný test sady.
+- WebKit 26.5, profil iPhone 13 / DPR 3, šířky **375, 390, 430, 768 a 1440 px**: **120 obrazovek** (24 cest × 5 šířek), bez JS chyb, přetečení, rasterových náhrad a podkladových dlaždic ikon.
+- **20** podrobných kontrol výsledných stylů pro admina/řidiče, Moduly/Nepřítomnost a pět šířek. Fokus OČR, scroll, disabled, syntetická safe area, OS dark a stávající tmavá paleta mapy prošly. Aplikace nemá nově přidaný dark mode.
+- **41** sad funkčních kontrol: sedm rolí, menu, hledání, oprávnění, formuláře Nepřítomnosti a validace, filtry vozidel, detail a skutečné kliknutí na SVG návrat, historie, mapa, klávesnice a změna orientace. API odpovědi a zápisy jsou lokální syntetické; nevznikly produkční záznamy.
+- **105/105** samostatných SVG validních a načtených přes skutečný WebKit `<img>`. Původní chyba XML atributu `data-icon-accent` zůstává opravená.
+- **68/68** přímých převodů prošlo porovnáním zdroje/SVG při 20/24/28 px. Nejhorší 95. percentil vzdálenosti kontur je **0,141 px při 24 px**. Pauza prošla kontrolou os, výšky, polohy a šířky 1 px odděleně.
 
-## Kontroly
+Výsledky: `docs/openart-original-family-verification.json`; úplné protokoly a screenshoty jsou v pracovním prostoru `outputs/openart-original-family/` (složky `surfaces`, `styles`, `functional`, `standalone`, `review`).
 
-- Build: 49 rout, úspěšný. Syntaxe: 748 JS/MJS souborů, úspěšná.
-- 9 testovacích souborů prošlo: sada SVG, zaměstnanci, mapování vozidel, oprávnění hlášení řidičů, auth session, výstupy řidiče, tabletové audio, Šarlota a verzování importů.
-- WebKit: 23 obrazovek × 5 šířek = 115 kontrolovaných zobrazení (375, 390, 430, 768 a 1440 px). Bez chyb vykreslení a vodorovného přetečení. Kontrolovány skutečné rozměry ikon 20–28 px, barvy, tloušťka linek, odstranění podkladů a absence vestavěných rastrových ikon.
-- Mobilní funkční test: menu a hledání, dotykové cíle, žádost o nepřítomnost a validace časů, seznam a detail vozidel, filtry, historie, seznam mapových poloh, klávesnice, editor oprávnění, odhlášení. Sedm rolí ověřeno také přihlášením přes skutečné auth handlery s mock OTP.
-- WebKit mobilní režim: pevné lišty, nezávislé rolování, vstupy 16 px, zachování rozepsaných dat při otočení, simulovaná klávesnice a iOS gesta. Mapa má zachovanou výjimku pro vlastní gesta.
-- Chrome: 7 rolí × 3 šířky = 21 kombinací; hledání modulů, seznam zaměstnanců, karta, přepínání záložek, návrat, staré adresy a oprávnění prošly.
-- Všechny browserové testy používají lokální server a syntetická data. Externí síť je blokovaná, API odpovědi jsou testovací. Automatické synchronizace se zachytávají lokálně; neposílají se do produkce.
+## Kontrast a velikost
 
-**Fyzický iPhone: NEOVĚŘENO.** Ověření proběhlo v desktopovém WebKitu s profilem iPhonu, nikoli na fyzickém zařízení. Nástroj pro přístup k zařízení (`xcrun devicectl`) není v prostředí dostupný. Reálné GPS, hlasové služby, produkční API a síťový výkon fyzického telefonu nejsou těmito lokálními testy doloženy.
+Tmavá na bílé: **13,59 : 1**. Zelená na bílé: **2,32 : 1**, proto zůstává akcentem doprovázeným tmavým tvarem a textovým/přístupným názvem; neuvádí se samostatná WCAG shoda zelené. Schválená paleta se neměnila.
 
-## Kontrast a výkon
+69 SVG má **212,919 B**, největší **7,381 B** (pod 8 KiB); gzip sdílených definic **74,396 B**. Inline vykreslení používá stávající cache. Nejde o měření rychlosti skutečného telefonu.
 
-- #243128 na bílé: **13,59 : 1**.
-- #75BD25 na bílé: **2,32 : 1**. Samotná schválená zelená nesplňuje 3 : 1 proti bílé; slouží jako akcent a identitu/akci doprovází tmavá geometrie a text nebo přístupný název. Barevná paleta nebyla svévolně změněna. Nejde o tvrzení úplné WCAG shody ikon.
-- #75BD25 proti #243128: **5,87 : 1**.
-- 69 SVG má dohromady **26 784 B**, největší **494 B**. Sdílené definice mají gzip **2 576 B**. Inline vykreslení je cachované a nevyžaduje jednotlivé obrázkové požadavky.
-- 36 mapových SVG aliasů má celkem **14 537 B** proti **4 912 151 B** odpovídajících původních PNG. Jde o porovnání souborů, nikoli tvrzení o naměřeném zrychlení na fyzickém iPhonu.
+## Před a po
 
-## Podklady ke kontrole
-
-[Galerie před/po](../../../outputs/unified-2d-icons/index.html) obsahuje 118 dvojic (115 obrazovek a 3 mobilní menu). [Celá sada 20/24/28 px](../../../outputs/unified-2d-icons/after-all/icon-catalog.html). Strojové výsledky jsou v `asset-audit.json`, `after-all/audit.json`, `functional/audit.json`, `native-mobile/audit.json` a `desktop-functional/browser-results.json`.
-
-## Existující moduly
-
-| Modul | Adresa | SVG |
-|---|---|---|
-| Dashboard firmy | `/dashboard` | `dashboard` |
-| Vozidla | `/vozovy-park` | `fleet` |
-| Poloha vozidel | `/sledovani-vozidel` | `tracking` |
-| Datové schránky | `/datove-schranky-plus` | `mail` |
-| Hlášení z vozidel | `/hlaseni-ridicu` | `jobs` |
-| Servis vozidel | `/servis-udrzba` | `service` |
-| Pneumatiky | `/pneumatiky` | `tyres` |
-| Svozové trasy | `/trasy-svozu` | `routes` |
-| Odběrové trasy | `/trasy-vzorku` | `sampling` |
-| Zákazníci / Vistos | `/vistos` | `customers` |
-| Náklady | `/naklady` | `costs` |
-| Nezaplacené faktury | `/pohledavky` | `invoice` |
-| Reporty | `/reporty` | `reports` |
-| Zprávy RCS a SMS | `/rcs-sms-konverzace` | `message` |
-| Zaměstnanci | `/zamestnanci` | `team` |
-| Nepřítomnosti | `/dovolena-nemoc` | `absence` |
-| Uživatelé a role | `/uzivatele` | `users` |
-| Nastavení | `/nastaveni` | `settings` |
-| Stav systému | `/kontrola-systemu` | `system` |
-| Samoopravy | `/samoopravy` | `repair` |
-
-Další navigační položky: hlavní stránka/moduly, rychlá nepřítomnost, připomínky a chyby. Výběr modulů na úvodní stránce zůstává stejný jako v základní verzi.
-
-## Údržba
-
-Zdroj: `src/components/icons/definitions.js`, renderer `SmartIcon.js`, mapování `moduleIconNames`, jednotný vzhled `src/icon-system.css`. Veřejné SVG jsou v `public/icons/ui/`; mapové aliasy v `public/vehicles/icons/`.
-
-```sh
-npm run icons:export
-npm run test:icons
-npm run build
-npm run test:icons:browser
-```
-
-Browserové testy potřebují Playwright a kompatibilní WebKit; lze použít `PLAYWRIGHT_MODULE_PATH` a `PLAYWRIGHT_BROWSERS_PATH`. Bez instalovaného Playwrightu nemění test produkční závislosti aplikace.
-
-## Ukázky uložené přímo v commitu
+Reprodukovatelné dvojice používají stejnou roli admin, syntetická data a viewport. Výchozí vzhled je z 0.1.851, výsledná úprava z 0.1.853; relevantní rozložení těchto obrazovek bylo v obou základech shodné.
 
 | Obrazovka | Před | Po |
 |---|---|---|
-| Hlavní stránka iPhone | [Před](icon-review/before-home-390.png) | [Po](icon-review/after-home-390.png) |
-| Mobilní menu | [Před](icon-review/before-menu-390.png) | [Po](icon-review/after-menu-390.png) |
-| Nepřítomnost iPhone | [Před](icon-review/before-dovolena-nemoc-rychle-zadani-375.png) | [Po](icon-review/after-dovolena-nemoc-rychle-zadani-375.png) |
-| Hlavní stránka desktop | [Před](icon-review/before-home-1440.png) | [Po](icon-review/after-home-1440.png) |
+| Moduly, 390 px | [Před](icon-review/original-family/modules-before.png) | [Po](icon-review/original-family/modules-after.png) |
+| Nepřítomnost, 390 px | [Před](icon-review/original-family/absence-before.png) | [Po](icon-review/original-family/absence-after.png) |
+| Moduly, 1440 px | [Před](icon-review/original-family/desktop-before.png) | [Po](icon-review/original-family/desktop-after.png) |
+
+[SVG návrat v detailu vozidla](icon-review/original-family/vehicle-back-after.png). Úplná lokální galerie: `outputs/openart-original-family/index.html`; zdroj a vektor vedle sebe: `review/index.html`. ZIP obsahuje všech 105 samostatných SVG a provenance.
+
+## Zachované funkce a konkrétní limity
+
+Backend, databáze, oprávnění, verze aplikace, produkční konfigurace, GPS a přiřazení ikon ke konkrétním vozidlům nejsou touto změnou upraveny. Home stále vede na přehled, návratové odkazy zůstávají návratovými odkazy. Dvě položky spodní navigace na Moduly a pět uvnitř modulů jsou doložené kontextové chování, zachované včetně oprávnění.
+
+**Fyzický iPhone/Safari/PWA: NEOVĚŘENO.** Testy jsou emulace WebKitu; syntetická safe area nenahrazuje reálný telefon. Tyrkysové bloky z dodaného fyzického screenshotu se nereprodukovaly a nejsou označeny za opravené. Pixelová analýza ukázala jejich přesah do systémového stavového řádku, konkrétní původ však není doložen. Legitimní zelené zvýraznění OČR zůstává zachované.
+
+## Reprodukce a návrat
+
+```sh
+node scripts/export-icons.mjs
+node scripts/icon-system.test.mjs
+node scripts/build.mjs
+node scripts/svg-assets-browser.test.mjs
+node scripts/icon-system-browser.test.mjs
+node scripts/icon-integration-browser.test.mjs
+node scripts/mobile-ux-browser.test.mjs
+```
+
+Browserové testy používají `PLAYWRIGHT_MODULE_PATH`, `PLAYWRIGHT_BROWSERS_PATH` a volitelný `PWA_TEST_OUTPUT`. Převod potřebuje Python s Pillow/cv2/numpy a Potrace 2.1.8. Při regeneraci všech 69 zdrojů použít `node scripts/trace-openart-icons.mjs <adresar-zdroju>`; zdroje PNG mají názvy `sources/<historyId>.png`, příloha se čte z commitu. Následuje `render-openart-proof.mjs` a `check-openart-fidelity.py`. Záměrná korekce pauzy se provede automaticky a zůstane dohledatelná.
+
+Změny jsou v samostatném implementačním commitu; přesný hash a příkaz `git revert` je v předávacím `outputs/openart-original-family/REPORT.md`. Pro úplný návrat původní šestice a XML exporteru patří k této větvi i předchozí commit `433a2caf`. Produkce se v tomto běhu neměnila, produkční rollback tedy není potřeba. Nasazení vyžaduje nový výslovný souhlas a aktuální kontrolu hlavní větve.

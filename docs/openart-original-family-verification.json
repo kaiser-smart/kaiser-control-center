@@ -1,0 +1,43 @@
+{
+  "status": "prepared-for-review-not-deployed",
+  "date": "2026-10-26",
+  "baseVersion": "0.1.853",
+  "baseCommit": "2d5668827d439298226d6852901526decb343638",
+  "branch": "codex/approved-icon-integration-current",
+  "approvedOriginals": 6,
+  "openartGeneratedIcons": 63,
+  "standaloneSVGs": 105,
+  "generatedSources": 11,
+  "uiModules": 21,
+  "functionalResultSets": 41,
+  "renderedSurfaces": 120,
+  "computedStyleSurfaces": 20,
+  "unitTests": 21,
+  "unitFailures": 0,
+  "pageErrors": 0,
+  "svgLoadingFailures": 0,
+  "buildRoutes": 52,
+  "syntaxFilesChecked": 811,
+  "browser": "26.5",
+  "physicalIPhoneVerified": false,
+  "cyanOverlayReproduced": false,
+  "assetMetrics": {
+    "icons": 69,
+    "modules": 21,
+    "totalBytes": 212919,
+    "maxBytes": 7381,
+    "libraryGzipBytes": 74396,
+    "graphiteOnWhite": 13.59241828339373,
+    "greenOnWhite": 2.3173348970671466,
+    "greenOnGraphite": 5.865539029596671,
+    "note": "Green is the approved accent, not an independently contrast-compliant foreground on white. Labels remain necessary."
+  },
+  "fidelity": {
+    "pixelFaithful": 68,
+    "documentedWidthCorrection": 1,
+    "max95thContourError24px": 0.140625
+  },
+  "sourceManifest": "docs/openart-source-input.json",
+  "sourceProvenance": "docs/icon-provenance.json",
+  "explicitVectorAdjustment": "Pause: measured axes and height preserved, both rounded bars normalized to 1px width at 24px."
+}
