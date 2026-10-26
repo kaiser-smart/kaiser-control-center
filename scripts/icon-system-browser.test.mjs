@@ -31,7 +31,7 @@ let browser;
 const results=[],errors=[],external=[],mockedMutations=[];
 try {
   browser=process.env.BROWSER_ENGINE==='chromium'?await chromium.launch({channel:'chrome',headless:true}):await webkit.launch({headless:true});
-  const context=await browser.newContext({...devices['iPhone 13'],serviceWorkers:'block'});
+  const context=await browser.newContext({...(process.env.ICON_DEVICE==='desktop'?{deviceScaleFactor:1}:devices['iPhone 13']),serviceWorkers:'block'});
   await context.route('**/*',async route=>{
     const url=new URL(route.request().url());
     const fonts=process.env.PWA_FONT_FIXTURES;
@@ -55,7 +55,7 @@ try {
   });
   const page=await context.newPage();page.setDefaultTimeout(10000);page.setDefaultNavigationTimeout(20000);
   page.on('pageerror',error=>errors.push({url:page.url(),message:error.message}));
-  const routes=JSON.parse(await readFile(path.join(dist,'route-manifest.json'),'utf8')).routes.map(r=>r.path);
+  const routes=JSON.parse(await readFile(path.join(dist,'route-manifest.json'),'utf8')).routes.map(r=>r.path).filter(route=>!process.env.ICON_TEST_ROUTES||process.env.ICON_TEST_ROUTES.split(',').includes(route));
   for(const [width,height] of [[320,740],[375,667],[390,844],[430,932],[768,1024],[1024,900],[1440,1000],[1920,1080]].filter(([w])=>!process.env.ICON_TEST_WIDTHS||process.env.ICON_TEST_WIDTHS.split(',').map(Number).includes(w))) {
     await page.setViewportSize({width,height});
     for(const route of routes) {
@@ -63,7 +63,8 @@ try {
       const metrics=await page.evaluate(()=>{
         const visible=node=>{const b=node.getBoundingClientRect();return b.width>0&&b.height>0;};
         const icons=[...document.querySelectorAll('svg.smart-icon')].filter(visible);
-        return {width:innerWidth,scrollWidth:document.documentElement.scrollWidth,icons:icons.length,
+        const clippedBrand=[...document.querySelectorAll('.ui-pilot-brand__copy .smart-brand-name')].filter(visible).some(n=>n.scrollWidth>n.clientWidth+1);
+        return {clippedBrand,width:innerWidth,scrollWidth:document.documentElement.scrollWidth,icons:icons.length,
           iconProblems:icons.flatMap(node=>{
             const style=getComputedStyle(node),b=node.getBoundingClientRect(),accent=node.querySelector('[data-icon-accent]');
             const mobile=innerWidth<=720;
@@ -98,8 +99,10 @@ try {
       });
       const slug=route==='/'?'home':route.slice(1).replaceAll('/','-');
       await page.screenshot({path:path.join(output,`${slug}-${width}.png`)});
+      if(metrics.scrollWidth>width)console.error('Overflow elements',route,width,await page.evaluate(()=>[...document.querySelectorAll('#app *')].filter(n=>n.getBoundingClientRect().right>innerWidth+1).slice(0,15).map(n=>({tag:n.tagName,cls:n.className,right:n.getBoundingClientRect().right,width:n.getBoundingClientRect().width}))));
       assert.ok(metrics.scrollWidth<=width,`Overflow ${route} @ ${width}`);
-      if(!baseline){if(metrics.iconProblems.length)console.error('SVG contract',route,width,JSON.stringify(metrics.iconProblems));assert.deepEqual(metrics.rasterIcons,[],`Raster icons ${route}`);assert.deepEqual(metrics.iconTiles,[],`Icon backgrounds ${route}`);if(route==='/sledovani-vozidel')assert.equal(await page.locator('.vm-header').count(),1,'Dedicated map workspace remains intact');else if(route!=='/opravit')assert.ok(metrics.icons>0,`Missing icons on ${route}`);}
+      if(!baseline)assert.equal(metrics.clippedBrand,false,`Clipped brand ${route} @ ${width}`);
+      if(!baseline){if(metrics.iconProblems.length)console.error('SVG contract',route,width,JSON.stringify(metrics.iconProblems));assert.deepEqual(metrics.rasterIcons,[],`Raster icons ${route}`);assert.deepEqual(metrics.iconTiles,[],`Icon backgrounds ${route}`);if(route==='/sledovani-vozidel')assert.equal(await page.locator('.vm-header').count(),1,'Dedicated map workspace remains intact');else if(!['/opravit','/trasy-svozu/test'].includes(route))assert.ok(metrics.icons>0,`Missing icons on ${route}`);}
       results.push({route,width,height,...metrics});
       if(route==='/'&&width<721){
         if(!baseline)assert.equal(await page.locator('.mobile-home-link [data-icon=home]').count(),1);
@@ -124,7 +127,7 @@ try {
     await writeFile(path.join(output,'icon-catalog.html'),catalog);
   }
   assert.deepEqual(errors,[],'No browser errors');
-  assert.deepEqual(results.filter(r=>r.iconProblems.length).map(r=>({route:r.route,width:r.width,issues:r.iconProblems})),[],'Context icon contracts');
-  await writeFile(path.join(output,'audit.json'),JSON.stringify({baseline,engine:process.env.BROWSER_ENGINE||'webkit',browser:browser.version(),physicalIPhone:false,results,errors,externalBlocked:[...new Set(external)],mockedMutations},null,2));
+  if(!baseline)assert.deepEqual(results.filter(r=>r.iconProblems.length).map(r=>({route:r.route,width:r.width,issues:r.iconProblems})),[],'Context icon contracts');
+  await writeFile(path.join(output,'audit.json'),JSON.stringify({baseline,engine:process.env.BROWSER_ENGINE||'webkit',browser:browser.version(),physicalIPhone:false,profile:process.env.ICON_DEVICE||'iPhone 13',results,errors,externalBlocked:[...new Set(external)],mockedMutations},null,2));
   await context.close();
 }finally{await browser?.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}

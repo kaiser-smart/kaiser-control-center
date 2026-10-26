@@ -1825,6 +1825,21 @@ body:has(.ui-system-v2) {
   border-radius: 999px;
 }
 
+/* Header actions need their own row before the sidebar leaves too little space. */
+@media (min-width: 721px) and (max-width: 1180px) {
+  .ui-system-v2 .absence-hero--app {
+    grid-template-columns: 104px minmax(0, 1fr);
+  }
+  .ui-system-v2 .absence-command-actions--hero { grid-column: 1 / -1; }
+}
+
+/* Fit the actual filters instead of reserving seven desktop columns. */
+@media (min-width: 721px) {
+  .ui-system-v2 .absence-filters {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  }
+}
+
 @media (max-width: 1180px) {
   .ui-system-v2:not(.ui-system-pilot) {
     grid-template-columns: 226px minmax(0, 1fr);

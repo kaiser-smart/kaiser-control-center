@@ -39,7 +39,7 @@
 #app .smart-brand-name { display:inline-flex; align-items:center; gap:8px; }
 #app .smart-brand-name svg.smart-icon { width:24px; height:24px; }
 #app .module-launcher-toolbar .smart-brand-name svg.smart-icon { width:36px; height:36px; }
-#app .ui-pilot-brand__copy .smart-brand-name { gap:5px; }
+#app .ui-pilot-brand__copy .smart-brand-name { gap:5px; min-width:0; white-space:normal; overflow:visible; }
 #app .ui-pilot-brand__copy .smart-brand-name svg.smart-icon { width:28px; height:28px; }
 #app :is(.ai-assistant-launcher__icon,.ai-voice-start-button__icon) { display:inline-flex; align-items:center; width:24px; height:24px; }
 #app :is(.ai-assistant-launcher__icon,.ai-voice-start-button__icon)::before,
