@@ -5,7 +5,7 @@ const v={id:'safe',label:'TEST',name:'<script>bad</script>',type:{key:'tanker',l
 const stale={...v,id:'stale',category:'stale'};
 const missing={...v,id:'missing',point:null,category:'missing',lastGpsAt:''};
 const stats=fleetStatsHTML([v,stale,missing],null,'Zdroj nedostupný');
-assert.match(stats,/33%/);assert.match(stats,/1 \/ 1 \/ 1/);assert.match(stats,/Zdroj nedostupný/);assert.doesNotMatch(stats,/NaN|Infinity/);
+assert.match(stats,/33%/);assert.match(stats,/1 \/ 2/);assert.match(stats,/Zdroj nedostupný/);assert.doesNotMatch(stats,/NaN|Infinity/);
 assert.match(fleetStatsHTML([],null,''),/Dostupnost GPS neověřena/);
 assert.match(fleetStatsHTML([v],{period:'today',apiStatus:'ready',summary:{pointCount:2,totalKm:12.5,tripCount:1}},''),/12,5 km/);
 assert.doesNotMatch(fleetStatsHTML([v],{period:'30d',summary:{pointCount:2,totalKm:999,tripCount:1}},''),/999/);
@@ -17,3 +17,6 @@ assert.equal(presentationType({vehicle:{vehicleType:'RAM'}}).key,'skip_loader');
 assert.equal(presentationType({vehicle:{vehicleType:'Ramenový nakladač'}}).key,'skip_loader');
 assert.equal(presentationType({vehicle:{vehicleType:'Popelářský vůz'}}).key,'collection_truck');
 console.log('PASS dashboard: verified gauge arithmetic, date-scoped analytics, absent telemetry and driver, escaped identities, GPS-only event provenance, declared RAM/collection types.');
+
+assert.doesNotMatch(fleetStatsHTML([v],{period:'today',apiStatus:'ready',summary:{pointCount:2,totalKm:12.5,tripCount:1,lastCalculatedAt:new Date().toISOString()}},''),/GPS výpočet|aktualizováno/);
+assert.match(fleetStatsHTML([v],{period:'today',apiStatus:'stale',summary:{pointCount:2,totalKm:12.5,tripCount:1}},''),/Statistiky nejsou aktuální/);

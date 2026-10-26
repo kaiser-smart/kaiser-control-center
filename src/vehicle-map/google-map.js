@@ -1,5 +1,5 @@
 import { CZECH_BOUNDARY } from "./czech-boundary.js";
-import { clusterPoints, clusterRect, markerRect, labelMarkerRect, overlaps, inside, rect, spreadPoints, placeLabels } from "./spatial.js";
+import { clusterPoints, clusterRect, markerRect, labelMarkerRect, overlaps, inside, rect, spreadPoints, placeLabels, focusTarget, fittedCamera } from "./spatial.js";
 import { markerHTML, markerName, escape, hasCurrentMotion, isOnline } from "./presentation.js";
 
 export const ROAD_STYLES = [
@@ -57,6 +57,7 @@ export function createGoogleMap(node, maps, callbacks) {
   let vehicles = [], selectedId = "", highlightedId = "", labelMode = "auto", groupIds = [], spider = false;
   let destroyed = false, initialFit = false, frame = 0, drawn = [], resizeFrame = 0;
   let history = null;
+  let selectionIdle = null;
   const polygons = countryPolygons;
   const countryMask = new maps.Polygon({ map, paths: countryMaskPaths(), fillColor:'#080f14', fillOpacity:1, strokeWeight:0, clickable:false, zIndex:4 });
   const countryBorder = polygons.flatMap(p => p.map(ring => new maps.Polyline({ map, path: ring.map(([lng,lat]) => ({lat,lng})), strokeColor:'#b4e52b', strokeOpacity:1, strokeWeight:2, clickable:false, zIndex:5 })));
@@ -203,19 +204,18 @@ export function createGoogleMap(node, maps, callbacks) {
   function fitCountry() {
     const b = new maps.LatLngBounds();
     polygons.forEach(p => p.forEach(ring => ring.forEach(([lng,lat]) => b.extend({lat,lng}))));
-    map.fitBounds(b, 24); map.setHeading?.(0); map.setTilt?.(0);
+    map.fitBounds(b, 24);
   }
   function fit(items) {
     const valid = items.filter((v) => v.point); if (!valid.length) return;
-    const b = new maps.LatLngBounds(); valid.forEach((v) => b.extend(v.point));
-    map.fitBounds(b, 64); map.setHeading?.(0); map.setTilt?.(0);
+    map.moveCamera(fittedCamera(valid.map(v => v.point), node.clientWidth, node.clientHeight, countryMinZoom(node)));
   }
   function openGroup(members) {
     groupIds = members.map((v) => v.id);
     callbacks.onGroup(members);
     const unique = new Set(members.map((v) => `${v.point.lat}:${v.point.lng}`));
     spider = members.length <= 8 && (unique.size === 1 || (map.getZoom() || 0) >= 20);
-    if (!spider && unique.size > 1) {
+    if (!spider) {
       const before = map.getZoom(); fit(members);
       maps.event.addListenerOnce(map, "idle", () => {
         if (destroyed || !groupIds.length) return;
@@ -226,33 +226,35 @@ export function createGoogleMap(node, maps, callbacks) {
     }
     scheduleLayout();
   }
-  function select(id, force = false) {
+  function select(id) {
+    selectionIdle?.remove(); selectionIdle = null;
     const v = vehicles.find((v) => v.id === id); if (!v?.point) return;
+    // Only explicit selection focuses the camera. Refreshes retain the user's
+    // viewport, and an already closer view is never zoomed out.
+    if ((map.getZoom() || 0) < 16) {
+      selectionIdle = maps.event.addListenerOnce(map, "idle", () => {
+        selectionIdle = null;
+        if (!destroyed && selectedId === id) select(id);
+      });
+      map.setZoom(16); return;
+    }
     const p = project(v); if (!p) return;
     const safe = { left: 50, top: 76, right: node.clientWidth - 50, bottom: node.clientHeight - 60 };
     const detail = node.parentElement.querySelector(".vm-panel-detail:not([hidden])");
     if (detail && getComputedStyle(detail).visibility !== "hidden" && detail.getBoundingClientRect().left < node.getBoundingClientRect().right) {
       const n = node.getBoundingClientRect(), r = detail.getBoundingClientRect();
       // Keep the full plate clear of the context panel on explicit selection.
-      // Pan the viewport only when needed; the geographic marker anchor is fixed.
+      // Center in the usable map area; the geographic marker anchor is fixed.
       const label = measure(v.label), footprint = labelMarkerRect({ ...p, vehicle: v });
       if (r.width < n.width * .8) safe.right = Math.max(safe.left + 20, r.left - n.left - Math.max(40, label.width / 2 + 8));
       else safe.bottom = Math.max(safe.top + 20, r.top - n.top - Math.max(40, footprint.bottom - p.y + 5 + label.height + 8));
     }
-    // A country overview cannot pan far enough to expose southern vehicles above
-    // a phone sheet. Zoom only on explicit selection, never on GPS refresh.
-    if (detail && safe.bottom < node.clientHeight - 60 && (p.y > safe.bottom || p.y < safe.top) && (map.getZoom() || 0) < 11) {
-      maps.event.addListenerOnce(map, "idle", () => { if (!destroyed && selectedId === id) select(id, true); });
-      map.setZoom(11); return;
-    }
-    if (force) {
-      map.panTo(v.point);
-      map.panBy(node.clientWidth / 2 - (safe.left + safe.right) / 2, node.clientHeight / 2 - (safe.top + safe.bottom) / 2);
-    } else {
-      const dx = p.x < safe.left ? p.x - safe.left : p.x > safe.right ? p.x - safe.right : 0;
-      const dy = p.y < safe.top ? p.y - safe.top : p.y > safe.bottom ? p.y - safe.bottom : 0;
-      if (dx || dy) map.panBy(dx, dy);
-    }
+    const target = focusTarget(v, safe, bounds(), controls(), measure(v.label));
+    const dx = p.x - target.x;
+    const dy = p.y - target.y;
+    // One pan avoids competing panTo/panBy animations. Repeated selection at
+    // the target is a no-op, so the icon and plate do not jump on another click.
+    if (Math.abs(dx) > .5 || Math.abs(dy) > .5) map.panBy(dx, dy);
   }
   listeners.push(maps.event.addListener(map, "idle", scheduleLayout));
   for (const event of ["dragstart", "zoom_changed"]) listeners.push(maps.event.addListener(map, event, () => overlay.layer?.classList.add("is-moving")));
@@ -281,6 +283,6 @@ export function createGoogleMap(node, maps, callbacks) {
       history?.setMap(null); history = null;
       if (points.length > 1) history = new maps.Polyline({ map, path: points, strokeColor: "#b4e52b", strokeWeight: 3, clickable: false });
     },
-    destroy() { destroyed = true; observer.disconnect(); cancelAnimationFrame(frame); cancelAnimationFrame(resizeFrame); listeners.forEach((l) => l.remove()); overlay.setMap(null); history?.setMap(null); countryMask.setMap(null); countryBorder.forEach(line => line.setMap(null)); measureNode.remove(); elements.clear(); labels.clear(); vehicles = []; }
+    destroy() { destroyed = true; selectionIdle?.remove(); observer.disconnect(); cancelAnimationFrame(frame); cancelAnimationFrame(resizeFrame); listeners.forEach((l) => l.remove()); overlay.setMap(null); history?.setMap(null); countryMask.setMap(null); countryBorder.forEach(line => line.setMap(null)); measureNode.remove(); elements.clear(); labels.clear(); vehicles = []; }
   };
 }

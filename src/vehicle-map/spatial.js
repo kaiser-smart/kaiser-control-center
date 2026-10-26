@@ -80,6 +80,19 @@ export function labelMarkerRect(p) {
   }
   return r;
 }
+// Camera target only: keep the selected marker and its plate clear of controls.
+// Does not change the vehicle's position or the marker/plate offsets.
+export function focusTarget(vehicle, safe, bounds, obstacles, label) {
+  const center = { x: (safe.left + safe.right) / 2, y: (safe.top + safe.bottom) / 2 };
+  const candidates = [center];
+  for (let y = safe.top; y <= safe.bottom; y += 24) for (let x = safe.left; x <= safe.right; x += 24) candidates.push({ x, y });
+  candidates.sort((a, b) => Math.hypot(a.x-center.x,a.y-center.y) - Math.hypot(b.x-center.x,b.y-center.y));
+  return candidates.find(p => {
+    const marker = markerRect({ ...p, vehicle }), foot = labelMarkerRect({ ...p, vehicle });
+    const plate = rect(p.x, foot.bottom + 5 + label.height / 2, label.width, label.height);
+    return inside(marker, bounds) && inside(plate, bounds) && !obstacles.some(o => overlaps(marker, o, 4) || overlaps(plate, o, 4));
+  }) || center;
+}
 export function placeLabels(items, obstacles, bounds, measure, selectedId = "", highlightedId = "", mode = "auto") {
   const occupied = [], output = new Map();
   const rank = (p) => p.id === selectedId ? 0 : p.id === highlightedId ? 1 : p.vehicle.emergency ? 2 : p.vehicle.age > 120 ? 3 : 4;
@@ -96,4 +109,20 @@ export function placeLabels(items, obstacles, bounds, measure, selectedId = "", 
     if (valid) { occupied.push(valid); output.set(p.id, valid); }
   }
   return output;
+}
+
+// Fit Czech vehicle coordinates with one atomic Google camera update. Splitting
+// center and zoom through fitBounds can leave the center clamped at the old zoom.
+export function fittedCamera(points, width, height, minZoom, padding = 64) {
+  if (!points.length) return null;
+  const y = lat => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)) / (2 * Math.PI);
+  const west = Math.min(...points.map(p => p.lng)), east = Math.max(...points.map(p => p.lng));
+  const south = Math.min(...points.map(p => y(p.lat))), north = Math.max(...points.map(p => y(p.lat)));
+  const zoomX = Math.log2(Math.max(1, width - padding * 2) * 360 / (256 * (east - west)));
+  const zoomY = Math.log2(Math.max(1, height - padding * 2) / (256 * (north - south)));
+  return {
+    center: { lat: (2 * Math.atan(Math.exp((north + south) * Math.PI)) - Math.PI / 2) * 180 / Math.PI, lng: (west + east) / 2 },
+    zoom: Math.max(minZoom, Math.min(east === west && north === south ? 16 : 20, zoomX, zoomY)),
+    heading: 0, tilt: 0
+  };
 }

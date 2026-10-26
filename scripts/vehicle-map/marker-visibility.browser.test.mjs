@@ -21,17 +21,22 @@ await page.route('**/src/**',async route=>{
 await page.route('**/src/vehicle-map/google-map.js*',async route=>{let code=await source('src/vehicle-map/google-map.js');code=code.replace('let vehicles = [],','window.__visibilityMap=map; window.__visibilityMaps=maps; let vehicles = [],').replace('const overlay = new FleetOverlay();','const overlay = new FleetOverlay(); window.__visibilityOverlay=overlay;');await route.fulfill({contentType:'text/javascript',body:code});});
 if(before&&process.env.MARKER_BASE_REF)for(const file of ['src/styles.css','src/vehicle-map/spatial.js','src/vehicle-map/presentation.js'])await page.route('**/'+file+'*',async route=>route.fulfill({contentType:file.endsWith('.css')?'text/css':'text/javascript',body:await source(file)}));
 const control=async q=>fetch(url+'/__preview/control?'+q);
-const ready=()=>page.waitForSelector('.vm-marker');
+const ready=()=>page.waitForSelector('.vm-marker',{timeout:30000});
 const marker=n=>page.locator(`.vm-marker[data-vm-marker$=":synthetic-${n}"]`);
-const choose=async n=>{if((await page.viewportSize()).width<=720)await page.locator('[data-vm-view="list"]').click();await page.locator(`[data-vm-row$=":synthetic-${n}"]`).click();await page.waitForTimeout(250);};
-const pulse=()=>page.evaluate(()=>[...document.querySelectorAll('.vm-marker')].filter(e=>getComputedStyle(e,'::after').animationName==='vm-selected-drive-pulse').map(e=>e.dataset.vmMarker));
+const choose=async n=>{if((await page.viewportSize()).width<=720)await page.locator('[data-vm-view="list"]').click();await page.locator(`[data-vm-row$=":synthetic-${n}"]`).click();await page.waitForTimeout(900);};
+const pulse=()=>page.evaluate(()=>[...document.querySelectorAll('.vm-marker')].filter(e=>getComputedStyle(e,'::after').animationName==='vm-drive-pulse').map(e=>e.dataset.vmMarker));
+const assertMovingRings=async()=>{
+ await page.waitForFunction(()=>document.querySelectorAll('.vm-marker.has-current-motion').length>1);
+ const {expected,actual}=await page.evaluate(()=>({expected:[...document.querySelectorAll('.vm-marker.has-current-motion')].map(e=>e.dataset.vmMarker).sort(),actual:[...document.querySelectorAll('.vm-marker')].filter(e=>getComputedStyle(e,'::after').animationName==='vm-drive-pulse').map(e=>e.dataset.vmMarker).sort()}));
+ assert.deepEqual(actual,expected);assert.ok(expected.length>1,'Several moving cars must pulse independently of selection');
+};
 const shot=async name=>page.screenshot({path:`${output}/${before?'before':'after'}-${engine}-${name}.png`});
 // Capture actual painted phases, not just an animation-name declaration.
 const ringPhases=async theme=>{
  const samples=[];
  for(const time of [625,1500,2250]){
   samples.push(await marker(1).evaluate((el,time)=>{
-   const a=el.getAnimations({subtree:true}).find(a=>a.animationName==='vm-selected-drive-pulse');
+   const a=el.getAnimations({subtree:true}).find(a=>a.animationName==='vm-drive-pulse');
    if(!a)throw new Error('Selected current vehicle has no pulse animation');
    a.pause();a.currentTime=time;
    const s=getComputedStyle(el,'::after'),base=getComputedStyle(el,'::before');
@@ -40,14 +45,23 @@ const ringPhases=async theme=>{
   },time));
   await shot(`${theme}-pulse-${time}`);
  }
- await marker(1).evaluate(el=>el.getAnimations({subtree:true}).find(a=>a.animationName==='vm-selected-drive-pulse').play());
+ await marker(1).evaluate(el=>el.getAnimations({subtree:true}).find(a=>a.animationName==='vm-drive-pulse').play());
  await writeFile(`${output}/${before?'before':'after'}-${engine}-${theme}-pulse.json`,JSON.stringify(samples,null,2));
  return samples;
 };
 const test=async(name,fn)=>{await fn();results.push(name);console.log('PASS '+name);};
 try{
  await control('scene=overview&error=0&denied=0&unauthorized=0&ttl=3600000&failMe=0');await page.goto(url+'/sledovani-vozidel');await ready();
- await page.evaluate(()=>{__visibilityMap.setZoom(11);__visibilityMap.panTo({lat:49.215,lng:16.62});});await page.waitForTimeout(800);await choose(1);
+ if(!before)await test('Opening a country-scale cluster frames its actual vehicles',async()=>{
+  await page.waitForTimeout(1800);
+  await page.locator('.vm-cluster').first().click();await page.waitForTimeout(1800);
+  await writeFile(`${output}/${engine}-cluster-camera.json`,JSON.stringify(await page.evaluate(()=>({center:__visibilityMap.getCenter().toJSON(),zoom:__visibilityMap.getZoom(),group:document.querySelector('.vm-group-heading').innerText})),null,2));
+  const center=await page.evaluate(()=>__visibilityMap.getCenter().toJSON());
+  assert.ok(center.lat>49.1&&center.lat<49.3&&center.lng>16.4&&center.lng<16.8,JSON.stringify(center));
+  const visible=await page.evaluate(()=>{const map=document.querySelector('.vm-map').getBoundingClientRect();return [...document.querySelectorAll('.vm-marker')].filter(el=>{const r=el.getBoundingClientRect();return r.left<map.right&&r.right>map.left&&r.top<map.bottom&&r.bottom>map.top;}).length;});assert.ok(visible>0);
+  await shot('opened-cluster');await page.goto(url+'/sledovani-vozidel');await ready();
+ });
+ await page.evaluate(()=>{__visibilityMap.setZoom(11);__visibilityMap.panTo({lat:49.215,lng:16.62});});await page.waitForTimeout(800);if(!before)await test('All independent moving markers pulse before any vehicle is selected',async()=>{assert.equal(await page.locator('.vm-marker.is-selected').count(),0);await assertMovingRings();assert.equal(await marker(4).evaluate(e=>getComputedStyle(e,'::after').animationName),'vm-drive-pulse');await shot('all-moving');});await choose(1);
  await shot('dark-1440x900');
  const darkPhases=await ringPhases('dark');
  if(!before){
@@ -58,8 +72,8 @@ try{
    assert.ok(darkPhases[2].scale>darkPhases[1].scale);
    assert.ok(darkPhases[0].opacity>darkPhases[1].opacity&&darkPhases[1].opacity>darkPhases[2].opacity);
   });
-  await test('Only selected current moving vehicle pulses; cycle 2.5 seconds; artwork and label do not animate',async()=>{
-   assert.equal((await pulse()).length,1);
+  await test('Every current moving vehicle pulses without selection; cycle 2.5 seconds; artwork and label do not animate',async()=>{
+   await assertMovingRings();
    const styles=await marker(1).evaluate(el=>({cycle:getComputedStyle(el,'::after').animationDuration,art:getComputedStyle(el.querySelector('.vm-art')).animationName,body:getComputedStyle(el).animationName}));
    assert.deepEqual(styles,{cycle:'2.5s',art:'none',body:'none'});
    const first=await marker(1).evaluate(el=>getComputedStyle(el,'::after').transform);await page.waitForTimeout(900);assert.notEqual(await marker(1).evaluate(el=>getComputedStyle(el,'::after').transform),first);
@@ -69,22 +83,28 @@ try{
    assert.equal(await page.locator('.vm-label.is-selected').isVisible(),true);const a=await geometry();assert.ok(a.label[2]>0);assert.equal(a.font,'14px');assert.equal(a.weight,'700');assert.equal(a.bg,'rgb(250, 252, 253)');assert.equal(a.color,'rgb(27, 38, 45)');assert.equal(a.radius,'7px');
    await marker(1).click();await page.waitForTimeout(250);assert.deepEqual(await geometry(),a);
   });
-  await test('First selection does not shift the visible artwork or SPZ',async()=>{
-   await choose(3);
-   const geometry=async()=>({art:await marker(1).locator('.vm-art').boundingBox(),label:await page.locator('.vm-label').filter({hasText:/^TEST 001$/}).boundingBox()});
-   const old=await geometry();assert.ok(old.label);await marker(1).click();await page.waitForTimeout(250);assert.deepEqual(await geometry(),old);
+  await test('Selection zooms to street level, centers the exact point and keeps closer manual zoom',async()=>{
+   await page.evaluate(()=>__visibilityMap.setZoom(9));await page.waitForTimeout(350);await choose(1);
+   assert.equal(await page.evaluate(()=>__visibilityMap.getZoom()),16);
+   const anchor=await marker(1).evaluate(el=>{const r=el.getBoundingClientRect(),m=document.querySelector('.vm-map').getBoundingClientRect();return {x:r.x+r.width/2-m.x,y:r.y+r.height/2-m.y,w:m.width,h:m.height};});
+   assert.ok(Math.abs(anchor.x-anchor.w/2)<2,JSON.stringify(anchor));
+   const before=await page.evaluate(()=>({zoom:__visibilityMap.getZoom(),center:__visibilityMap.getCenter().toJSON()}));
+   await page.locator('[data-vm-refresh]').click();await page.waitForTimeout(500);
+   assert.deepEqual(await page.evaluate(()=>({zoom:__visibilityMap.getZoom(),center:__visibilityMap.getCenter().toJSON()})),before);
+   await page.evaluate(()=>__visibilityMap.setZoom(18));await page.waitForTimeout(350);await choose(1);
+   assert.equal(await page.evaluate(()=>__visibilityMap.getZoom()),18);
   });
-  await test('Reduced motion disables pulse',async()=>{await page.emulateMedia({reducedMotion:'reduce'});assert.deepEqual(await pulse(),[]);await page.emulateMedia({reducedMotion:'no-preference'});assert.equal((await pulse()).length,1);});
+  await test('Reduced motion disables pulse',async()=>{await page.emulateMedia({reducedMotion:'reduce'});assert.deepEqual(await pulse(),[]);await page.emulateMedia({reducedMotion:'no-preference'});await assertMovingRings();});
   await test('Pulse stops when current GPS ages past 120 seconds without receiving another sample',async()=>{
    await page.clock.setFixedTime(new Date(Date.now()+180000));await page.waitForTimeout(1300);assert.deepEqual(await pulse(),[]);
-   await page.clock.setFixedTime(new Date());await page.waitForTimeout(1300);assert.equal((await pulse()).length,1);
+   await page.clock.setFixedTime(new Date());await page.waitForTimeout(1300);await assertMovingRings();
   });
-  for(const [n,name] of [[3,'stopped'],[2,'stale'],[8,'unknown'],[12,'missing']])await test(name+' GPS/movement has no pulse',async()=>{await choose(n);assert.deepEqual(await pulse(),[]);await shot(name);});
+  for(const [n,name] of [[3,'stopped'],[2,'stale'],[8,'unknown'],[12,'missing']])await test(name+' GPS/movement has no pulse',async()=>{await choose(n);assert.equal(await marker(n).count() ? await marker(n).evaluate(e=>getComputedStyle(e,'::after').animationName) : 'none','none');await assertMovingRings();await shot(name);});
  }
  await choose(1);await page.evaluate(()=>{__visibilityMap.setOptions({styles:[]});__visibilityMap.setZoom(11);__visibilityMap.panTo({lat:49.215,lng:16.62});});await page.waitForTimeout(1000);await shot('light-1440x900');
  await ringPhases('light');
- if(!before)await test('Pan and zoom retain selection and fixed geographic anchor',async()=>{const old=await page.evaluate(()=>__visibilityMap.getZoom());await page.locator('[data-vm-zoom="1"]').click();await page.evaluate(()=>__visibilityMap.panBy(60,20));await page.waitForTimeout(800);assert.equal(await page.evaluate(()=>__visibilityMap.getZoom()),old+1);assert.equal(await page.locator('.vm-marker.is-selected').count(),1);assert.equal((await pulse()).length,1);const delta=await page.evaluate(()=>{const a=document.querySelector('.vm-marker.is-selected').getBoundingClientRect(),b=document.querySelector('.vm-map').getBoundingClientRect(),p=__visibilityOverlay.getProjection().fromLatLngToContainerPixel(new __visibilityMaps.LatLng(49.22,16.5));return [a.x+a.width/2-b.x-p.x,a.y+a.height/2-b.y-p.y];});assert.ok(delta.every(n=>Math.abs(n)<.75),JSON.stringify(delta));});
- for(const width of [1024,768,430,390,375,320]) {await page.setViewportSize({width,height:width>=768?768:width>=375?844:700});await page.evaluate(()=>{__visibilityMap.setZoom(11);__visibilityMap.panTo({lat:49.215,lng:16.62});});await page.waitForTimeout(250);await choose(1);await page.waitForTimeout(400);await shot('light-'+width);if(!before){assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);assert.equal((await pulse()).length,1);assert.equal(await page.locator('.vm-label.is-selected').isVisible(),true);if(width<=720){const plate=await page.locator('.vm-label.is-selected').boundingBox(),panel=await page.locator('.vm-panel-detail').boundingBox();assert.ok(plate.y+plate.height<panel.y,'Selected plate is fully above mobile detail');}}}
+ if(!before)await test('Pan and zoom retain selection and fixed geographic anchor',async()=>{const old=await page.evaluate(()=>__visibilityMap.getZoom());await page.locator('[data-vm-zoom="1"]').click();await page.evaluate(()=>__visibilityMap.panBy(60,20));await page.waitForTimeout(800);assert.equal(await page.evaluate(()=>__visibilityMap.getZoom()),old+1);assert.equal(await page.locator('.vm-marker.is-selected').count(),1);await assertMovingRings();const delta=await page.evaluate(()=>{const a=document.querySelector('.vm-marker.is-selected').getBoundingClientRect(),b=document.querySelector('.vm-map').getBoundingClientRect(),p=__visibilityOverlay.getProjection().fromLatLngToContainerPixel(new __visibilityMaps.LatLng(49.22,16.5));return [a.x+a.width/2-b.x-p.x,a.y+a.height/2-b.y-p.y];});assert.ok(delta.every(n=>Math.abs(n)<.75),JSON.stringify(delta));});
+ for(const width of [1024,768,430,390,375,320]) {await page.setViewportSize({width,height:width>=768?768:width>=375?844:700});await page.evaluate(()=>{__visibilityMap.setZoom(11);__visibilityMap.panTo({lat:49.215,lng:16.62});});await page.waitForTimeout(250);await choose(1);await page.waitForTimeout(500);await shot('light-'+width);if(!before){assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);await assertMovingRings();assert.equal(await page.locator('.vm-label.is-selected').isVisible(),true);if(width<=720){const plate=await page.locator('.vm-label.is-selected').boundingBox(),panel=await page.locator('.vm-panel-detail').boundingBox();assert.ok(plate.y+plate.height<panel.y,'Selected plate is fully above mobile detail');}}}
  if(!before){
   await page.setViewportSize({width:1440,height:900});await control('scene=same6');await page.goto(url+'/sledovani-vozidel');await ready();await page.locator('.vm-cluster').click();await page.waitForTimeout(500);await choose(1);
   await test('Coincident vehicles keep exact group count, selected SPZ priority and no plate collisions',async()=>{assert.equal(await page.locator('.vm-marker:not(.vm-cluster)').count(),6);assert.equal(await page.locator('.vm-label.is-selected:not([hidden])').count(),1);const overlap=await page.evaluate(()=>{const a=[...document.querySelectorAll('.vm-label:not(.vm-measure):not([hidden])')].map(el=>el.getBoundingClientRect());return a.some((r,i)=>a.slice(i+1).some(s=>r.left<s.right&&r.right>s.left&&r.top<s.bottom&&r.bottom>s.top));});assert.equal(overlap,false);await shot('cluster-six');});

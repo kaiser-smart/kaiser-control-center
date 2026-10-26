@@ -37,6 +37,7 @@ class TestMap {
   panTo(value) { this.center=new LatLng(value);this.calls.push(['panTo',value]);this.draw(); }
   panBy(x,y) { const scale=this.scale();this.center=new LatLng(this.center.lat()-y/scale,this.center.lng()+x/scale);this.calls.push(['panBy',x,y]);this.draw(); }
   setZoom(value) { this.zoom=Math.max(1,Math.min(21,value));this.calls.push(['zoom',this.zoom]);event.trigger(this,'zoom_changed');this.draw(); }
+  moveCamera(options) { this.center=new LatLng(options.center);this.zoom=options.zoom;this.heading=options.heading;this.tilt=options.tilt;this.calls.push(['fit',options]);event.trigger(this,'zoom_changed');this.draw(); }
   fitBounds(bounds,padding) {
     const ps=bounds.points; if(!ps.length)return; const minLat=Math.min(...ps.map(p=>p.lat)),maxLat=Math.max(...ps.map(p=>p.lat)),minLng=Math.min(...ps.map(p=>p.lng)),maxLng=Math.max(...ps.map(p=>p.lng));
     this.center=new LatLng((minLat+maxLat)/2,(minLng+maxLng)/2);

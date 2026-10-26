@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { hasCurrentMotion, isOnline, markerName, connectionHTML } from '../../src/vehicle-map/presentation.js';
-import { labelMarkerRect,placeLabels } from '../../src/vehicle-map/spatial.js';
+import { labelMarkerRect,placeLabels,focusTarget,fittedCamera,overlaps,rect } from '../../src/vehicle-map/spatial.js';
 const moving={point:{lat:49,lng:16},previousPoint:false,category:'moving',movement:'moving',age:30};
 assert.equal(hasCurrentMotion(moving),true);
 for(const patch of [{category:'stopped'},{category:'stale'},{category:'missing'},{movement:'unknown'},{point:null},{previousPoint:true},{age:null},{age:NaN},{age:120.001},{age:-1}])assert.equal(hasCurrentMotion({...moving,...patch}),false);
@@ -25,3 +25,19 @@ assert.equal(markerName({...moving,label:'TEST 001',type:{label:'Vůz'}}),'TEST 
 assert.equal(markerName({...moving,category:'stale',label:'TEST 002',type:{label:'Vůz'}}),'TEST 002, Vůz, Offline');
 assert.match(connectionHTML({...moving,category:'stale'}),/vm-offline/);
 console.log('PASS availability dots: online moving/stopped, offline stale/missing/fallback/unverified; no age in marker names');
+
+const tabletBounds={left:6,top:6,right:302,bottom:404},tabletSafe={left:50,top:76,right:258,bottom:374},legend={left:12,top:245,right:138,bottom:400};
+const target=focusTarget({heading:0},tabletSafe,tabletBounds,[legend],{width:100,height:26});
+const footprint=labelMarkerRect({...target,vehicle:{heading:0}});
+assert.equal(overlaps(rect(target.x,footprint.bottom+18,100,26),legend,4),false);
+assert(target.y<(tabletSafe.top+tabletSafe.bottom)/2 || target.x!==154);
+console.log('PASS focus target keeps the selected plate clear of tablet controls without moving its GPS anchor');
+
+const fitted=fittedCamera([{lat:49.15,lng:16.5},{lat:49.22,lng:16.695}],1200,800,7);
+assert.ok(fitted.center.lat>49.15&&fitted.center.lat<49.22);
+assert.equal(fitted.center.lng,16.5975);
+assert.ok(fitted.zoom>12&&fitted.zoom<13);
+const single=fittedCamera([{lat:49,lng:16}],400,600,7);
+assert.ok(Math.abs(single.center.lat-49)<1e-10);assert.equal(single.center.lng,16);assert.equal(single.zoom,16);
+assert.equal(fittedCamera([],400,600,7),null);
+console.log('PASS group camera fits real bounds atomically, including coincident points');

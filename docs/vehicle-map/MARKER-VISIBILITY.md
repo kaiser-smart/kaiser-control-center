@@ -35,3 +35,15 @@ Cílená změna pouze CSS: kruh začíná na scale 1,12, končí na 1,7, má ten
 Rozšířený browser test pořizuje skutečně vykreslené fáze 625/1500/2250 ms na tmavé i světlé Google mapě a měří viditelný odstup, růst a zeslabování. Zdroj CSS/JS pochází z testovaného checkoutu a je nahrazený jen v izolovaném browser kontextu. Syntetická flotila nikdy není produkční GPS. Šířky: 1440, 1024, 768, 430, 390, 375 a 320 px. Stávající testy zachovávají kontrolu stání, staré/chybějící/neověřené GPS, reduced-motion, kolizí, výběru, posunu a zoomu. Snímky a výsledky tohoto běhu jsou mimo Git v `outputs/pulse-fix/`.
 
 Cílené testy skutečných Google Maps prošly v Chromium i WebKit. Jednotkové testy markerů, modelu a všech sedmi GPS sad, syntax check 838 JS/MJS a build 53 rout prošly. Mobilní vykreslení je ověřované Chromium a WebKit; fyzická instalace PWA na iPhonu není tímto testem doložená. Produkční ověření je samostatný krok po povinném deploy guardu.
+
+## Změna zadání: všechny jedoucí vozy a cílené přiblížení — 0.1.877
+
+Na výslovný požadavek uživatele už pulz není omezený na vybrané vozidlo. Každý samostatně vykreslený marker se skutečně potvrzenou aktuální jízdou má stejný jemný kruh. Skupiny zůstávají skupinami; nerozlišitelná vozidla ve shluku se nezaměňují za samostatné markery. Podmínky platné GPS, skutečného pohybu, stáří nejvýše 120 s a reduced-motion zůstávají beze změny.
+
+Výslovný výběr z mapy, seznamu nebo přehledu přiblíží mapu alespoň na zoom 16 a vystředí zeměpisný bod do využitelné části mapy mimo detail. Bližší pohled se neoddaluje. Opakovaný výběr již vystředěného vozu neposune kameru. Nový výběr ruší čekání na předchozí přiblížení. Obnova GPS ani zvýraznění hoverem kameru nemění. Vozidla se stejnými souřadnicemi zachovávají původní skupiny a rozbalení; vybraná SPZ má prioritu.
+
+Aktualizované testy požadují více současných pulzů i bez výběru, žádný pulz u stojícího/starého/neověřeného bodu, zastavení po zestárnutí, přiblížení z celorepublikového pohledu a zachování ručního zoomu při obnově. Grafika, kotvy, provozní stavová logika, API a DB beze změny.
+
+Doplnění podle dalších připomínek: odstraněna mapová legenda, počítadlo výřezu, volba režimu popisků a běžný časový podpis GPS výpočtu. SPZ se vždy zobrazují automaticky s prioritou výběru a s řešením kolizí. Detail má pouze jednu dostupnostní tečku u GPS; stav Jede/Stojí zůstává textem. Neaktuálnost statistik nebo výpadek se nadále označují pravdivě.
+
+Otevírání shluku je testováno na skutečných Google Maps z celorepublikového pohledu. Výřez skupiny nastavuje střed a zoom společně pomocí moveCamera. Rozměry výřezu vycházejí z Mercatorovy projekce skutečných bodů a velikosti mapy s okrajem 64 px. Tím se odstraňuje reprodukovaný případ, kdy fitBounds změnil zoom, ale ponechal střed mimo vozidla. Souřadnice markerů se nemění; nulové natočení zůstává zachované.
