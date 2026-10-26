@@ -1,0 +1,191 @@
+name: Opravit · hourly safe repair
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: smart-odpady-production-repair
+  cancel-in-progress: false
+jobs:
+  claim:
+    if: vars.REPAIR_ENABLED == 'true' && github.ref == 'refs/heads/main' && github.event.repository.private == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      has_job: ${{ steps.claim.outputs.has_job }}
+      case_id: ${{ steps.claim.outputs.case_id }}
+      base: ${{ steps.base.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check integration prerequisites
+        env:
+          OPENAI_READY: ${{ secrets.OPENAI_API_KEY != '' }}
+          DEPLOY_READY: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          RUNNER_READY: ${{ secrets.REPAIR_RUNNER_TOKEN != '' }}
+        run: test "$OPENAI_READY" = true && test "$DEPLOY_READY" = true && test "$RUNNER_READY" = true
+      - id: base
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - id: claim
+        env:
+          REPAIR_RUNNER_TOKEN: ${{ secrets.REPAIR_RUNNER_TOKEN }}
+        run: node scripts/repair/client.mjs
+      - uses: actions/upload-artifact@v4
+        if: steps.claim.outputs.has_job == 'true'
+        with:
+          name: repair-request
+          path: request/
+          retention-days: 1
+  generate:
+    needs: claim
+    if: needs.claim.outputs.has_job == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.claim.outputs.base }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: repair-request
+          path: request
+      - name: Isolated working branch
+        run: git switch -c "codex/repair-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+      - uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          sandbox: workspace-write
+          safety-strategy: drop-sudo
+          prompt-file: .github/codex/repair-prompt.md
+          output-file: /tmp/codex-result.md
+      # No credentials after the agent. Capture only source bytes, not its Git state.
+      - name: Collect untrusted CSS proposal
+        run: |
+          mkdir -p /tmp/repair-proposal
+          test -f src/styles.css && test ! -L src/styles.css
+          test "$(wc -c < src/styles.css)" -lt 2000000
+          cp -- src/styles.css /tmp/repair-proposal/styles.css
+      - uses: actions/upload-artifact@v4
+        with:
+          name: repair-proposal
+          path: /tmp/repair-proposal/styles.css
+          retention-days: 7
+  validate:
+    needs: [claim, generate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.claim.outputs.base }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: repair-proposal
+          path: /tmp/repair-proposal
+      - name: Reconstruct patch and enforce trusted policy
+        env:
+          BASE_SHA: ${{ needs.claim.outputs.base }}
+        run: |
+          cp /tmp/repair-proposal/styles.css src/styles.css
+          git diff --no-ext-diff -- src/styles.css > /tmp/repair.patch
+          git restore src/styles.css
+          node scripts/repair/gate.mjs /tmp/repair.patch "$BASE_SHA"
+      - name: Regression gates
+        run: |
+          npm run test:repair
+          npm run test:auth-session
+          npm run test:self-repair
+          npm run lint
+          npm run build
+      - name: Browser regression with synthetic accounts
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.62.1
+          npx playwright install --with-deps webkit
+          node scripts/repair-browser.test.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-repair
+          path: |
+            /tmp/repair.patch
+            gate.json
+          retention-days: 30
+  deploy:
+    needs: [claim, validate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: repair-production
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.claim.outputs.base }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: validated-repair
+          path: /tmp/validated
+      - name: Validate again on fresh runner
+        env:
+          BASE_SHA: ${{ needs.claim.outputs.base }}
+        run: |
+          PATCH=$(find /tmp/validated -name repair.patch -type f)
+          test -n "$PATCH"
+          node scripts/repair/gate.mjs "$PATCH" "$BASE_SHA"
+      - name: Record passed deployment gates
+        env:
+          REPAIR_RUNNER_TOKEN: ${{ secrets.REPAIR_RUNNER_TOKEN }}
+          CASE_ID: ${{ needs.claim.outputs.case_id }}
+        run: |
+          node --input-type=module -e 'import {readFileSync} from "node:fs"; import {runner} from "./scripts/repair/client.mjs"; const g=JSON.parse(readFileSync("gate.json")); await runner({action:"finish",caseId:process.env.CASE_ID,state:"validated",base_sha:g.base,patch_sha:g.patchSha,detail:"Kontrola rozsahu změn, regrese a sestavení prošly."})'
+      - name: Deploy, verify production, rollback on failed checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          REPAIR_RUNNER_TOKEN: ${{ secrets.REPAIR_RUNNER_TOKEN }}
+          BASE_SHA: ${{ needs.claim.outputs.base }}
+          CASE_ID: ${{ needs.claim.outputs.case_id }}
+        run: |
+          gh auth setup-git
+          node scripts/repair/production.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: repair-deployment-evidence
+          path: deployment-result.json
+          if-no-files-found: ignore
+          retention-days: 30
+  record_failure:
+    needs: [claim, generate, validate, deploy]
+    if: always() && needs.claim.outputs.has_job == 'true' && (needs.generate.result != 'success' || needs.validate.result != 'success' || needs.deploy.result != 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.claim.outputs.base }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require decision for rejected or ambiguous repair
+        env:
+          REPAIR_RUNNER_TOKEN: ${{ secrets.REPAIR_RUNNER_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CASE_ID: ${{ needs.claim.outputs.case_id }}
+        run: |
+          node scripts/repair/recover.mjs

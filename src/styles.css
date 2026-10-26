@@ -53635,3 +53635,30 @@ body.collection-driver-blackview-simulator-active #app {
 @media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
  .vm-detail-identity .vm-vehicle-picture { width:58px; height:44px; }
 }
+
+/* Opravit: a small form usable on phones and desktop. */
+.repair-module form,
+.repair-module form label {
+  display: grid;
+  gap: 12px;
+}
+.repair-module form {
+  max-width: 760px;
+}
+.repair-module input,
+.repair-module textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.repair-module .feedback-workflow-content-card {
+  overflow-wrap: anywhere;
+  margin-bottom: 16px;
+}
+.repair-module [hidden] {
+  display: none;
+}

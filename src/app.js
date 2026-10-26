@@ -1,3 +1,4 @@
+import { RepairModule } from "./components/RepairModule.js";
 import { isMobileViewport } from "./mobileViewport.js";
 import { fleetCalendarDate } from "./data/fleetDate.js";
 import { createVehicleWorkspace } from "./vehicle-map/workspace.js";
@@ -5183,11 +5184,9 @@ function optionList(options, selected, emptyLabel = "Vše") {
 }
 
 function userBar(user) {
-  const reportModuleKey = moduleIdForAiRoute(normalizePath(window.location.pathname)) || "dashboard";
-  const sourceRoute = `${normalizePath(window.location.pathname)}${window.location.search || ""}${window.location.hash || ""}`;
-  const reportHref = `${FEEDBACK_ROUTE}?new=report&module=${encodeURIComponent(reportModuleKey)}&sourceRoute=${encodeURIComponent(sourceRoute)}#feedback-report`;
+  const reportHref = `/opravit?page=${encodeURIComponent(window.location.pathname)}`;
   const reportLink = hasPermission(user, "feedback", "create")
-    ? `<a class="user-bar__report" href="${escapeHtml(routeHref(reportHref))}" data-link>Nahlásit chybu</a>`
+    ? `<a class="user-bar__report" href="${escapeHtml(routeHref(reportHref))}" data-link>Opravit</a>`
     : "";
 
   return `
@@ -44135,6 +44134,7 @@ function feedbackWorkflowDetailPage(user) {
           <div><dt>Řešitel</dt><dd>${escapeHtml(item.assigneeUserName || "Zatím nepřiřazeno")}</dd></div>
           <div><dt>Poslední změna</dt><dd>${escapeHtml(formatDateTime(item.updatedAt))}</dd></div>
         </dl>
+        ${detail.repair ? `<section class="feedback-workflow-content-card"><h2>${escapeHtml(detail.repair.stateLabel)}</h2><p>${escapeHtml(detail.repair.detail)}</p><a href="/opravit" data-link>Stav automatické opravy</a></section>` : ""}
         ${feedbackWorkflowReplyPanel(detail)}
         ${feedbackWorkflowVerificationPanel(detail)}
         <section class="feedback-workflow-content-card"><h2>Popis</h2><p>${escapeHtml(item.description)}</p></section>
@@ -55303,6 +55303,12 @@ function renderAuthenticatedApp(user) {
       void loadVehicleTrackingAnalytics({ period: mainDashboardUiState.period });
     }
     document.title = `Dashboard firmy | ${APP_NAME}`;
+    return;
+  }
+
+  if (path === "/opravit") {
+    app.innerHTML = hasPermission(user, "feedback", "view") ? RepairModule(user, buildMeta.version) : forbiddenPage(user);
+    document.title = `Opravit | ${APP_NAME}`;
     return;
   }
 
