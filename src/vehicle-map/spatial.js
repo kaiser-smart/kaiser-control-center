@@ -101,8 +101,10 @@ export function placeLabels(items, obstacles, bounds, measure, selectedId = "", 
     if (mode === "selected" && p.id !== selectedId) continue;
     const { width, height } = measure(p.vehicle.label);
     const own = labelMarkerRect(p), gap = 5;
+    // Never detach a plate from a vehicle clipped by the map viewport.
+    if (!inside(own, bounds)) continue;
     // One fixed anchor, even when selection changes label priority.
-    const left = Math.max(bounds.left, Math.min(p.x - width / 2, bounds.right - width));
+    const left = p.x - width / 2;
     const candidate = { left, top: own.bottom + gap, right: left + width, bottom: own.bottom + gap + height };
     const valid = inside(candidate, bounds) && !obstacles.some(o => overlaps(candidate,o))
       && !occupied.some(o => overlaps(candidate,o,3)) ? candidate : null;
