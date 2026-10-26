@@ -12,6 +12,7 @@ import {verifiedTcarsTime} from '../functions/_lib/vistos-tracking-enrichment.js
 import {loadJobTrackingInterval,vehicleTrackingHistoryPoint} from '../functions/_lib/vehicle-tracking-history.js';
 import {writeGate,processPaymentCommand,acquireFinanceLocks,submitTransfers,confirmAllocation} from '../functions/_lib/vistos-payment-outbox.js';
 import {hasPermission} from '../src/permissions.js';
+import {runJobsReadQueue} from '../functions/_lib/vistos-jobs-read-queue.js';
 
 export function fixtureDb(){
  const sqlite=new DatabaseSync(':memory:');
@@ -287,9 +288,55 @@ test('priority headers validate detail wall-time and parent items retain isolate
  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM vistos_source_records WHERE entity='ServiceListItem'").get().n,0);
  await items({Id:20,ServiceList_FK:10,Modified:'2026-10-24T12:30:00.123'});
  assert.equal(db.sqlite.prepare("SELECT company_id FROM vistos_source_records WHERE entity='ServiceListItem'").get().company_id,'1');
+ assert.equal((await items({Id:20,ServiceList_FK:10})).alreadyRead,true);
+ db.sqlite.prepare("UPDATE vistos_source_records SET fingerprint='changed-parent' WHERE source_id='10'").run();
+ await items({Id:20,ServiceList_FK:10,Modified:'2026-10-24T12:30:00.123'});
+ const refreshed=db.sqlite.prepare("SELECT generation,comparison_json FROM vistos_sync_checkpoints WHERE mode='parent:10'").get();
+ assert.equal(refreshed.generation,2);assert.equal(JSON.parse(refreshed.comparison_json).parentFingerprint,'changed-parent');
+ db.sqlite.prepare("UPDATE vistos_sync_checkpoints SET last_success_at='2020-01-01T00:00:00Z' WHERE mode='parent:10'").run();
+ await items({Id:20,ServiceList_FK:10,Modified:'2026-10-24T12:30:00.123'});
+ assert.equal(db.sqlite.prepare("SELECT generation FROM vistos_sync_checkpoints WHERE mode='parent:10'").get().generation,3);
  contract.entities.ServiceList.priorityWindow={from:'2026-10-25T00:00:00',to:'2026-10-27T00:00:00'};environment(db,contract);
  await assert.rejects(header(),e=>e.code==='vistos_modified_filter_ignored');
  assert.equal(db.sqlite.prepare("SELECT offset FROM vistos_sync_checkpoints WHERE mode='priority_backfill'").get().offset,0);
  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM vistos_source_records WHERE entity='ServiceList'").get().n,1);
  db.sqlite.close();
+});
+
+function queueFixture(count=3){
+ const db=fixtureDb(),contract=structuredClone(mapping);
+ contract.entities.ServiceListItem={readVerified:true,parentFilterVerified:true};
+ const insert=db.sqlite.prepare("INSERT INTO vistos_source_records(id,installation,entity,source_id,company_id,number,fields_json,fingerprint,received_at,mapping_version) VALUES(?,'test','ServiceList',?,?,'JOB','{}',?,'2026-10-26T01:00:00Z','test')");
+ for(let i=1;i<=count;i++)insert.run(String(i),String(i),'1','fp'+i);
+ insert.run('foreign','9999','other','private');
+ return {db,contract};
+}
+test('jobs queue drains multiple parents, bounds backlog, scopes companies and joins overlapping ticks',async()=>{
+ const {db,contract}=queueFixture(81);let clock=1000000;const calls=[];
+ const options={deadline:clock+80000,clock:()=>clock,maxBatches:4,syncBatch:async(env,args)=>{
+  assert.equal(env.syncRequestDeadline,1080000);calls.push(args);
+  assert.deepEqual(await runJobsReadQueue({},db,contract,{deadline:clock+80000,clock:()=>clock}),[]);
+  clock+=1000;return {status:'compared'};
+ }};
+ const result=await runJobsReadQueue({},db,contract,options);
+ assert.equal(result.length,4);assert.ok(calls.every(c=>c.entity==='ServiceListItem'&&c.mode!=='parent:9999'));
+ assert.equal(new Set(calls.map(c=>c.mode)).size,4);assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM vistos_sync_entity_locks').get().n,0);
+ db.sqlite.close();
+});
+test('jobs queue shares a run deadline and stops on provider or capacity limits',async()=>{
+ for(const code of ['vistos_request_budget_exhausted','vistos_target_capacity_exceeded']){
+  const {db,contract}=queueFixture();const calls=[];
+  const reads=await runJobsReadQueue({},db,contract,{syncBatch:async(_env,args)=>{calls.push(args);throw Object.assign(Error(code),{code});}});
+  assert.equal(calls.length,1);assert.equal(reads[0].code,code);assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM vistos_sync_entity_locks').get().n,0);db.sqlite.close();
+ }
+ const {db,contract}=queueFixture();let clock=1000000,calls=0;
+ await runJobsReadQueue({},db,contract,{deadline:clock+80000,clock:()=>clock,syncBatch:async()=>{calls++;clock+=75000;return {status:'partial'};}});
+ assert.equal(calls,1);db.sqlite.close();
+});
+test('jobs progress remains visible with empty filters and cannot include another company',async()=>{
+ const {db,contract}=queueFixture(3);environment(db,contract);
+ db.sqlite.prepare("UPDATE vistos_source_records SET received_at='2099-01-01T00:00:00Z' WHERE company_id='other'").run();
+ const data=await listJobs({db,installation:'test',companies:['1'],rights:{}},new URL('https://test/api/jobs?period=all&status=done'));
+ assert.equal(data.rows.length,0);assert.equal(data.stats.total,0);
+ assert.deepEqual({...data.importProgress},{total:3,lastReceivedAt:'2026-10-26T01:00:00Z',itemsPending:3});db.sqlite.close();
 });

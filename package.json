@@ -1,6 +1,6 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.861",
+  "version": "0.1.862",
   "private": true,
   "type": "module",
   "scripts": {
@@ -48,7 +48,7 @@
     "test:icons": "node scripts/icon-system.test.mjs",
     "test:icons:browser": "node scripts/icon-system-browser.test.mjs",
     "test:vistos-jobs-browser": "node scripts/vistos-jobs-browser.test.mjs",
-    "test:vistos-jobs-payments": "node --test scripts/vistos-jobs-payments.test.mjs scripts/vistos-read-audit.test.mjs scripts/vistos-field-storage.test.mjs"
+    "test:vistos-jobs-payments": "node --test scripts/vistos-jobs-payments.test.mjs scripts/vistos-read-audit.test.mjs scripts/vistos-field-storage.test.mjs scripts/vistos-jobs-server-bridge.test.mjs"
   },
   "engines": {
     "node": ">=18"

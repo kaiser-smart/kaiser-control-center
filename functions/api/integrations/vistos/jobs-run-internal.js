@@ -9,7 +9,7 @@ export async function handleJobsServerRun({request,env},run=runVistosJobsPayment
   // No body-controlled operation, installation, permissions or source URL.
   // Every source read still requires its persisted contract, module rule and capacity check.
   try {
-    const result=await run({...env,VISTOS_PAYMENT_WRITE_ENABLED:'false',VISTOS_JOB_EXECUTION_ENABLED:'false'},{onlyJobs:true,maxBatches:2});
+    const result=await run({...env,VISTOS_PAYMENT_WRITE_ENABLED:'false',VISTOS_JOB_EXECUTION_ENABLED:'false'},{onlyJobs:true,maxBatches:12});
     const reads=result.reads||[];
     return json({status:result.status,reads:reads.length,blocked:reads.filter(r=>r.status==='blocked').length});
   }catch{return json({code:'vistos_jobs_server_unavailable'},503);}
