@@ -150,8 +150,12 @@ export async function handleVistosRequest(context,action) {
     }
     if(action==='job-history') {
       const before=url.searchParams.get('before')||'9999';
-      const {results=[]}=await scope.db.prepare(`SELECT id,kind,actor,created_at FROM vistos_integration_events WHERE entity_id=? AND company_id=? AND (created_at || '|' || id)<? ORDER BY created_at DESC,id DESC LIMIT 51`).bind(job.id,job.company_id,before).all();
-      return json({events:results.slice(0,50),next:results.length>50?results[49].created_at+'|'+results[49].id:null});
+      const {results=[]}=await scope.db.prepare(`SELECT id,kind,actor,fields_json,created_at FROM vistos_integration_events WHERE entity_id=? AND company_id=? AND (created_at || '|' || id)<? ORDER BY created_at DESC,id DESC LIMIT 51`).bind(job.id,job.company_id,before).all();
+      const visible=publicSourceRecord(job,scope.rights).fields;
+      return json({events:results.slice(0,50).map(({fields_json,actor,...event})=>({...event,
+        actor:scope.rights.personal?actor:null,
+        changedFields:JSON.parse(fields_json||'[]').filter(key=>Object.hasOwn(visible,key)).map(field=>({field,label:visible[field].label||field}))
+      })),next:results.length>50?results[49].created_at+'|'+results[49].id:null});
     }
     if(action==='job-execution'||action==='execution-confirm') {
       if(!scope.rights.tracking)throw integrationError('tracking_permission_required',403);
