@@ -57,4 +57,5 @@ assert.equal((await verifyOrRollback(config,api,async sha=>{if(sha===head)throw 
 active='d'.repeat(40);await assert.rejects(()=>verifyOrRollback(config,api,async()=>{throw Error('bad');}),/outside this run/);assert.equal(rollbackCalls,1);
 active=head;await assert.rejects(()=>verifyOrRollback(config,api,async()=>{throw Error('rollback also broken');}));
 assert.match(await digest('test'),/^[a-f0-9]{64}$/);
+assert.match(readFileSync('.github/workflows/repair-hourly.yml','utf8'),/github\.event\.repository\.private == true/,'Private reports cannot enter a public Actions run');
 console.log('Repair tests passed: concurrent claims, dedupe, lease expiry, audit, token scope, transitions, bounded uploads, image signatures, CSS gate, deploy smoke/rollback/concurrent-deploy protection.');

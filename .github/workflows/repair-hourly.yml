@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   claim:
-    if: vars.REPAIR_ENABLED == 'true' && github.ref == 'refs/heads/main'
+    if: vars.REPAIR_ENABLED == 'true' && github.ref == 'refs/heads/main' && github.event.repository.private == true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:

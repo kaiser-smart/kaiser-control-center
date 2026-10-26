@@ -22,6 +22,7 @@ The controller records the current successful production deployment, deploys an 
 
 ## Activation prerequisites — do not call this active until verified
 
+0. The application repository was verified PUBLIC on 2026-10-26. The claim job refuses to run in a public repository, even if REPAIR_ENABLED is set. Private reports/screenshots and agent logs must stay in a private runner repository/environment. This deployment does not change repository visibility. Moving the workflow to a separate private repository also requires an explicitly scoped checkout/push integration for the application repository; simply copying the workflow is insufficient.
 1. Apply the additive migration to the verified SMART_ODPADY_CORE binding, after recording a Time Travel bookmark; verify all seven objects and the existing evidence schema.
 2. Create a dedicated random `REPAIR_RUNNER_TOKEN` in production Pages secrets and repository Actions secrets. Never copy browser/session credentials into CI.
 3. Provide `OPENAI_API_KEY` for the Codex action and a suitably scoped `CLOUDFLARE_API_TOKEN` for the verified account/project's Pages deployment and rollback. Store in GitHub Actions secrets, not source, prompts or job-level environments. The workflow requires all three before claiming work. The current preflight expects repository secrets (not environment-only secrets).
