@@ -13,11 +13,11 @@ class Statement {
  async run(){return {meta:this.db.prepare(this.sql).run(...this.values)};}
 }
 const sql=new DatabaseSync(':memory:');
-sql.exec('CREATE TABLE self_repair_cases(id TEXT PRIMARY KEY,title TEXT,description TEXT,expected_behavior TEXT,source_route TEXT,module_key TEXT,client_request_id TEXT); CREATE TABLE cross_database_workflows(idempotency_key TEXT,status TEXT);');
+sql.exec("CREATE TABLE self_repair_cases(id TEXT PRIMARY KEY,title TEXT,description TEXT,expected_behavior TEXT,source_route TEXT,module_key TEXT,client_request_id TEXT,workflow_status TEXT DEFAULT 'new',automation_status TEXT DEFAULT 'not_reviewed'); CREATE TABLE cross_database_workflows(idempotency_key TEXT,status TEXT);");
 sql.exec(readFileSync('migrations/modular/core/0008_repair_queue.sql','utf8'));
 const db={prepare:s=>new Statement(sql,s)};
 const now=new Date().toISOString();
-for(let n=1;n<=3;n++){sql.prepare('INSERT INTO self_repair_cases VALUES(?,?,?,?,?,?,?)').run(`case-${n}`,'problem','description','','/','feedback',`request-${n}`);sql.prepare('INSERT INTO cross_database_workflows VALUES(?,?)').run(`self-repair-user-report:request-${n}`,'completed');sql.prepare('INSERT INTO repair_queue(case_id,reporter_id,dedupe_key,created_at,updated_at) VALUES(?,?,?,?,?)').run(`case-${n}`,'user',`key-${n}`,now,now);}
+for(let n=1;n<=3;n++){sql.prepare('INSERT INTO self_repair_cases(id,title,description,expected_behavior,source_route,module_key,client_request_id) VALUES(?,?,?,?,?,?,?)').run(`case-${n}`,'problem','description','','/','feedback',`request-${n}`);sql.prepare('INSERT INTO cross_database_workflows VALUES(?,?)').run(`self-repair-user-report:request-${n}`,'completed');sql.prepare('INSERT INTO repair_queue(case_id,reporter_id,dedupe_key,created_at,updated_at) VALUES(?,?,?,?,?)').run(`case-${n}`,'user',`key-${n}`,now,now);}
 assert.throws(()=>sql.prepare('INSERT INTO repair_queue(case_id,reporter_id,dedupe_key,created_at,updated_at) VALUES(?,?,?,?,?)').run('other','user','key-1',now,now),/UNIQUE/);
 const [first,second]=await Promise.all([claimRepair(db,'100-1'),claimRepair(db,'101-1')]);assert.ok(Boolean(first)!==Boolean(second),'One concurrent claimant only');
 const job=first||second;const callback={caseId:job.caseId,runId:job.runId,lease:job.lease};
@@ -33,9 +33,17 @@ await finishRepair(db,{...callback,state:'deployed',result_sha:head,deployment_i
 assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM repair_queue_events WHERE case_id=?').get(job.caseId).n,5);
 const abandoned=await claimRepair(db,'102-1',now);
 const future=new Date(Date.now()+60*60000).toISOString();
-await claimRepair(db,'103-1',future);
+const finalJob=await claimRepair(db,'103-1',future);
 assert.equal(sql.prepare('SELECT state FROM repair_queue WHERE case_id=?').get(abandoned.caseId).state,'needs_decision');
 await assert.rejects(()=>finishRepair(db,{caseId:abandoned.caseId,runId:abandoned.runId,lease:abandoned.lease,state:'failed'},future));
+sql.prepare("UPDATE self_repair_cases SET workflow_status='done' WHERE id=?").run(finalJob.caseId);
+await assert.rejects(()=>finishRepair(db,{caseId:finalJob.caseId,runId:finalJob.runId,lease:finalJob.lease,state:'validated',base_sha:base,patch_sha:patch},future),/Nepovolený přechod/);
+assert.equal(sql.prepare('SELECT state FROM repair_queue WHERE case_id=?').get(finalJob.caseId).state,'needs_decision');
+sql.prepare("INSERT INTO self_repair_cases(id,client_request_id,automation_status) VALUES('blocked','blocked','unsuitable')").run();
+sql.prepare("INSERT INTO cross_database_workflows VALUES('self-repair-user-report:blocked','completed')").run();
+sql.prepare("INSERT INTO repair_queue(case_id,reporter_id,dedupe_key,created_at,updated_at) VALUES('blocked','user','blocked',?,?)").run(now,now);
+assert.equal(await claimRepair(db,'104-1',future),null);
+assert.equal(sql.prepare("SELECT state FROM repair_queue WHERE case_id='blocked'").get().state,'needs_decision');
 await assert.rejects(()=>authorizeRunner(new Request('https://smart-odpady.ai/api/repair/runner'),{}));
 await assert.rejects(()=>authorizeRunner(new Request('https://smart-odpady.ai/api/repair/runner'),{REPAIR_AUTOMATION_ENABLED:'true',REPAIR_RUNNER_TOKEN:'x'.repeat(32)}));
 await authorizeRunner(new Request('https://smart-odpady.ai/api/repair/runner',{headers:{authorization:`Bearer ${'x'.repeat(32)}`}}),{REPAIR_AUTOMATION_ENABLED:'true',REPAIR_RUNNER_TOKEN:'x'.repeat(32)});

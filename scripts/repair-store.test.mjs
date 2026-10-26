@@ -128,4 +128,13 @@ const retry=await createUserReportedSelfRepairCase(env,reporter,input,{repair:{d
 assert.equal(retry.case.id,result.case.id);
 assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM repair_queue').get().n,1);
 assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM self_repair_cases').get().n,1);
+await updateFeedbackCase(env,manager,result.case.id,{workflowStatus:'done',internalNote:'Finished test'});
+assert.equal((await getFeedbackCase(env,reporter,result.case.id)).repair.state,'needs_decision');
+assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM repair_queue_events WHERE case_id=?').get(result.case.id).n,2);
+for(const state of ['claimed','validated','deploying']) {
+  const item=await createUserReportedSelfRepairCase(env,reporter,{...input,clientRequestId:`cancel-${state}`},{repair:{dedupeKey:`cancel-${state}`}});
+  sqlite.prepare('UPDATE repair_queue SET state=? WHERE case_id=?').run(state,item.case.id);
+  await updateFeedbackCase(env,manager,item.case.id,{automationStatus:'unsuitable',internalNote:'Excluded by manager'});
+  assert.equal(sqlite.prepare('SELECT state FROM repair_queue WHERE case_id=?').get(item.case.id).state,state==='deploying'?'deploying':'needs_decision','Pending work stops; an active deployment retains recovery ownership');
+}
 console.log('Repair store: atomic queue creation, retry dedupe, private list/detail, manager access and integration with existing evidence passed.');
