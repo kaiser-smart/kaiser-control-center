@@ -273,3 +273,23 @@ test('Jobs tracking traverses neighbouring source jobs through the temporal reso
  assert.equal(row.assignment_status,'unavailable');assert.ok(JSON.parse(row.evidence_json).reasons.includes('history_unavailable'));assert.equal(row.use_for_payroll,0);
  db.sqlite.close();
 });
+
+test('priority headers validate detail wall-time and parent items retain isolated coverage',async()=>{
+ const db=fixtureDb();const contract=structuredClone(mapping);
+ Object.assign(contract.entities.ServiceList,{detailOnImport:true,detailVerified:true,priorityFilterVerified:true,priorityWindow:{from:'2026-10-20T00:00:00',to:'2026-10-27T00:00:00'}});
+ contract.entities.ServiceListItem={readVerified:true,orderVerified:true,detailVerified:true,detailOnImport:true,parentFilterVerified:true,parentField:'ServiceList_FK',inheritCompanyFromParent:true,idOrder:'Id asc',verifiedFields:['ServiceList_FK']};
+ const env=environment(db,contract),page=rows=>({filtered:rows.length,countEvidence:{filteredReported:true},rows});
+ const header=()=>syncVistosBatch(env,{installation:'test',entity:'ServiceList',mode:'priority_backfill',source:async({filter})=>{assert.deepEqual(filter,{Modified_From:contract.entities.ServiceList.priorityWindow.from,Modified_To:contract.entities.ServiceList.priorityWindow.to});return page([{Id:10}]);},detailSource:async()=>({Id:10,Number:'recent',Modified:'2026-10-24T12:30:00.123'})});
+ const result=await header();assert.equal(result.offset,1);assert.equal(result.completeImport,false);assert.equal((await header()).alreadyRead,true);
+ assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM vistos_sync_checkpoints WHERE mode='initial_backfill'").get().n,0);
+ const items=detail=>syncVistosBatch(env,{installation:'test',entity:'ServiceListItem',mode:'parent:10',source:async({filter})=>{assert.deepEqual(filter,{ServiceList_FK:[10]});return page([{Id:20,ServiceList_FK:10}]);},detailSource:async()=>detail});
+ await assert.rejects(items({Id:20,ServiceList_FK:11}),e=>e.code==='vistos_parent_filter_ignored');
+ assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM vistos_source_records WHERE entity='ServiceListItem'").get().n,0);
+ await items({Id:20,ServiceList_FK:10,Modified:'2026-10-24T12:30:00.123'});
+ assert.equal(db.sqlite.prepare("SELECT company_id FROM vistos_source_records WHERE entity='ServiceListItem'").get().company_id,'1');
+ contract.entities.ServiceList.priorityWindow={from:'2026-10-25T00:00:00',to:'2026-10-27T00:00:00'};environment(db,contract);
+ await assert.rejects(header(),e=>e.code==='vistos_modified_filter_ignored');
+ assert.equal(db.sqlite.prepare("SELECT offset FROM vistos_sync_checkpoints WHERE mode='priority_backfill'").get().offset,0);
+ assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM vistos_source_records WHERE entity='ServiceList'").get().n,1);
+ db.sqlite.close();
+});

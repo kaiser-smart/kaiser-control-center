@@ -1,4 +1,4 @@
-import { runVistosJobsPayments } from "../functions/_lib/vistos-jobs-runner.js";
+import { runVistosJobsServerBridge } from "../functions/_lib/vistos-jobs-server-bridge.js";
 import { runModuleAutomationDryRun } from "../functions/_lib/module-automation-dry-run.js";
 import {
   runCollectionDailyRoutePreparationAutomation,
@@ -19,8 +19,8 @@ export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil((async () => {
       if (controller.cron === "*/10 * * * *") {
-        const result = await runVistosJobsPayments(env, {now:new Date(controller.scheduledTime)});
-        console.log("vistos_jobs_payments", {status:result.status, reads:result.reads?.length||0, commands:result.commands?.length||0});
+        const result = await runVistosJobsServerBridge(env);
+        console.log("vistos_jobs_read", {status:result.status, reads:result.reads||0, blocked:result.blocked||0, code:result.code||null});
         return;
       }
       if (controller.cron === COLLECTION_ROUTE_INCIDENT_REMINDER_CRON) {

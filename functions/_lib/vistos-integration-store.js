@@ -1,3 +1,4 @@
+import {jobAuditFilter} from './vistos-read-audit.js';
 import {checkJobsImportCapacity} from './vistos-import-capacity.js';
 import { getModuleDatabase } from './databases.js';
 import { hasPermission } from '../../src/permissions.js';
@@ -29,8 +30,8 @@ export async function authorizedIntegrationScope(env,user,{companyId=null,instal
     rights:{finance:hasPermission(user,'jobs','view_finance'),personal:hasPermission(user,'jobs','view_personal'),tracking:hasPermission(user,'vehicle-tracking','view'),manage:hasPermission(user,'integrations','manage')}};
 }
 export const RECORD_COLUMNS=['id','installation','entity','source_id','company_id','number','customer','place','service','planned_start','planned_end','planned_day','status','driver_id','vehicle_ids_json','parent_id','unassigned','needs_review','fields_json','fingerprint','source_modified','received_at','detail_at','mapping_version'];
-export async function flushIntegrationAudit(db) {
-  for (const table of ['vistos_evidence_events','vistos_command_events']) {
+export async function flushIntegrationAudit(db,{onlyJobs=false}={}) {
+  for (const table of (onlyJobs?['vistos_evidence_events']:['vistos_evidence_events','vistos_command_events'])) {
     const {results=[]}=await db.prepare(`SELECT * FROM ${table} WHERE delivered_at IS NULL ORDER BY created_at LIMIT 100`).all();
     for(const row of results) {
       await db.prepare(`INSERT INTO vistos_integration_events(id,entity_id,company_id,kind,actor,before_value,after_value,fields_json,created_at)
@@ -52,10 +53,23 @@ export async function normalizeImportedRecord(db,row,options) {
   return record;
 }
 export async function syncVistosBatch(env,{installation,entity,mode='initial_backfill',actor='scheduler',pageSize=100,source=null,detailSource=null,now=new Date().toISOString()}={}) {
-  if(!['ServiceList','ServiceListItem','Payment','InvoiceIssued'].includes(entity)||!['initial_backfill','delta','reconciliation'].includes(mode)) throw integrationError('invalid_sync_stream',400);
+  if(!['ServiceList','ServiceListItem','Payment','InvoiceIssued'].includes(entity)||(!['initial_backfill','delta','reconciliation','priority_backfill'].includes(mode)&&!/^parent:[1-9][0-9]*$/.test(mode))) throw integrationError('invalid_sync_stream',400);
   if(String(env.VISTOS_READ_SYNC_ENABLED)!=='true') throw integrationError('vistos_read_sync_disabled',503);
   const db=integrationDb(env),contract=await loadIntegrationContract(db,installation),rules=contract.entities?.[entity];
   if(!rules?.readVerified || !rules.orderVerified || !contract.companyIds?.length || !contract.capacityEvidence?.approvedAt) throw integrationError('vistos_read_contract_unverified',503);
+  const priority=mode==='priority_backfill',parentId=mode.startsWith('parent:')?mode.slice(7):null;
+  let boundedFilter=null;
+  if(priority) {
+    if(entity!=='ServiceList'||!rules.priorityFilterVerified||!rules.detailOnImport)throw integrationError('vistos_priority_filter_unverified');
+    boundedFilter=jobAuditFilter({entity,modifiedFrom:rules.priorityWindow?.from,modifiedTo:rules.priorityWindow?.to});
+    if(!boundedFilter)throw integrationError('vistos_priority_filter_unverified');
+  }
+  if(parentId) {
+    if(entity!=='ServiceListItem'||!rules.parentFilterVerified||rules.parentField!=='ServiceList_FK')throw integrationError('vistos_parent_filter_unverified');
+    const parent=await db.prepare("SELECT company_id FROM vistos_source_records WHERE installation=? AND entity='ServiceList' AND source_id=?").bind(installation,parentId).first();
+    if(!parent||!contract.companyIds.includes(parent.company_id))throw integrationError('vistos_parent_scope_unverified');
+    boundedFilter=jobAuditFilter({entity,parentId});
+  }
   await checkJobsImportCapacity(env,contract,{entity});
   if(mode==='delta'&&!rules.modifiedFilterVerified) throw integrationError('vistos_delta_filter_unverified',503);
   if(rules.detailOnImport&&!rules.detailVerified)throw integrationError('vistos_detail_contract_unverified',503);
@@ -74,7 +88,11 @@ export async function syncVistosBatch(env,{installation,entity,mode='initial_bac
       await db.prepare("UPDATE vistos_sync_checkpoints SET generation=generation+1,offset=0,last_source_id=NULL,expected_count=NULL,status='queued',error_code=NULL WHERE id=?").bind(cp.id).run();
       cp=await db.prepare('SELECT * FROM vistos_sync_checkpoints WHERE id=?').bind(cp.id).first();
     }
-    if(cp.status==='compared' && mode==='initial_backfill') return {status:'compared',alreadyRead:true};
+    if(priority&&(cp.window_from!==rules.priorityWindow.from||cp.window_to!==rules.priorityWindow.to)) {
+      await db.prepare("UPDATE vistos_sync_checkpoints SET generation=generation+1,offset=0,last_source_id=NULL,expected_count=NULL,status='queued',error_code=NULL,window_from=?,window_to=? WHERE id=?").bind(rules.priorityWindow.from,rules.priorityWindow.to,cp.id).run();
+      cp=await db.prepare('SELECT * FROM vistos_sync_checkpoints WHERE id=?').bind(cp.id).first();
+    }
+    if(cp.status==='compared' && (mode==='initial_backfill'||parentId||priority)) return {status:'compared',alreadyRead:true};
     if(cp.status==='compared') {
       await db.prepare(`UPDATE vistos_sync_checkpoints SET generation=generation+1,offset=0,last_source_id=NULL,expected_count=NULL,status='queued',window_from=NULL,window_to=NULL WHERE id=?`).bind(cp.id).run();
       cp=await db.prepare('SELECT * FROM vistos_sync_checkpoints WHERE id=?').bind(cp.id).first();
@@ -87,7 +105,7 @@ export async function syncVistosBatch(env,{installation,entity,mode='initial_bac
     const readEnv={...env,VISTOS_EXACT_DECIMALS:true,VISTOS_REQUIRE_SHARED_BUDGET:true,syncRequestDeadline:Date.now()+90000};
     if(!source)assertVistosInstallation(env,contract);
     const session=source?null:await loginVistosExecute(readEnv);
-    const filter=mode==='delta'?{Modified_From:cp.window_from,Modified_To:cp.window_to}:null;
+    const filter=boundedFilter||(mode==='delta'?{Modified_From:cp.window_from,Modified_To:cp.window_to}:null);
     const page=source?await source({offset:cp.offset,length:pageSize,filter}):await getVistosPage(readEnv,session,entity,rules.columns,filter,cp.offset,pageSize,{order:rules.idOrder});
     if(!page.countEvidence?.filteredReported || !Number.isSafeInteger(page.filtered)||page.filtered<0) throw integrationError('vistos_count_unverified');
     if(cp.expected_count!==null&&page.filtered!==cp.expected_count) throw integrationError('vistos_page_count_changed');
@@ -97,6 +115,7 @@ export async function syncVistosBatch(env,{installation,entity,mode='initial_bac
     for(const row of page.rows) {
       const id=numericId(row.Id); if(!id||BigInt(id)<=last) throw integrationError('vistos_page_order_unstable'); last=BigInt(id);
       if(mode==='delta') { const t=sourceTime(row.Modified).instant;if(!t||t<cp.window_from||t>=cp.window_to) throw integrationError('vistos_modified_filter_ignored'); }
+      if(parentId&&!referenceIds(row,'ServiceList_FK','list').includes(parentId))throw integrationError('vistos_parent_filter_ignored');
       const previous=await db.prepare('SELECT * FROM vistos_source_records WHERE installation=? AND entity=? AND source_id=?').bind(installation,entity,id).first();
       let record=await normalizeImportedRecord(db,row,{installation,entity,contract,previous,now});
       if(rules.detailOnImport) {
@@ -105,6 +124,11 @@ export async function syncVistosBatch(env,{installation,entity,mode='initial_bac
         if(source&&!detailSource)throw integrationError('vistos_detail_source_missing');
         const detail=detailSource?await detailSource(id):(await getVistosById(readEnv,session,entity,id,rules.detailColumns||rules.columns||[])).row;
         if(numericId(detail?.Id)!==id)throw integrationError('vistos_detail_identity_mismatch');
+        if(parentId&&!referenceIds(detail,'ServiceList_FK','detail').includes(parentId))throw integrationError('vistos_parent_filter_ignored');
+        if(priority) {
+          const t=detail.Modified;
+          if(typeof t!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(t)||t<cp.window_from||t>=cp.window_to)throw integrationError('vistos_modified_filter_ignored');
+        }
         record=await normalizeImportedRecord(db,detail,{installation,entity,contract,previous:record||previous,kind:'detail',now});
         if(!record)throw integrationError('vistos_detail_version_older');
         // The audit compares the committed revision, not the intermediate list merge.
@@ -152,7 +176,7 @@ export async function syncVistosBatch(env,{installation,entity,mode='initial_bac
       } else comparison={baseline:null,observed:next};
       await db.prepare('UPDATE vistos_sync_checkpoints SET comparison_json=? WHERE id=? AND generation=?').bind(JSON.stringify(comparison),cp.id,cp.generation).run();
     }
-    await flushIntegrationAudit(db);
+    await flushIntegrationAudit(db,{onlyJobs:['ServiceList','ServiceListItem'].includes(entity)});
     if(done)await db.prepare('DELETE FROM vistos_sync_seen WHERE checkpoint_id=? AND generation<?').bind(cp.id,Math.max(1,cp.generation-1)).run();
     return {status:done?'compared':'partial',offset:next,expected:page.filtered,completeImport:false,quality:'offset_scan_compared',comparison,runId};
   } catch(error) {

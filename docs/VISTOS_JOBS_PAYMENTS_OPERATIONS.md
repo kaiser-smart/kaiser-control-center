@@ -90,3 +90,10 @@ Audit podporuje omezené čtení podle Modified_From/To (max. 92 dní, doslovné
 Živé čtení 2026-10-25T20:54:28Z vrací pro 24. září 127 z 183131 hlaviček, ale seznam neposkytuje Modified. Tento stav není důkaz ignorovaného filtru ani úspěšné kontroly. Omezený audit proto čte nejvýše deset různých detailů ze vzorku, kontroluje přesnou identitu a porovnává zdrojový čas bez doplňování časové zóny. Detail prvního řádku se používá opakovaně bez dalšího požadavku. Chybný detail, neověřený čas či řádek mimo okno znamená neúspěšnou kontrolu. Úplnost celého importu tím stále není potvrzena. Import a oprávnění se touto změnou nezapínají.
 
 Ověření: pět testů read-audit včetně chybějícího Modified, neodpovídajícího ID, hranice intervalu a nezpřístupnění osobních/finančních hodnot.
+
+### 0.1.854 — serverové čtení Zakázek a omezená priorita
+- Plánovač volá pevný interní Pages endpoint s vlastním VISTOS_JOBS_RUNNER_TOKEN. Přihlašovací údaje Vistos zůstávají v Pages; endpoint ignoruje tělo požadavku a vynucuje jobs-only, vypnuté platby i GPS zápisy.
+- Ověřený priorityWindow čte hlavičky s kontrolou Modified v každém detailu, bez odhadování časové zóny. Samostatné parent:<id> checkpointy ověřují rodiče položek a nepředstírají úplnost celého zdroje. Obě entity dostanou samostatnou dávku.
+- Neúplné pokrytí položek je viditelné v detailu. Čtecí audit jobs-only nezpracovává platební události.
+- Aktivace vyžaduje kontrakt, kapacitní stropy, shared request budget, vlastní token na obou službách a oba read/runner přepínače. Výchozí konfigurace workeru zůstává vypnutá.
+- Rollback: vypnout VISTOS_JOBS_RUNNER_ENABLED v Pages i workeru; vrátit předchozí Pages deployment. Importované záznamy se nemažou. priorityWindow je pevné ověřené období; samo o sobě není průběžnou deltou.
