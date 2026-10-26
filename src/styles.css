@@ -24693,9 +24693,9 @@ body:has(.data-box-page) {
 }
 
 .employee-card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 18px;
   padding: 22px;
 }
@@ -24710,6 +24710,7 @@ body:has(.data-box-page) {
   margin: 4px 0 8px;
   font-size: clamp(1.75rem, 4vw, 2.7rem);
   line-height: 1.05;
+  overflow-wrap: anywhere;
 }
 
 .employee-card-header p {
@@ -24720,10 +24721,41 @@ body:has(.data-box-page) {
 
 .employee-card-header__actions {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  max-width: 320px;
+}
+
+.employee-card-header__toolbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.employee-card-header__switcher {
+  display: grid;
+  gap: 6px;
+  flex: 0 1 320px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.employee-card-header__switcher .employee-card-switcher {
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  font-size: 1rem;
+}
+
+.employee-card-header__toolbar .employee-add-button {
+  flex-shrink: 0;
 }
 
 .absence-panel__actions {
@@ -30331,7 +30363,7 @@ body:has(.absence-page--employee-card) {
 
 @media (max-width: 980px) {
   .employee-card-header {
-    display: grid;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .employee-card-header__actions {
@@ -30366,6 +30398,18 @@ body:has(.absence-page--employee-card) {
 }
 
 @media (max-width: 640px) {
+  .employee-card-header__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .employee-card-header__toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    padding-top: 16px;
+  }
+
   .employee-card-header,
   .employee-card-section {
     padding: 16px;
