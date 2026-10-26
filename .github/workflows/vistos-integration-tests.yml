@@ -16,6 +16,7 @@ on:
       - "functions/api/jobs/**"
       - "functions/api/integrations/**"
       - "src/components/VistosWorkspace.js"
+      - "src/components/VistosJobDetail.js"
       - "src/vistos-workspace.css"
       - "migrations/modular/**"
       - "wrangler.vistos-leadhub-profile-sync-runner.toml"

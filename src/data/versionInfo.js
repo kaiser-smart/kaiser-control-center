@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.873"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.875"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -23,6 +23,7 @@ export const versionNews = [
   { title: "Zřetelný kruh při jízdě", text: "Kruh vybraného jedoucího vozidla se oddělí od pevného obrysu a pomalu se rozšíří. Původní ikony i čitelné SPZ zůstávají beze změny; stará nebo neověřená GPS neanimuje." },
   { title: "Ikony podle velikosti pracovního místa", text: "Velká záhlaví a postranní navigace mají výraznější ikony. Mobilní nabídka je čitelnější a samostatná ikonová tlačítka mají větší plochu pro klepnutí. Zachováváme schválenou tenkou kresbu." },
   { title: "Přehlednější karta zaměstnance", text: "Návrat a úprava jsou oddělené od přepínání zaměstnanců a přidání nového. Ovládání zůstává přehledné i na mobilu a u dlouhých jmen." },
+  { title: "Přehledný detail zakázky", text: "Položky mají stručné řádky a rozbalovací podrobnosti. Šest záložek odděluje přehled, provedení, doklady, zdrojová data a historii. Na mobilu se položky zobrazují jako karty; nedoložené jednotky a časy zůstávají výslovně označené." },
   { title: "Ikony podle vašeho přiřazení", text: "Mapa používá 42 ručně vybraných ikon podle předaného návrhu. Nabídka navíc obsahuje tři dodané varianty kontejnerového vozu, dodávky a cisterny." },
   { title: "Poloha vozidel: online a offline", text: "Stáří GPS nahrazují zelené a oranžové puntíky. Jízda, rychlost i bezpečnostní pravidla GPS zůstávají zachované." },
   { title: "Čitelnější vozidla a SPZ na mapě", text: "Původní siluety mají jemný tmavý kruhový podklad a SPZ světlé štítky. Pouze vybrané jedoucí auto s aktuální GPS jemně pulzuje; při omezení animací zůstává statické." },
