@@ -3,11 +3,11 @@ import { markerHTML, markerName, escape } from "./presentation.js";
 
 export const ROAD_STYLES = [
   { featureType: "poi.business", stylers: [{ visibility: "off" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#e3ebda" }] },
-  { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#eef0e9" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#e7eee3" }] },
+  { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#f1f3f2" }] },
   { featureType: "road.local", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#657164" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#c5dde2" }] }
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#77817e" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#d6e6e9" }] }
 ];
 
 export function createGoogleMap(node, maps, callbacks) {
@@ -187,8 +187,16 @@ export function createGoogleMap(node, maps, callbacks) {
     const v = vehicles.find((v) => v.id === id); if (!v?.point) return;
     const p = project(v); if (!p) return;
     const safe = { left: 50, top: 76, right: node.clientWidth - 50, bottom: node.clientHeight - 60 };
-    if (force) map.panTo(v.point);
-    else {
+    const detail = node.parentElement.querySelector(".vm-panel-detail:not([hidden])");
+    if (detail && getComputedStyle(detail).visibility !== "hidden") {
+      const n = node.getBoundingClientRect(), r = detail.getBoundingClientRect();
+      if (r.width < n.width * .8) safe.right = Math.max(safe.left + 20, r.left - n.left - 40);
+      else safe.bottom = Math.max(safe.top + 20, r.top - n.top - 40);
+    }
+    if (force) {
+      map.panTo(v.point);
+      map.panBy(node.clientWidth / 2 - (safe.left + safe.right) / 2, node.clientHeight / 2 - (safe.top + safe.bottom) / 2);
+    } else {
       const dx = p.x < safe.left ? p.x - safe.left : p.x > safe.right ? p.x - safe.right : 0;
       const dy = p.y < safe.top ? p.y - safe.top : p.y > safe.bottom ? p.y - safe.bottom : 0;
       if (dx || dy) map.panBy(dx, dy);

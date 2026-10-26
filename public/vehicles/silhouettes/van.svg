@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 32" width="48" height="32" style="color:#202821"><path d="M6 6h25l10 10h3v10H3V10a4 4 0 0 1 3-4Z" fill="currentColor" />
+    <path d="M28 9h2l7 8h-9ZM24 9v13" fill="var(--vehicle-cutout, #fff)" stroke="var(--vehicle-cutout, #fff)" stroke-width="1.5" />
+    <path d="M8 10h12v7H8Z" fill="var(--vehicle-cutout, #fff)" opacity=".18" />
+    <circle cx="11" cy="25" r="4.5" fill="currentColor" /><circle cx="36" cy="25" r="4.5" fill="currentColor" />
+    <circle cx="11" cy="25" r="1.6" fill="var(--vehicle-cutout, #fff)" /><circle cx="36" cy="25" r="1.6" fill="var(--vehicle-cutout, #fff)" />
+  </svg>

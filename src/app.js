@@ -1,3 +1,4 @@
+import { isMobileViewport } from "./mobileViewport.js";
 import { createVehicleWorkspace } from "./vehicle-map/workspace.js";
 import { vistosWorkspaceSection, mountVistosWorkspace } from "./components/VistosWorkspace.js";
 import { searchNavigation } from "./data/globalSearch.js";
@@ -55516,7 +55517,7 @@ function applyUiSystemV2() {
 
   if (
     !shell
-    || shell.classList.contains("vm-page")
+    || (shell.classList.contains("vm-page") && !isMobileViewport())
     || !user
     || (isCollectionRoutesDriverKioskUser(user) && isCollectionRoutesDriverKioskPath(window.location.pathname))
   ) {

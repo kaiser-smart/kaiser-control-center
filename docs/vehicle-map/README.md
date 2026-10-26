@@ -1,3 +1,5 @@
+> **Aktuální práce 2.0 (26. 10. 2026):** [přejímací report](PREJIMKA-2.0.md), [nové parametry vzhledu](DESIGN_TOKENS-2.0.json). Nasazení 2.0 není dokončeno. Následující původní text popisuje výhradně historickou implementaci 1.3.
+
 # Poloha vozidel – izolovaná implementace zadání 1.3
 
 Stav: implementováno v pracovní větvi, NENASAZENO. Estetické schválení Radimem není doloženo. Syntetický náhled ani automatické testy nejsou ověřením produkčního Google Maps / T-Cars spojení.

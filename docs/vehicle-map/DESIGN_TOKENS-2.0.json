@@ -1,0 +1,36 @@
+{
+  "version": "2.0-draft",
+  "visualReference": "https://openart.ai/suite/create-image/gpt-image-2?projectId=US8UZpz2nvEkuGgKgli7",
+  "colors": {
+    "surface": "#FFFFFF",
+    "secondary": "#F6F8F8",
+    "text": "#263238",
+    "brand": "#75BD25",
+    "border": "#DFE5E5"
+  },
+  "typography": {
+    "family": "Quicksand",
+    "body": 14,
+    "mobileInput": 16
+  },
+  "layout": {
+    "leftPanel": 320,
+    "compactPanel": 288,
+    "compactMax": 1100,
+    "mobileMax": 720,
+    "contextDetail": 305,
+    "mobileDetailMaxHeight": "57%",
+    "mobileNavigation": "Existing application navigation"
+  },
+  "marker": {
+    "iconWidth": 36,
+    "iconHeight": 24,
+    "targetWidth": 48,
+    "targetHeight": 44,
+    "clusterSize": 44,
+    "transparent": true,
+    "spiderfyLimit": 8
+  },
+  "artworkStatus": "TEMPORARY_PLACEHOLDER_NOT_RELEASE_READY",
+  "contracts": "Existing model, provider, history API, permissions and session guard are unchanged."
+}

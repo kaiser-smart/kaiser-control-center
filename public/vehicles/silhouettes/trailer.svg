@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 32" width="48" height="32" style="color:#202821"><rect x="3" y="7" width="34" height="15" rx="2" fill="currentColor" />
+    <path d="M8 10v9m7-9v9m7-9v9m7-9v9" stroke="var(--vehicle-cutout, #fff)" stroke-width="1.5" opacity=".6" />
+    <path d="M4 24h33l8 2m-7-5v5" stroke="currentColor" stroke-width="2.8" fill="none" stroke-linecap="round" />
+    <circle cx="12" cy="25" r="4" fill="currentColor" /><circle cx="24" cy="25" r="4" fill="currentColor" />
+    <circle cx="12" cy="25" r="1.5" fill="var(--vehicle-cutout, #fff)" /><circle cx="24" cy="25" r="1.5" fill="var(--vehicle-cutout, #fff)" />
+  </svg>
