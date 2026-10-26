@@ -1,7 +1,7 @@
 import { createIconAssignment } from "./icon-assignment.js";
-import { fleetStatsHTML, driverHTML, telemetryHTML, vehiclePictureHTML, activityHTML, overviewHTML, mapLegendHTML } from "./dashboard.js";
+import { fleetStatsHTML, driverHTML, telemetryHTML, vehiclePictureHTML, activityHTML, overviewHTML } from "./dashboard.js";
 import { reconcile, normalize, filterVehicles, CATEGORIES, validateSample } from "./model.js";
-import { escape, artwork, vehicleArtworkType, artworkFilterHTML, legendHTML, connectionHTML, connectionName, isOnline, stateHTML, markerName } from "./presentation.js";
+import { escape, artwork, vehicleArtworkType, artworkFilterHTML, legendHTML, connectionHTML, connectionName, isOnline, stateHTML, markerName, movementText } from "./presentation.js";
 import { SmartIcon } from "../components/icons/SmartIcon.js";
 import { isMobileViewport, mobileViewportQuery } from "../mobileViewport.js";
 import { createGoogleMap } from "./google-map.js";
@@ -23,10 +23,10 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
       <footer class="vm-list-footer"><span data-vm-count></span><div class="vm-pagination mobile-pager"><button type="button" data-vm-page="-1" aria-label="Předchozí vozidla">${SmartIcon("chevron-left")}</button><span data-vm-page-number></span><button type="button" data-vm-page="1" aria-label="Další vozidla">${SmartIcon("chevron-right")}</button></div></footer>
       </div></aside>
       <div class="vm-map-shell"><div class="vm-map" aria-label="Mapa vozidel"></div><div class="vm-map-message" role="status">Připravuji mapový podklad…</div>
-        <details class="vm-map-tools" data-vm-obstacle><summary>${SmartIcon("settings")}Mapa</summary><div class="vm-map-options"><button type="button" data-vm-country>Celá Česká republika</button><label>Přiblížení<input type="range" min="5" max="20" value="7" step="1" data-vm-zoom-range aria-label="Přiblížení mapy"></label><label>Popisky<select data-vm-labels aria-label="Popisky"><option value="auto">Automaticky</option><option value="selected">Jen vybrané</option></select></label><label>Podklad<select data-vm-layer aria-label="Mapová vrstva"><option value="road">Mapa</option><option value="satellite">Satelit</option></select></label></div></details>
+        <details class="vm-map-tools" data-vm-obstacle><summary>${SmartIcon("settings")}Mapa</summary><div class="vm-map-options"><button type="button" data-vm-country>Celá Česká republika</button><label>Přiblížení<input type="range" min="5" max="20" value="7" step="1" data-vm-zoom-range aria-label="Přiblížení mapy"></label><label>Podklad<select data-vm-layer aria-label="Mapová vrstva"><option value="road">Mapa</option><option value="satellite">Satelit</option></select></label></div></details>
         <div class="vm-map-zoom" data-vm-obstacle><button type="button" class="vm-fit" data-vm-fit aria-label="Vystředit celou flotilu" title="Celá flotila">${SmartIcon("navigate")}</button><button type="button" data-vm-zoom="1" aria-label="Přiblížit">${SmartIcon("plus")}</button><button type="button" data-vm-zoom="-1" aria-label="Oddálit">${SmartIcon("minus")}</button></div>
-        ${mapLegendHTML}<aside class="vm-insights" aria-label="Provozní přehled"><section class="vm-stats-card" data-vm-stats></section><section class="vm-selection-empty"><header><h2>Stav vozidla</h2></header>${artwork({key:'truck'})}<p>Vyberte vozidlo v seznamu nebo na mapě.</p></section><aside class="vm-panel-detail" aria-label="Detail vozidla" data-vm-obstacle hidden></aside><section class="vm-driver-card" data-vm-driver></section></aside><div class="vm-dashboard-bottom"><section class="vm-activity" data-vm-activity></section><section class="vm-overview" data-vm-overview></section></div>
-        <div class="vm-viewport" data-vm-obstacle></div></div></div>
+        <aside class="vm-insights" aria-label="Provozní přehled"><section class="vm-stats-card" data-vm-stats></section><section class="vm-selection-empty"><header><h2>Stav vozidla</h2></header>${artwork({key:'truck'})}<p>Vyberte vozidlo v seznamu nebo na mapě.</p></section><aside class="vm-panel-detail" aria-label="Detail vozidla" data-vm-obstacle hidden></aside><section class="vm-driver-card" data-vm-driver></section></aside><div class="vm-dashboard-bottom"><section class="vm-activity" data-vm-activity></section><section class="vm-overview" data-vm-overview></section></div>
+        </div></div>
     <p class="vm-sr" data-vm-announcement aria-live="polite"></p>
     <dialog class="vm-legend"><button type="button" data-vm-close-legend aria-label="Zavřít legendu">${SmartIcon("close")}</button>${legendHTML()}</dialog>`;
   const $ = (selector) => root.querySelector(selector);
@@ -104,7 +104,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   function detailHTML(v) {
     const field = (label, value) => `<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`;
     const historical = !v.point || v.previousPoint || v.age > 120;
-    return `<header class="vm-detail-head"><div class="vm-detail-identity">${vehiclePictureHTML(v)}<div><h2>${escape(v.name || v.label)}</h2><p>${escape(v.name ? `${v.label} · ${v.type.label}` : v.type.label)}</p>${stateHTML(v)}</div></div><button type="button" data-vm-back aria-label="Zavřít detail vozidla" title="Zavřít detail">${SmartIcon("close")}</button></header>
+    return `<header class="vm-detail-head"><div class="vm-detail-identity">${vehiclePictureHTML(v)}<div><h2>${escape(v.name || v.label)}</h2><p>${escape(v.name ? `${v.label} · ${v.type.label}` : v.type.label)}</p><span class="vm-state">${escape(movementText(v))}</span></div></div><button type="button" data-vm-back aria-label="Zavřít detail vozidla" title="Zavřít detail">${SmartIcon("close")}</button></header>
       <div class="vm-detail-scroll">
       ${v.emergency ? '<p class="vm-emergency">Hlášená mimořádná událost</p>' : ""}
       ${!v.point ? `<p>${escape(v.reason)}</p>` : ""}
@@ -177,7 +177,6 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
       $("[data-vm-activity]").innerHTML = activityHTML(vehicles);
       $("[data-vm-overview]").innerHTML = overviewHTML(filtered);
     }
-    if (!map) $(".vm-viewport").textContent = `${pointCount} s polohou · bez polohy ${filtered.length - pointCount}`;
   }
   async function ensureMap() {
     if (destroyed || map || mapLoading) return;
@@ -188,7 +187,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
         onSelect: select, onHighlight: highlight,
         onGroup(members) { state.groupIds = members.map((v) => v.id); state.selectedId = ""; state.view = "list"; state.page = 0; updatePanel(); updateMap(); resize(); },
         onSelectedGroup(members) { const changed = members.map((v) => v.id).join() !== selectedGroup.map((v) => v.id).join(); selectedGroup = members; if (changed && state.selectedId) updatePanel(); },
-        onViewport(x, y, z, zoom) { if (Number.isFinite(zoom) && document.activeElement !== $("[data-vm-zoom-range]")) $("[data-vm-zoom-range]").value = zoom; $(".vm-viewport").textContent = `Ve výřezu ${x} z ${y} s polohou · bez polohy ${z}`; }
+        onViewport(x, y, z, zoom) { if (Number.isFinite(zoom) && document.activeElement !== $("[data-vm-zoom-range]")) $("[data-vm-zoom-range]").value = zoom; }
       });
       $(".vm-map-message").hidden = true; update();
     } catch { if (!destroyed) $(".vm-map-message").textContent = "Mapový podklad není dostupný. Seznam vozidel zůstává použitelný."; }
@@ -257,7 +256,6 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   });
   root.addEventListener("input", (event) => { if (event.target.hasAttribute("data-vm-zoom-range")) map?.zoomTo(event.target.value); if (event.target.id === "vm-search") { state.query = event.target.value; closeGroup(); update(); } });
   root.addEventListener("change", (event) => {
-    if (event.target.hasAttribute("data-vm-labels")) { state.labelMode = event.target.value; updateMap(); }
     if (event.target.hasAttribute("data-vm-layer")) map?.setLayer(event.target.value);
     if (event.target.hasAttribute("data-vm-history-range")) historyState.range = event.target.value;
   });
