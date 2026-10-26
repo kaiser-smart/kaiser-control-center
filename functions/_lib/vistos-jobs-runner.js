@@ -4,7 +4,7 @@ import { processPaymentCommand } from './vistos-payment-outbox.js';
 import { enrichJobExecution } from './vistos-tracking-enrichment.js';
 
 // Short, sequential tasks share the existing connector budget. No browser polling starts an import.
-export async function runVistosJobsPayments(env,{now=new Date(),maxBatches=12}={}) {
+export async function runVistosJobsPayments(env,{now=new Date(),maxBatches=12,onlyJobs=false}={}) {
   if(String(env.VISTOS_JOBS_RUNNER_ENABLED)!=='true')return {status:'disabled'};
   const db=integrationDb(env),summary={status:'partial',reads:[],commands:[],execution:[]};
   const {results:contracts=[]}=await db.prepare('SELECT installation FROM vistos_integration_contracts ORDER BY installation').all();
@@ -15,10 +15,29 @@ export async function runVistosJobsPayments(env,{now=new Date(),maxBatches=12}={
     const contract=await loadIntegrationContract(db,installation);
     const safe=async(name,fn)=>{try{return {name,...await fn()};}catch(error){return {name,status:'blocked',code:/^[a-z0-9_]+$/.test(error.code||'')?error.code:'vistos_operation_unavailable'};}};
     // Verification survives a writer rollback. No blocked/failed command is automatically resubmitted.
+    if(!onlyJobs) {
     const {results:commands=[]}=await db.prepare(`SELECT id,state FROM vistos_payment_commands WHERE installation=? AND state IN ('ready','sending','verifying','outcome_unknown','recalculation_pending') ORDER BY CASE WHEN state='ready' THEN 1 ELSE 0 END,updated_at LIMIT 5`).bind(installation).all();
     for(const command of commands)if(command.state!=='ready'||active.has('receivables-vistos-writer'))summary.commands.push(await safe('payment',()=>processPaymentCommand(env,command.id)));
+    }
     if(String(env.VISTOS_READ_SYNC_ENABLED)==='true'&&active.has('jobs-vistos-read')) {
-      for(const entity of ['ServiceList','ServiceListItem','InvoiceIssued','Payment']) {
+      if(onlyJobs) {
+        // A parent item stream gets a turn on every invocation; history cannot starve it.
+        const header=contract.entities?.ServiceList;
+        if(header?.readVerified&&batches<maxBatches) {
+          const cp=await db.prepare("SELECT status FROM vistos_sync_checkpoints WHERE installation=? AND entity='ServiceList' AND mode='priority_backfill'").bind(installation).first();
+          const mode=header.priorityFilterVerified&&cp?.status!=='compared'?'priority_backfill':'initial_backfill';
+          summary.reads.push(await safe('ServiceList:'+mode,()=>syncVistosBatch(env,{installation,entity:'ServiceList',mode})));batches++;
+        }
+        if(contract.entities?.ServiceListItem?.readVerified&&batches<maxBatches) {
+          const parent=contract.entities.ServiceListItem.parentFilterVerified?await db.prepare(`SELECT r.source_id FROM vistos_source_records r
+            LEFT JOIN vistos_sync_checkpoints c ON c.installation=r.installation AND c.entity='ServiceListItem' AND c.mode='parent:'||r.source_id
+            WHERE r.installation=? AND r.entity='ServiceList' AND r.company_id IS NOT NULL AND (c.status IS NULL OR c.status<>'compared')
+            ORDER BY r.planned_day DESC,r.source_id DESC LIMIT 1`).bind(installation).first():null;
+          const mode=parent?'parent:'+parent.source_id:'initial_backfill';
+          summary.reads.push(await safe('ServiceListItem:'+mode,()=>syncVistosBatch(env,{installation,entity:'ServiceListItem',mode})));batches++;
+        }
+      }
+      for(const entity of (onlyJobs?[]:['ServiceList','ServiceListItem','InvoiceIssued','Payment'])) {
         const rules=contract.entities?.[entity];if(!rules?.readVerified)continue;
         // Delta first, then one historical page. No single history job owns the entity indefinitely.
         for(const mode of [...(rules.modifiedFilterVerified?['delta']:[]),'initial_backfill',...(now.getUTCHours()<5?['reconciliation']:[])]) {
@@ -26,6 +45,7 @@ export async function runVistosJobsPayments(env,{now=new Date(),maxBatches=12}={
           summary.reads.push(await safe(entity+':'+mode,()=>syncVistosBatch(env,{installation,entity,mode})));
         }
       }
+      if(!onlyJobs) {
       const {results:refresh=[]}=await db.prepare('SELECT * FROM vistos_detail_refresh_queue WHERE installation=? ORDER BY requested_at LIMIT 4').bind(installation).all();
       for(const task of refresh)if(contract.entities?.[task.entity]?.detailVerified)summary.reads.push(await safe('invoice_refresh',async()=>{
         assertVistosInstallation(env,contract);
@@ -36,7 +56,8 @@ export async function runVistosJobsPayments(env,{now=new Date(),maxBatches=12}={
         if(result.status==='stored')await db.prepare('DELETE FROM vistos_detail_refresh_queue WHERE installation=? AND entity=? AND source_id=? AND requested_at=?').bind(installation,task.entity,task.source_id,task.requested_at).run();
         return result;
       }));
-      const {results:details=[]}=await db.prepare(`SELECT id,entity FROM vistos_source_records WHERE installation=? AND (detail_at IS NULL OR detail_at<source_modified) ORDER BY COALESCE(detail_at,''),received_at DESC LIMIT 4`).bind(installation).all();
+      }
+      const {results:details=[]}=await db.prepare(`SELECT id,entity FROM vistos_source_records WHERE installation=? AND (${onlyJobs?"entity IN ('ServiceList','ServiceListItem') AND":''} (detail_at IS NULL OR detail_at<source_modified)) ORDER BY COALESCE(detail_at,''),received_at DESC LIMIT 4`).bind(installation).all();
       for(const record of details)if(contract.entities?.[record.entity]?.detailVerified)summary.reads.push(await safe('detail',()=>refreshSourceDetail(env,installation,record.id)));
     }
     if(String(env.VISTOS_JOB_EXECUTION_ENABLED)==='true'&&active.has('jobs-tcars-evidence')){
@@ -47,5 +68,5 @@ export async function runVistosJobsPayments(env,{now=new Date(),maxBatches=12}={
         await db.prepare('INSERT INTO vistos_execution_checks(job_id,checked_at,error_code) VALUES(?,?,?) ON CONFLICT(job_id) DO UPDATE SET checked_at=excluded.checked_at,error_code=excluded.error_code').bind(job.id,now.toISOString(),outcome.code||null).run();}
     }
   }
-  await flushIntegrationAudit(db);return summary;
+  await flushIntegrationAudit(db,{onlyJobs});return summary;
 }

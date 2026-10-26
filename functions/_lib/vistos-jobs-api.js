@@ -131,7 +131,8 @@ export async function handleVistosRequest(context,action) {
     if(action==='job-detail') {
       const {results:items=[]}=await scope.db.prepare(`SELECT * FROM vistos_source_records WHERE entity='ServiceListItem' AND installation=? AND parent_id=? AND company_id IN (${scope.companies.map(()=>'?')}) ORDER BY source_id LIMIT 101`).bind(scope.installation,job.source_id,...scope.companies).all();
       const contract=await loadIntegrationContract(scope.db,scope.installation);
-      return json({job:publicSourceRecord(job,scope.rights),items:items.slice(0,100).map(r=>publicSourceRecord(r,scope.rights)),itemsPartial:items.length>100,
+      const coverage=await scope.db.prepare("SELECT status FROM vistos_sync_checkpoints WHERE installation=? AND entity='ServiceListItem' AND mode=?").bind(scope.installation,'parent:'+job.source_id).first();
+      return json({job:publicSourceRecord(job,scope.rights),items:items.slice(0,100).map(r=>publicSourceRecord(r,scope.rights)),itemsPartial:items.length>100||coverage?.status!=='compared',
         itemsAvailable:contract.entities?.ServiceListItem?.readVerified===true&&Boolean(contract.entities.ServiceListItem.parentField),attachmentsAvailable:false,rights:scope.rights});
     }
     if(action==='job-history') {
