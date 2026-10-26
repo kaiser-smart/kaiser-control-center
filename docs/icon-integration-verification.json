@@ -1,0 +1,264 @@
+{
+  "status": "prepared-not-deployed",
+  "baseCommit": "a0760a8f44df1ab13047a9cf558fe3fe161e35a5",
+  "baselineVersion": "0.1.851",
+  "approvedReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98",
+  "restoredGeometry": [
+    "public/icons/ui/absence.svg",
+    "public/icons/ui/home.svg",
+    "public/icons/ui/jobs.svg",
+    "public/icons/ui/modules.svg",
+    "public/icons/ui/more.svg",
+    "public/icons/ui/tracking.svg"
+  ],
+  "serializationOnly": 99,
+  "unprovidedApprovedUIOriginals": 63,
+  "physicalIPhoneVerified": false,
+  "cyanOverlayReproduced": false,
+  "unitTests": 23,
+  "unitFailures": 0,
+  "buildRoutes": 52,
+  "evidencePath": "/Users/radimoplustil/Documents/ChatGPT/App smart-odpady/outputs/icon-integration-audit",
+  "screensBefore": {
+    "cases": 120,
+    "pageErrors": 0
+  },
+  "screensAfter": {
+    "cases": 120,
+    "pageErrors": 0
+  },
+  "computedStylesBefore": {
+    "cases": 20,
+    "pageErrors": 0
+  },
+  "computedStylesAfter": {
+    "cases": 20,
+    "pageErrors": 0
+  },
+  "functional": {
+    "cases": 41,
+    "pageErrors": 0
+  },
+  "standaloneSVGBefore": {
+    "total": 105,
+    "failed": 105
+  },
+  "standaloneSVGAfter": {
+    "total": 105,
+    "failed": 0
+  },
+  "fidelity": {
+    "status": "passed",
+    "icons": 6,
+    "method": "Symmetric source/vector contour distance, normalized to a 24px icon; final colour palette fixed to approved hex values. Raster source antialiasing and SVG antialiasing differ.",
+    "rows": [
+      {
+        "name": "home",
+        "layers": [
+          {
+            "intersectionOverUnion": 0.8990932254196643,
+            "edge95At24px": 0.09375,
+            "edgeMaxAt24px": 7.328754901885986
+          },
+          {
+            "intersectionOverUnion": 0.9324721080446271,
+            "edge95At24px": 0.09375,
+            "edgeMaxAt24px": 0.13124942779541016
+          }
+        ],
+        "smallSizes": [
+          {
+            "size": 20,
+            "meanAbsoluteRgbDifference": 4.2625
+          },
+          {
+            "size": 24,
+            "meanAbsoluteRgbDifference": 4.285300925925926
+          },
+          {
+            "size": 28,
+            "meanAbsoluteRgbDifference": 4.491071428571429
+          }
+        ],
+        "svgBytes": 3224
+      },
+      {
+        "name": "modules",
+        "layers": [
+          {
+            "intersectionOverUnion": 0.8976981501327991,
+            "edge95At24px": 0.09375,
+            "edgeMaxAt24px": 6.465116500854492
+          },
+          {
+            "intersectionOverUnion": 0.8707379906046371,
+            "edge95At24px": 0.09375,
+            "edgeMaxAt24px": 0.140625
+          }
+        ],
+        "smallSizes": [
+          {
+            "size": 20,
+            "meanAbsoluteRgbDifference": 5.429166666666666
+          },
+          {
+            "size": 24,
+            "meanAbsoluteRgbDifference": 5.933449074074074
+          },
+          {
+            "size": 28,
+            "meanAbsoluteRgbDifference": 5.79421768707483
+          }
+        ],
+        "svgBytes": 4356
+      },
+      {
+        "name": "absence",
+        "layers": [
+          {
+            "intersectionOverUnion": 0.8763981829726958,
+            "edge95At24px": 0.140625,
+            "edgeMaxAt24px": 5.484375
+          },
+          {
+            "intersectionOverUnion": 0.9070074196207749,
+            "edge95At24px": 0.10297966003417969,
+            "edgeMaxAt24px": 0.13124942779541016
+          }
+        ],
+        "smallSizes": [
+          {
+            "size": 20,
+            "meanAbsoluteRgbDifference": 5.2925
+          },
+          {
+            "size": 24,
+            "meanAbsoluteRgbDifference": 4.651041666666667
+          },
+          {
+            "size": 28,
+            "meanAbsoluteRgbDifference": 5.34608843537415
+          }
+        ],
+        "svgBytes": 2961
+      },
+      {
+        "name": "tracking",
+        "layers": [
+          {
+            "intersectionOverUnion": 0.9131740221280796,
+            "edge95At24px": 0.09375,
+            "edgeMaxAt24px": 4.475000381469727
+          },
+          {
+            "intersectionOverUnion": 0.9088009450679267,
+            "edge95At24px": 0.09375,
+            "edgeMaxAt24px": 0.1498546600341797
+          }
+        ],
+        "smallSizes": [
+          {
+            "size": 20,
+            "meanAbsoluteRgbDifference": 3.191666666666667
+          },
+          {
+            "size": 24,
+            "meanAbsoluteRgbDifference": 3.4461805555555554
+          },
+          {
+            "size": 28,
+            "meanAbsoluteRgbDifference": 3.5863095238095237
+          }
+        ],
+        "svgBytes": 7254
+      },
+      {
+        "name": "jobs",
+        "layers": [
+          {
+            "intersectionOverUnion": 0.8898618311710863,
+            "edge95At24px": 0.09375,
+            "edgeMaxAt24px": 1.875
+          },
+          {
+            "intersectionOverUnion": 0.8701837581505631,
+            "edge95At24px": 0.09375,
+            "edgeMaxAt24px": 0.13124942779541016
+          }
+        ],
+        "smallSizes": [
+          {
+            "size": 20,
+            "meanAbsoluteRgbDifference": 4.445833333333334
+          },
+          {
+            "size": 24,
+            "meanAbsoluteRgbDifference": 4.338541666666667
+          },
+          {
+            "size": 28,
+            "meanAbsoluteRgbDifference": 4.711309523809524
+          }
+        ],
+        "svgBytes": 4157
+      },
+      {
+        "name": "more",
+        "layers": [
+          {
+            "intersectionOverUnion": 0.8985609260128266,
+            "edge95At24px": 0.09375,
+            "edgeMaxAt24px": 4.877689361572266
+          },
+          {
+            "intersectionOverUnion": 0.8936670586259029,
+            "edge95At24px": 0.09375,
+            "edgeMaxAt24px": 0.13124942779541016
+          }
+        ],
+        "smallSizes": [
+          {
+            "size": 20,
+            "meanAbsoluteRgbDifference": 2.4033333333333333
+          },
+          {
+            "size": 24,
+            "meanAbsoluteRgbDifference": 2.490740740740741
+          },
+          {
+            "size": 28,
+            "meanAbsoluteRgbDifference": 2.677721088435374
+          }
+        ],
+        "svgBytes": 4311
+      }
+    ]
+  },
+  "assetMetrics": {
+    "icons": 69,
+    "modules": 21,
+    "totalBytes": 245540,
+    "maxBytes": 8105,
+    "libraryGzipBytes": 85170,
+    "graphiteOnWhite": 13.59241828339373,
+    "greenOnWhite": 2.3173348970671466,
+    "greenOnGraphite": 5.865539029596671,
+    "note": "Green is the approved accent, not an independently contrast-compliant foreground on white. Labels remain necessary."
+  },
+  "currentCompatibility": {
+    "version": "0.1.853",
+    "baseCommit": "2d5668827d439298226d6852901526decb343638",
+    "implementationCommit": "433a2caf071522e113a600c91715b927dc48e169",
+    "tests": 21,
+    "failures": 0,
+    "browserSurfaces": 20,
+    "svgAssets": 105,
+    "svgFailures": 0,
+    "physicalIPhone": false
+  },
+  "nextScope": {
+    "newGenerationAuthorized": true,
+    "icons": 63,
+    "productionDeploymentAuthorized": false
+  }
+}
