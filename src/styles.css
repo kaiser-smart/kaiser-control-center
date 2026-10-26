@@ -53731,11 +53731,14 @@ body.collection-driver-blackview-simulator-active #app {
 .vm .vm-marker:not(.vm-cluster).is-selected::before { border-color:#b4e52b; border-width:2px; }
 .vm .vm-marker:not(.vm-cluster).is-highlighted:not(.is-selected) { outline:0; }
 .vm .vm-marker:not(.vm-cluster).is-highlighted:not(.is-selected)::before { border-color:#e5edf1; }
-.vm .vm-marker.has-current-motion.is-selected::after { border-color:#b4e52b; animation:vm-selected-drive-pulse 2.5s ease-out infinite; }
+.vm .vm-marker.has-current-motion.is-selected::after { border-color:#b4e52b; border-width:1.5px; animation:vm-selected-drive-pulse 2.5s ease-out infinite; }
 @keyframes vm-selected-drive-pulse {
-  0% { transform:scale(1); opacity:0; }
-  18% { opacity:.45; }
-  100% { transform:scale(1.35); opacity:0; }
+  /* Start clear of the static selection border, so the ring reads as motion
+     even at country zoom. Only this decorative layer expands and fades. */
+  0% { transform:scale(1.12); opacity:0; }
+  12% { opacity:.65; }
+  55% { opacity:.4; }
+  100% { transform:scale(1.7); opacity:0; }
 }
 .vm .vm-label { background:#fafcfd; color:#1b262d; border:1px solid #71838e; border-radius:7px; font-size:14px; line-height:18px; font-weight:700; padding:3px 7px; }
 .vm .vm-label.is-selected { border-color:#4f6718; outline:1px solid #b4e52b; }

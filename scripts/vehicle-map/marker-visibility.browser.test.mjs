@@ -11,6 +11,13 @@ const browser=await(engine==='webkit'?webkit.launch({headless:true}):chromium.la
 const page=await browser.newPage({viewport:{width:1440,height:900}});page.setDefaultTimeout(10000);
 const source=async file=>before&&process.env.MARKER_BASE_REF?execFileSync('git',['show',`${process.env.MARKER_BASE_REF}:${file}`],{encoding:'utf8',maxBuffer:8*1024*1024}):readFile(file,'utf8');
 const errors=[],results=[];page.on('pageerror',e=>errors.push(e.message.replace(/AIza[\w-]+/g,'[REDACTED]')));
+// The already authorized local Google preview may be shared by checkouts.
+// Serve this checkout's sources only in this isolated browser context.
+await page.route('**/src/**',async route=>{
+ const file=new URL(route.request().url()).pathname.slice(1);
+ if(!file.endsWith('.js')&&!file.endsWith('.css'))return route.continue();
+ await route.fulfill({contentType:file.endsWith('.css')?'text/css':'text/javascript',body:await readFile(file,'utf8')});
+});
 await page.route('**/src/vehicle-map/google-map.js*',async route=>{let code=await source('src/vehicle-map/google-map.js');code=code.replace('let vehicles = [],','window.__visibilityMap=map; window.__visibilityMaps=maps; let vehicles = [],').replace('const overlay = new FleetOverlay();','const overlay = new FleetOverlay(); window.__visibilityOverlay=overlay;');await route.fulfill({contentType:'text/javascript',body:code});});
 if(before&&process.env.MARKER_BASE_REF)for(const file of ['src/styles.css','src/vehicle-map/spatial.js','src/vehicle-map/presentation.js'])await page.route('**/'+file+'*',async route=>route.fulfill({contentType:file.endsWith('.css')?'text/css':'text/javascript',body:await source(file)}));
 const control=async q=>fetch(url+'/__preview/control?'+q);
@@ -19,12 +26,38 @@ const marker=n=>page.locator(`.vm-marker[data-vm-marker$=":synthetic-${n}"]`);
 const choose=async n=>{if((await page.viewportSize()).width<=720)await page.locator('[data-vm-view="list"]').click();await page.locator(`[data-vm-row$=":synthetic-${n}"]`).click();await page.waitForTimeout(250);};
 const pulse=()=>page.evaluate(()=>[...document.querySelectorAll('.vm-marker')].filter(e=>getComputedStyle(e,'::after').animationName==='vm-selected-drive-pulse').map(e=>e.dataset.vmMarker));
 const shot=async name=>page.screenshot({path:`${output}/${before?'before':'after'}-${engine}-${name}.png`});
+// Capture actual painted phases, not just an animation-name declaration.
+const ringPhases=async theme=>{
+ const samples=[];
+ for(const time of [625,1500,2250]){
+  samples.push(await marker(1).evaluate((el,time)=>{
+   const a=el.getAnimations({subtree:true}).find(a=>a.animationName==='vm-selected-drive-pulse');
+   if(!a)throw new Error('Selected current vehicle has no pulse animation');
+   a.pause();a.currentTime=time;
+   const s=getComputedStyle(el,'::after'),base=getComputedStyle(el,'::before');
+   const scale=new DOMMatrixReadOnly(s.transform).a;
+   return {time,scale,opacity:Number(s.opacity),gap:(parseFloat(s.width)*scale-parseFloat(base.width))/2};
+  },time));
+  await shot(`${theme}-pulse-${time}`);
+ }
+ await marker(1).evaluate(el=>el.getAnimations({subtree:true}).find(a=>a.animationName==='vm-selected-drive-pulse').play());
+ await writeFile(`${output}/${before?'before':'after'}-${engine}-${theme}-pulse.json`,JSON.stringify(samples,null,2));
+ return samples;
+};
 const test=async(name,fn)=>{await fn();results.push(name);console.log('PASS '+name);};
 try{
  await control('scene=overview&error=0&denied=0&unauthorized=0&ttl=3600000&failMe=0');await page.goto(url+'/sledovani-vozidel');await ready();
  await page.evaluate(()=>{__visibilityMap.setZoom(11);__visibilityMap.panTo({lat:49.215,lng:16.62});});await page.waitForTimeout(800);await choose(1);
  await shot('dark-1440x900');
+ const darkPhases=await ringPhases('dark');
  if(!before){
+  await test('Painted ring clears selection by at least 6px early, expands and gradually fades',async()=>{
+   assert.ok(darkPhases[0].gap>=6,JSON.stringify(darkPhases));
+   assert.ok(darkPhases[0].opacity>=.5,JSON.stringify(darkPhases));
+   assert.ok(darkPhases[1].scale>darkPhases[0].scale);
+   assert.ok(darkPhases[2].scale>darkPhases[1].scale);
+   assert.ok(darkPhases[0].opacity>darkPhases[1].opacity&&darkPhases[1].opacity>darkPhases[2].opacity);
+  });
   await test('Only selected current moving vehicle pulses; cycle 2.5 seconds; artwork and label do not animate',async()=>{
    assert.equal((await pulse()).length,1);
    const styles=await marker(1).evaluate(el=>({cycle:getComputedStyle(el,'::after').animationDuration,art:getComputedStyle(el.querySelector('.vm-art')).animationName,body:getComputedStyle(el).animationName}));
@@ -49,8 +82,9 @@ try{
   for(const [n,name] of [[3,'stopped'],[2,'stale'],[8,'unknown'],[12,'missing']])await test(name+' GPS/movement has no pulse',async()=>{await choose(n);assert.deepEqual(await pulse(),[]);await shot(name);});
  }
  await choose(1);await page.evaluate(()=>{__visibilityMap.setOptions({styles:[]});__visibilityMap.setZoom(11);__visibilityMap.panTo({lat:49.215,lng:16.62});});await page.waitForTimeout(1000);await shot('light-1440x900');
+ await ringPhases('light');
  if(!before)await test('Pan and zoom retain selection and fixed geographic anchor',async()=>{const old=await page.evaluate(()=>__visibilityMap.getZoom());await page.locator('[data-vm-zoom="1"]').click();await page.evaluate(()=>__visibilityMap.panBy(60,20));await page.waitForTimeout(800);assert.equal(await page.evaluate(()=>__visibilityMap.getZoom()),old+1);assert.equal(await page.locator('.vm-marker.is-selected').count(),1);assert.equal((await pulse()).length,1);const delta=await page.evaluate(()=>{const a=document.querySelector('.vm-marker.is-selected').getBoundingClientRect(),b=document.querySelector('.vm-map').getBoundingClientRect(),p=__visibilityOverlay.getProjection().fromLatLngToContainerPixel(new __visibilityMaps.LatLng(49.22,16.5));return [a.x+a.width/2-b.x-p.x,a.y+a.height/2-b.y-p.y];});assert.ok(delta.every(n=>Math.abs(n)<.75),JSON.stringify(delta));});
- for(const width of [1024,390,320]) {await page.setViewportSize({width,height:width===1024?768:width===390?844:700});await page.evaluate(()=>{__visibilityMap.setZoom(11);__visibilityMap.panTo({lat:49.215,lng:16.62});});await page.waitForTimeout(250);await choose(1);await page.waitForTimeout(400);await shot('light-'+width);if(!before){assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);assert.equal((await pulse()).length,1);assert.equal(await page.locator('.vm-label.is-selected').isVisible(),true);if(width<=720){const plate=await page.locator('.vm-label.is-selected').boundingBox(),panel=await page.locator('.vm-panel-detail').boundingBox();assert.ok(plate.y+plate.height<panel.y,'Selected plate is fully above mobile detail');}}}
+ for(const width of [1024,768,430,390,375,320]) {await page.setViewportSize({width,height:width>=768?768:width>=375?844:700});await page.evaluate(()=>{__visibilityMap.setZoom(11);__visibilityMap.panTo({lat:49.215,lng:16.62});});await page.waitForTimeout(250);await choose(1);await page.waitForTimeout(400);await shot('light-'+width);if(!before){assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);assert.equal((await pulse()).length,1);assert.equal(await page.locator('.vm-label.is-selected').isVisible(),true);if(width<=720){const plate=await page.locator('.vm-label.is-selected').boundingBox(),panel=await page.locator('.vm-panel-detail').boundingBox();assert.ok(plate.y+plate.height<panel.y,'Selected plate is fully above mobile detail');}}}
  if(!before){
   await page.setViewportSize({width:1440,height:900});await control('scene=same6');await page.goto(url+'/sledovani-vozidel');await ready();await page.locator('.vm-cluster').click();await page.waitForTimeout(500);await choose(1);
   await test('Coincident vehicles keep exact group count, selected SPZ priority and no plate collisions',async()=>{assert.equal(await page.locator('.vm-marker:not(.vm-cluster)').count(),6);assert.equal(await page.locator('.vm-label.is-selected:not([hidden])').count(),1);const overlap=await page.evaluate(()=>{const a=[...document.querySelectorAll('.vm-label:not(.vm-measure):not([hidden])')].map(el=>el.getBoundingClientRect());return a.some((r,i)=>a.slice(i+1).some(s=>r.left<s.right&&r.right>s.left&&r.top<s.bottom&&r.bottom>s.top));});assert.equal(overlap,false);await shot('cluster-six');});
