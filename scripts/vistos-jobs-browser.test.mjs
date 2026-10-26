@@ -23,7 +23,7 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.
 let browser;const errors=[],checks=[];
 const field=(value)=>({value,label:'Test',source:'detail',availability:'known',disclosure:'operational'});
 const record={id:'fixture-1',number:'ZL-TEST-1',customer:'Testovací zákazník',place:'Testovací místo',service:'Testovací služba',status:'unverified',vehicleIds:[],driverId:null,needsReview:true,unassigned:true,receivedAt:'2026-10-25T10:00:00Z',fields:{Number:field('ZL-TEST-1'),Description:field('<img src=x onerror="alert(1)">')}};
-const payload=rows=>({rows,stats:{total:rows.length,inProgress:0,unassigned:rows.length,review:rows.length,unknownDate:rows.length},pagination:{page:1,pageSize:50,total:rows.length},rights:{},companies:['fixture-company'],streams:[],period:'all',dateVerified:false});
+const payload=rows=>({rows,stats:{total:rows.length,inProgress:0,unassigned:rows.length,review:rows.length,unknownDate:rows.length},pagination:{page:1,pageSize:50,total:rows.length},rights:{},companies:['fixture-company'],importProgress:{total:1,lastReceivedAt:'2026-10-25T10:00:00Z',itemsPending:1},streams:[],period:'all',dateVerified:false});
 try{
  await mkdir(output,{recursive:true});browser=await webkit.launch({headless:true});
  for(const width of [390,1440]){
@@ -47,6 +47,7 @@ try{
   assert.equal(await page.locator('[data-vistos-workspace]').getAttribute('aria-busy'),'false');
   await page.screenshot({path:path.join(output,`error-${width}.png`)});
   fail=false;await page.getByRole('button',{name:'Zkusit znovu',exact:true}).click();await page.locator('.vj-kpis').waitFor();
+  assert.ok((await page.locator('.vj-meta').allTextContents()).some(t=>t.includes('Poslední načtená změna:')&&!t.includes('Neověřeno')));
   assert.equal(await page.locator('.vj-load-error').count(),0);assert.ok(await page.locator('.vj-quality-mark').count()>0);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   const detail=page.getByRole('button',{name:'Detail ZL-TEST-1',exact:true}).filter({visible:true}).first();await detail.click();
@@ -59,7 +60,7 @@ try{
   assert.equal(await page.locator('.vj-kpis,.vj-mobile-cards,.vj-table').count(),0);
   fail=false;empty=true;await page.getByRole('button',{name:'Zkusit znovu',exact:true}).click();await page.getByRole('heading',{name:'Žádné dostupné zakázky'}).waitFor();
   assert.equal(await page.getByRole('alert').count(),0);
-  empty=false;await page.getByRole('button',{name:'Vymazat filtry',exact:true}).first().click();await page.getByRole('button',{name:'Detail ZL-TEST-1',exact:true}).filter({visible:true}).first().waitFor();
+  empty=false;await page.getByRole('button',{name:'Zobrazit všechny načtené zakázky',exact:true}).click();assert.equal(new URL(page.url()).searchParams.get('period'),'all');await page.getByRole('button',{name:'Detail ZL-TEST-1',exact:true}).filter({visible:true}).first().waitFor();
   // Delayed responses cannot replace the current query's result.
   await page.getByLabel('Hledání',{exact:true}).fill('slow');await page.waitForRequest(r=>new URL(r.url()).searchParams.get('q')==='slow');
   await page.getByLabel('Hledání',{exact:true}).fill('fast');await page.getByRole('button',{name:'Detail ZL-FAST',exact:true}).filter({visible:true}).first().waitFor();

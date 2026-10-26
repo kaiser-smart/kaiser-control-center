@@ -1,6 +1,6 @@
 // Isolated preview transport: existing backend authorization remains authoritative.
 export const UPSTREAM='https://smart-odpady.ai';
-export const READ_PATHS=new Set(['/api/me','/api/theme-settings','/api/vehicle-tracking/status','/api/vehicle-tracking/maps-config','/api/vehicle-tracking/preferences','/api/vehicle-tracking/history']);
+export const READ_PATHS=new Set(['/api/me','/api/theme-settings','/api/vehicle-tracking/status','/api/vehicle-tracking/maps-config','/api/vehicle-tracking/preferences','/api/vehicle-tracking/history','/api/vehicle-tracking/analytics']);
 export const AUTH_PATHS=new Set(['/api/auth/start','/api/auth/verify','/api/auth/logout']);
 export function permitted(request,origin){
  const u=new URL(request.url);

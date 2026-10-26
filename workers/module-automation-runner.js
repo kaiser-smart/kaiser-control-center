@@ -1,4 +1,5 @@
 import { runVistosJobsServerBridge } from "../functions/_lib/vistos-jobs-server-bridge.js";
+import {VISTOS_JOBS_CRON} from "../functions/_lib/vistos-jobs-read-queue.js";
 import { runModuleAutomationDryRun } from "../functions/_lib/module-automation-dry-run.js";
 import {
   runCollectionDailyRoutePreparationAutomation,
@@ -18,7 +19,7 @@ const ABSENCE_CRON = "15 3 * * *";
 export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil((async () => {
-      if (controller.cron === "*/10 * * * *") {
+      if (controller.cron === VISTOS_JOBS_CRON) {
         const result = await runVistosJobsServerBridge(env);
         console.log("vistos_jobs_read", {status:result.status, reads:result.reads||0, blocked:result.blocked||0, code:result.code||null});
         return;

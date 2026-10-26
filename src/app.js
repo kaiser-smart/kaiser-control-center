@@ -1,4 +1,5 @@
 import { RepairModule } from "./components/RepairModule.js";
+import { isMobileViewport } from "./mobileViewport.js";
 import { fleetCalendarDate } from "./data/fleetDate.js";
 import { createVehicleWorkspace } from "./vehicle-map/workspace.js";
 import { vistosWorkspaceSection, mountVistosWorkspace } from "./components/VistosWorkspace.js";
@@ -7257,7 +7258,7 @@ function paintGlobalSearch() {
   const target = app.querySelector("[data-global-search-results]");
   if (target) target.innerHTML = globalSearchHtml(currentUser());
   const searching = Boolean(moduleLauncherQuery.trim());
-  for (const element of app.querySelectorAll(".module-launcher-grid, #module-launcher-title")) element.hidden = searching;
+  for (const element of app.querySelectorAll(".module-launcher-grid, #module-launcher-title, [data-launcher-more]")) element.hidden = searching;
 }
 function updateGlobalSearch(value) {
   moduleLauncherQuery = value.slice(0, 100);
@@ -7312,6 +7313,8 @@ function launcherModules(user) {
 
 function homePage(user) {
   const items = launcherModules(user);
+  const primaryIds = new Set(items.map(item => item.id));
+  const moreItems = menuModules(user).filter(item => !primaryIds.has(item.id) && item.active !== false && !item.disabled);
   return `
     <main class="app-shell module-theme-scope ui-system-pilot ui-system-pilot--modules" ${moduleThemeStyleAttribute()}>
       ${uiSystemPilotSidebar(user, "dashboard")}
@@ -7327,6 +7330,15 @@ function homePage(user) {
             <span class="module-launcher-arrow" aria-hidden="true">${SmartIcon("chevron-right")}</span>
           </a>`).join("")}
         </div>
+        ${moreItems.length ? `<nav class="module-launcher-more" aria-labelledby="module-launcher-more-title" data-launcher-more ${moduleLauncherQuery.trim() ? "hidden" : ""}>
+          <h2 id="module-launcher-more-title">Další moduly</h2>
+          <div class="module-launcher-more-grid">
+            ${moreItems.map(item => `<a class="module-launcher-card module-launcher-card--compact" href="${routeHref(routeForModuleCard(item, user))}" data-link data-launcher-additional="${escapeHtml(item.id)}">
+              <span class="module-launcher-secondary-icon" aria-hidden="true">${renderModuleIcon(item)}</span>
+              <strong>${escapeHtml(item.title)}</strong>
+            </a>`).join("")}
+          </div>
+        </nav>` : ""}
       </section>
     </main>
   `;
@@ -18962,10 +18974,10 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
       ${userBar(user)}
       <nav class="topbar" aria-label="Navigace">
         <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
-        <a class="back-button" href="${routeHref("/")}" data-link>Zpět na HP</a>
+        <a class="back-button" href="${routeHref("/")}" data-link aria-label="Domů" title="Domů">${SmartIcon("home")}</a>
         <div class="vm-shell-links">
-          ${canViewModule(user, "fleet") ? `<a href="${routeHref(FLEET_ROUTE)}" data-link>Vozový park</a>` : ""}
-          ${hasPermission(user, "settings", "view") ? `<a href="${routeHref("/nastaveni#vehicle-tracking-settings")}" data-link>Nastavení</a>` : ""}
+          ${canViewModule(user, "fleet") ? `<a href="${routeHref(FLEET_ROUTE)}" data-link aria-label="Vozový park" title="Vozový park">${SmartIcon("fleet")}</a>` : ""}
+          ${hasPermission(user, "settings", "view") ? `<a href="${routeHref("/nastaveni#vehicle-tracking-settings")}" data-link aria-label="Nastavení" title="Nastavení">${SmartIcon("settings")}</a>` : ""}
         </div>
       </nav>
       <div data-vehicle-map-workspace></div>
@@ -18987,14 +18999,12 @@ function syncVehicleMapWorkspace() {
       scope: owner,
       loadMaps: loadVehicleTrackingGoogleMaps,
       refresh: () => refreshVehicleTrackingOperationalData(),
-      readHistory: (key, range) => apiJson(`/api/vehicle-tracking/history?vehicleKey=${encodeURIComponent(key)}&range=${encodeURIComponent(range)}`)
+      readHistory: (key, range) => apiJson(`/api/vehicle-tracking/history?vehicleKey=${encodeURIComponent(key)}&range=${encodeURIComponent(range)}`),
+      readAnalytics: () => apiJson("/api/vehicle-tracking/analytics?period=today")
     });
   }
   if (vehicleMapWorkspace.root.parentElement !== host) host.replaceChildren(vehicleMapWorkspace.root);
-  const background = activeThemeSettings().backgroundColor || "#ffffff";
-  const rgb = background.replace("#", "");
-  const luminance = rgb.length === 6 ? [0, 2, 4].map((i) => parseInt(rgb.slice(i, i + 2), 16)).reduce((sum, value, i) => sum + value * [0.2126, 0.7152, 0.0722][i], 0) : 255;
-  vehicleMapWorkspace.root.dataset.theme = luminance < 128 ? "dark" : "light";
+  vehicleMapWorkspace.root.dataset.theme = "dark"; // User-selected OpenArt reference; scoped to this module.
   vehicleMapWorkspace.update(vehicleTrackingLiveState.status, {
     loading: vehicleTrackingLiveState.loading,
     error: vehicleTrackingLiveState.error,
@@ -55616,7 +55626,7 @@ function applyUiSystemV2() {
 
   if (
     !shell
-    || shell.classList.contains("vm-page")
+    || (shell.classList.contains("vm-page") && !isMobileViewport())
     || !user
     || (isCollectionRoutesDriverKioskUser(user) && isCollectionRoutesDriverKioskPath(window.location.pathname))
   ) {

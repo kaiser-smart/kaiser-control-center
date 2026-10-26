@@ -8,6 +8,9 @@ export const TYPES = Object.freeze({
   car: { label: "Osobní vůz", monogram: "OS" },
   trailer: { label: "Přívěs / návěs", monogram: "PŘ" },
   special: { label: "Speciální technika", monogram: "SP" },
+  truck: { label: "Nákladní vůz", image: true },
+  excavator: { label: "Bagr", image: true },
+  forklift: { label: "Vysokozdvižný vozík", image: true },
   unknown: { label: "Neurčený typ", monogram: "?" }
 });
 // Exact individual artwork assignments already present at c37cd96 in
@@ -46,7 +49,7 @@ export function presentationType(item) {
   if (individual) return { key: individual, ...TYPES[individual] };
   // Only explicit evidence fields, never a derived iconType or a nickname.
   const declared = first(v.bodyType, v.vehicleType, typeof v.type === "object" ? v.type?.name : v.type);
-  const aliases = { "svozovevozidlo": "collection_truck", "dodavka": "van", "osobnivozidlo": "car", "specialnitechnika": "special", "prives/naves": "trailer", "kontejnerovevozidlo": "container_truck", "hakovynosic": "hook_loader", "ramenovynosic": "skip_loader", "cisterna": "tanker" };
+  const aliases = { "nakladnivuz": "truck", "bagr": "excavator", "vzv": "forklift", "vysokozdviznyvozik": "forklift", "svozovevozidlo": "collection_truck", "dodavka": "van", "osobnivozidlo": "car", "specialnitechnika": "special", "prives/naves": "trailer", "kontejnerovevozidlo": "container_truck", "hakovynosic": "hook_loader", "ramenovynosic": "skip_loader", "ramenovynakladac": "skip_loader", "ram": "skip_loader", "popelarskyvuz": "collection_truck", "cisterna": "tanker" };
   let key = aliases[searchKey(declared)] || declared;
   if (key === "hook_loader") key = "container_truck";
   else if (key === "container_truck") return { key: "unknown", label: "Kontejnerové vozidlo", monogram: "?" };

@@ -45,8 +45,12 @@ export async function listJobs(scope,url) {
   }
   const {results=[]}=await scope.db.prepare(`SELECT * FROM vistos_source_records WHERE ${filter} ORDER BY ${sort},source_id,id LIMIT ? OFFSET ?`).bind(...bind,size,(page-1)*size).all();
   const {results:streams=[]}=await scope.db.prepare(`SELECT mode,status,offset,expected_count,last_success_at,updated_at,error_code FROM vistos_sync_checkpoints WHERE installation=? AND entity='ServiceList'`).bind(scope.installation).all();
+  const importProgress=await scope.db.prepare(`SELECT COUNT(*) AS total,MAX(r.received_at) AS lastReceivedAt,
+    COALESCE(SUM(CASE WHEN c.status='compared' AND json_extract(c.comparison_json,'$.parentFingerprint')=r.fingerprint THEN 0 ELSE 1 END),0) AS itemsPending
+    FROM vistos_source_records r LEFT JOIN vistos_sync_checkpoints c ON c.installation=r.installation AND c.entity='ServiceListItem' AND c.mode='parent:'||r.source_id
+    WHERE r.installation=? AND r.entity='ServiceList' AND r.company_id IN (${scope.companies.map(()=>'?')})`).bind(scope.installation,...scope.companies).first();
   return {rows:results.map(r=>publicSourceRecord(r,scope.rights)),stats,pagination:{page,pageSize:size,total:stats.total},period,dateVerified:verifiedDate,
-    streams,rights:scope.rights,companies:scope.companies,sourceCountConfirmed:false};
+    streams,importProgress,rights:scope.rights,companies:scope.companies,sourceCountConfirmed:false};
 }
 async function integrationStatus(scope) {
   const contract=await loadIntegrationContract(scope.db,scope.installation);
@@ -131,8 +135,8 @@ export async function handleVistosRequest(context,action) {
     if(action==='job-detail') {
       const {results:items=[]}=await scope.db.prepare(`SELECT * FROM vistos_source_records WHERE entity='ServiceListItem' AND installation=? AND parent_id=? AND company_id IN (${scope.companies.map(()=>'?')}) ORDER BY source_id LIMIT 101`).bind(scope.installation,job.source_id,...scope.companies).all();
       const contract=await loadIntegrationContract(scope.db,scope.installation);
-      const coverage=await scope.db.prepare("SELECT status FROM vistos_sync_checkpoints WHERE installation=? AND entity='ServiceListItem' AND mode=?").bind(scope.installation,'parent:'+job.source_id).first();
-      return json({job:publicSourceRecord(job,scope.rights),items:items.slice(0,100).map(r=>publicSourceRecord(r,scope.rights)),itemsPartial:items.length>100||coverage?.status!=='compared',
+      const coverage=await scope.db.prepare("SELECT status,comparison_json FROM vistos_sync_checkpoints WHERE installation=? AND entity='ServiceListItem' AND mode=?").bind(scope.installation,'parent:'+job.source_id).first();
+      return json({job:publicSourceRecord(job,scope.rights),items:items.slice(0,100).map(r=>publicSourceRecord(r,scope.rights)),itemsPartial:items.length>100||coverage?.status!=='compared'||JSON.parse(coverage?.comparison_json||'null')?.parentFingerprint!==job.fingerprint,
         itemsAvailable:contract.entities?.ServiceListItem?.readVerified===true&&Boolean(contract.entities.ServiceListItem.parentField),attachmentsAvailable:false,rights:scope.rights});
     }
     if(action==='job-history') {

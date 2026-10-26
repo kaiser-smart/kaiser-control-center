@@ -1,0 +1,45 @@
+{
+  "status": "USER_SELECTED_OPENART_ASSET",
+  "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2-edit-1_1792976872301_546d2b9a.png",
+  "projectId": "US8UZpz2nvEkuGgKgli7",
+  "historyId": "RAWkpulVhLuMJNyrKk2D",
+  "resourceId": "xhLThzPMe1y47Z6CQGy0",
+  "sha256": "d05712ae2dd761000135e33f8f47b6a84c40bcc005b19330daf0204701ad9f96",
+  "bytes": 839019,
+  "width": 1024,
+  "height": 1024,
+  "imageModified": false,
+  "display": "CSS sprite crops and SVG alpha-only white-canvas filter. Source pixels and green colors are retained; no generated drawing.",
+  "evidence": "User instructed use icons from this OpenArt project after being asked for final assets. Latest completed set has eight vehicle/equipment silhouettes.",
+  "fallbacks": "Trailer, generic special and unknown types use neutral text monograms. Collection truck and RAM/skip loader have separately supplied user artwork; hook loader uses original atlas hook silhouette.",
+  "additionalUserAttachments": [
+    {
+      "file": "skip-loader.png",
+      "source": "Snímek obrazovky 2026-10-26 v 2.20.17.png",
+      "width": 584,
+      "height": 520,
+      "crop": [
+        53,
+        131,
+        502,
+        296
+      ],
+      "sha256": "81e0a59777996d732482463572868963f9acd512f778295acbc645baf7c186ee",
+      "imageModified": false
+    },
+    {
+      "file": "collection-truck.png",
+      "source": "Snímek obrazovky 2026-10-26 v 2.20.07.png",
+      "width": 934,
+      "height": 882,
+      "crop": [
+        103,
+        303,
+        768,
+        380
+      ],
+      "sha256": "95bd74b192c2cde146fad83e425ff71679447e5430f96bcd6100ae244d20699a",
+      "imageModified": false
+    }
+  ]
+}
