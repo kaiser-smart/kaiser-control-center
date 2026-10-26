@@ -17,11 +17,37 @@ export const ROAD_STYLES = [
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#09151d" }] }
 ];
 
+const countryPolygons = CZECH_BOUNDARY.type === 'MultiPolygon' ? CZECH_BOUNDARY.coordinates : [CZECH_BOUNDARY.coordinates];
+const countryPoints = countryPolygons.flat(2);
+export const CZECH_VIEW_BOUNDS = Object.freeze({
+  north: Math.max(...countryPoints.map(p => p[1])), south: Math.min(...countryPoints.map(p => p[1])),
+  east: Math.max(...countryPoints.map(p => p[0])), west: Math.min(...countryPoints.map(p => p[0]))
+});
+function countryMinZoom(node) {
+  const b = CZECH_VIEW_BOUNDS;
+  const mercator = lat => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)) / (2 * Math.PI);
+  return Math.max(5, Math.min(9, Math.log2(Math.max(100, node.clientWidth - 48) * 360 / (256 * (b.east - b.west))), Math.log2(Math.max(100, node.clientHeight - 48) / (256 * (mercator(b.north) - mercator(b.south))))));
+}
+// A geographic mask, not a replacement map: Czech Google tiles remain interactive.
+// Opposite winding creates a hole through the surrounding neutral surface.
+function countryMaskPaths() {
+  const outer = [{lat:20,lng:-40},{lat:20,lng:70},{lat:75,lng:70},{lat:75,lng:-40}];
+  const area = ring => ring.reduce((sum, p, i) => { const q = ring[(i + 1) % ring.length]; return sum + p.lng * q.lat - q.lng * p.lat; }, 0);
+  return [outer, ...countryPolygons.map(p => {
+    const ring = p[0].map(([lng,lat]) => ({lat,lng}));
+    return Math.sign(area(ring)) === Math.sign(area(outer)) ? ring.reverse() : ring;
+  })];
+}
+
 export function createGoogleMap(node, maps, callbacks) {
   // Existing module has no mapId. Raster roadmap supports inline styles; no cloud
   // styling, new provider/key or ignored styles+mapId combination is introduced.
   const map = new maps.Map(node, {
-    center: { lat: 49.2, lng: 16.6 }, zoom: 11, heading: 0, tilt: 0,
+    center: { lat: 49.8, lng: 15.5 }, zoom: 7, heading: 0, tilt: 0,
+    minZoom: countryMinZoom(node), maxZoom: 20, isFractionalZoomEnabled: true,
+    // Small camera margin lets border vehicles sit above the mobile detail.
+    // The opaque geographic mask still shows Czech territory only.
+    restriction: { latLngBounds: { north:CZECH_VIEW_BOUNDS.north + .6, south:CZECH_VIEW_BOUNDS.south - .6, east:CZECH_VIEW_BOUNDS.east + .6, west:CZECH_VIEW_BOUNDS.west - .6 }, strictBounds: false },
     renderingType: maps.RenderingType?.RASTER || "RASTER",
     mapTypeId: "roadmap", styles: ROAD_STYLES, clickableIcons: false,
     mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
@@ -31,7 +57,8 @@ export function createGoogleMap(node, maps, callbacks) {
   let vehicles = [], selectedId = "", highlightedId = "", labelMode = "auto", groupIds = [], spider = false;
   let destroyed = false, initialFit = false, frame = 0, drawn = [], resizeFrame = 0;
   let history = null;
-  const polygons = CZECH_BOUNDARY.type === 'MultiPolygon' ? CZECH_BOUNDARY.coordinates : [CZECH_BOUNDARY.coordinates];
+  const polygons = countryPolygons;
+  const countryMask = new maps.Polygon({ map, paths: countryMaskPaths(), fillColor:'#080f14', fillOpacity:1, strokeWeight:0, clickable:false, zIndex:4 });
   const countryBorder = polygons.flatMap(p => p.map(ring => new maps.Polyline({ map, path: ring.map(([lng,lat]) => ({lat,lng})), strokeColor:'#b4e52b', strokeOpacity:1, strokeWeight:2, clickable:false, zIndex:5 })));
 
   const elements = new Map(), labels = new Map(), measurements = new Map(), listeners = [];
@@ -175,9 +202,7 @@ export function createGoogleMap(node, maps, callbacks) {
   function fitCountry() {
     const b = new maps.LatLngBounds();
     polygons.forEach(p => p.forEach(ring => ring.forEach(([lng,lat]) => b.extend({lat,lng}))));
-    // Include authorized outliers without fabricating a position or hiding them.
-    vehicles.filter(v => v.point).forEach(v => b.extend(v.point));
-    map.fitBounds(b, 36); map.setHeading?.(0); map.setTilt?.(0);
+    map.fitBounds(b, 24); map.setHeading?.(0); map.setTilt?.(0);
   }
   function fit(items) {
     const valid = items.filter((v) => v.point); if (!valid.length) return;
@@ -210,6 +235,12 @@ export function createGoogleMap(node, maps, callbacks) {
       if (r.width < n.width * .8) safe.right = Math.max(safe.left + 20, r.left - n.left - 40);
       else safe.bottom = Math.max(safe.top + 20, r.top - n.top - 40);
     }
+    // A country overview cannot pan far enough to expose southern vehicles above
+    // a phone sheet. Zoom only on explicit selection, never on GPS refresh.
+    if (detail && safe.bottom < node.clientHeight - 60 && (p.y > safe.bottom || p.y < safe.top) && (map.getZoom() || 0) < 11) {
+      maps.event.addListenerOnce(map, "idle", () => { if (!destroyed && selectedId === id) select(id, true); });
+      map.setZoom(11); return;
+    }
     if (force) {
       map.panTo(v.point);
       map.panBy(node.clientWidth / 2 - (safe.left + safe.right) / 2, node.clientHeight / 2 - (safe.top + safe.bottom) / 2);
@@ -223,7 +254,7 @@ export function createGoogleMap(node, maps, callbacks) {
   for (const event of ["dragstart", "zoom_changed"]) listeners.push(maps.event.addListener(map, event, () => overlay.layer?.classList.add("is-moving")));
   overlay.setMap(map);
   const observer = new ResizeObserver(() => {
-    cancelAnimationFrame(resizeFrame); resizeFrame = requestAnimationFrame(() => { maps.event.trigger(map, "resize"); measurements.clear(); scheduleLayout(); });
+    cancelAnimationFrame(resizeFrame); resizeFrame = requestAnimationFrame(() => { maps.event.trigger(map, "resize"); map.setOptions({ minZoom: countryMinZoom(node) }); measurements.clear(); scheduleLayout(); });
   }); observer.observe(node);
   return {
     map,
@@ -239,13 +270,13 @@ export function createGoogleMap(node, maps, callbacks) {
     },
     fit, fitCountry, select, openGroup,
     closeGroup() { groupIds = []; spider = false; scheduleLayout(); },
-    zoomTo(value) { map.setZoom(Math.max(3, Math.min(20, Number(value)))); },
+    zoomTo(value) { map.setZoom(Math.max(countryMinZoom(node), Math.min(20, Number(value)))); },
     zoom(delta) { map.setZoom((map.getZoom() || 11) + delta); },
     setLayer(layer) { map.setMapTypeId(layer === "satellite" ? "hybrid" : "roadmap"); map.setTilt?.(0); map.setHeading?.(0); },
     history(points) {
       history?.setMap(null); history = null;
       if (points.length > 1) history = new maps.Polyline({ map, path: points, strokeColor: "#b4e52b", strokeWeight: 3, clickable: false });
     },
-    destroy() { destroyed = true; observer.disconnect(); cancelAnimationFrame(frame); cancelAnimationFrame(resizeFrame); listeners.forEach((l) => l.remove()); overlay.setMap(null); history?.setMap(null); countryBorder.forEach(line => line.setMap(null)); measureNode.remove(); elements.clear(); labels.clear(); vehicles = []; }
+    destroy() { destroyed = true; observer.disconnect(); cancelAnimationFrame(frame); cancelAnimationFrame(resizeFrame); listeners.forEach((l) => l.remove()); overlay.setMap(null); history?.setMap(null); countryMask.setMap(null); countryBorder.forEach(line => line.setMap(null)); measureNode.remove(); elements.clear(); labels.clear(); vehicles = []; }
   };
 }

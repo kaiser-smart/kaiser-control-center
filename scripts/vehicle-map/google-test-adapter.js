@@ -2,6 +2,7 @@
 // Never imported by production src. This is not a map provider or a visual map reference.
 const registry = new WeakMap();
 const instances = [];
+const polygons = [];
 const polylines = []; // Test-only inspection of history route lifecycle.
 const event = {
   addListener(obj, name, fn) { if (!registry.has(obj)) registry.set(obj, new Map()); const events = registry.get(obj); if (!events.has(name)) events.set(name, new Set()); events.get(name).add(fn); return { remove: () => events.get(name).delete(fn) }; },
@@ -30,6 +31,7 @@ class TestMap {
   }
   scale() { return 256 * 2 ** this.zoom / 360; }
   getCenter() { return this.center; } getZoom() { return this.zoom; } getHeading() { return this.heading; } getTilt() { return this.tilt; } getMapTypeId() { return this.mapTypeId; }
+  setOptions(options) { Object.assign(this.options,options); }
   setHeading(value) { this.heading=value;this.calls.push(['heading',value]); } setTilt(value) { this.tilt=value;this.calls.push(['tilt',value]); }
   setMapTypeId(value) { this.mapTypeId=value;this.calls.push(['layer',value]); }
   panTo(value) { this.center=new LatLng(value);this.calls.push(['panTo',value]);this.draw(); }
@@ -50,4 +52,5 @@ class OverlayView {
   static preventMapHitsAndGesturesFrom(){}
 }
 class Polyline { constructor(options){this.options=options;this.map=options.map;polylines.push(this);}setMap(map){this.map=map;} }
-export const testMaps={ Map:TestMap,LatLng,LatLngBounds,OverlayView,Polyline,event,RenderingType:{RASTER:'RASTER'},MapTypeId:{ROADMAP:'roadmap',HYBRID:'hybrid'},_instances:instances, _polylines:polylines };
+class Polygon { constructor(options){this.options=options;this.map=options.map;polygons.push(this);}setMap(map){this.map=map;} }
+export const testMaps={ Map:TestMap,LatLng,LatLngBounds,OverlayView,Polyline,Polygon,event,RenderingType:{RASTER:'RASTER'},MapTypeId:{ROADMAP:'roadmap',HYBRID:'hybrid'},_instances:instances, _polylines:polylines, _polygons:polygons };
