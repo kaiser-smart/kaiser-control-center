@@ -1,4 +1,4 @@
-import { REPAIR_STATES } from "./repair-queue.js";
+import { REPAIR_STATES, repairCancellationStatement } from "./repair-queue.js";
 import { getModuleDatabase } from "./databases.js";
 import { runCrossDatabaseBatch } from "./cross-database-workflows.js";
 import { hasPermission } from "../../src/permissions.js";
@@ -631,6 +631,12 @@ export async function updateFeedbackCase(env, user, caseId, input = {}) {
         nullableText(input.auditNote || "Aktualizován průběh hlášení.", 2000)
       )
     ];
+
+    // Same CORE transaction as the manager's change: invalidate pending work and
+    // its callbacks before it can deploy. An already deploying run keeps recovery ownership.
+    if (existing.technicalContext?.repairModule) {
+      statements.push(repairCancellationStatement(db, next.id, now));
+    }
 
     if (publicMessage) {
       statements.push(db.prepare(`
