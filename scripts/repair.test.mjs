@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { claimRepair,finishRepair,authorizeRunner } from '../functions/_lib/repair-queue.js';
 import { assertImage,boundedForm,repairRoute,digest } from '../functions/_lib/repair-input.js';
 import { validateCss } from './repair/gate.mjs';
-import { verifyOrRollback,target } from './repair/production.mjs';
+import { verifyOrRollback,smoke,target } from './repair/production.mjs';
 class Statement {
  constructor(db,sql,values=[]){Object.assign(this,{db,sql,values});}
  bind(...values){return new Statement(this.db,this.sql,values);}
@@ -57,5 +57,22 @@ assert.equal((await verifyOrRollback(config,api,async sha=>{if(sha===head)throw 
 active='d'.repeat(40);await assert.rejects(()=>verifyOrRollback(config,api,async()=>{throw Error('bad');}),/outside this run/);assert.equal(rollbackCalls,1);
 active=head;await assert.rejects(()=>verifyOrRollback(config,api,async()=>{throw Error('rollback also broken');}));
 assert.match(await digest('test'),/^[a-f0-9]{64}$/);
+// Model the directory redirects observed on production, without following any redirect.
+const checkedRoutes=[];
+const productionResponse=async(url,options)=>{
+  assert.equal(options.redirect,'error');
+  const route=new URL(url).pathname;checkedRoutes.push(route);
+  if(['/opravit','/pripominky'].includes(route))throw new TypeError('unexpected redirect');
+  if(route==='/src/data/buildMeta.js')return new Response(`export const buildMeta = {"commit": "${head.slice(0,7)}"};`);
+  if(route==='/src/styles.css')return new Response(good);
+  if(route.startsWith('/api/'))return new Response('{}',{status:401,headers:{'cache-control':'no-store'}});
+  assert.ok(['/','/opravit/','/pripominky/'].includes(route));
+  return new Response('<script src="src/app.js"></script>');
+};
+assert.equal(await smoke(head,await digest(good),productionResponse),true);
+assert.ok(checkedRoutes.includes('/opravit/')&&checkedRoutes.includes('/pripominky/'));
+await assert.rejects(()=>smoke(head,'0'.repeat(64),productionResponse),/Published CSS mismatch/);
+const checkedCss=await digest(good);
+await assert.rejects(()=>smoke(head,checkedCss,async(url,options)=>new URL(url).pathname==='/api/repair/reports'?new Response('{}'):productionResponse(url,options)),/Anonymous/);
 assert.match(readFileSync('.github/workflows/repair-hourly.yml','utf8'),/github\.event\.repository\.private == true/,'Private reports cannot enter a public Actions run');
 console.log('Repair tests passed: concurrent claims, dedupe, lease expiry, audit, token scope, transitions, bounded uploads, image signatures, CSS gate, deploy smoke/rollback/concurrent-deploy protection.');

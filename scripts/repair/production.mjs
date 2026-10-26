@@ -18,7 +18,9 @@ export function assertTarget(project) {
 export async function smoke(sha,cssHash,request=fetch) {
   const get=async path=>{const response=await request(`${target.origin}${path}${path.includes('?')?'&':'?'}repair-check=${Date.now()}`,{redirect:'error',cache:'no-store',signal:AbortSignal.timeout(15000)});return response;};
   const meta=await get('/src/data/buildMeta.js');assert.equal(meta.status,200);assert.ok((await meta.text()).includes(`"commit": "${sha.slice(0,7)}"`),'Published commit mismatch');
-  for(const route of ['/','/opravit','/pripominky']){const r=await get(route);assert.equal(r.status,200);assert.ok((await r.text()).includes('src/app.js'));}
+  // Pages redirects directory routes to their canonical trailing-slash URL.
+  // Keep redirect rejection for unexpected destinations, including auth/API checks.
+  for(const route of ['/','/opravit/','/pripominky/']){const r=await get(route);assert.equal(r.status,200);assert.ok((await r.text()).includes('src/app.js'));}
   const style=await get('/src/styles.css');assert.equal(style.status,200);assert.equal(createHash('sha256').update(Buffer.from(await style.arrayBuffer())).digest('hex'),cssHash,'Published CSS mismatch');
   for(const route of ['/api/me','/api/users','/api/repair/reports']){const r=await get(route);assert.equal(r.status,401,`Anonymous ${route}`);assert.match(r.headers.get('cache-control')||'',/no-store/);}
   return true;
