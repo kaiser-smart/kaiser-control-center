@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.881"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.882"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Poloha vedle rychlosti", text: "V detailu vozidla je adresa vedle rychlosti. Zelený nebo červený indikátor GPS je u SPZ v záhlaví, takže nezabírá samostatnou buňku." },
   { title: "SPZ u viditelného vozidla", text: "Popisek zůstává přímo pod autem. Když vozidlo opustí výřez mapy, jeho SPZ se už nepřichytává k okraji bez ikony." },
   { title: "Červený bod nedostupné GPS", text: "Nedostupná GPS je místo oranžového bodu označená červeně v mapě, seznamu, detailu i přehledu. Zelené označení dostupné GPS zůstává zachované." },
   { title: "Favicon K.", text: "Záložka aplikace má bílé K. písmem Quicksand na zeleném podkladu." },
