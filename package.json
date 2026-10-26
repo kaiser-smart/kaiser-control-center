@@ -1,9 +1,10 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.858",
+  "version": "0.1.859",
   "private": true,
   "type": "module",
   "scripts": {
+    "test:mobile-audit": "node scripts/mobile-audit-regression.test.mjs",
     "test:theme-settings": "node --test scripts/theme-settings.test.mjs",
     "test:auth-session": "node scripts/auth-session.test.mjs",
     "dev": "node scripts/serve.mjs",

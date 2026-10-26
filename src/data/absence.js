@@ -115,10 +115,10 @@ export function countAbsenceDays(dateFrom, dateTo, halfDayFrom = false, halfDayT
     return 0;
   }
 
-  const from = new Date(`${dateFrom}T12:00:00`);
-  const to = new Date(`${dateTo}T12:00:00`);
+  const from = new Date(`${dateFrom}T00:00:00Z`);
+  const to = new Date(`${dateTo}T00:00:00Z`);
 
-  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || to < from) {
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || !/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo) || from.toISOString().slice(0, 10) !== dateFrom || to.toISOString().slice(0, 10) !== dateTo || to < from) {
     return 0;
   }
 
@@ -396,6 +396,8 @@ export function filterAbsenceRequests(requests, filters = {}) {
       return false;
     }
 
+    if (filters.status && absenceStatusLabel(request.statusLabel || request.status) !== absenceStatusLabel(filters.status)) return false;
+
     if (filters.employeeId && request.employeeId !== filters.employeeId) {
       return false;
     }
@@ -444,14 +446,16 @@ export function absenceSummary(state, user) {
   };
 }
 
-export function generateMonthlyAbsenceReport(state, user) {
-  const periodKey = monthKeyWithOffset(-1);
+export function generateMonthlyAbsenceReport(state, user, filters = {}) {
+  const periodKey = filters.month || currentMonthKey();
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(periodKey)) throw new Error("Neplatné období reportu.");
   const [periodYear, periodMonth] = periodKey.split("-").map(Number);
-  const requests = filterAbsenceRequests(state.requests, { month: periodKey });
+  const requests = filterAbsenceRequests(visibleAbsenceRequests(state, user), { ...filters, month: periodKey });
   const report = {
     id: newId("absence-report"),
     periodMonth,
     periodYear,
+    possiblyTruncated: state.requests.length >= 100,
     recipientEmail: state.settings.recipientEmail || ABSENCE_REPORT_EMAIL,
     generatedAt: isoNow(),
     sentAt: null,
@@ -468,18 +472,35 @@ export function generateMonthlyAbsenceReport(state, user) {
   };
 }
 
-export function monthlyAbsenceTotals(requests) {
+export function absenceDaysInMonth(request, month) {
+  if (absenceRequestIsHourlyDoctor(request)) return 0;
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month || "")) return 0;
+  const last = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5)), 0)).toISOString().slice(0, 10);
+  const from = request.dateFrom > `${month}-01` ? request.dateFrom : `${month}-01`;
+  const to = request.dateTo < last ? request.dateTo : last;
+  if (!countAbsenceDays(request.dateFrom, request.dateTo)) return 0;
+  return countAbsenceDays(from, to,
+    from === request.dateFrom && Boolean(request.halfDayFrom || request.halfDay),
+    to === request.dateTo && Boolean(request.halfDayTo));
+}
+
+function reportStatusMatches(request, pending) {
+  const status = absenceStatusLabel(request.statusLabel || request.status);
+  return pending ? status === "Čeká na schválení" : ["Schváleno", "Evidováno"].includes(status);
+}
+
+export function monthlyAbsenceTotals(requests, month = currentMonthKey(), { pending = false } = {}) {
   return ABSENCE_TYPES.reduce((totals, type) => {
     totals[type] = requests
-      .filter((request) => absenceTypeLabel(request.typeLabel || request.type) === type)
-      .reduce((sum, request) => sum + Number(request.daysCount || 0), 0);
+      .filter(request => absenceTypeLabel(request.typeLabel || request.type) === type && reportStatusMatches(request, pending))
+      .reduce((sum, request) => sum + absenceDaysInMonth(request, month), 0);
     return totals;
   }, {});
 }
 
-export function monthlyAbsenceDoctorHours(requests) {
+export function monthlyAbsenceDoctorHours(requests, month = currentMonthKey(), { pending = false } = {}) {
   return requests
-    .filter((request) => absenceRequestIsHourlyDoctor(request))
+    .filter(request => absenceRequestIsHourlyDoctor(request) && requestOverlapsMonth(request, month) && reportStatusMatches(request, pending))
     .reduce((sum, request) => sum + absenceRequestHours(request), 0);
 }
 
@@ -518,15 +539,21 @@ export function absenceRequestsToCsv(requests) {
 }
 
 export function monthlyAbsenceReportToCsv(report, requests) {
-  const totals = monthlyAbsenceTotals(requests);
-  const doctorHours = monthlyAbsenceDoctorHours(requests);
+  const month = `${report.periodYear}-${pad(report.periodMonth)}`;
+  const totals = monthlyAbsenceTotals(requests, month);
+  const pendingTotals = monthlyAbsenceTotals(requests, month, { pending: true });
+  const doctorHours = monthlyAbsenceDoctorHours(requests, month);
   const pendingCount = requests.filter((request) => absenceStatusLabel(request.statusLabel || request.status) === "Čeká na schválení").length;
   const period = `${pad(report.periodMonth)}/${report.periodYear}`;
   const rows = [
     ["Období reportu", period],
+    ["Rozsah podkladů", report.possiblyTruncated ? "Pouze posledních 100 žádostí; období nemusí být úplné" : "Načtené žádosti"],
     ["Příjemce", report.recipientEmail],
     ["Vygenerováno", report.generatedAt],
     ["Počet žádostí celkem", requests.length],
+    ["Součty dnů", "Pouze schválené a evidované, kalendářní dny ve vybraném měsíci"],
+    ...ABSENCE_TYPES.map(type => [`Čekající ${type} dnů`, pendingTotals[type]]),
+    ["Čekající lékař hodin", monthlyAbsenceDoctorHours(requests, month, { pending: true })],
     ["Dovolená celkem dnů", totals.Dovolená],
     ["Nemoc celkem dnů", totals.Nemoc],
     ["Lékař celkem dnů", totals.Lékař],
@@ -537,7 +564,7 @@ export function monthlyAbsenceReportToCsv(report, requests) {
     ["Jiná nepřítomnost celkem dnů", totals["Jiná nepřítomnost"]],
     ["Čekající žádosti", pendingCount],
     [],
-    ["Zaměstnanec", "Typ", "Od", "Do", "Čas od", "Čas do", "Počet dnů", "Hodiny", "Stav"],
+    ["Zaměstnanec", "Typ", "Od", "Do", "Čas od", "Čas do", "Dny v období (bez ohledu na stav)", "Hodiny", "Stav"],
     ...requests.map((request) => [
       request.employeeName,
       absenceTypeLabel(request.typeLabel || request.type),
@@ -545,7 +572,7 @@ export function monthlyAbsenceReportToCsv(report, requests) {
       request.dateTo,
       absenceRequestIsHourlyDoctor(request) ? request.startTime : "",
       absenceRequestIsHourlyDoctor(request) ? request.endTime : "",
-      request.daysCount,
+      absenceDaysInMonth(request, month),
       absenceRequestHours(request) || "",
       absenceStatusLabel(request.statusLabel || request.status)
     ])

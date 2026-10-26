@@ -1,3 +1,4 @@
+import { fleetCalendarDate } from "../../src/data/fleetDate.js";
 import {
   VistosExecuteError,
   cleanVistosValue,
@@ -241,6 +242,7 @@ function schemaColumnsFromPayload(payload) {
 
 function termColumnScore(column = {}, spec = {}) {
   const columnName = clean(column.columnName);
+  if (/_FK(?:_|$)/i.test(columnName) || /int|number|decimal|double|float|bool|guid|lookup|reference/i.test(clean(column.type))) return 0;
   if (!columnName) return 0;
 
   const columnKey = normalizeMetadataKey(columnName);
@@ -520,29 +522,7 @@ function readVistosDisplayValue(row, columnName) {
 }
 
 function normalizeVistosDate(value) {
-  const raw = clean(value);
-  if (!raw) return "";
-
-  const msMatch = raw.match(/\/Date\((\d+)(?:[+-]\d+)?\)\//);
-  if (msMatch) {
-    const date = new Date(Number(msMatch[1]));
-    return Number.isNaN(date.getTime()) ? raw : date.toISOString().slice(0, 10);
-  }
-
-  const czechMatch = raw.match(/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/);
-  if (czechMatch) {
-    const [, day, month, year] = czechMatch;
-    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-  }
-
-  const isoMatch = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (isoMatch) {
-    const [, year, month, day] = isoMatch;
-    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-  }
-
-  const date = new Date(raw);
-  return Number.isNaN(date.getTime()) ? raw : date.toISOString().slice(0, 10);
+  return fleetCalendarDate(value);
 }
 
 function termValueFromRow(row, termFields, field) {
@@ -553,6 +533,7 @@ function termValueFromRow(row, termFields, field) {
   const raw = explicitRaw || fallback?.raw || "";
   return {
     value: normalizeVistosDate(raw),
+    invalid: Boolean(raw && !normalizeVistosDate(raw)),
     sourceColumn: raw && source?.columnName ? source.columnName : fallback?.columnName || "",
     sourceCaption: raw && source?.caption ? source.caption : fallback?.caption || ""
   };
@@ -567,7 +548,7 @@ function termValueFallbackFromRow(row, spec = {}) {
       raw: readVistosDisplayValue(row, columnName),
       score: termColumnScore({ columnName, caption: "" }, spec)
     }))
-    .filter((item) => item.raw && item.score > 0)
+    .filter((item) => fleetCalendarDate(item.raw) && item.score > 0)
     .sort((left, right) => right.score - left.score || left.columnName.localeCompare(right.columnName, "cs"));
 
   return candidates[0] || null;
@@ -904,7 +885,7 @@ function mapVehicle(row, termFields = null, technicalFields = null) {
     registrationPlate: firstValue(row, ["RegistrationPlate", "RegistrationNumber", "SPZ"]),
     vinMasked: shortVin(vin),
     categoryId: recordId(row, "CarCategory_FK"),
-    category: caption(row, "CarCategory_FK"),
+    category: /^\d+$/.test(caption(row, "CarCategory_FK")) ? "" : caption(row, "CarCategory_FK"),
     statusId: recordId(row, "Stavvozidla_FK"),
     status: caption(row, "Stavvozidla_FK"),
     isActive: firstValue(row, ["IsActive"]),
@@ -937,7 +918,8 @@ function mapVehicle(row, termFields = null, technicalFields = null) {
         .filter(([, item]) => item?.sourceColumn)
         .map(([field, item]) => [field, {
           columnName: item.sourceColumn,
-          caption: item.sourceCaption
+          caption: item.sourceCaption,
+          invalid: item.invalid
         }])
     ),
     technicalProfile,
@@ -1128,5 +1110,6 @@ export const __test = {
   enrichVistosVehicleRows,
   mapVehicle,
   parseAxleLoadKg,
-  resolveVehicleTechnicalFields
+  resolveVehicleTechnicalFields,
+  termColumnScore
 };
