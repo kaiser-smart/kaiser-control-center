@@ -1,3 +1,4 @@
+import { REPAIR_STATES, repairCancellationStatement } from "./repair-queue.js";
 import { getModuleDatabase } from "./databases.js";
 import { runCrossDatabaseBatch } from "./cross-database-workflows.js";
 import { hasPermission } from "../../src/permissions.js";
@@ -395,7 +396,7 @@ export async function listFeedbackCases(env, user, filters = {}) {
         updated_at DESC
       LIMIT 500
     `).all();
-    const all = (result.results || []).map(rowToCase).filter(Boolean);
+    const all = (result.results || []).map(rowToCase).filter(Boolean).filter(item => !item.technicalContext?.repairModule || canManage(user) || sameReporter(user, item));
     const filtered = listFilters(all, filters, user);
     return {
       cases: filtered.map((item) => caseForUser(item, user)),
@@ -424,6 +425,7 @@ export async function getFeedbackCase(env, user, caseId) {
     }
     const item = rowToCase(row);
     const manager = canManage(user);
+    if (item.technicalContext?.repairModule && !manager && !sameReporter(user,item)) throw new SelfRepairStoreError("Hlášení neexistuje nebo k němu nemáte přístup.",404,"feedback_case_not_found");
     const [messagesResult, attachmentResult, auditResult, jobsResult] = await Promise.all([
       db.prepare(`
         SELECT * FROM self_repair_case_messages
@@ -453,6 +455,10 @@ export async function getFeedbackCase(env, user, caseId) {
         : Promise.resolve({ results: [] })
     ]);
     return {
+      repair: item.technicalContext?.repairModule ? await (async () => {
+        const row=await env.DB_CORE.prepare('SELECT state,detail,result_sha,deployment_id,rollback_id FROM repair_queue WHERE case_id=?').bind(item.id).first();
+        return row ? {...row,stateLabel:REPAIR_STATES[row.state]} : null;
+      })() : null,
       case: caseForUser(item, user),
       messages: (messagesResult.results || []).map(rowToMessage),
       attachments: (attachmentResult.results || []).map(rowToAttachment),
@@ -625,6 +631,12 @@ export async function updateFeedbackCase(env, user, caseId, input = {}) {
         nullableText(input.auditNote || "Aktualizován průběh hlášení.", 2000)
       )
     ];
+
+    // Same CORE transaction as the manager's change: invalidate pending work and
+    // its callbacks before it can deploy. An already deploying run keeps recovery ownership.
+    if (existing.technicalContext?.repairModule) {
+      statements.push(repairCancellationStatement(db, next.id, now));
+    }
 
     if (publicMessage) {
       statements.push(db.prepare(`

@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { hasCurrentMotion, isOnline, markerName, connectionHTML } from '../../src/vehicle-map/presentation.js';
+import { labelMarkerRect,placeLabels } from '../../src/vehicle-map/spatial.js';
+const moving={point:{lat:49,lng:16},previousPoint:false,category:'moving',movement:'moving',age:30};
+assert.equal(hasCurrentMotion(moving),true);
+for(const patch of [{category:'stopped'},{category:'stale'},{category:'missing'},{movement:'unknown'},{point:null},{previousPoint:true},{age:null},{age:NaN},{age:120.001},{age:-1}])assert.equal(hasCurrentMotion({...moving,...patch}),false);
+assert.equal(hasCurrentMotion({...moving,age:120}),true);
+const rows=[{id:'a',x:200,y:150,vehicle:{label:'1AB 2345',heading:null}},{id:'b',x:280,y:150,vehicle:{label:'2AB 3456',heading:null}}];
+const bounds={left:0,right:500,top:0,bottom:400},measure=()=>({width:100,height:26}),obstacles=rows.map(labelMarkerRect);
+const first=placeLabels(rows,obstacles,bounds,measure,'a'),second=placeLabels(rows,obstacles,bounds,measure,'b');
+assert.deepEqual([...first.keys()],['a']);assert.deepEqual([...second.keys()],['b']);
+assert.equal(first.get('a').top,177);assert.equal(second.get('b').top,177);
+assert.equal(first.get('a').left,150);assert.equal(second.get('b').left,230);
+assert.equal(labelMarkerRect({...rows[0],vehicle:{heading:180}}).bottom,180);
+const hashes={'atlas.png':'d05712ae2dd761000135e33f8f47b6a84c40bcc005b19330daf0204701ad9f96','collection-truck.png':'95bd74b192c2cde146fad83e425ff71679447e5430f96bcd6100ae244d20699a','skip-loader.png':'81e0a59777996d732482463572868963f9acd512f778295acbc645baf7c186ee'};
+for(const [file,hash]of Object.entries(hashes))assert.equal(createHash('sha256').update(await readFile('public/vehicles/openart-2/'+file)).digest('hex'),hash);
+console.log('PASS current-motion eligibility, 120-second boundary, stable plate priority, heading clearance, unchanged original PNG hashes');
+
+assert.equal(isOnline(moving),true);
+assert.equal(isOnline({...moving,category:'stopped',movement:'stopped'}),true);
+for(const patch of [{category:'stale'},{category:'missing'},{point:null},{previousPoint:true},{age:null},{age:NaN}])assert.equal(isOnline({...moving,...patch}),false);
+assert.equal(markerName({...moving,label:'TEST 001',type:{label:'Vůz'}}),'TEST 001, Vůz, Jede, Online');
+assert.equal(markerName({...moving,category:'stale',label:'TEST 002',type:{label:'Vůz'}}),'TEST 002, Vůz, Offline');
+assert.match(connectionHTML({...moving,category:'stale'}),/vm-offline/);
+console.log('PASS availability dots: online moving/stopped, offline stale/missing/fallback/unverified; no age in marker names');

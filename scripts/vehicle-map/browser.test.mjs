@@ -24,9 +24,9 @@ const screenshot=async(name)=>{await page.screenshot({path:`${output}/${name}.pn
 try{
  await scene();
  await test('Product shell: logo, HP, user bar; no added global sidebar',async()=>{assert.equal(await page.locator('.ui-pilot-sidebar').count(),0);assert.equal(await page.locator('.vm-page > .topbar .kaiser-logo').count(),1);assert.equal(await page.locator('.vm-page > .user-bar').count(),1);});
- await test('Overview: all 18 rows; 17 valid points including two stale; matching counts',async()=>{assert.equal(await page.locator('[data-vm-row]').count(),18);assert.equal(await page.locator('[data-vm-filter="all"] b').innerText(),'18');assert.match(await page.locator('.vm-viewport').innerText(),/17 z 17.*bez polohy 1/);assert.equal(await page.locator('[data-vm-filter="stale"] b').textContent(),'2');});
+ await test('Overview: all 18 rows; 17 valid points including two stale; matching counts',async()=>{assert.equal(await page.locator('[data-vm-row]').count(),18);assert.equal(await page.locator('[data-vm-filter="all"] b').innerText(),'18');assert.match(await page.locator('.vm-viewport').innerText(),/17 z 17.*bez polohy 1/);assert.equal(await page.locator('[data-vm-filter="stale"] b').textContent(),'3');});
  await test('Dispatcher reference: actual GPS gauge, event selection, no invented driver score or telemetry',async()=>{
-  assert.match(await page.locator('[data-vm-stats]').innerText(),/Čerstvá GPS/);
+  assert.match(await page.locator('[data-vm-stats]').innerText(),/Online/);
   assert.match(await page.locator('[data-vm-driver]').innerText(),/Přiřazení neověřeno/);
   assert(await page.locator('.vm-map-legend').isVisible());
   await page.locator('.vm-event-list [data-vm-select]').first().click();
@@ -34,6 +34,16 @@ try{
   await page.locator('.vm-telemetry-box summary').click();
   assert.match(await page.locator('.vm-panel-detail').innerText(),/Palivo[\s\S]*Údaj není dostupný[\s\S]*AdBlue/);
   await page.locator('[data-vm-back]').click();
+ });
+ await test('Only availability dots replace age text across list, table, map and detail',async()=>{
+  assert.equal(await page.locator('[data-vm-age],.vm-row-gps').count(),0);
+  assert.doesNotMatch(await page.locator('.vm').innerText(),/Stará poloha|GPS před|před \d+ (min|h|d)|Poslední GPS/);
+  const row=n=>page.locator(`[data-vm-row$=":synthetic-${n}"] .vm-connection`);
+  assert.equal(await row(1).getAttribute('aria-label'),'Online');assert.equal(await row(3).getAttribute('aria-label'),'Online');
+  assert.equal(await row(2).getAttribute('aria-label'),'Offline');assert.equal(await row(12).getAttribute('aria-label'),'Offline');
+  assert.equal(await row(1).evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(117, 189, 37)');
+  assert.equal(await row(2).evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(245, 166, 35)');
+
  });
  await test('Primary route action stays readable on hover',async()=>{
   await page.locator('[data-vm-row]').first().click();
@@ -56,10 +66,10 @@ try{
   const before=await camera();await control('revision=1');await page.locator('[data-vm-refresh]').click();await page.waitForTimeout(180);assert.deepEqual(await camera(),before);
   assert.equal(await page.evaluate(()=>savedMarker===document.querySelector('.vm-marker.is-selected')&&savedImage===savedMarker.querySelector('img')),true);
  });
- await test('Stale 47 minute point: original GPS, clock badge, no direction and last reported state',async()=>{
+ await test('Stale point: orange Offline dot, no age text or direction',async()=>{
   await page.locator('[data-vm-back]').click();await page.locator('[data-vm-row$=":synthetic-2"]').click();await page.waitForTimeout(100);
-  assert.match(await page.locator('.vm-panel-detail').innerText(),/před 47 min/);assert.match(await page.locator('.vm-panel-detail').innerText(),/Poslední hlášený stav/);
-  assert.equal(await page.locator('.vm-marker.is-selected .vm-heading').count(),0);assert.equal(await page.locator('.vm-marker.is-selected .vm-badge').innerText(),'◷');
+  assert.doesNotMatch(await page.locator('.vm-panel-detail').innerText(),/před \d+|Stará poloha|Poslední GPS/);assert.equal(await page.locator('.vm-panel-detail .vm-offline').count(),2);
+  assert.equal(await page.locator('.vm-marker.is-selected .vm-heading').count(),0);assert.equal(await page.locator('.vm-marker.is-selected .vm-badge').innerText(),'');assert.equal(await page.locator('.vm-marker.is-selected .vm-badge').getAttribute('aria-label'),'Offline');
  });
  await screenshot('stale-desktop');
  await test('API provider error: retained map and selection, explicit last success',async()=>{
@@ -83,8 +93,8 @@ try{
  });
  await test('Search/filters shared by map and list; missing GPS remains selectable; empty reason',async()=>{
   await page.locator('#vm-search').fill('t e s t 012');await page.waitForTimeout(120);assert.equal(await page.locator('[data-vm-row]').count(),1);assert.equal(await page.locator('.vm-marker').count(),0);assert.equal(await page.locator('[data-vm-fit]').isDisabled(),true);
-  await page.locator('[data-vm-row]').click();assert.match(await page.locator('.vm-panel-detail').innerText(),/Bez polohy/);await page.locator('[data-vm-back]').click();
-  await page.locator('#vm-search').fill('NOT FOUND');assert.match(await page.locator('.vm-list').innerText(),/Žádná vozidla/);await page.locator('#vm-search').fill('');await page.locator('.vm-extra-filters summary').click();await page.locator('[data-vm-filter="stale"]').click();await page.waitForTimeout(100);assert.equal(await page.locator('[data-vm-row]').count(),2);assert.equal(await page.locator('.vm-marker').evaluateAll(nodes=>nodes.reduce((n,e)=>n+(e.classList.contains('vm-cluster')?Number(e.querySelector('b').textContent):1),0)),2);await page.locator('[data-vm-filter="stale"]').click();
+  await page.locator('[data-vm-row]').click();assert.match(await page.locator('.vm-panel-detail').innerText(),/Bez ověřené polohy/);assert.equal(await page.locator('.vm-panel-detail .vm-offline').count(),2);await page.locator('[data-vm-back]').click();
+  await page.locator('#vm-search').fill('NOT FOUND');assert.match(await page.locator('.vm-list').innerText(),/Žádná vozidla/);await page.locator('#vm-search').fill('');await page.locator('.vm-extra-filters summary').click();await page.locator('[data-vm-filter="stale"]').click();await page.waitForTimeout(100);assert.equal(await page.locator('[data-vm-row]').count(),3);assert.equal(await page.locator('.vm-marker').evaluateAll(nodes=>nodes.reduce((n,e)=>n+(e.classList.contains('vm-cluster')?Number(e.querySelector('b').textContent):1),0)),2);await page.locator('[data-vm-filter="stale"]').click();
  });
  await test('Hover and keyboard focus highlight without camera changes',async()=>{
   const before=await camera();await page.locator('[data-vm-row$=":synthetic-1"]').focus();await page.waitForTimeout(100);assert(await page.locator('.vm-marker.is-highlighted').count());assert.deepEqual(await camera(),before);
@@ -151,7 +161,7 @@ try{
    images.forEach(i=>{assert.equal(i.w,36);assert.match(i.filter,/vm-white-canvas/);assert.equal(i.bg,'rgba(0, 0, 0, 0)');});
   });
   await page.locator('[data-vm-row$=":synthetic-2"]').click();await page.waitForTimeout(100);
-  await test(`${theme} ${width}: selected stale silhouette and user-selected lime accent`,async()=>{assert.equal(await page.locator('.vm').getAttribute('data-theme'),'dark');assert.match(await page.locator('.vm-marker.is-selected').evaluate(e=>getComputedStyle(e).boxShadow),/rgb\(180, 229, 43\)/);});
+  await test(`${theme} ${width}: selected stale silhouette and user-selected lime accent`,async()=>{assert.equal(await page.locator('.vm').getAttribute('data-theme'),'dark');assert.match(await page.locator('.vm-marker.is-selected').evaluate(e=>getComputedStyle(e,'::before').borderColor),/rgb\(180, 229, 43\)/);});
   await screenshot(`stale-${theme}-${width}`);
  }
  await scene();
@@ -186,6 +196,13 @@ try{
   await page.goto(`${url}/pripominky`);await page.waitForSelector('[data-logout]');await context.setOffline(true);await page.waitForTimeout(100);assert.equal(await page.locator('#app').isVisible(),false);await context.setOffline(false);await page.waitForTimeout(150);
  });
  await test('No business writes or GPS browser persistence during acceptance run',async()=>{assert.deepEqual(network.filter(r=>r.method!=='GET'),[]);const stored=await page.evaluate(()=>({local:{...localStorage},session:{...sessionStorage}}));assert.deepEqual(stored,{local:{},session:{}});});
+ await test('Availability changes to offline as GPS ages without a new sample',async()=>{
+  await scene();const row=n=>page.locator(`[data-vm-row$=":synthetic-${n}"] .vm-connection`);
+  await page.clock.setFixedTime(new Date(Date.now()+1900000));await page.waitForTimeout(1300);
+  assert.equal(await row(1).getAttribute('aria-label'),'Offline');
+  assert.equal(await page.locator('.vm-table-scroll .vm-online').count(),0);
+  await page.clock.setFixedTime(new Date());await page.waitForTimeout(1300);assert.equal(await row(1).getAttribute('aria-label'),'Online');
+ });
  await test('Logout clears selected GPS and returns to login; reload stays signed out',async()=>{
   await scene();await page.locator('[data-vm-row$=":synthetic-1"]').click();
   await page.route('**/api/auth/logout',async r=>{assert.equal(r.request().method(),'POST');await control('unauthorized=1');await r.fulfill({json:{ok:true}});});

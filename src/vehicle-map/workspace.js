@@ -1,6 +1,7 @@
+import { createIconAssignment } from "./icon-assignment.js";
 import { fleetStatsHTML, driverHTML, telemetryHTML, vehiclePictureHTML, activityHTML, overviewHTML, mapLegendHTML } from "./dashboard.js";
-import { reconcile, normalize, filterVehicles, CATEGORIES, ageText, gpsTime, statusText, validateSample } from "./model.js";
-import { escape, artwork, artworkFilterHTML, legendHTML } from "./presentation.js";
+import { reconcile, normalize, filterVehicles, CATEGORIES, validateSample } from "./model.js";
+import { escape, artwork, artworkFilterHTML, legendHTML, connectionHTML, connectionName, isOnline, stateHTML, markerName } from "./presentation.js";
 import { SmartIcon } from "../components/icons/SmartIcon.js";
 import { isMobileViewport, mobileViewportQuery } from "../mobileViewport.js";
 import { createGoogleMap } from "./google-map.js";
@@ -13,10 +14,10 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
       <div class="vm-view-switch" role="group" aria-label="Zobrazení polohy vozidel"><button type="button" data-vm-view="map" aria-pressed="true">${SmartIcon("tracking")}Mapa</button><button type="button" data-vm-view="list" aria-pressed="false">${SmartIcon("fleet")}Vozidla</button><button type="button" data-vm-view="dashboard" aria-pressed="false">${SmartIcon("dashboard")}Přehled</button></div>
       <div class="vm-header-actions"><p data-vm-refresh-status role="status">Načítám polohy…</p><button type="button" data-vm-refresh aria-label="Obnovit polohy" title="Obnovit polohy">${SmartIcon("refresh")}</button></div></header>
     <div class="vm-work"><aside class="vm-panel" aria-label="Vozidla"><div class="vm-panel-list">
-      <div class="vm-list-heading"><h2>Vozidla <span data-vm-total></span></h2><button type="button" data-vm-legend aria-label="Ikony a stavy" title="Ikony a stavy">${SmartIcon("info")}</button></div>
+      <div class="vm-list-heading"><h2>Vozidla <span data-vm-total></span></h2><button type="button" data-vm-assign-icons>Přiřadit ikony</button><button type="button" data-vm-legend aria-label="Ikony a stavy" title="Ikony a stavy">${SmartIcon("info")}</button></div>
       <div class="vm-search">${SmartIcon("search")}<label for="vm-search" class="vm-sr">Hledat vozidlo, SPZ nebo řidiče</label><input id="vm-search" type="search" placeholder="Hledat vozidlo, SPZ nebo řidiče" autocomplete="off"></div>
       <div class="vm-filters" role="group" aria-label="Stav vozidel">${filter("all")}${filter("moving")}${filter("stopped")}${filter("missing", "Bez GPS")}</div>
-      <details class="vm-extra-filters"><summary>Další stavy</summary><div class="vm-filters" role="group" aria-label="Další stavy vozidel">${filter("stale")}${filter("unknown")}</div></details>
+      <details class="vm-extra-filters"><summary>Další stavy</summary><div class="vm-filters" role="group" aria-label="Další stavy vozidel">${filter("stale", "Offline")}${filter("unknown")}</div></details>
       <div class="vm-group-heading" hidden><button type="button" data-vm-close-group>${SmartIcon("arrow-left")}Celá flotila</button><span></span></div>
       <div class="vm-list" role="group" aria-label="Seznam vozidel"></div>
       <footer class="vm-list-footer"><span data-vm-count></span><div class="vm-pagination mobile-pager"><button type="button" data-vm-page="-1" aria-label="Předchozí vozidla">${SmartIcon("chevron-left")}</button><span data-vm-page-number></span><button type="button" data-vm-page="1" aria-label="Další vozidla">${SmartIcon("chevron-right")}</button></div></footer>
@@ -37,6 +38,8 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   let analytics = null, analyticsError = "", analyticsLoading = false;
   let historyState = { open: false, range: "24h", text: "", points: [], vehicleId: "" };
   const rows = new Map();
+  const iconAssignment = createIconAssignment({ root, getVehicles: () => vehicles });
+  let openAssignmentsOnLoad = new URLSearchParams(location.search).get("ikony") === "1";
   const announce = (message) => { $("[data-vm-announcement]").textContent = message; };
   function fit() { map?.fit(filtered); announce(`Celá flotila: ${filtered.filter((v) => v.point).length} poloh odpovídajících filtru.`); }
   function select(id) {
@@ -58,11 +61,11 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
     const time = lastSuccess ? new Intl.DateTimeFormat("cs-CZ", { timeStyle: "medium", timeZone: "Europe/Prague" }).format(lastSuccess) : "dosud žádná";
     $("[data-vm-refresh-status]").textContent = error ? `Obnova se nezdařila · poslední úspěšná aktualizace ${time}` : loading ? "Načítám polohy…" : `Živá data · ${time}`;
     root.classList.toggle("has-error", !!error);
-    $("[data-vm-refresh-status]").title = "Čas načtení dat z API. Čas skutečné GPS je uveden u každého vozidla. Obnova po 60 s.";
+    $("[data-vm-refresh-status]").title = "Čas načtení dat z API. Dostupnost GPS označuje zelený nebo oranžový bod. Obnova po 60 s.";
     $("[data-vm-refresh]").disabled = loading;
   }
   function rowHTML(v) {
-    return `${artwork(v.type)}<span class="vm-row-main"><strong>${escape(v.name || v.label)}</strong><span class="vm-row-identity">${escape(v.name ? v.label : v.type.label)}</span><span class="vm-state vm-state--${v.category}"><i aria-hidden="true"></i>${escape(statusText(v))}${v.speed !== null && v.category === "moving" ? ` · ${v.speed} km/h` : ""}</span><span class="vm-row-gps" title="${escape(gpsTime(v))}">GPS <span data-vm-age="${escape(v.id)}">${escape(ageText(v))}</span>${v.previousPoint ? " · poslední známá" : ""}</span></span>`;
+    return `${artwork(v.type)}<span class="vm-row-main"><strong>${escape(v.name || v.label)}</strong><span class="vm-row-identity">${escape(v.name ? v.label : v.type.label)}</span>${stateHTML(v, true)}</span>`;
   }
 
   function updateRows() {
@@ -84,7 +87,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
         rows.set(v.id, row);
       }
       const html = rowHTML(v); if (row.innerHTML !== html) row.innerHTML = html;
-      row.setAttribute("aria-label", `${v.name ? v.name + ", " : ""}${v.label}, ${v.type.label}, ${statusText(v)}, ${ageText(v)}, GPS ${gpsTime(v)}`);
+      row.setAttribute("aria-label", `${v.name ? v.name + ", " : ""}${markerName(v)}`);
       row.setAttribute("aria-pressed", String(state.selectedId === v.id));
       const index = shown.indexOf(v); if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);
     }
@@ -101,13 +104,12 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   function detailHTML(v) {
     const field = (label, value) => `<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`;
     const historical = !v.point || v.previousPoint || v.age > 120;
-    return `<header class="vm-detail-head"><div class="vm-detail-identity">${vehiclePictureHTML(v)}<div><h2>${escape(v.name || v.label)}</h2><p>${escape(v.name ? `${v.label} · ${v.type.label}` : v.type.label)}</p><p class="vm-state vm-state--${v.category}"><i aria-hidden="true"></i>${escape(statusText(v))}</p></div></div><button type="button" data-vm-back aria-label="Zavřít detail vozidla" title="Zavřít detail">${SmartIcon("close")}</button></header>
+    return `<header class="vm-detail-head"><div class="vm-detail-identity">${vehiclePictureHTML(v)}<div><h2>${escape(v.name || v.label)}</h2><p>${escape(v.name ? `${v.label} · ${v.type.label}` : v.type.label)}</p>${stateHTML(v)}</div></div><button type="button" data-vm-back aria-label="Zavřít detail vozidla" title="Zavřít detail">${SmartIcon("close")}</button></header>
       <div class="vm-detail-scroll">
       ${v.emergency ? '<p class="vm-emergency">Hlášená mimořádná událost</p>' : ""}
-      ${v.previousPoint ? `<p class="vm-old-time">Poslední známá poloha · ${escape(v.reason)}</p>` : !v.point ? `<p>${escape(v.reason)}</p>` : ""}
-      <p class="vm-status-qualifier vm-sr">${historical ? "Poslední hlášený stav" : "Poslední GPS vzorek"}</p>
-      <dl class="vm-detail-metrics">${field("Rychlost", v.speed !== null ? `${v.speed} km/h` : "Neověřeno")}<div><dt>Poslední GPS</dt><dd data-vm-age="${escape(v.id)}">${escape(ageText(v))}</dd></div></dl>
-      <div class="vm-location">${SmartIcon("tracking")}<div><p class="vm-location-label">${historical ? "Poslední známá poloha" : "Poloha GPS"}</p><p>${escape(v.address || (v.point ? `${v.point.lat.toFixed(6)}, ${v.point.lng.toFixed(6)}` : "Bez ověřené polohy"))}</p><time datetime="${escape(v.lastGpsAt)}">${escape(gpsTime(v))}</time></div></div>
+      ${!v.point ? `<p>${escape(v.reason)}</p>` : ""}
+      <dl class="vm-detail-metrics">${field("Rychlost", v.speed !== null ? `${v.speed} km/h` : "Neověřeno")}<div><dt>GPS</dt><dd>${connectionHTML(v)}</dd></div></dl>
+      <div class="vm-location">${SmartIcon("tracking")}<div><p class="vm-location-label">Poloha</p><p>${escape(v.address || (v.point ? `${v.point.lat.toFixed(6)}, ${v.point.lng.toFixed(6)}` : "Bez ověřené polohy"))}</p></div></div>
       ${v.assignedDriver ? `<p class="vm-driver">${SmartIcon("users")}<span>Přiřazený řidič: ${escape(v.assignedDriver)}</span></p>` : ""}
       <div class="vm-detail-actions"><button type="button" class="vm-primary" data-vm-history-show ${!v.historyKey ? "disabled" : ""}>${SmartIcon("routes")}Zobrazit trasu</button><button type="button" data-vm-history-toggle aria-expanded="${historyState.open}" ${!v.historyKey ? "disabled" : ""}>${SmartIcon("reports")}Historie jízd</button></div>
 
@@ -141,7 +143,10 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   }
   function update({ tick = false } = {}) {
     vehicles = normalize(records, { now: now(), staleAfterSeconds });
-    const result = filterVehicles(vehicles, state.query, state.category); filtered = result.vehicles;
+    const result = filterVehicles(vehicles, state.query, state.category === "stale" ? "all" : state.category);
+    // Keep the internal filter key, but Offline includes every orange dot.
+    result.counts.stale = filterVehicles(vehicles, state.query).vehicles.filter(v => !isOnline(v)).length;
+    filtered = state.category === "stale" ? result.vehicles.filter(v => !isOnline(v)) : result.vehicles;
     if (state.selectedId && !filtered.some((v) => v.id === state.selectedId)) {
       state.selectedId = ""; map?.history([]); historyRequest++;
       announce("Výběr byl zrušen, vozidlo již není v aktuálním filtru nebo oprávněném seznamu.");
@@ -158,12 +163,15 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
     const signature = JSON.stringify(filtered.map(({ age, ...v }) => ({ ...v, softAge: age > 120 })));
     if (!tick || signature !== dataSignature) { dataSignature = signature; updatePanel(); updateMap(); }
     else map?.age(filtered);
-    // Time text updates never replace marker DOM or trigger collision measurement.
-    root.querySelectorAll("[data-vm-age]").forEach((el) => {
-      const v = vehicles.find((v) => v.id === el.dataset.vmAge); if (!v) return;
-      el.textContent = ageText(v); el.classList.toggle("vm-old-time", v.age > 120);
+    // Availability dots update without repainting vehicle images or map geometry.
+    const byId = new Map(vehicles.map(v => [v.id, v]));
+    root.querySelectorAll("[data-vm-connection]").forEach(el => {
+      const v = byId.get(el.dataset.vmConnection); if (!v) return;
+      el.classList.toggle("vm-online", isOnline(v)); el.classList.toggle("vm-offline", !isOnline(v));
+      el.setAttribute("aria-label", connectionName(v)); el.title = connectionName(v);
     });
     updateStatus();
+    if (!tick) { iconAssignment.update(); if (openAssignmentsOnLoad && vehicles.length) { openAssignmentsOnLoad = false; iconAssignment.open(); } }
     $("[data-vm-stats]").innerHTML = fleetStatsHTML(vehicles, analytics, analyticsError);
     if (!tick) {
       $("[data-vm-activity]").innerHTML = activityHTML(vehicles);
@@ -242,6 +250,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
     if (button.hasAttribute("data-vm-history-show")) void loadHistory();
     if (button.hasAttribute("data-vm-history-toggle")) { historyState.open = !historyState.open; updatePanel(); }
     if (button.hasAttribute("data-vm-zoom")) map?.zoom(Number(button.dataset.vmZoom));
+    if (button.hasAttribute("data-vm-assign-icons")) iconAssignment.open(state.selectedId);
     if (button.hasAttribute("data-vm-legend")) $(".vm-legend").showModal();
     if (button.hasAttribute("data-vm-close-legend")) $(".vm-legend").close();
     if (button.hasAttribute("data-vm-history-load")) void loadHistory();
@@ -278,6 +287,6 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
       }
       update(); resize(); if (options.mapsReady) void ensureMap();
     },
-    destroy() { destroyed = true; historyRequest++; clearInterval(tickTimer); observer.disconnect(); mobileQuery.removeEventListener("change", onViewportChange); window.removeEventListener("resize", resize); window.visualViewport?.removeEventListener("resize", resize); cancelAnimationFrame(resizeFrame); map?.destroy(); records.clear(); vehicles = []; filtered = []; payloadRef = null; root.remove(); }
+    destroy() { iconAssignment.destroy(); destroyed = true; historyRequest++; clearInterval(tickTimer); observer.disconnect(); mobileQuery.removeEventListener("change", onViewportChange); window.removeEventListener("resize", resize); window.visualViewport?.removeEventListener("resize", resize); cancelAnimationFrame(resizeFrame); map?.destroy(); records.clear(); vehicles = []; filtered = []; payloadRef = null; root.remove(); }
   };
 }

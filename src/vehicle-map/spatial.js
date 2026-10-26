@@ -67,21 +67,32 @@ export function spreadPoints(points, center, bounds, obstacles = []) {
   }
   return placed;
 }
+// Visible marker geometry for plate collisions; clustering keeps its larger
+// conservative envelope. A faint pulse is allowed behind the higher label layer.
+export function labelMarkerRect(p) {
+  const r = rect(p.x, p.y, 48, 44);
+  if (p.vehicle.heading == null) return r;
+  const angle = p.vehicle.heading * Math.PI / 180, c = Math.cos(angle), s = Math.sin(angle);
+  for (const [x,y] of [[0,-30],[-3,-24],[3,-24]]) {
+    const px = p.x + x*c - y*s, py = p.y + x*s + y*c;
+    r.left = Math.min(r.left,px); r.right = Math.max(r.right,px);
+    r.top = Math.min(r.top,py); r.bottom = Math.max(r.bottom,py);
+  }
+  return r;
+}
 export function placeLabels(items, obstacles, bounds, measure, selectedId = "", highlightedId = "", mode = "auto") {
-  const occupied = [...obstacles], output = new Map();
+  const occupied = [], output = new Map();
   const rank = (p) => p.id === selectedId ? 0 : p.id === highlightedId ? 1 : p.vehicle.emergency ? 2 : p.vehicle.age > 120 ? 3 : 4;
   const ordered = [...items].sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id));
   for (const p of ordered) {
     if (mode === "selected" && p.id !== selectedId) continue;
     const { width, height } = measure(p.vehicle.label);
-    const own = markerRect(p), gap = 6;
-    const candidates = [
-      { left: p.x - width / 2, top: own.bottom + gap },
-      { left: own.right + gap, top: p.y - height / 2 },
-      { left: own.left - gap - width, top: p.y - height / 2 },
-      { left: p.x - width / 2, top: own.top - gap - height }
-    ].map((r) => ({ ...r, right: r.left + width, bottom: r.top + height }));
-    const valid = candidates.find((r) => inside(r, bounds) && !occupied.some((o) => overlaps(r, o, gap)));
+    const own = labelMarkerRect(p), gap = 5;
+    // One fixed anchor, even when selection changes label priority.
+    const left = Math.max(bounds.left, Math.min(p.x - width / 2, bounds.right - width));
+    const candidate = { left, top: own.bottom + gap, right: left + width, bottom: own.bottom + gap + height };
+    const valid = inside(candidate, bounds) && !obstacles.some(o => overlaps(candidate,o))
+      && !occupied.some(o => overlaps(candidate,o,3)) ? candidate : null;
     if (valid) { occupied.push(valid); output.set(p.id, valid); }
   }
   return output;
