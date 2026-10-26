@@ -14,8 +14,11 @@ export async function runVistosJobsServerBridge(env,{fetcher=fetch}={}) {
   try {
     const response=await fetcher(base+'/api/integrations/vistos/jobs-run-internal',{
       method:'POST',headers:{Authorization:`Bearer ${env.VISTOS_JOBS_RUNNER_TOKEN}`,'Content-Type':'application/json'},
-      body:'{}',redirect:'error',signal:AbortSignal.timeout(110000)
+      body:'{}',redirect:'manual',signal:AbortSignal.timeout(110000)
     });
+    // workerd rejects redirect:error before sending a request. Manual + explicit
+    // rejection keeps the same no-redirect policy without forwarding the token.
+    if(response.status>=300&&response.status<400)return {status:'blocked',code:'vistos_jobs_redirect_rejected'};
     const result=await response.json().catch(()=>({}));
     if(!response.ok)return {status:'blocked',code:/^[a-z0-9_]+$/.test(result.code||'')?result.code:'vistos_jobs_server_unavailable'};
     return {status:['partial','disabled','blocked'].includes(result.status)?result.status:'partial',
