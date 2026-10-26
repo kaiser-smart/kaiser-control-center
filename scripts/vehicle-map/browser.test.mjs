@@ -71,6 +71,23 @@ try{
   await page.locator('[data-vm-row$=":synthetic-1"]').click();await page.waitForTimeout(150);
   assert.equal((await camera()).zoom,18);
  });
+ await test('Map center control returns to selected car instead of the fleet, and preserves closer zoom',async()=>{
+  await page.evaluate(()=>{const m=google.maps._instances.at(-1);m.setZoom(10);m.panBy(400,150);});
+  assert.equal(await page.locator('[data-vm-fit]').getAttribute('aria-label'),'Vystředit vybrané vozidlo');
+  await page.locator('[data-vm-fit]').click();await page.waitForTimeout(160);
+  assert.equal((await camera()).zoom,16);
+  const offset=await page.evaluate(()=>{const r=document.querySelector('.vm-marker.is-selected').getBoundingClientRect(),m=document.querySelector('.vm-map').getBoundingClientRect();return Math.abs(r.x+r.width/2-m.x-m.width/2);});assert(offset<1);
+  await page.evaluate(()=>google.maps._instances.at(-1).setZoom(18));await page.locator('[data-vm-fit]').click();await page.waitForTimeout(160);assert.equal((await camera()).zoom,18);
+ });
+ await test('Center control is disabled for selected missing GPS; closing detail restores fleet framing',async()=>{
+  await page.locator('[data-vm-row$=":synthetic-12"]').click();await page.waitForTimeout(100);
+  assert.equal(await page.locator('[data-vm-fit]').isDisabled(),true);
+  await page.locator('[data-vm-back]').click();
+  assert.equal(await page.locator('[data-vm-fit]').getAttribute('aria-label'),'Vystředit celou flotilu');
+  assert.equal(await page.locator('[data-vm-fit]').isDisabled(),false);
+  await page.locator('[data-vm-fit]').click();await page.waitForTimeout(160);assert((await camera()).zoom<16);
+  await page.locator('[data-vm-row$=":synthetic-1"]').click();await page.waitForTimeout(150);
+ });
  await test('Latest rapid selection wins focus and missing GPS cannot invent a focus point',async()=>{
   await page.evaluate(()=>google.maps._instances.at(-1).setZoom(8));
   await page.evaluate(()=>{document.querySelector('[data-vm-row$=":synthetic-1"]').click();document.querySelector('[data-vm-row$=":synthetic-4"]').click();});await page.waitForTimeout(150);

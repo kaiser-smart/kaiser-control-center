@@ -41,7 +41,15 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   const iconAssignment = createIconAssignment({ root, getVehicles: () => vehicles });
   let openAssignmentsOnLoad = new URLSearchParams(location.search).get("ikony") === "1";
   const announce = (message) => { $("[data-vm-announcement]").textContent = message; };
-  function fit() { map?.fit(filtered); announce(`Celá flotila: ${filtered.filter((v) => v.point).length} poloh odpovídajících filtru.`); }
+  function fit() {
+    if (state.selectedId) {
+      const v = filtered.find(v => v.id === state.selectedId);
+      if (!v?.point) return;
+      map?.select(v.id); announce(`Vystředěno vozidlo ${v.label}.`);
+    } else {
+      map?.fit(filtered); announce(`Celá flotila: ${filtered.filter(v => v.point).length} poloh odpovídajících filtru.`);
+    }
+  }
   function select(id) {
     const v = filtered.find((v) => v.id === id); if (!v) return;
     if (!state.selectedId) state.listScroll = $(".vm-list").scrollTop;
@@ -120,6 +128,11 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
 
   function updatePanel() {
     const v = filtered.find((v) => v.id === state.selectedId);
+    const fitButton = $("[data-vm-fit]"), pointCount = filtered.filter(v => v.point).length;
+    fitButton.disabled = !map || (v ? !v.point : !pointCount);
+    fitButton.setAttribute("aria-label", v ? "Vystředit vybrané vozidlo" : "Vystředit celou flotilu");
+    fitButton.title = v ? (v.point ? `Vystředit ${v.label}` : "Vybrané vozidlo nemá ověřenou polohu")
+      : pointCount ? `Přizpůsobit ${pointCount} polohám podle filtru` : "Filtru neodpovídá žádná ověřená poloha";
     $(".vm-panel-detail").hidden = !v;
     $(".vm-selection-empty").hidden = !!v;
     $("[data-vm-driver]").innerHTML = driverHTML(v);
@@ -157,9 +170,6 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
       button.setAttribute("aria-pressed", String(key === state.category));
       button.hidden = key === "unknown" && !result.counts.unknown && state.category !== "unknown";
     });
-    const pointCount = filtered.filter((v) => v.point).length;
-    $("[data-vm-fit]").disabled = !pointCount || !map;
-    $("[data-vm-fit]").title = !pointCount ? "Filtru neodpovídá žádná ověřená poloha" : `Přizpůsobit ${pointCount} polohám podle filtru`;
     const signature = JSON.stringify(filtered.map(({ age, ...v }) => ({ ...v, softAge: age > 120 })));
     if (!tick || signature !== dataSignature) { dataSignature = signature; updatePanel(); updateMap(); }
     else map?.age(filtered);
