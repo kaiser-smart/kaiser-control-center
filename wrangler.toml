@@ -8,6 +8,15 @@ binding = "FORPSI_CONNECTOR"
 service = "forpsi-company-mail"
 
 [env.production.vars]
+# Jobs-only read pilot. Bound by persisted company contract and per-database capacity ceilings.
+VISTOS_INSTALLATION_ID = "kaiserservis.myvistos.com"
+VISTOS_SHARED_REQUESTS_PER_MINUTE = "60"
+VISTOS_READ_SYNC_ENABLED = "true"
+VISTOS_JOBS_BULK_IMPORT_APPROVED = "true"
+VISTOS_JOBS_RUNNER_ENABLED = "true"
+VISTOS_PAYMENT_WRITE_ENABLED = "false"
+VISTOS_JOB_EXECUTION_ENABLED = "false"
+D1_CAPACITY_BLOCK_BULK_WRITES = "true"
 ALLOWED_EMAIL_DOMAIN = "kaiserservis.cz"
 APP_ENV = "production"
 AUTH_COOKIE_NAME = "__Host-smart_odpady_session"
