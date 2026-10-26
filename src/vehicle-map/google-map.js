@@ -1,13 +1,20 @@
+import { CZECH_BOUNDARY } from "./czech-boundary.js";
 import { clusterPoints, clusterRect, markerRect, overlaps, inside, rect, spreadPoints, placeLabels } from "./spatial.js";
 import { markerHTML, markerName, escape } from "./presentation.js";
 
 export const ROAD_STYLES = [
-  { featureType: "poi.business", stylers: [{ visibility: "off" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#e7eee3" }] },
-  { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#f1f3f2" }] },
-  { featureType: "road.local", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#77817e" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#d6e6e9" }] }
+  { elementType: "geometry", stylers: [{ color: "#15232e" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#899ca6" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#101b24" }, { weight: 2 }] },
+  { featureType: "poi", stylers: [{ visibility: "off" }] },
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
+  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#384951" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#263b43" }] },
+  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#627937" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#324c31" }] },
+  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#bacba5" }] },
+  { featureType: "road.local", elementType: "geometry", stylers: [{ color: "#20333d" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#09151d" }] }
 ];
 
 export function createGoogleMap(node, maps, callbacks) {
@@ -24,6 +31,9 @@ export function createGoogleMap(node, maps, callbacks) {
   let vehicles = [], selectedId = "", highlightedId = "", labelMode = "auto", groupIds = [], spider = false;
   let destroyed = false, initialFit = false, frame = 0, drawn = [], resizeFrame = 0;
   let history = null;
+  const polygons = CZECH_BOUNDARY.type === 'MultiPolygon' ? CZECH_BOUNDARY.coordinates : [CZECH_BOUNDARY.coordinates];
+  const countryBorder = polygons.flatMap(p => p.map(ring => new maps.Polyline({ map, path: ring.map(([lng,lat]) => ({lat,lng})), strokeColor:'#b4e52b', strokeOpacity:1, strokeWeight:2, clickable:false, zIndex:5 })));
+
   const elements = new Map(), labels = new Map(), measurements = new Map(), listeners = [];
   const measureNode = document.createElement("span");
   measureNode.className = "vm-label vm-measure";
@@ -76,7 +86,7 @@ export function createGoogleMap(node, maps, callbacks) {
   function layout() {
     if (destroyed || !overlay.layer || !overlay.getProjection()) return;
     const points = vehicles.filter((v) => v.point).map(project).filter(Boolean);
-    if (!initialFit && points.length) { initialFit = true; fit(vehicles); }
+    if (!initialFit && points.length) { initialFit = true; fitCountry(); }
     const groups = clusterPoints(points), obstacleRects = controls(), visibleBounds = bounds();
     let plans = groups.map((g) => ({ id: g.members.length > 1 ? `group:${g.id}` : g.members[0].id, x: g.x, y: g.y, members: g.members.map((p) => p.vehicle), bounds: g.bounds }));
     const active = points.filter((p) => groupIds.includes(p.id));
@@ -160,7 +170,14 @@ export function createGoogleMap(node, maps, callbacks) {
     overlay.layer.classList.remove("is-moving");
     positionNodes();
     const visible = points.filter((p) => p.x >= 0 && p.x <= node.clientWidth && p.y >= 0 && p.y <= node.clientHeight).length;
-    callbacks.onViewport(visible, points.length, vehicles.length - points.length);
+    callbacks.onViewport(visible, points.length, vehicles.length - points.length, map.getZoom());
+  }
+  function fitCountry() {
+    const b = new maps.LatLngBounds();
+    polygons.forEach(p => p.forEach(ring => ring.forEach(([lng,lat]) => b.extend({lat,lng}))));
+    // Include authorized outliers without fabricating a position or hiding them.
+    vehicles.filter(v => v.point).forEach(v => b.extend(v.point));
+    map.fitBounds(b, 36); map.setHeading?.(0); map.setTilt?.(0);
   }
   function fit(items) {
     const valid = items.filter((v) => v.point); if (!valid.length) return;
@@ -188,7 +205,7 @@ export function createGoogleMap(node, maps, callbacks) {
     const p = project(v); if (!p) return;
     const safe = { left: 50, top: 76, right: node.clientWidth - 50, bottom: node.clientHeight - 60 };
     const detail = node.parentElement.querySelector(".vm-panel-detail:not([hidden])");
-    if (detail && getComputedStyle(detail).visibility !== "hidden") {
+    if (detail && getComputedStyle(detail).visibility !== "hidden" && detail.getBoundingClientRect().left < node.getBoundingClientRect().right) {
       const n = node.getBoundingClientRect(), r = detail.getBoundingClientRect();
       if (r.width < n.width * .8) safe.right = Math.max(safe.left + 20, r.left - n.left - 40);
       else safe.bottom = Math.max(safe.top + 20, r.top - n.top - 40);
@@ -220,14 +237,15 @@ export function createGoogleMap(node, maps, callbacks) {
         if (v && el) { const name = markerName(v); if (el.getAttribute("aria-label") !== name) el.setAttribute("aria-label", name); }
       }
     },
-    fit, select, openGroup,
+    fit, fitCountry, select, openGroup,
     closeGroup() { groupIds = []; spider = false; scheduleLayout(); },
+    zoomTo(value) { map.setZoom(Math.max(3, Math.min(20, Number(value)))); },
     zoom(delta) { map.setZoom((map.getZoom() || 11) + delta); },
     setLayer(layer) { map.setMapTypeId(layer === "satellite" ? "hybrid" : "roadmap"); map.setTilt?.(0); map.setHeading?.(0); },
     history(points) {
       history?.setMap(null); history = null;
-      if (points.length > 1) history = new maps.Polyline({ map, path: points, strokeColor: "#3F7416", strokeWeight: 3, clickable: false });
+      if (points.length > 1) history = new maps.Polyline({ map, path: points, strokeColor: "#b4e52b", strokeWeight: 3, clickable: false });
     },
-    destroy() { destroyed = true; observer.disconnect(); cancelAnimationFrame(frame); cancelAnimationFrame(resizeFrame); listeners.forEach((l) => l.remove()); overlay.setMap(null); history?.setMap(null); measureNode.remove(); elements.clear(); labels.clear(); vehicles = []; }
+    destroy() { destroyed = true; observer.disconnect(); cancelAnimationFrame(frame); cancelAnimationFrame(resizeFrame); listeners.forEach((l) => l.remove()); overlay.setMap(null); history?.setMap(null); countryBorder.forEach(line => line.setMap(null)); measureNode.remove(); elements.clear(); labels.clear(); vehicles = []; }
   };
 }

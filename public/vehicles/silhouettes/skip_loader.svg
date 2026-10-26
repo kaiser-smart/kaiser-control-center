@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 32" width="48" height="32" style="color:#202821"><path d="M3 14h25l-5 8H9Z" fill="currentColor" />
-    <path d="m5 23 4-17h15l5 17" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linejoin="round" />
-    <path d="M33 11h7l6 7v8H31V13Z" fill="currentColor" /><path d="M35 14h4l4 5h-8Z" fill="var(--vehicle-cutout, #fff)" />
-    <path d="M5 24h39" stroke="currentColor" stroke-width="3" />
-    <circle cx="11" cy="25" r="4" fill="currentColor" /><circle cx="24" cy="25" r="4" fill="currentColor" /><circle cx="39" cy="25" r="4" fill="currentColor" />
-    <circle cx="11" cy="25" r="1.5" fill="var(--vehicle-cutout, #fff)" /><circle cx="24" cy="25" r="1.5" fill="var(--vehicle-cutout, #fff)" /><circle cx="39" cy="25" r="1.5" fill="var(--vehicle-cutout, #fff)" />
-  </svg>

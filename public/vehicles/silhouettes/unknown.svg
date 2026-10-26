@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 32" width="48" height="32" style="color:#202821"><path d="M8 8h29l6 7v10H4V12Z" fill="currentColor" />
-    <path d="M21 14a3.2 3.2 0 0 1 6.4 0c0 2-3.2 2.3-3.2 4" stroke="var(--vehicle-cutout, #fff)" stroke-width="2" fill="none" stroke-linecap="round" />
-    <circle cx="24.2" cy="21" r="1" fill="var(--vehicle-cutout, #fff)" />
-    <circle cx="12" cy="25" r="4" fill="currentColor" /><circle cx="36" cy="25" r="4" fill="currentColor" />
-    <circle cx="12" cy="25" r="1.5" fill="var(--vehicle-cutout, #fff)" /><circle cx="36" cy="25" r="1.5" fill="var(--vehicle-cutout, #fff)" />
-  </svg>

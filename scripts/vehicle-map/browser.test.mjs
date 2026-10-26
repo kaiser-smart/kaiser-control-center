@@ -25,8 +25,18 @@ try{
  await scene();
  await test('Product shell: logo, HP, user bar; no added global sidebar',async()=>{assert.equal(await page.locator('.ui-pilot-sidebar').count(),0);assert.equal(await page.locator('.vm-page > .topbar .kaiser-logo').count(),1);assert.equal(await page.locator('.vm-page > .user-bar').count(),1);});
  await test('Overview: all 18 rows; 17 valid points including two stale; matching counts',async()=>{assert.equal(await page.locator('[data-vm-row]').count(),18);assert.equal(await page.locator('[data-vm-filter="all"] b').innerText(),'18');assert.match(await page.locator('.vm-viewport').innerText(),/17 z 17.*bez polohy 1/);assert.equal(await page.locator('[data-vm-filter="stale"] b').textContent(),'2');});
+ await test('Dispatcher reference: actual GPS gauge, event selection, no invented driver score or telemetry',async()=>{
+  assert.match(await page.locator('[data-vm-stats]').innerText(),/Čerstvá GPS/);
+  assert.match(await page.locator('[data-vm-driver]').innerText(),/Přiřazení neověřeno/);
+  assert(await page.locator('.vm-map-legend').isVisible());
+  await page.locator('.vm-event-list [data-vm-select]').first().click();
+  assert(await page.locator('.vm-panel-detail').isVisible());
+  assert.match(await page.locator('.vm-panel-detail').innerText(),/Palivo[\s\S]*Údaj není dostupný[\s\S]*AdBlue/);
+  await page.locator('[data-vm-back]').click();
+ });
  await screenshot('overview-desktop');
- await test('Visible row selection and image decoding preserve camera and stable marker element',async()=>{
+ await test('Selection and image decoding preserve selected marker; repeated selection retains camera',async()=>{
+  await page.locator('[data-vm-row$=":synthetic-1"]').click();await page.waitForTimeout(150);
   await page.evaluate(()=>{window.savedMarker=document.querySelector('[data-vm-marker="synthetic-preview-admin:tcars:vehicle:synthetic-1"]');window.savedImage=window.savedMarker.querySelector('img');});
   const before=await camera();await page.locator('[data-vm-row$=":synthetic-1"]').click();await page.waitForTimeout(120);assert.deepEqual(await camera(),before);
   assert.equal(await page.locator('.vm-marker.is-selected').count(),1);assert.equal(await page.evaluate(()=>savedMarker===document.querySelector('.vm-marker.is-selected')&&savedImage===savedMarker.querySelector('img')),true);
@@ -65,18 +75,18 @@ try{
  await test('Search/filters shared by map and list; missing GPS remains selectable; empty reason',async()=>{
   await page.locator('#vm-search').fill('t e s t 012');await page.waitForTimeout(120);assert.equal(await page.locator('[data-vm-row]').count(),1);assert.equal(await page.locator('.vm-marker').count(),0);assert.equal(await page.locator('[data-vm-fit]').isDisabled(),true);
   await page.locator('[data-vm-row]').click();assert.match(await page.locator('.vm-panel-detail').innerText(),/Bez polohy/);await page.locator('[data-vm-back]').click();
-  await page.locator('#vm-search').fill('NOT FOUND');assert.match(await page.locator('.vm-list').innerText(),/Žádná vozidla/);await page.locator('#vm-search').fill('');await page.locator('.vm-extra-filters summary').click();await page.locator('[data-vm-filter="stale"]').click();await page.waitForTimeout(100);assert.equal(await page.locator('[data-vm-row]').count(),2);assert.equal(await page.locator('.vm-marker').count(),2);await page.locator('[data-vm-filter="stale"]').click();
+  await page.locator('#vm-search').fill('NOT FOUND');assert.match(await page.locator('.vm-list').innerText(),/Žádná vozidla/);await page.locator('#vm-search').fill('');await page.locator('.vm-extra-filters summary').click();await page.locator('[data-vm-filter="stale"]').click();await page.waitForTimeout(100);assert.equal(await page.locator('[data-vm-row]').count(),2);assert.equal(await page.locator('.vm-marker').evaluateAll(nodes=>nodes.reduce((n,e)=>n+(e.classList.contains('vm-cluster')?Number(e.querySelector('b').textContent):1),0)),2);await page.locator('[data-vm-filter="stale"]').click();
  });
  await test('Hover and keyboard focus highlight without camera changes',async()=>{
   const before=await camera();await page.locator('[data-vm-row$=":synthetic-1"]').focus();await page.waitForTimeout(100);assert(await page.locator('.vm-marker.is-highlighted').count());assert.deepEqual(await camera(),before);
  });
  await test('Detail scroll belongs to selected vehicle: refresh preserves it, changing vehicle resets it',async()=>{
   await scene();await page.locator('[data-vm-row$=":synthetic-1"]').click();
-  await page.locator('.vm-more summary').click();await page.locator('.vm-history summary').click();await page.locator('.vm-detail-scroll').evaluate(el=>{el.scrollTop=160;});
+  await page.locator('.vm-more summary').click();await page.locator('[data-vm-history-toggle]').click();await page.locator('.vm-detail-scroll').evaluate(el=>{el.scrollTop=160;});
   const before=await page.locator('.vm-detail-scroll').evaluate(el=>el.scrollTop);assert(before>0);
   await page.locator('[data-vm-refresh]').click();await page.waitForTimeout(160);
   assert.equal(await page.locator('.vm-detail-scroll').evaluate(el=>el.scrollTop),before);
-  await page.locator('.vm-marker[data-vm-marker$=":synthetic-2"]').click();await page.waitForTimeout(160);
+  await page.locator('[data-vm-row$=":synthetic-2"]').click();await page.waitForTimeout(160);
   assert.equal(await page.locator('.vm-detail-scroll').evaluate(el=>el.scrollTop),0);
   assert.match(await page.locator('.vm-detail-identity').innerText(),/TEST/);
  });
@@ -103,7 +113,7 @@ try{
    const d=await page.evaluate(()=>{const r=e=>e.getBoundingClientRect().toJSON();return{scroll:document.documentElement.scrollWidth,work:r(document.querySelector('.vm-work')),map:r(document.querySelector('.vm-map-shell')),panel:r(document.querySelector('.vm-panel')),nav:document.querySelector('.mobile-bottom-nav')?r(document.querySelector('.mobile-bottom-nav')):null};});
    assert(d.scroll<=width);assert(d.map.height>=220);assert(d.map.bottom<=height+1);
    if(width<=720){assert(d.map.bottom<=d.nav.top+1);assert.equal(await page.locator('.vm-panel').isVisible(),false);assert.equal(await page.locator('.mobile-header').count(),1);}
-   else {assert.equal(d.panel.width,width<=1100?288:320);assert.equal(d.map.left,d.panel.right);if(width>=1024)assert(d.map.width/d.work.width>=.69);}
+   else {assert.equal(d.panel.width,width<=1100?210:240);assert(d.map.left>d.panel.right && d.map.left-d.panel.right<=10);if(width>=1024)assert(d.map.width/d.work.width>=.7);}
    metrics.push({scenario:`viewport-${width}`,mapWidth:d.map.width,mapHeight:d.map.height,panelWidth:d.panel.width});
   });
   await screenshot(`overview-${width}x${height}`);
@@ -126,13 +136,13 @@ try{
  }
  for(const theme of ['light','dark'])for(const width of [390,1440]){
   await scene('overview',theme,width,width<721?844:900);if(width<=720)await page.locator('[data-vm-view="list"]').click();
-  await test(`${theme} ${width}: nine supplied silhouettes decode; map markers transparent and compact`,async()=>{
+  await test(`${theme} ${width}: supplied OpenArt atlas decodes; map markers transparent and compact`,async()=>{
    await page.locator('[data-vm-legend]').click();await page.locator('.vm-legend img').evaluateAll(imgs=>Promise.all(imgs.map(i=>i.decode())));assert.equal(await page.locator('.vm-legend img').count(),9);await page.locator('[data-vm-close-legend]').click();
-   const images=await page.locator('.vm-marker img').evaluateAll(imgs=>Promise.all(imgs.map(async i=>{await i.decode();return{w:i.getBoundingClientRect().width,filter:getComputedStyle(i).filter,bg:getComputedStyle(i.parentElement).backgroundColor};})));
-   images.forEach(i=>{assert.equal(i.w,36);assert.equal(i.filter,'none');assert.equal(i.bg,'rgba(0, 0, 0, 0)');});
+   const images=await page.locator('.vm-marker img').evaluateAll(imgs=>Promise.all(imgs.map(async i=>{await i.decode();return{w:i.closest('.vm-art').getBoundingClientRect().width,filter:getComputedStyle(i).filter,bg:getComputedStyle(i.closest('.vm-art')).backgroundColor};})));
+   images.forEach(i=>{assert.equal(i.w,36);assert.match(i.filter,/vm-white-canvas/);assert.equal(i.bg,'rgba(0, 0, 0, 0)');});
   });
   await page.locator('[data-vm-row$=":synthetic-2"]').click();await page.waitForTimeout(100);
-  await test(`${theme} ${width}: selected stale silhouette and exact brand accent`,async()=>{assert.equal(await page.locator('.vm').getAttribute('data-theme'),theme);assert.match(await page.locator('.vm-marker.is-selected').evaluate(e=>getComputedStyle(e).boxShadow),/rgb\(117, 189, 37\)/);});
+  await test(`${theme} ${width}: selected stale silhouette and user-selected lime accent`,async()=>{assert.equal(await page.locator('.vm').getAttribute('data-theme'),'dark');assert.match(await page.locator('.vm-marker.is-selected').evaluate(e=>getComputedStyle(e).boxShadow),/rgb\(180, 229, 43\)/);});
   await screenshot(`stale-${theme}-${width}`);
  }
  await scene();
@@ -145,13 +155,13 @@ try{
   const points=[{latitude:49.2,longitude:16.6,lastGpsAt:new Date(Date.now()-300000).toISOString()},{latitude:49.21,longitude:16.61,lastGpsAt:new Date(Date.now()-240000).toISOString()},{latitude:0,longitude:0,lastGpsAt:new Date().toISOString()}];
   await page.route('**/api/vehicle-tracking/history?**',r=>{historyRequests.push(r.request().url());return r.fulfill({json:{apiStatus:'ready',points}});});
   await page.locator('[data-vm-history-show]').click();await page.waitForFunction(()=>document.querySelector('[data-vm-history-status]')?.textContent==='2 uložených GPS bodů');
-  assert.equal(await page.evaluate(()=>google.maps._polylines.filter(p=>p.map).length),1);
+  assert.equal(await page.evaluate(()=>google.maps._polylines.filter(p=>p.map && p.options.path?.length===2).length),1);
   await page.locator('[data-vm-history-range]').selectOption('7d');await page.locator('[data-vm-history-load]').click();await page.waitForTimeout(100);assert(historyRequests.at(-1).includes('7d'));
-  await page.locator('[data-vm-back]').click();assert.equal(await page.evaluate(()=>google.maps._polylines.filter(p=>p.map).length),0);
+  await page.locator('[data-vm-back]').click();assert.equal(await page.evaluate(()=>google.maps._polylines.filter(p=>p.map && p.options.path?.length===2).length),0);
   await page.unroute('**/api/vehicle-tracking/history?**');
   await page.route('**/api/vehicle-tracking/history?**',async r=>{await new Promise(resolve=>setTimeout(resolve,350));await r.fulfill({json:{apiStatus:'ready',points}});});
   await page.locator('[data-vm-row$=":synthetic-1"]').click();await page.locator('[data-vm-history-show]').click();await page.locator('[data-vm-row$=":synthetic-2"]').click();await page.waitForTimeout(500);
-  assert.equal(await page.evaluate(()=>google.maps._polylines.filter(p=>p.map).length),0);await page.unroute('**/api/vehicle-tracking/history?**');await page.locator('[data-vm-back]').click();
+  assert.equal(await page.evaluate(()=>google.maps._polylines.filter(p=>p.map && p.options.path?.length===2).length),0);await page.unroute('**/api/vehicle-tracking/history?**');await page.locator('[data-vm-back]').click();
  });
  await test('Confirmed 403 removes GPS and selection; no demo fallback',async()=>{await control('denied=1');await page.locator('[data-vm-refresh]').click();await page.waitForTimeout(150);assert.equal(await page.locator('.vm-marker').count(),0);assert.equal(await page.locator('[data-vm-row]').count(),0);});
  await test('Confirmed 401 clears in-memory map and ends session',async()=>{

@@ -1,11 +1,16 @@
 import { json, requireUserPermission } from "../../_lib/auth.js";
-import { getArchiveDatabase } from "../../_lib/databases.js";
+import { getModuleDatabase } from "../../_lib/databases.js";
 import { loadVehicleTrackingHistory } from "../../_lib/vehicle-tracking-history.js";
 
 export async function onRequestGet({ request, env }) {
   const { response } = await requireUserPermission(env, request, "vehicle-tracking", "view");
   if (response) return response;
-  const archiveDb = getArchiveDatabase(env, { required: false });
+  const archiveDb = getModuleDatabase(env, {
+    moduleName: "vehicle-tracking-history-read",
+    allowedDomains: ["archive", "audit"],
+    defaultDomain: "archive",
+    required: false
+  });
   if (!archiveDb) return json({ error: "Historie tras zatím není připravená v DB_ARCHIVE." }, 503);
 
   const url = new URL(request.url);
