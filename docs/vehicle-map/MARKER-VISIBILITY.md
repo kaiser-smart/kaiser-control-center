@@ -47,3 +47,7 @@ Aktualizované testy požadují více současných pulzů i bez výběru, žádn
 Doplnění podle dalších připomínek: odstraněna mapová legenda, počítadlo výřezu, volba režimu popisků a běžný časový podpis GPS výpočtu. SPZ se vždy zobrazují automaticky s prioritou výběru a s řešením kolizí. Detail má pouze jednu dostupnostní tečku u GPS; stav Jede/Stojí zůstává textem. Neaktuálnost statistik nebo výpadek se nadále označují pravdivě.
 
 Otevírání shluku je testováno na skutečných Google Maps z celorepublikového pohledu. Výřez skupiny nastavuje střed a zoom společně pomocí moveCamera. Rozměry výřezu vycházejí z Mercatorovy projekce skutečných bodů a velikosti mapy s okrajem 64 px. Tím se odstraňuje reprodukovaný případ, kdy fitBounds změnil zoom, ale ponechal střed mimo vozidla. Souřadnice markerů se nemění; nulové natočení zůstává zachované.
+
+## Kontextové vystředění — 0.1.878
+
+Šipka nad zoomem vrací mapu k vybranému vozidlu (stejné vystředění a minimální zoom 16 jako výběr). Bez výběru přizpůsobí výřez platným polohám filtrované flotily. Název a nápověda odpovídají právě aktivnímu cíli; při výběru bez GPS je tlačítko neaktivní i tehdy, když ostatní vozidla polohu mají. Obnova GPS sama kameru nemění. Regresní test pokrývá oddálení, posunutí, návrat, bližší ruční zoom, chybějící GPS a návrat na celou flotilu. Test skutečných Google Maps ověřuje šipku na desktopu a v mobilních šířkách.

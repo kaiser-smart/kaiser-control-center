@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.877"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.878"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,8 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Ikony podle doplněného přiřazení", text: "Zapracováno všech 12 voleb z vašeho návrhu: kompaktní kontejnery a cisterna, minibusy, servisní dodávka a oba stroje Manitou. Ostatní přiřazení i původní grafika zůstávají zachované." },
+  { title: "Návrat k vybranému vozidlu", text: "Šipka na mapě při otevřeném detailu přiblíží a vystředí vybrané vozidlo. Bez výběru zobrazí celou flotilu podle filtru. U vozidla bez polohy je neaktivní." },
   { title: "Jízda všech vozidel a přiblížení při výběru", text: "Každé zobrazené vozidlo s potvrzenou aktuální jízdou jemně pulzuje. Výběr vozidla přiblíží mapu na úroveň ulice a vystředí jej mimo panel detailu. Obnova GPS zachovává váš pohled. Otevření shluku směřuje ke skutečným vozidlům; z mapy zmizela legenda, počítadlo výřezu a volba popisků. Detail má jednu tečku u GPS." },
   { title: "Zřetelný kruh při jízdě", text: "Kruh vybraného jedoucího vozidla se oddělí od pevného obrysu a pomalu se rozšíří. Původní ikony i čitelné SPZ zůstávají beze změny; stará nebo neověřená GPS neanimuje." },
   { title: "Ikony podle velikosti pracovního místa", text: "Velká záhlaví a postranní navigace mají výraznější ikony. Mobilní nabídka je čitelnější a samostatná ikonová tlačítka mají větší plochu pro klepnutí. Zachováváme schválenou tenkou kresbu." },
