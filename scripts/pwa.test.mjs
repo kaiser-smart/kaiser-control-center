@@ -37,8 +37,8 @@ const routes = JSON.parse(await readFile(path.join(dist, "route-manifest.json"),
 for (const route of [...routes, { path: "/404.html" }]) {
   const filename = route.path === "/404.html" ? "404.html" : path.join(route.path.slice(1), "index.html");
   const html = await readFile(path.join(dist, filename), "utf8");
-  assert.match(html, /rel="manifest" href="manifest\.webmanifest\?v=k-quicksand-1"/);
-  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="icons\/apple-touch-icon\.png\?v=k-quicksand-1"/);
+  assert.match(html, /rel="manifest" href="manifest\.webmanifest\?v=kaiser-original-2"/);
+  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="icons\/apple-touch-icon\.png\?v=kaiser-original-2"/);
   assert.match(html, /name="apple-mobile-web-app-title" content="SMART ODPADY"/);
   assert.match(html, /name="apple-mobile-web-app-capable" content="yes"/);
   assert.match(html, /name="apple-mobile-web-app-status-bar-style" content="default"/);
