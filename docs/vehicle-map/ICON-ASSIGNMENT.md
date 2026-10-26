@@ -34,3 +34,7 @@ Verze 0.1.871 zapracovává 42 explicitních voleb ze souboru předaného uživa
 Vazba se aplikuje pouze na stabilní vozidlo z aktuální oprávněné odpovědi API. Musí souhlasit externí ID a SPZ; rozporná identita mezi evidencí a GPS vzorkem vazbu odmítne. Ostatní vozidla zachovávají dosavadní grafiku. Jde o oddělený `artworkKey`, nikoli změnu doloženého typu vozidla. Stejná volba se vykreslí na mapě, v seznamu, detailu, přehledu a současné ikoně v editoru. Editor stále exportuje jen nové explicitní volby uživatele.
 
 Žádný z 42 řádků nevybral novou kompaktní variantu; všechny původní zvolené klíče se proto zachovávají přesně. Tři doplněné varianty jsou dostupné pro další návrhy. Žádný zápis DB/API, přenos GPS ani změna oprávnění není součástí této implementace.
+
+## Doplněný návrh — 0.1.878
+
+Zapracováno všech 12 voleb ze souboru smart-odpady-prirazeni-ikon-2.json, export 2026-10-26T10:23:35.630Z. Pět minibusů, tři kompaktní kontejnerové vozy, kompaktní cisterna, dodávka a dva bagry Manitou. Osm nových vazeb, tři změny grafiky a jedna již shodná volba; celkem 50 schválených vazeb. Ostatní předchozí volby zůstávají zachované. Párování stále vyžaduje přesnou shodu T-Cars ID a normalizované SPZ. PNG/CSS grafiky se nemění.

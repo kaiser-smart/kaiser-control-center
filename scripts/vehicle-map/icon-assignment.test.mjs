@@ -42,8 +42,8 @@ const { APPROVED_ICON_ASSIGNMENTS, approvedArtworkKey } = await import('../../sr
 const { reconcile, normalize } = await import('../../src/vehicle-map/model.js');
 const { markerHTML } = await import('../../src/vehicle-map/presentation.js');
 const { vehiclePictureHTML, overviewHTML } = await import('../../src/vehicle-map/dashboard.js');
-assert.equal(APPROVED_ICON_ASSIGNMENTS.length,42);
-assert.equal(new Set(APPROVED_ICON_ASSIGNMENTS.map(row=>row[0])).size,42);
+assert.equal(APPROVED_ICON_ASSIGNMENTS.length,50);
+assert.equal(new Set(APPROVED_ICON_ASSIGNMENTS.map(row=>row[0])).size,50);
 const now=Date.parse('2026-10-26T10:00:00Z');
 for(const [id,plate,key] of APPROVED_ICON_ASSIGNMENTS) {
  assert.ok(ICON_CHOICES.some(icon=>icon.key===key));
@@ -69,4 +69,4 @@ for(const [id,plate,key] of APPROVED_ICON_ASSIGNMENTS) {
 }
 assert.equal(approvedArtworkKey({stable:true,vehicle:{licensePlate:'3BN3558',externalUnitId:'891'}}),'');
 assert.equal(approvedArtworkKey({stable:true,vehicle:{externalVehicleId:'891'}}),'');
-console.log('PASS 42 approved assignments: exact ID + plate, conflict rejection, all renderers, original fleet type/GPS unchanged');
+console.log('PASS 50 approved assignments: exact ID + plate, conflict rejection, all renderers, original fleet type/GPS unchanged');
