@@ -31,6 +31,19 @@ for(const name of Object.keys(iconDefinitions)){
     assert.equal(source.sourceSha256,approved.attachmentSha256);
     assert.equal(source.userApprovedExact,true);
   } else assert.equal(source.userApprovedExact,false,`Do not infer approval for ${name}`);
+  if(source.vectorAdjustment){
+    assert.equal(name,'pause');
+    assert.equal(source.vectorAdjustment.type,'measured-straight-bars-uniform-width');
+    assert.equal(source.vectorAdjustment.widthAt24,1);
+    assert.equal(source.vectorAdjustment.bars.length,2);
+    assert.equal((saved.match(/<rect /g)||[]).length,2);
+    for(const bar of source.vectorAdjustment.bars){
+      const [x0,y0,x1,y1]=bar.sourceBoundsAt24;
+      assert.equal(bar.width,1);assert.equal(bar.rx,.5);
+      assert.equal(bar.x+.5,(x0+x1)/2);
+      assert.equal(bar.y,y0);assert.equal(bar.y+bar.height,y1);
+    }
+  }
   totalBytes+=Buffer.byteLength(saved);maxBytes=Math.max(maxBytes,Buffer.byteLength(saved));
 }
 assert.throws(()=>SmartIcon('<script>'));

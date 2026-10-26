@@ -187,11 +187,12 @@
   },
   {
     "name": "fleet",
-    "historyId": "CRikO54YGZpzFTu1poIJ",
-    "resourceId": "u2GxTG241SH8scMekzv5",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926832486_0c98065b.png",
-    "sourceSha256": "9f7ec7abecd70fd6886f85cbffbd6704c15a5a77bd480895effcd8d22b5ad00e",
-    "sourceFile": "sources/CRikO54YGZpzFTu1poIJ.png",
+    "sourceType": "openart-generation",
+    "historyId": "hia6BDyVhvAmnDeTTQML",
+    "resourceId": "2uSkn94aHx31SCGovEYm",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963382873_83addd07.png",
+    "sourceSha256": "c8e681b57eed6eef0da8d77698f59f64d0940b56a6c23968fa74e9c3e8cce190",
+    "sourceFile": "sources/hia6BDyVhvAmnDeTTQML.png",
     "cellCrop": [
       0,
       0,
@@ -199,29 +200,30 @@
       672
     ],
     "foregroundBounds": [
-      208,
-      230,
-      548,
-      551
+      186,
+      207,
+      524,
+      529
     ],
-    "transform": "matrix(0.05882353 0 0 0.05882353 -10.235294 -10.970588)",
+    "transform": "matrix(0.05917160 0 0 0.05917160 -9.005917 -9.775148)",
     "svgFile": "public/icons/ui/fleet.svg",
     "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 13387,
-      "green": 4178
+      "graphite": 26578,
+      "green": 8939
     },
-    "svgSha256": "9411a5d501f0c12a0e0d30e689cdd815450a34ea13ad082384e9ad57c6e6fe52",
-    "approvalStatus": "exact-approved-original-not-provided"
+    "svgSha256": "ff3c348d8b55cb43e7b762ad2dd714ecf63915b9c359a5f13b43c955468c2e13"
   },
   {
     "name": "invoice",
-    "historyId": "CRikO54YGZpzFTu1poIJ",
-    "resourceId": "u2GxTG241SH8scMekzv5",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926832486_0c98065b.png",
-    "sourceSha256": "9f7ec7abecd70fd6886f85cbffbd6704c15a5a77bd480895effcd8d22b5ad00e",
-    "sourceFile": "sources/CRikO54YGZpzFTu1poIJ.png",
+    "sourceType": "openart-generation",
+    "historyId": "hia6BDyVhvAmnDeTTQML",
+    "resourceId": "2uSkn94aHx31SCGovEYm",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963382873_83addd07.png",
+    "sourceSha256": "c8e681b57eed6eef0da8d77698f59f64d0940b56a6c23968fa74e9c3e8cce190",
+    "sourceFile": "sources/hia6BDyVhvAmnDeTTQML.png",
     "cellCrop": [
       672,
       0,
@@ -229,1649 +231,30 @@
       672
     ],
     "foregroundBounds": [
-      190,
-      230,
-      481,
-      550
+      194,
+      203,
+      470,
+      529
     ],
-    "transform": "matrix(0.06250000 0 0 0.06250000 -8.968750 -12.375000)",
+    "transform": "matrix(0.06134969 0 0 0.06134969 -8.368098 -10.453988)",
     "svgFile": "public/icons/ui/invoice.svg",
     "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 7998,
-      "green": 4452
+      "graphite": 24444,
+      "green": 8611
     },
-    "svgSha256": "f2cca098514741d2454998ae33b6db83bb1f770384af5435f7bdbafcbbc468b3",
-    "approvalStatus": "exact-approved-original-not-provided"
+    "svgSha256": "6f86d5d1b0bfb1850769837d3de6f89ad7547f21d4f9ac8ddca66f886e84e24e"
   },
   {
     "name": "team",
-    "historyId": "CRikO54YGZpzFTu1poIJ",
-    "resourceId": "u2GxTG241SH8scMekzv5",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926832486_0c98065b.png",
-    "sourceSha256": "9f7ec7abecd70fd6886f85cbffbd6704c15a5a77bd480895effcd8d22b5ad00e",
-    "sourceFile": "sources/CRikO54YGZpzFTu1poIJ.png",
-    "cellCrop": [
-      1344,
-      0,
-      2016,
-      672
-    ],
-    "foregroundBounds": [
-      108,
-      312,
-      451,
-      540
-    ],
-    "transform": "matrix(0.05830904 0 0 0.05830904 -4.297376 -12.839650)",
-    "svgFile": "public/icons/ui/team.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 6483,
-      "green": 2380
-    },
-    "svgSha256": "a59299b19db3074e161549964648c3aa4994cdc15029be3f32f828e1e416c29f",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "dashboard",
-    "historyId": "CRikO54YGZpzFTu1poIJ",
-    "resourceId": "u2GxTG241SH8scMekzv5",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926832486_0c98065b.png",
-    "sourceSha256": "9f7ec7abecd70fd6886f85cbffbd6704c15a5a77bd480895effcd8d22b5ad00e",
-    "sourceFile": "sources/CRikO54YGZpzFTu1poIJ.png",
-    "cellCrop": [
-      0,
-      672,
-      672,
-      1344
-    ],
-    "foregroundBounds": [
-      217,
-      150,
-      525,
-      423
-    ],
-    "transform": "matrix(0.06493506 0 0 0.06493506 -12.090909 -6.603896)",
-    "svgFile": "public/icons/ui/dashboard.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 5300,
-      "green": 4695
-    },
-    "svgSha256": "f8536a869eca29a9270683a780734cefd051a047de649778a5f6446bd81c859a",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "settings",
-    "historyId": "CRikO54YGZpzFTu1poIJ",
-    "resourceId": "u2GxTG241SH8scMekzv5",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926832486_0c98065b.png",
-    "sourceSha256": "9f7ec7abecd70fd6886f85cbffbd6704c15a5a77bd480895effcd8d22b5ad00e",
-    "sourceFile": "sources/CRikO54YGZpzFTu1poIJ.png",
-    "cellCrop": [
-      672,
-      672,
-      1344,
-      1344
-    ],
-    "foregroundBounds": [
-      178,
-      124,
-      493,
-      437
-    ],
-    "transform": "matrix(0.06349206 0 0 0.06349206 -9.301587 -5.809524)",
-    "svgFile": "public/icons/ui/settings.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 7580,
-      "green": 2553
-    },
-    "svgSha256": "5576d3ab6c633fefbc24473f94aea762edad15c025ad3dfca7ff1eb595c1d279",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "notification",
-    "historyId": "CRikO54YGZpzFTu1poIJ",
-    "resourceId": "u2GxTG241SH8scMekzv5",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926832486_0c98065b.png",
-    "sourceSha256": "9f7ec7abecd70fd6886f85cbffbd6704c15a5a77bd480895effcd8d22b5ad00e",
-    "sourceFile": "sources/CRikO54YGZpzFTu1poIJ.png",
-    "cellCrop": [
-      1344,
-      672,
-      2016,
-      1344
-    ],
-    "foregroundBounds": [
-      158,
-      141,
-      405,
-      428
-    ],
-    "transform": "matrix(0.06968641 0 0 0.06968641 -7.616725 -7.825784)",
-    "svgFile": "public/icons/ui/notification.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 5195,
-      "green": 1313
-    },
-    "svgSha256": "c663fa539bf34c9d5c61aca3130e0ae025301fd9eed0a5811549b128f22704fe",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "arrow-left",
-    "historyId": "2DKWIOl57bclsdWmCrr2",
-    "resourceId": "8rY7eCr0KVsfszTeJbVl",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926823821_3f750537.png",
-    "sourceSha256": "c8a976529792a959f1900ebd30719aa34b0b4367196d52990c645822c7cb908a",
-    "sourceFile": "sources/2DKWIOl57bclsdWmCrr2.png",
-    "cellCrop": [
-      0,
-      0,
-      672,
-      672
-    ],
-    "foregroundBounds": [
-      212,
-      316,
-      552,
-      453
-    ],
-    "transform": "matrix(0.05882353 0 0 0.05882353 -10.470588 -10.617647)",
-    "svgFile": "public/icons/ui/arrow-left.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 3044,
-      "green": 408
-    },
-    "svgSha256": "58ffa0aa50006ded2246dc98a5ded8671a1b212ed9f45fd5ab28bb9b54907a6a",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "health",
-    "historyId": "2DKWIOl57bclsdWmCrr2",
-    "resourceId": "8rY7eCr0KVsfszTeJbVl",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926823821_3f750537.png",
-    "sourceSha256": "c8a976529792a959f1900ebd30719aa34b0b4367196d52990c645822c7cb908a",
-    "sourceFile": "sources/2DKWIOl57bclsdWmCrr2.png",
-    "cellCrop": [
-      672,
-      0,
-      1344,
-      672
-    ],
-    "foregroundBounds": [
-      183,
-      229,
-      490,
-      522
-    ],
-    "transform": "matrix(0.06514658 0 0 0.06514658 -9.921824 -12.462541)",
-    "svgFile": "public/icons/ui/health.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 8056,
-      "green": 1935
-    },
-    "svgSha256": "c52c9120ec99bb8a5b88ba30314f9fcf1c9f68efef97e22b3dfe06824562b4e8",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "care",
-    "historyId": "2DKWIOl57bclsdWmCrr2",
-    "resourceId": "8rY7eCr0KVsfszTeJbVl",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926823821_3f750537.png",
-    "sourceSha256": "c8a976529792a959f1900ebd30719aa34b0b4367196d52990c645822c7cb908a",
-    "sourceFile": "sources/2DKWIOl57bclsdWmCrr2.png",
-    "cellCrop": [
-      1344,
-      0,
-      2016,
-      672
-    ],
-    "foregroundBounds": [
-      134,
-      243,
-      452,
-      542
-    ],
-    "transform": "matrix(0.06289308 0 0 0.06289308 -6.427673 -12.685535)",
-    "svgFile": "public/icons/ui/care.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 6383,
-      "green": 1769
-    },
-    "svgSha256": "63893b2b2f18879e868c936ed3ccc7fa1e8f012e6ca322bd31965c06184e8de1",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "time",
-    "historyId": "2DKWIOl57bclsdWmCrr2",
-    "resourceId": "8rY7eCr0KVsfszTeJbVl",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926823821_3f750537.png",
-    "sourceSha256": "c8a976529792a959f1900ebd30719aa34b0b4367196d52990c645822c7cb908a",
-    "sourceFile": "sources/2DKWIOl57bclsdWmCrr2.png",
-    "cellCrop": [
-      0,
-      672,
-      672,
-      1344
-    ],
-    "foregroundBounds": [
-      220,
-      121,
-      533,
-      433
-    ],
-    "transform": "matrix(0.06389776 0 0 0.06389776 -12.057508 -5.699681)",
-    "svgFile": "public/icons/ui/time.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 6301,
-      "green": 1837
-    },
-    "svgSha256": "366a6a9c999fc5deb1831de3374b728a9a7faa3ee54c2a13fbd1af429601fef9",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "calendar",
-    "historyId": "2DKWIOl57bclsdWmCrr2",
-    "resourceId": "8rY7eCr0KVsfszTeJbVl",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926823821_3f750537.png",
-    "sourceSha256": "c8a976529792a959f1900ebd30719aa34b0b4367196d52990c645822c7cb908a",
-    "sourceFile": "sources/2DKWIOl57bclsdWmCrr2.png",
-    "cellCrop": [
-      672,
-      672,
-      1344,
-      1344
-    ],
-    "foregroundBounds": [
-      176,
-      122,
-      496,
-      422
-    ],
-    "transform": "matrix(0.06250000 0 0 0.06250000 -9.000000 -5.000000)",
-    "svgFile": "public/icons/ui/calendar.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 10587,
-      "green": 2475
-    },
-    "svgSha256": "ee66b23f3a0836a3e568d1b0f7b764fd5b283a30b12b88e8264c16eb2e2d40df",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "mail",
-    "historyId": "2DKWIOl57bclsdWmCrr2",
-    "resourceId": "8rY7eCr0KVsfszTeJbVl",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926823821_3f750537.png",
-    "sourceSha256": "c8a976529792a959f1900ebd30719aa34b0b4367196d52990c645822c7cb908a",
-    "sourceFile": "sources/2DKWIOl57bclsdWmCrr2.png",
-    "cellCrop": [
-      1344,
-      672,
-      2016,
-      1344
-    ],
-    "foregroundBounds": [
-      131,
-      165,
-      456,
-      393
-    ],
-    "transform": "matrix(0.06153846 0 0 0.06153846 -6.061538 -5.169231)",
-    "svgFile": "public/icons/ui/mail.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 6726,
-      "green": 2589
-    },
-    "svgSha256": "cfa0ca32b5811e7adb911e445347c7d619ca2b4ab8ff89737312dc49fc7e4dfe",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "message",
-    "historyId": "tLWbYhKvq4VVQZjGIhAc",
-    "resourceId": "eGugaDEY3DrleMi6MFUp",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926838081_76ad477f.png",
-    "sourceSha256": "6b2600f5205ac278c0076120423cb8b916a9ca4291821b6a2ee887f026a685b9",
-    "sourceFile": "sources/tLWbYhKvq4VVQZjGIhAc.png",
-    "cellCrop": [
-      0,
-      0,
-      672,
-      672
-    ],
-    "foregroundBounds": [
-      208,
-      263,
-      515,
-      530
-    ],
-    "transform": "matrix(0.06514658 0 0 0.06514658 -11.550489 -13.830619)",
-    "svgFile": "public/icons/ui/message.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 7890,
-      "green": 871
-    },
-    "svgSha256": "76b654c4abd3b55105f1927e05380e932087ad0d8d318cd5fff0d81984d2b617",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "service",
-    "historyId": "tLWbYhKvq4VVQZjGIhAc",
-    "resourceId": "eGugaDEY3DrleMi6MFUp",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926838081_76ad477f.png",
-    "sourceSha256": "6b2600f5205ac278c0076120423cb8b916a9ca4291821b6a2ee887f026a685b9",
-    "sourceFile": "sources/tLWbYhKvq4VVQZjGIhAc.png",
-    "cellCrop": [
-      672,
-      0,
-      1344,
-      672
-    ],
-    "foregroundBounds": [
-      191,
-      233,
-      472,
-      523
-    ],
-    "transform": "matrix(0.06896552 0 0 0.06896552 -10.862069 -14.068966)",
-    "svgFile": "public/icons/ui/service.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 5932,
-      "green": 607
-    },
-    "svgSha256": "684fbdbf471c55bdf7351b54bad2e3295acee39482f5f63afb758104a49435a8",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "tyres",
-    "historyId": "tLWbYhKvq4VVQZjGIhAc",
-    "resourceId": "eGugaDEY3DrleMi6MFUp",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926838081_76ad477f.png",
-    "sourceSha256": "6b2600f5205ac278c0076120423cb8b916a9ca4291821b6a2ee887f026a685b9",
-    "sourceFile": "sources/tLWbYhKvq4VVQZjGIhAc.png",
-    "cellCrop": [
-      1344,
-      0,
-      2016,
-      672
-    ],
-    "foregroundBounds": [
-      144,
-      237,
-      441,
-      535
-    ],
-    "transform": "matrix(0.06711409 0 0 0.06711409 -7.630872 -13.906040)",
-    "svgFile": "public/icons/ui/tyres.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 6724,
-      "green": 3293
-    },
-    "svgSha256": "5aa0e35c0ff9aeec6f2980f76c7d43b38fb6fb56013947ba4fcf109a442b6ead",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "routes",
-    "historyId": "tLWbYhKvq4VVQZjGIhAc",
-    "resourceId": "eGugaDEY3DrleMi6MFUp",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926838081_76ad477f.png",
-    "sourceSha256": "6b2600f5205ac278c0076120423cb8b916a9ca4291821b6a2ee887f026a685b9",
-    "sourceFile": "sources/tLWbYhKvq4VVQZjGIhAc.png",
-    "cellCrop": [
-      0,
-      672,
-      672,
-      1344
-    ],
-    "foregroundBounds": [
-      197,
-      141,
-      507,
-      402
-    ],
-    "transform": "matrix(0.06451613 0 0 0.06451613 -10.709677 -5.516129)",
-    "svgFile": "public/icons/ui/routes.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 5269,
-      "green": 650
-    },
-    "svgSha256": "b3688d51bd3f552a5096e7cb2508865d8cd95b23d8d23885cb0aa6583716ae89",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "sampling",
-    "historyId": "tLWbYhKvq4VVQZjGIhAc",
-    "resourceId": "eGugaDEY3DrleMi6MFUp",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926838081_76ad477f.png",
-    "sourceSha256": "6b2600f5205ac278c0076120423cb8b916a9ca4291821b6a2ee887f026a685b9",
-    "sourceFile": "sources/tLWbYhKvq4VVQZjGIhAc.png",
-    "cellCrop": [
-      672,
-      672,
-      1344,
-      1344
-    ],
-    "foregroundBounds": [
-      203,
-      133,
-      468,
-      434
-    ],
-    "transform": "matrix(0.06644518 0 0 0.06644518 -10.292359 -6.837209)",
-    "svgFile": "public/icons/ui/sampling.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 6089,
-      "green": 1218
-    },
-    "svgSha256": "4e06f10b29e10107fc985419b1a6ef160987fd5990aa50640fa23f668c7f28e0",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "customers",
-    "historyId": "tLWbYhKvq4VVQZjGIhAc",
-    "resourceId": "eGugaDEY3DrleMi6MFUp",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926838081_76ad477f.png",
-    "sourceSha256": "6b2600f5205ac278c0076120423cb8b916a9ca4291821b6a2ee887f026a685b9",
-    "sourceFile": "sources/tLWbYhKvq4VVQZjGIhAc.png",
-    "cellCrop": [
-      1344,
-      672,
-      2016,
-      1344
-    ],
-    "foregroundBounds": [
-      112,
-      155,
-      472,
-      417
-    ],
-    "transform": "matrix(0.05555556 0 0 0.05555556 -4.222222 -3.888889)",
-    "svgFile": "public/icons/ui/customers.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 11817,
-      "green": 1348
-    },
-    "svgSha256": "f85c60003d63b92a0ed62c2e8e06f436d76ff03a60b5e1ab3776fd2864f27ee7",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "costs",
-    "historyId": "JFWhVyhtW9nPu0YySt7r",
-    "resourceId": "ArRRIszI8Db5Ro6Tzrx8",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926831593_6e1d70e0.png",
-    "sourceSha256": "873002b66dd031455e00d20a7efe6b059798be9e4b1731c9e96100141fa103a3",
-    "sourceFile": "sources/JFWhVyhtW9nPu0YySt7r.png",
-    "cellCrop": [
-      0,
-      0,
-      672,
-      672
-    ],
-    "foregroundBounds": [
-      221,
-      245,
-      531,
-      532
-    ],
-    "transform": "matrix(0.06451613 0 0 0.06451613 -12.258065 -13.064516)",
-    "svgFile": "public/icons/ui/costs.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 9374,
-      "green": 779
-    },
-    "svgSha256": "1ccbdf799b6cc64d288de76205abbe0ce56bf07de87ba14f2006c80fb01507c5",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "reports",
-    "historyId": "JFWhVyhtW9nPu0YySt7r",
-    "resourceId": "ArRRIszI8Db5Ro6Tzrx8",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926831593_6e1d70e0.png",
-    "sourceSha256": "873002b66dd031455e00d20a7efe6b059798be9e4b1731c9e96100141fa103a3",
-    "sourceFile": "sources/JFWhVyhtW9nPu0YySt7r.png",
-    "cellCrop": [
-      672,
-      0,
-      1344,
-      672
-    ],
-    "foregroundBounds": [
-      210,
-      236,
-      463,
-      557
-    ],
-    "transform": "matrix(0.06230530 0 0 0.06230530 -8.965732 -12.704050)",
-    "svgFile": "public/icons/ui/reports.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 11068,
-      "green": 2549
-    },
-    "svgSha256": "6f6fb8b0b17844b618e4b83fe3f496db47aaf2799ff234cd95608ad1fa500ecc",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "users",
-    "historyId": "JFWhVyhtW9nPu0YySt7r",
-    "resourceId": "ArRRIszI8Db5Ro6Tzrx8",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926831593_6e1d70e0.png",
-    "sourceSha256": "873002b66dd031455e00d20a7efe6b059798be9e4b1731c9e96100141fa103a3",
-    "sourceFile": "sources/JFWhVyhtW9nPu0YySt7r.png",
-    "cellCrop": [
-      1344,
-      0,
-      2016,
-      672
-    ],
-    "foregroundBounds": [
-      148,
-      250,
-      458,
-      556
-    ],
-    "transform": "matrix(0.06451613 0 0 0.06451613 -7.548387 -14.000000)",
-    "svgFile": "public/icons/ui/users.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 7939,
-      "green": 657
-    },
-    "svgSha256": "0ef9c35b42a7e2231214b968f950ab179ad219dd38441102b49883f904bf6c24",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "system",
-    "historyId": "JFWhVyhtW9nPu0YySt7r",
-    "resourceId": "ArRRIszI8Db5Ro6Tzrx8",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926831593_6e1d70e0.png",
-    "sourceSha256": "873002b66dd031455e00d20a7efe6b059798be9e4b1731c9e96100141fa103a3",
-    "sourceFile": "sources/JFWhVyhtW9nPu0YySt7r.png",
-    "cellCrop": [
-      0,
-      672,
-      672,
-      1344
-    ],
-    "foregroundBounds": [
-      216,
-      149,
-      539,
-      411
-    ],
-    "transform": "matrix(0.06191950 0 0 0.06191950 -11.374613 -5.337461)",
-    "svgFile": "public/icons/ui/system.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 7953,
-      "green": 2677
-    },
-    "svgSha256": "b403044621f96613ddcc200a7389ea7a8ea065d231f8f6db514907ba6f781956",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "repair",
-    "historyId": "JFWhVyhtW9nPu0YySt7r",
-    "resourceId": "ArRRIszI8Db5Ro6Tzrx8",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926831593_6e1d70e0.png",
-    "sourceSha256": "873002b66dd031455e00d20a7efe6b059798be9e4b1731c9e96100141fa103a3",
-    "sourceFile": "sources/JFWhVyhtW9nPu0YySt7r.png",
-    "cellCrop": [
-      672,
-      672,
-      1344,
-      1344
-    ],
-    "foregroundBounds": [
-      197,
-      140,
-      474,
-      415
-    ],
-    "transform": "matrix(0.07220217 0 0 0.07220217 -12.223827 -8.036101)",
-    "svgFile": "public/icons/ui/repair.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 5918,
-      "green": 1059
-    },
-    "svgSha256": "53993fe6970dddb27ef78e1ca7bc705c7ee3d0c484644808ecf444bbf3343cd5",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "warning",
-    "historyId": "JFWhVyhtW9nPu0YySt7r",
-    "resourceId": "ArRRIszI8Db5Ro6Tzrx8",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926831593_6e1d70e0.png",
-    "sourceSha256": "873002b66dd031455e00d20a7efe6b059798be9e4b1731c9e96100141fa103a3",
-    "sourceFile": "sources/JFWhVyhtW9nPu0YySt7r.png",
-    "cellCrop": [
-      1344,
-      672,
-      2016,
-      1344
-    ],
-    "foregroundBounds": [
-      139,
-      143,
-      440,
-      408
-    ],
-    "transform": "matrix(0.06644518 0 0 0.06644518 -7.235880 -6.305648)",
-    "svgFile": "public/icons/ui/warning.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 5777,
-      "green": 2092
-    },
-    "svgSha256": "31a71740947f3233ffdea6c537847659aebb5ff4e52bbd064d5cbbc29ebdde11",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "check",
-    "historyId": "Io3aKqNDDbbh3GplyHQS",
-    "resourceId": "XBxsrpQ6fX17sZZSw78c",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926836910_b9e33f7a.png",
-    "sourceSha256": "e0021389fec5df95bcb9bba713490486585615a97cf8fbb5afd6abdaf92559cd",
-    "sourceFile": "sources/Io3aKqNDDbbh3GplyHQS.png",
-    "cellCrop": [
-      0,
-      0,
-      672,
-      672
-    ],
-    "foregroundBounds": [
-      218,
-      241,
-      496,
-      520
-    ],
-    "transform": "matrix(0.07168459 0 0 0.07168459 -13.591398 -15.275986)",
-    "svgFile": "public/icons/ui/check.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 5909,
-      "green": 1704
-    },
-    "svgSha256": "087105087f04f6d2276c2dbb97fd9bd76c53fb9fc387cbc27395b238f3db1455",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "close",
-    "historyId": "Io3aKqNDDbbh3GplyHQS",
-    "resourceId": "XBxsrpQ6fX17sZZSw78c",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926836910_b9e33f7a.png",
-    "sourceSha256": "e0021389fec5df95bcb9bba713490486585615a97cf8fbb5afd6abdaf92559cd",
-    "sourceFile": "sources/Io3aKqNDDbbh3GplyHQS.png",
-    "cellCrop": [
-      672,
-      0,
-      1344,
-      672
-    ],
-    "foregroundBounds": [
-      240,
-      288,
-      431,
-      477
-    ],
-    "transform": "matrix(0.10471204 0 0 0.10471204 -23.130890 -28.052356)",
-    "svgFile": "public/icons/ui/close.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 1683,
-      "green": 2173
-    },
-    "svgSha256": "43500068fa3700aa3f3bb762a8a6470e5812db5f6af8cfc786587a266a15ea37",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "plus",
-    "historyId": "Io3aKqNDDbbh3GplyHQS",
-    "resourceId": "XBxsrpQ6fX17sZZSw78c",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926836910_b9e33f7a.png",
-    "sourceSha256": "e0021389fec5df95bcb9bba713490486585615a97cf8fbb5afd6abdaf92559cd",
-    "sourceFile": "sources/Io3aKqNDDbbh3GplyHQS.png",
-    "cellCrop": [
-      1344,
-      0,
-      2016,
-      672
-    ],
-    "foregroundBounds": [
-      190,
-      274,
-      413,
-      489
-    ],
-    "transform": "matrix(0.08968610 0 0 0.08968610 -15.040359 -22.215247)",
-    "svgFile": "public/icons/ui/plus.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 1493,
-      "green": 1708
-    },
-    "svgSha256": "e47c4ea52847146632214b2b378bcc3c70779a637451a59c8238dabe13803d5c",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "minus",
-    "historyId": "Io3aKqNDDbbh3GplyHQS",
-    "resourceId": "XBxsrpQ6fX17sZZSw78c",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926836910_b9e33f7a.png",
-    "sourceSha256": "e0021389fec5df95bcb9bba713490486585615a97cf8fbb5afd6abdaf92559cd",
-    "sourceFile": "sources/Io3aKqNDDbbh3GplyHQS.png",
-    "cellCrop": [
-      0,
-      672,
-      672,
-      1344
-    ],
-    "foregroundBounds": [
-      244,
-      276,
-      503,
-      284
-    ],
-    "transform": "matrix(0.07722008 0 0 0.07722008 -16.841699 -9.621622)",
-    "svgFile": "public/icons/ui/minus.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 1015,
-      "green": 784
-    },
-    "svgSha256": "debbf406bdaa3055cc77fa1001bc487b059da1fe7ee90f068e938287fb436139",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "chevron-right",
-    "historyId": "Io3aKqNDDbbh3GplyHQS",
-    "resourceId": "XBxsrpQ6fX17sZZSw78c",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926836910_b9e33f7a.png",
-    "sourceSha256": "e0021389fec5df95bcb9bba713490486585615a97cf8fbb5afd6abdaf92559cd",
-    "sourceFile": "sources/Io3aKqNDDbbh3GplyHQS.png",
-    "cellCrop": [
-      672,
-      672,
-      1344,
-      1344
-    ],
-    "foregroundBounds": [
-      277,
-      167,
-      400,
-      387
-    ],
-    "transform": "matrix(0.09090909 0 0 0.09090909 -18.772727 -13.181818)",
-    "svgFile": "public/icons/ui/chevron-right.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 1152,
-      "green": 1329
-    },
-    "svgSha256": "2f4c6718aa99038cc2f752d83b21b4040da53f93164215b2407d0f0a6803eede",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "chevron-left",
-    "historyId": "Io3aKqNDDbbh3GplyHQS",
-    "resourceId": "XBxsrpQ6fX17sZZSw78c",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926836910_b9e33f7a.png",
-    "sourceSha256": "e0021389fec5df95bcb9bba713490486585615a97cf8fbb5afd6abdaf92559cd",
-    "sourceFile": "sources/Io3aKqNDDbbh3GplyHQS.png",
-    "cellCrop": [
-      1344,
-      672,
-      2016,
-      1344
-    ],
-    "foregroundBounds": [
-      212,
-      168,
-      335,
-      388
-    ],
-    "transform": "matrix(0.09090909 0 0 0.09090909 -12.863636 -13.272727)",
-    "svgFile": "public/icons/ui/chevron-left.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 1153,
-      "green": 1316
-    },
-    "svgSha256": "aa49988ff504510fb2f82544df2635306bf73a7baefa1b5953ab080619f9f81f",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "chevron-down",
-    "historyId": "pkiwp57xpT1OlfxbHv7b",
-    "resourceId": "QysXGr7lfKVrbf3sbQ26",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926840677_35e8f13e.png",
-    "sourceSha256": "e5eb343b111aca383360e8bede115135d53b3d07fab190dc29a13712a7a95a67",
-    "sourceFile": "sources/pkiwp57xpT1OlfxbHv7b.png",
-    "cellCrop": [
-      0,
-      0,
-      672,
-      672
-    ],
-    "foregroundBounds": [
-      222,
-      332,
-      496,
-      475
-    ],
-    "transform": "matrix(0.07299270 0 0 0.07299270 -14.204380 -17.452555)",
-    "svgFile": "public/icons/ui/chevron-down.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 1368,
-      "green": 1758
-    },
-    "svgSha256": "1871c948a36f14e04d6dc67dea4e412802e50ff3a690378e09bd8483ae56c113",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "arrow-right",
-    "historyId": "pkiwp57xpT1OlfxbHv7b",
-    "resourceId": "QysXGr7lfKVrbf3sbQ26",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926840677_35e8f13e.png",
-    "sourceSha256": "e5eb343b111aca383360e8bede115135d53b3d07fab190dc29a13712a7a95a67",
-    "sourceFile": "sources/pkiwp57xpT1OlfxbHv7b.png",
-    "cellCrop": [
-      672,
-      0,
-      1344,
-      672
-    ],
-    "foregroundBounds": [
-      176,
-      304,
-      489,
-      475
-    ],
-    "transform": "matrix(0.06389776 0 0 0.06389776 -9.246006 -12.888179)",
-    "svgFile": "public/icons/ui/arrow-right.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 3298,
-      "green": 686
-    },
-    "svgSha256": "37fddc3f92035915320160cafdeb1a9d763a796b214f1b7c1592bf9049dc1e59",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "arrow-up",
-    "historyId": "pkiwp57xpT1OlfxbHv7b",
-    "resourceId": "QysXGr7lfKVrbf3sbQ26",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926840677_35e8f13e.png",
-    "sourceSha256": "e5eb343b111aca383360e8bede115135d53b3d07fab190dc29a13712a7a95a67",
-    "sourceFile": "sources/pkiwp57xpT1OlfxbHv7b.png",
-    "cellCrop": [
-      1344,
-      0,
-      2016,
-      672
-    ],
-    "foregroundBounds": [
-      216,
-      226,
-      360,
-      513
-    ],
-    "transform": "matrix(0.06968641 0 0 0.06968641 -8.069686 -13.749129)",
-    "svgFile": "public/icons/ui/arrow-up.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 2938,
-      "green": 770
-    },
-    "svgSha256": "9ad8f45e65a99c12bfb7e9c96cbd3b1bd4625e73a3b612ed79eec0e7486f1590",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "arrow-down",
-    "historyId": "pkiwp57xpT1OlfxbHv7b",
-    "resourceId": "QysXGr7lfKVrbf3sbQ26",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926840677_35e8f13e.png",
-    "sourceSha256": "e5eb343b111aca383360e8bede115135d53b3d07fab190dc29a13712a7a95a67",
-    "sourceFile": "sources/pkiwp57xpT1OlfxbHv7b.png",
-    "cellCrop": [
-      0,
-      672,
-      672,
-      1344
-    ],
-    "foregroundBounds": [
-      285,
-      128,
-      432,
-      393
-    ],
-    "transform": "matrix(0.07547170 0 0 0.07547170 -15.056604 -7.660377)",
-    "svgFile": "public/icons/ui/arrow-down.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 2664,
-      "green": 756
-    },
-    "svgSha256": "2d7045f1c4fbcf829233c173214fd4541a32bbd3f31ad2d284d5bf871dc19b72",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "search",
-    "historyId": "pkiwp57xpT1OlfxbHv7b",
-    "resourceId": "QysXGr7lfKVrbf3sbQ26",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926840677_35e8f13e.png",
-    "sourceSha256": "e5eb343b111aca383360e8bede115135d53b3d07fab190dc29a13712a7a95a67",
-    "sourceFile": "sources/pkiwp57xpT1OlfxbHv7b.png",
-    "cellCrop": [
-      672,
-      672,
-      1344,
-      1344
-    ],
-    "foregroundBounds": [
-      187,
-      133,
-      458,
-      394
-    ],
-    "transform": "matrix(0.07380074 0 0 0.07380074 -11.800738 -7.446494)",
-    "svgFile": "public/icons/ui/search.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 4368,
-      "green": 946
-    },
-    "svgSha256": "981581609f59b00fa14b48fb9acc1ded86e8570f3bf376c8030d12435a91e22e",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "refresh",
-    "historyId": "pkiwp57xpT1OlfxbHv7b",
-    "resourceId": "QysXGr7lfKVrbf3sbQ26",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926840677_35e8f13e.png",
-    "sourceSha256": "e5eb343b111aca383360e8bede115135d53b3d07fab190dc29a13712a7a95a67",
-    "sourceFile": "sources/pkiwp57xpT1OlfxbHv7b.png",
-    "cellCrop": [
-      1344,
-      672,
-      2016,
-      1344
-    ],
-    "foregroundBounds": [
-      170,
-      136,
-      422,
-      386
-    ],
-    "transform": "matrix(0.07936508 0 0 0.07936508 -11.492063 -8.714286)",
-    "svgFile": "public/icons/ui/refresh.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 4182,
-      "green": 2312
-    },
-    "svgSha256": "ceb95032d49694469b125c828806e33c4590e17d88b48755e375f98fd6585079",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "microphone",
-    "historyId": "jQ91kFIJNHkhNbQYKk0z",
-    "resourceId": "50fnbi1Y4YOIyYWVfjWG",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849019_c6934ede.png",
-    "sourceSha256": "771427a80ab45ddc4c6311a88561a2cff1d0ab9f91238f5f20f8f0100d18e3fd",
-    "sourceFile": "sources/jQ91kFIJNHkhNbQYKk0z.png",
-    "cellCrop": [
-      0,
-      0,
-      672,
-      672
-    ],
-    "foregroundBounds": [
-      265,
-      245,
-      460,
-      537
-    ],
-    "transform": "matrix(0.06849315 0 0 0.06849315 -12.828767 -14.780822)",
-    "svgFile": "public/icons/ui/microphone.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 4526,
-      "green": 2475
-    },
-    "svgSha256": "bc28562234eb82a0fc7b6155697ea2eab82cf471119848eca211c10e138c2ac3",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "sound",
-    "historyId": "jQ91kFIJNHkhNbQYKk0z",
-    "resourceId": "50fnbi1Y4YOIyYWVfjWG",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849019_c6934ede.png",
-    "sourceSha256": "771427a80ab45ddc4c6311a88561a2cff1d0ab9f91238f5f20f8f0100d18e3fd",
-    "sourceFile": "sources/jQ91kFIJNHkhNbQYKk0z.png",
-    "cellCrop": [
-      672,
-      0,
-      1344,
-      672
-    ],
-    "foregroundBounds": [
-      176,
-      263,
-      473,
-      520
-    ],
-    "transform": "matrix(0.06734007 0 0 0.06734007 -9.851852 -14.363636)",
-    "svgFile": "public/icons/ui/sound.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 4390,
-      "green": 2832
-    },
-    "svgSha256": "762e297f4d8aeabf72f82eda31d515796e374b61c690600e71bcd759e3fdadfe",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "mute",
-    "historyId": "jQ91kFIJNHkhNbQYKk0z",
-    "resourceId": "50fnbi1Y4YOIyYWVfjWG",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849019_c6934ede.png",
-    "sourceSha256": "771427a80ab45ddc4c6311a88561a2cff1d0ab9f91238f5f20f8f0100d18e3fd",
-    "sourceFile": "sources/jQ91kFIJNHkhNbQYKk0z.png",
-    "cellCrop": [
-      1344,
-      0,
-      2016,
-      672
-    ],
-    "foregroundBounds": [
-      122,
-      264,
-      430,
-      521
-    ],
-    "transform": "matrix(0.06493506 0 0 0.06493506 -5.922078 -13.487013)",
-    "svgFile": "public/icons/ui/mute.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 4383,
-      "green": 2066
-    },
-    "svgSha256": "185db09ce8e9fe150067af541268a365e3cecaaac4fbf58894cf672daa019b80",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "camera",
-    "historyId": "jQ91kFIJNHkhNbQYKk0z",
-    "resourceId": "50fnbi1Y4YOIyYWVfjWG",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849019_c6934ede.png",
-    "sourceSha256": "771427a80ab45ddc4c6311a88561a2cff1d0ab9f91238f5f20f8f0100d18e3fd",
-    "sourceFile": "sources/jQ91kFIJNHkhNbQYKk0z.png",
-    "cellCrop": [
-      0,
-      672,
-      672,
-      1344
-    ],
-    "foregroundBounds": [
-      209,
-      143,
-      519,
-      389
-    ],
-    "transform": "matrix(0.06451613 0 0 0.06451613 -11.483871 -5.161290)",
-    "svgFile": "public/icons/ui/camera.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 6482,
-      "green": 3236
-    },
-    "svgSha256": "225593738b0506ba14083b4d8949b9cfda0211623f216bfb97635f455dbe3653",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "navigate",
-    "historyId": "jQ91kFIJNHkhNbQYKk0z",
-    "resourceId": "50fnbi1Y4YOIyYWVfjWG",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849019_c6934ede.png",
-    "sourceSha256": "771427a80ab45ddc4c6311a88561a2cff1d0ab9f91238f5f20f8f0100d18e3fd",
-    "sourceFile": "sources/jQ91kFIJNHkhNbQYKk0z.png",
-    "cellCrop": [
-      672,
-      672,
-      1344,
-      1344
-    ],
-    "foregroundBounds": [
-      200,
-      142,
-      462,
-      398
-    ],
-    "transform": "matrix(0.07633588 0 0 0.07633588 -13.267176 -8.610687)",
-    "svgFile": "public/icons/ui/navigate.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 5017,
-      "green": 818
-    },
-    "svgSha256": "d661aba7f986de864ade4abbf60d81d9f7c3eee5c13c3cbc845c3881d9ecb8c2",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "bin",
-    "historyId": "jQ91kFIJNHkhNbQYKk0z",
-    "resourceId": "50fnbi1Y4YOIyYWVfjWG",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849019_c6934ede.png",
-    "sourceSha256": "771427a80ab45ddc4c6311a88561a2cff1d0ab9f91238f5f20f8f0100d18e3fd",
-    "sourceFile": "sources/jQ91kFIJNHkhNbQYKk0z.png",
-    "cellCrop": [
-      1344,
-      672,
-      2016,
-      1344
-    ],
-    "foregroundBounds": [
-      178,
-      96,
-      415,
-      421
-    ],
-    "transform": "matrix(0.06153846 0 0 0.06153846 -6.246154 -3.907692)",
-    "svgFile": "public/icons/ui/bin.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 9140,
-      "green": 1485
-    },
-    "svgSha256": "ed21090fdad061e2aaa703b33d980ca14dc81adc2f41412c11b1361e2005d1e8",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "bin-missing",
-    "historyId": "8Rbmwg9zIvNaFDmwoNbv",
-    "resourceId": "WDpKoydsYU7tjA2yRYx5",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926851970_2c148b85.png",
-    "sourceSha256": "90f81f7b178fce68d610725eeef8103cef2c66aff28760eb55f134d563074b51",
-    "sourceFile": "sources/8Rbmwg9zIvNaFDmwoNbv.png",
-    "cellCrop": [
-      0,
-      0,
-      672,
-      672
-    ],
-    "foregroundBounds": [
-      230,
-      254,
-      507,
-      553
-    ],
-    "transform": "matrix(0.06688963 0 0 0.06688963 -12.648829 -14.989967)",
-    "svgFile": "public/icons/ui/bin-missing.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 9732,
-      "green": 2591
-    },
-    "svgSha256": "ebd3ef9fa0b3a3acf135acac16b92b49b8f8f0c0c28f8b233e264c70a25760f7",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "overflow",
-    "historyId": "8Rbmwg9zIvNaFDmwoNbv",
-    "resourceId": "WDpKoydsYU7tjA2yRYx5",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926851970_2c148b85.png",
-    "sourceSha256": "90f81f7b178fce68d610725eeef8103cef2c66aff28760eb55f134d563074b51",
-    "sourceFile": "sources/8Rbmwg9zIvNaFDmwoNbv.png",
-    "cellCrop": [
-      672,
-      0,
-      1344,
-      672
-    ],
-    "foregroundBounds": [
-      213,
-      221,
-      459,
-      559
-    ],
-    "transform": "matrix(0.05917160 0 0 0.05917160 -7.881657 -11.076923)",
-    "svgFile": "public/icons/ui/overflow.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 10454,
-      "green": 1327
-    },
-    "svgSha256": "027b89c10a0df699355762983ac24b82d9f4da61091320bdef02e4262ff7c2aa",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "obstruction",
-    "historyId": "8Rbmwg9zIvNaFDmwoNbv",
-    "resourceId": "WDpKoydsYU7tjA2yRYx5",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926851970_2c148b85.png",
-    "sourceSha256": "90f81f7b178fce68d610725eeef8103cef2c66aff28760eb55f134d563074b51",
-    "sourceFile": "sources/8Rbmwg9zIvNaFDmwoNbv.png",
-    "cellCrop": [
-      1344,
-      0,
-      2016,
-      672
-    ],
-    "foregroundBounds": [
-      153,
-      247,
-      424,
-      552
-    ],
-    "transform": "matrix(0.06557377 0 0 0.06557377 -6.918033 -14.196721)",
-    "svgFile": "public/icons/ui/obstruction.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 4858,
-      "green": 3811
-    },
-    "svgSha256": "312e2bf6ccef7ddc3f95d8d83008ee3bd30fd07269a4f2becd29490ade4b7d6f",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "blocked",
-    "historyId": "8Rbmwg9zIvNaFDmwoNbv",
-    "resourceId": "WDpKoydsYU7tjA2yRYx5",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926851970_2c148b85.png",
-    "sourceSha256": "90f81f7b178fce68d610725eeef8103cef2c66aff28760eb55f134d563074b51",
-    "sourceFile": "sources/8Rbmwg9zIvNaFDmwoNbv.png",
-    "cellCrop": [
-      0,
-      672,
-      672,
-      1344
-    ],
-    "foregroundBounds": [
-      231,
-      144,
-      497,
-      409
-    ],
-    "transform": "matrix(0.07518797 0 0 0.07518797 -15.368421 -8.789474)",
-    "svgFile": "public/icons/ui/blocked.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 5145,
-      "green": 1671
-    },
-    "svgSha256": "0f66fba5e50c36ab06f1add335c7c8b355e666af0f0b20950e6c9c0ef471187f",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "tablet",
-    "historyId": "8Rbmwg9zIvNaFDmwoNbv",
-    "resourceId": "WDpKoydsYU7tjA2yRYx5",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926851970_2c148b85.png",
-    "sourceSha256": "90f81f7b178fce68d610725eeef8103cef2c66aff28760eb55f134d563074b51",
-    "sourceFile": "sources/8Rbmwg9zIvNaFDmwoNbv.png",
-    "cellCrop": [
-      672,
-      672,
-      1344,
-      1344
-    ],
-    "foregroundBounds": [
-      215,
-      127,
-      457,
-      429
-    ],
-    "transform": "matrix(0.06622517 0 0 0.06622517 -10.251656 -6.410596)",
-    "svgFile": "public/icons/ui/tablet.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 11821,
-      "green": 478
-    },
-    "svgSha256": "60eac642fa5e3318f53fbecc882ff2a1632398792c5bb56654ddf60ad7936f7a",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "pause",
-    "historyId": "8Rbmwg9zIvNaFDmwoNbv",
-    "resourceId": "WDpKoydsYU7tjA2yRYx5",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926851970_2c148b85.png",
-    "sourceSha256": "90f81f7b178fce68d610725eeef8103cef2c66aff28760eb55f134d563074b51",
-    "sourceFile": "sources/8Rbmwg9zIvNaFDmwoNbv.png",
-    "cellCrop": [
-      1344,
-      672,
-      2016,
-      1344
-    ],
-    "foregroundBounds": [
-      216,
-      195,
-      363,
-      379
-    ],
-    "transform": "matrix(0.10869565 0 0 0.10869565 -19.467391 -19.195652)",
-    "svgFile": "public/icons/ui/pause.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 2664,
-      "green": 2850
-    },
-    "svgSha256": "bba167eb3829505bfe5caa77439e3ec1d1f6b159a0500de64ecfd5e968d1c614",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "measure",
-    "historyId": "SRkk56a15gbxUjhlKxsB",
-    "resourceId": "QIkap6d3oqPyQ5ospOeH",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849775_19644623.png",
-    "sourceSha256": "788125f5a0855ebf98cc8be8b9d49fca529c1e70ac03c2dc463cc89347ffd03c",
-    "sourceFile": "sources/SRkk56a15gbxUjhlKxsB.png",
-    "cellCrop": [
-      0,
-      0,
-      672,
-      672
-    ],
-    "foregroundBounds": [
-      207,
-      224,
-      528,
-      545
-    ],
-    "transform": "matrix(0.06230530 0 0 0.06230530 -10.897196 -11.956386)",
-    "svgFile": "public/icons/ui/measure.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 5801,
-      "green": 739
-    },
-    "svgSha256": "9721285cc59d4453128beec23a93843725caf261276e7a1a7af768b712428d08",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "info",
-    "historyId": "SRkk56a15gbxUjhlKxsB",
-    "resourceId": "QIkap6d3oqPyQ5ospOeH",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849775_19644623.png",
-    "sourceSha256": "788125f5a0855ebf98cc8be8b9d49fca529c1e70ac03c2dc463cc89347ffd03c",
-    "sourceFile": "sources/SRkk56a15gbxUjhlKxsB.png",
-    "cellCrop": [
-      672,
-      0,
-      1344,
-      672
-    ],
-    "foregroundBounds": [
-      182,
-      236,
-      489,
-      543
-    ],
-    "transform": "matrix(0.06514658 0 0 0.06514658 -9.856678 -13.374593)",
-    "svgFile": "public/icons/ui/info.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 5983,
-      "green": 1991
-    },
-    "svgSha256": "acbb1486d557ea5b14e1b83889fef2b762ba034f0a55813f78e69013f95e916c",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "download",
-    "historyId": "SRkk56a15gbxUjhlKxsB",
-    "resourceId": "QIkap6d3oqPyQ5ospOeH",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849775_19644623.png",
-    "sourceSha256": "788125f5a0855ebf98cc8be8b9d49fca529c1e70ac03c2dc463cc89347ffd03c",
-    "sourceFile": "sources/SRkk56a15gbxUjhlKxsB.png",
-    "cellCrop": [
-      1344,
-      0,
-      2016,
-      672
-    ],
-    "foregroundBounds": [
-      149,
-      257,
-      453,
-      527
-    ],
-    "transform": "matrix(0.06578947 0 0 0.06578947 -7.802632 -13.789474)",
-    "svgFile": "public/icons/ui/download.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 2965,
-      "green": 2493
-    },
-    "svgSha256": "7b7f383216d40edfd54723fc1fe12883a6fa3e7546d27504243843511e3fcaff",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "attachment",
-    "historyId": "SRkk56a15gbxUjhlKxsB",
-    "resourceId": "QIkap6d3oqPyQ5ospOeH",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849775_19644623.png",
-    "sourceSha256": "788125f5a0855ebf98cc8be8b9d49fca529c1e70ac03c2dc463cc89347ffd03c",
-    "sourceFile": "sources/SRkk56a15gbxUjhlKxsB.png",
-    "cellCrop": [
-      0,
-      672,
-      672,
-      1344
-    ],
-    "foregroundBounds": [
-      211,
-      132,
-      506,
-      425
-    ],
-    "transform": "matrix(0.06779661 0 0 0.06779661 -12.305085 -6.881356)",
-    "svgFile": "public/icons/ui/attachment.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 6807,
-      "green": 1448
-    },
-    "svgSha256": "319d67f4babe06d3eab05747bb30f50003365bfe04f94cdd318e6e2bc7a418be",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "car",
-    "historyId": "SRkk56a15gbxUjhlKxsB",
-    "resourceId": "QIkap6d3oqPyQ5ospOeH",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849775_19644623.png",
-    "sourceSha256": "788125f5a0855ebf98cc8be8b9d49fca529c1e70ac03c2dc463cc89347ffd03c",
-    "sourceFile": "sources/SRkk56a15gbxUjhlKxsB.png",
-    "cellCrop": [
-      672,
-      672,
-      1344,
-      1344
-    ],
-    "foregroundBounds": [
-      174,
-      171,
-      498,
-      422
-    ],
-    "transform": "matrix(0.06172840 0 0 0.06172840 -8.740741 -6.302469)",
-    "svgFile": "public/icons/ui/car.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 9683,
-      "green": 3457
-    },
-    "svgSha256": "f0f9246ca83907af9561eabb055c9385e1ce2e62b8bc85f46308c460f825efc3",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "van",
-    "historyId": "SRkk56a15gbxUjhlKxsB",
-    "resourceId": "QIkap6d3oqPyQ5ospOeH",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849775_19644623.png",
-    "sourceSha256": "788125f5a0855ebf98cc8be8b9d49fca529c1e70ac03c2dc463cc89347ffd03c",
-    "sourceFile": "sources/SRkk56a15gbxUjhlKxsB.png",
-    "cellCrop": [
-      1344,
-      672,
-      2016,
-      1344
-    ],
-    "foregroundBounds": [
-      135,
-      115,
-      467,
-      434
-    ],
-    "transform": "matrix(0.06024096 0 0 0.06024096 -6.132530 -4.536145)",
-    "svgFile": "public/icons/ui/van.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 11372,
-      "green": 4072
-    },
-    "svgSha256": "ccdc704515161498e11890111f507efceba092ecdf787db2e5ae12dee31eab99",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "container-truck",
-    "historyId": "mFu4sInng2hhqcKJk3Mt",
-    "resourceId": "2h1bliWccJjiR1Y7A9nG",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926856924_be8a2359.png",
-    "sourceSha256": "e15de88d17bb7937ab459359988be149d37445458735dd02dc37498f1ccd25b0",
-    "sourceFile": "sources/mFu4sInng2hhqcKJk3Mt.png",
-    "cellCrop": [
-      0,
-      0,
-      672,
-      672
-    ],
-    "foregroundBounds": [
-      171,
-      280,
-      594,
-      510
-    ],
-    "transform": "matrix(0.04728132 0 0 0.04728132 -6.085106 -6.676123)",
-    "svgFile": "public/icons/ui/container-truck.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 12221,
-      "green": 1293
-    },
-    "svgSha256": "afad55fe785db7cc9baf35468d965d3a8a569eae6ce5131802aedb069b74ceab",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "special-vehicle",
-    "historyId": "mFu4sInng2hhqcKJk3Mt",
-    "resourceId": "2h1bliWccJjiR1Y7A9nG",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926856924_be8a2359.png",
-    "sourceSha256": "e15de88d17bb7937ab459359988be149d37445458735dd02dc37498f1ccd25b0",
-    "sourceFile": "sources/mFu4sInng2hhqcKJk3Mt.png",
-    "cellCrop": [
-      672,
-      0,
-      1344,
-      672
-    ],
-    "foregroundBounds": [
-      193,
-      258,
-      509,
-      511
-    ],
-    "transform": "matrix(0.06329114 0 0 0.06329114 -10.215190 -12.335443)",
-    "svgFile": "public/icons/ui/special-vehicle.svg",
-    "userApprovedExact": false,
-    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
-    "maskPixels": {
-      "graphite": 8609,
-      "green": 1602
-    },
-    "svgSha256": "5549fba47f93183af42b59293038a33dcea24ce39e01760e8f6a8636d722e2dc",
-    "approvalStatus": "exact-approved-original-not-provided"
-  },
-  {
-    "name": "trailer",
-    "historyId": "mFu4sInng2hhqcKJk3Mt",
-    "resourceId": "2h1bliWccJjiR1Y7A9nG",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926856924_be8a2359.png",
-    "sourceSha256": "e15de88d17bb7937ab459359988be149d37445458735dd02dc37498f1ccd25b0",
-    "sourceFile": "sources/mFu4sInng2hhqcKJk3Mt.png",
+    "sourceType": "openart-generation",
+    "historyId": "hia6BDyVhvAmnDeTTQML",
+    "resourceId": "2uSkn94aHx31SCGovEYm",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963382873_83addd07.png",
+    "sourceSha256": "c8e681b57eed6eef0da8d77698f59f64d0940b56a6c23968fa74e9c3e8cce190",
+    "sourceFile": "sources/hia6BDyVhvAmnDeTTQML.png",
     "cellCrop": [
       1344,
       0,
@@ -1880,28 +263,959 @@
     ],
     "foregroundBounds": [
       107,
-      292,
-      505,
-      515
+      239,
+      459,
+      512
     ],
-    "transform": "matrix(0.05025126 0 0 0.05025126 -3.376884 -8.276382)",
-    "svgFile": "public/icons/ui/trailer.svg",
+    "transform": "matrix(0.05681818 0 0 0.05681818 -4.079545 -9.335227)",
+    "svgFile": "public/icons/ui/team.svg",
     "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 8363,
-      "green": 1124
+      "graphite": 19558,
+      "green": 6196
     },
-    "svgSha256": "ceb0047c3f344648bd49932e92cedb9ed43ebe2e6771d46e618be13d81bb2a77",
-    "approvalStatus": "exact-approved-original-not-provided"
+    "svgSha256": "dd8b462d79d6482414a034f12f43d8bb340df8956626076bf1d6ec04dd9514da"
   },
   {
-    "name": "map-truck",
-    "historyId": "mFu4sInng2hhqcKJk3Mt",
-    "resourceId": "2h1bliWccJjiR1Y7A9nG",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926856924_be8a2359.png",
-    "sourceSha256": "e15de88d17bb7937ab459359988be149d37445458735dd02dc37498f1ccd25b0",
-    "sourceFile": "sources/mFu4sInng2hhqcKJk3Mt.png",
+    "name": "dashboard",
+    "sourceType": "openart-generation",
+    "historyId": "hia6BDyVhvAmnDeTTQML",
+    "resourceId": "2uSkn94aHx31SCGovEYm",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963382873_83addd07.png",
+    "sourceSha256": "c8e681b57eed6eef0da8d77698f59f64d0940b56a6c23968fa74e9c3e8cce190",
+    "sourceFile": "sources/hia6BDyVhvAmnDeTTQML.png",
+    "cellCrop": [
+      0,
+      672,
+      672,
+      1344
+    ],
+    "foregroundBounds": [
+      197,
+      133,
+      522,
+      418
+    ],
+    "transform": "matrix(0.06153846 0 0 0.06153846 -10.123077 -4.953846)",
+    "svgFile": "public/icons/ui/dashboard.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 13942,
+      "green": 11520
+    },
+    "svgSha256": "a7fe1fd36a3bfbbcf9cc131477e156be1e0bb2bac2cf313e8ca0c50f0aa68dfb"
+  },
+  {
+    "name": "settings",
+    "sourceType": "openart-generation",
+    "historyId": "hia6BDyVhvAmnDeTTQML",
+    "resourceId": "2uSkn94aHx31SCGovEYm",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963382873_83addd07.png",
+    "sourceSha256": "c8e681b57eed6eef0da8d77698f59f64d0940b56a6c23968fa74e9c3e8cce190",
+    "sourceFile": "sources/hia6BDyVhvAmnDeTTQML.png",
+    "cellCrop": [
+      672,
+      672,
+      1344,
+      1344
+    ],
+    "foregroundBounds": [
+      172,
+      112,
+      500,
+      436
+    ],
+    "transform": "matrix(0.06097561 0 0 0.06097561 -8.487805 -4.707317)",
+    "svgFile": "public/icons/ui/settings.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 18409,
+      "green": 6414
+    },
+    "svgSha256": "e21f2f8b18c1b56616525ab7967d76fe942c392afaa154e3c7fd41316d1cb71d"
+  },
+  {
+    "name": "notification",
+    "sourceType": "openart-generation",
+    "historyId": "hia6BDyVhvAmnDeTTQML",
+    "resourceId": "2uSkn94aHx31SCGovEYm",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963382873_83addd07.png",
+    "sourceSha256": "c8e681b57eed6eef0da8d77698f59f64d0940b56a6c23968fa74e9c3e8cce190",
+    "sourceFile": "sources/hia6BDyVhvAmnDeTTQML.png",
+    "cellCrop": [
+      1344,
+      672,
+      2016,
+      1344
+    ],
+    "foregroundBounds": [
+      158,
+      133,
+      419,
+      425
+    ],
+    "transform": "matrix(0.06849315 0 0 0.06849315 -7.760274 -7.109589)",
+    "svgFile": "public/icons/ui/notification.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 13102,
+      "green": 3506
+    },
+    "svgSha256": "afc0117ead179400cfbc3d7dd24790a1d54cdbf8f7a981a34e064b4176970061"
+  },
+  {
+    "name": "arrow-left",
+    "sourceType": "openart-generation",
+    "historyId": "Uo8P2RrXphG83wRTrEr1",
+    "resourceId": "ep5btR5fiiVYo6Mj3wvJ",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975406517_7cca75f1.png",
+    "sourceSha256": "3ef51b2baa1bcdad188c914e0361720ddac80f7503a82a797be9d2e86e006f34",
+    "sourceFile": "sources/Uo8P2RrXphG83wRTrEr1.png",
+    "cellCrop": [
+      0,
+      0,
+      672,
+      672
+    ],
+    "foregroundBounds": [
+      203,
+      277,
+      529,
+      486
+    ],
+    "transform": "matrix(0.06134969 0 0 0.06134969 -10.453988 -11.404908)",
+    "svgFile": "public/icons/ui/arrow-left.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 6191,
+      "green": 1304
+    },
+    "svgSha256": "24efed83ab466e6484dd5de7594d19f556ced167fc650845ef38bd89d07c51f2"
+  },
+  {
+    "name": "health",
+    "sourceType": "openart-generation",
+    "historyId": "Uo8P2RrXphG83wRTrEr1",
+    "resourceId": "ep5btR5fiiVYo6Mj3wvJ",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975406517_7cca75f1.png",
+    "sourceSha256": "3ef51b2baa1bcdad188c914e0361720ddac80f7503a82a797be9d2e86e006f34",
+    "sourceFile": "sources/Uo8P2RrXphG83wRTrEr1.png",
+    "cellCrop": [
+      672,
+      0,
+      1344,
+      672
+    ],
+    "foregroundBounds": [
+      175,
+      218,
+      497,
+      516
+    ],
+    "transform": "matrix(0.06211180 0 0 0.06211180 -8.869565 -10.795031)",
+    "svgFile": "public/icons/ui/health.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 14294,
+      "green": 4006
+    },
+    "svgSha256": "7d68f0243b5b8b77631b473eae1fb551afa893ba4b1a7d9bf743ff7c1247bd4f"
+  },
+  {
+    "name": "care",
+    "sourceType": "openart-generation",
+    "historyId": "Uo8P2RrXphG83wRTrEr1",
+    "resourceId": "ep5btR5fiiVYo6Mj3wvJ",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975406517_7cca75f1.png",
+    "sourceSha256": "3ef51b2baa1bcdad188c914e0361720ddac80f7503a82a797be9d2e86e006f34",
+    "sourceFile": "sources/Uo8P2RrXphG83wRTrEr1.png",
+    "cellCrop": [
+      1344,
+      0,
+      2016,
+      672
+    ],
+    "foregroundBounds": [
+      140,
+      246,
+      462,
+      538
+    ],
+    "transform": "matrix(0.06211180 0 0 0.06211180 -6.695652 -12.347826)",
+    "svgFile": "public/icons/ui/care.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 11124,
+      "green": 3540
+    },
+    "svgSha256": "16880e2a473efc8c8815bf3324053fe8c7cdd2e636c4103f89cab5a94e1ff32a"
+  },
+  {
+    "name": "time",
+    "sourceType": "openart-generation",
+    "historyId": "Uo8P2RrXphG83wRTrEr1",
+    "resourceId": "ep5btR5fiiVYo6Mj3wvJ",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975406517_7cca75f1.png",
+    "sourceSha256": "3ef51b2baa1bcdad188c914e0361720ddac80f7503a82a797be9d2e86e006f34",
+    "sourceFile": "sources/Uo8P2RrXphG83wRTrEr1.png",
+    "cellCrop": [
+      0,
+      672,
+      672,
+      1344
+    ],
+    "foregroundBounds": [
+      201,
+      129,
+      517,
+      442
+    ],
+    "transform": "matrix(0.06329114 0 0 0.06329114 -10.721519 -6.069620)",
+    "svgFile": "public/icons/ui/time.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 10946,
+      "green": 2860
+    },
+    "svgSha256": "b3b9c538827b5b72f3ada1819c83e0b390b9e88c93b1f93d7e6c4ada5d69e5c5"
+  },
+  {
+    "name": "calendar",
+    "sourceType": "openart-generation",
+    "historyId": "Uo8P2RrXphG83wRTrEr1",
+    "resourceId": "ep5btR5fiiVYo6Mj3wvJ",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975406517_7cca75f1.png",
+    "sourceSha256": "3ef51b2baa1bcdad188c914e0361720ddac80f7503a82a797be9d2e86e006f34",
+    "sourceFile": "sources/Uo8P2RrXphG83wRTrEr1.png",
+    "cellCrop": [
+      672,
+      672,
+      1344,
+      1344
+    ],
+    "foregroundBounds": [
+      178,
+      119,
+      494,
+      429
+    ],
+    "transform": "matrix(0.06329114 0 0 0.06329114 -9.265823 -5.341772)",
+    "svgFile": "public/icons/ui/calendar.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 16864,
+      "green": 3450
+    },
+    "svgSha256": "a8870d948d322d2728123933995823954f7118748d41ed8fd6adeb208c061e5b"
+  },
+  {
+    "name": "mail",
+    "sourceType": "openart-generation",
+    "historyId": "Uo8P2RrXphG83wRTrEr1",
+    "resourceId": "ep5btR5fiiVYo6Mj3wvJ",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975406517_7cca75f1.png",
+    "sourceSha256": "3ef51b2baa1bcdad188c914e0361720ddac80f7503a82a797be9d2e86e006f34",
+    "sourceFile": "sources/Uo8P2RrXphG83wRTrEr1.png",
+    "cellCrop": [
+      1344,
+      672,
+      2016,
+      1344
+    ],
+    "foregroundBounds": [
+      134,
+      173,
+      470,
+      400
+    ],
+    "transform": "matrix(0.05952381 0 0 0.05952381 -5.976190 -5.053571)",
+    "svgFile": "public/icons/ui/mail.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 11707,
+      "green": 4650
+    },
+    "svgSha256": "c0a87c9ff2a971ea6970407ffdb7f1d761e2bdb2112c870d0758af7d9583eed9"
+  },
+  {
+    "name": "message",
+    "sourceType": "openart-generation",
+    "historyId": "pqAVwi0bHOobrYDvdNhu",
+    "resourceId": "RtVWFFkutD8cD7Q0E1nU",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963393044_bd754e1e.png",
+    "sourceSha256": "c6046409a4803fca8dc6849054d7bca98ad218144c6d272c46d5e5345e9be112",
+    "sourceFile": "sources/pqAVwi0bHOobrYDvdNhu.png",
+    "cellCrop": [
+      0,
+      0,
+      672,
+      672
+    ],
+    "foregroundBounds": [
+      235,
+      236,
+      535,
+      509
+    ],
+    "transform": "matrix(0.06666667 0 0 0.06666667 -13.666667 -12.833333)",
+    "svgFile": "public/icons/ui/message.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 19329,
+      "green": 2410
+    },
+    "svgSha256": "b87ee5383ebce796caf606f7a7024daae4aede94c93daa89aaa25a33433bc504"
+  },
+  {
+    "name": "service",
+    "sourceType": "openart-generation",
+    "historyId": "pqAVwi0bHOobrYDvdNhu",
+    "resourceId": "RtVWFFkutD8cD7Q0E1nU",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963393044_bd754e1e.png",
+    "sourceSha256": "c6046409a4803fca8dc6849054d7bca98ad218144c6d272c46d5e5345e9be112",
+    "sourceFile": "sources/pqAVwi0bHOobrYDvdNhu.png",
+    "cellCrop": [
+      672,
+      0,
+      1344,
+      672
+    ],
+    "foregroundBounds": [
+      187,
+      197,
+      493,
+      507
+    ],
+    "transform": "matrix(0.06451613 0 0 0.06451613 -9.935484 -10.709677)",
+    "svgFile": "public/icons/ui/service.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 16576,
+      "green": 1813
+    },
+    "svgSha256": "a58ebd73ccadca5caebbd4d2fe8b7106e3599e63617fbbc0d30e81fc2b355355"
+  },
+  {
+    "name": "tyres",
+    "sourceType": "openart-generation",
+    "historyId": "pqAVwi0bHOobrYDvdNhu",
+    "resourceId": "RtVWFFkutD8cD7Q0E1nU",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963393044_bd754e1e.png",
+    "sourceSha256": "c6046409a4803fca8dc6849054d7bca98ad218144c6d272c46d5e5345e9be112",
+    "sourceFile": "sources/pqAVwi0bHOobrYDvdNhu.png",
+    "cellCrop": [
+      1344,
+      0,
+      2016,
+      672
+    ],
+    "foregroundBounds": [
+      122,
+      212,
+      442,
+      526
+    ],
+    "transform": "matrix(0.06250000 0 0 0.06250000 -5.625000 -11.062500)",
+    "svgFile": "public/icons/ui/tyres.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 18350,
+      "green": 7510
+    },
+    "svgSha256": "63122485bd1d96a04611422a32406850392aa3531c220b159a21f6cd1f2bacb6"
+  },
+  {
+    "name": "routes",
+    "sourceType": "openart-generation",
+    "historyId": "pqAVwi0bHOobrYDvdNhu",
+    "resourceId": "RtVWFFkutD8cD7Q0E1nU",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963393044_bd754e1e.png",
+    "sourceSha256": "c6046409a4803fca8dc6849054d7bca98ad218144c6d272c46d5e5345e9be112",
+    "sourceFile": "sources/pqAVwi0bHOobrYDvdNhu.png",
+    "cellCrop": [
+      0,
+      672,
+      672,
+      1344
+    ],
+    "foregroundBounds": [
+      223,
+      116,
+      540,
+      437
+    ],
+    "transform": "matrix(0.06230530 0 0 0.06230530 -11.769470 -5.227414)",
+    "svgFile": "public/icons/ui/routes.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 15220,
+      "green": 3539
+    },
+    "svgSha256": "e1773aa444b346597e094a231a4f64703a30aeb05310bfe4329ffc03ecfa9610"
+  },
+  {
+    "name": "sampling",
+    "sourceType": "openart-generation",
+    "historyId": "pqAVwi0bHOobrYDvdNhu",
+    "resourceId": "RtVWFFkutD8cD7Q0E1nU",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963393044_bd754e1e.png",
+    "sourceSha256": "c6046409a4803fca8dc6849054d7bca98ad218144c6d272c46d5e5345e9be112",
+    "sourceFile": "sources/pqAVwi0bHOobrYDvdNhu.png",
+    "cellCrop": [
+      672,
+      672,
+      1344,
+      1344
+    ],
+    "foregroundBounds": [
+      198,
+      113,
+      474,
+      437
+    ],
+    "transform": "matrix(0.06172840 0 0 0.06172840 -8.740741 -4.975309)",
+    "svgFile": "public/icons/ui/sampling.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 15740,
+      "green": 3141
+    },
+    "svgSha256": "c385a972f684f59c7e23fa94b908572bbc375dbc941fd082d40dfa06bcdedd83"
+  },
+  {
+    "name": "customers",
+    "sourceType": "openart-generation",
+    "historyId": "pqAVwi0bHOobrYDvdNhu",
+    "resourceId": "RtVWFFkutD8cD7Q0E1nU",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963393044_bd754e1e.png",
+    "sourceSha256": "c6046409a4803fca8dc6849054d7bca98ad218144c6d272c46d5e5345e9be112",
+    "sourceFile": "sources/pqAVwi0bHOobrYDvdNhu.png",
+    "cellCrop": [
+      1344,
+      672,
+      2016,
+      1344
+    ],
+    "foregroundBounds": [
+      122,
+      127,
+      449,
+      437
+    ],
+    "transform": "matrix(0.06116208 0 0 0.06116208 -5.461774 -5.247706)",
+    "svgFile": "public/icons/ui/customers.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 33427,
+      "green": 3528
+    },
+    "svgSha256": "6fda2216e7b5b8ad2149f21067b9d86c772202660a55bf1659279fa70e19ec74"
+  },
+  {
+    "name": "costs",
+    "sourceType": "openart-generation",
+    "historyId": "Nebu7uzCwoA7Ostkh7Se",
+    "resourceId": "FYUoAvlFyncIdtHVPaDn",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963397451_3f541eb5.png",
+    "sourceSha256": "9723d2a52553178b104334112d75a2dda6e7698034cccd836b3ab485d05abd91",
+    "sourceFile": "sources/Nebu7uzCwoA7Ostkh7Se.png",
+    "cellCrop": [
+      0,
+      0,
+      672,
+      672
+    ],
+    "foregroundBounds": [
+      226,
+      235,
+      563,
+      524
+    ],
+    "transform": "matrix(0.05934718 0 0 0.05934718 -11.412463 -10.522255)",
+    "svgFile": "public/icons/ui/costs.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 26691,
+      "green": 1262
+    },
+    "svgSha256": "cc4ca1558f341a4c084f32eb53f64808b663252179ad0f9e067cf4195e1cff0e"
+  },
+  {
+    "name": "reports",
+    "sourceType": "openart-generation",
+    "historyId": "Nebu7uzCwoA7Ostkh7Se",
+    "resourceId": "FYUoAvlFyncIdtHVPaDn",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963397451_3f541eb5.png",
+    "sourceSha256": "9723d2a52553178b104334112d75a2dda6e7698034cccd836b3ab485d05abd91",
+    "sourceFile": "sources/Nebu7uzCwoA7Ostkh7Se.png",
+    "cellCrop": [
+      672,
+      0,
+      1344,
+      672
+    ],
+    "foregroundBounds": [
+      194,
+      214,
+      470,
+      537
+    ],
+    "transform": "matrix(0.06191950 0 0 0.06191950 -8.557276 -11.250774)",
+    "svgFile": "public/icons/ui/reports.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 24588,
+      "green": 4270
+    },
+    "svgSha256": "a1fb84a27e45a1c9d5fda9191b467d57320d96f99166fb0820f759d89a506c46"
+  },
+  {
+    "name": "users",
+    "sourceType": "openart-generation",
+    "historyId": "Nebu7uzCwoA7Ostkh7Se",
+    "resourceId": "FYUoAvlFyncIdtHVPaDn",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963397451_3f541eb5.png",
+    "sourceSha256": "9723d2a52553178b104334112d75a2dda6e7698034cccd836b3ab485d05abd91",
+    "sourceFile": "sources/Nebu7uzCwoA7Ostkh7Se.png",
+    "cellCrop": [
+      1344,
+      0,
+      2016,
+      672
+    ],
+    "foregroundBounds": [
+      117,
+      211,
+      467,
+      553
+    ],
+    "transform": "matrix(0.05714286 0 0 0.05714286 -4.685714 -9.828571)",
+    "svgFile": "public/icons/ui/users.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 22360,
+      "green": 2043
+    },
+    "svgSha256": "c1e041206dd717bd9b17d3b60f503f0d8b0cdd28a16df441bb79e8da8590f617"
+  },
+  {
+    "name": "system",
+    "sourceType": "openart-generation",
+    "historyId": "Nebu7uzCwoA7Ostkh7Se",
+    "resourceId": "FYUoAvlFyncIdtHVPaDn",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963397451_3f541eb5.png",
+    "sourceSha256": "9723d2a52553178b104334112d75a2dda6e7698034cccd836b3ab485d05abd91",
+    "sourceFile": "sources/Nebu7uzCwoA7Ostkh7Se.png",
+    "cellCrop": [
+      0,
+      672,
+      672,
+      1344
+    ],
+    "foregroundBounds": [
+      212,
+      137,
+      557,
+      429
+    ],
+    "transform": "matrix(0.05797101 0 0 0.05797101 -10.289855 -4.405797)",
+    "svgFile": "public/icons/ui/system.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 21491,
+      "green": 7756
+    },
+    "svgSha256": "7643b759cf2283e2a19453fd929c2c74d1831cf9133495d8c62fb3186ee56b39"
+  },
+  {
+    "name": "repair",
+    "sourceType": "openart-generation",
+    "historyId": "Nebu7uzCwoA7Ostkh7Se",
+    "resourceId": "FYUoAvlFyncIdtHVPaDn",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963397451_3f541eb5.png",
+    "sourceSha256": "9723d2a52553178b104334112d75a2dda6e7698034cccd836b3ab485d05abd91",
+    "sourceFile": "sources/Nebu7uzCwoA7Ostkh7Se.png",
+    "cellCrop": [
+      672,
+      672,
+      1344,
+      1344
+    ],
+    "foregroundBounds": [
+      180,
+      124,
+      489,
+      429
+    ],
+    "transform": "matrix(0.06472492 0 0 0.06472492 -9.650485 -5.896440)",
+    "svgFile": "public/icons/ui/repair.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 17490,
+      "green": 3981
+    },
+    "svgSha256": "e9a95d977478783d60f1f21664d59334eaa195a2c6bd5c050859d5359a50ea02"
+  },
+  {
+    "name": "warning",
+    "sourceType": "openart-generation",
+    "historyId": "Nebu7uzCwoA7Ostkh7Se",
+    "resourceId": "FYUoAvlFyncIdtHVPaDn",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963397451_3f541eb5.png",
+    "sourceSha256": "9723d2a52553178b104334112d75a2dda6e7698034cccd836b3ab485d05abd91",
+    "sourceFile": "sources/Nebu7uzCwoA7Ostkh7Se.png",
+    "cellCrop": [
+      1344,
+      672,
+      2016,
+      1344
+    ],
+    "foregroundBounds": [
+      120,
+      136,
+      446,
+      420
+    ],
+    "transform": "matrix(0.06134969 0 0 0.06134969 -5.361963 -5.055215)",
+    "svgFile": "public/icons/ui/warning.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 15192,
+      "green": 3828
+    },
+    "svgSha256": "5a4aff9f178e76007e7ee22cfcaaf1ff7641aa69b27599a4335868bceafd02af"
+  },
+  {
+    "name": "check",
+    "sourceType": "openart-generation",
+    "historyId": "YBpqsnth84iaMtP1ZYJz",
+    "resourceId": "gp1MCFxNoYzByg4VZkEN",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975411782_23deb105.png",
+    "sourceSha256": "374cddd371d7f3c9fe336e7aecd16c951d7274a4955236844139a7c94c0b48a3",
+    "sourceFile": "sources/YBpqsnth84iaMtP1ZYJz.png",
+    "cellCrop": [
+      0,
+      0,
+      672,
+      672
+    ],
+    "foregroundBounds": [
+      231,
+      240,
+      518,
+      525
+    ],
+    "transform": "matrix(0.06968641 0 0 0.06968641 -14.097561 -14.655052)",
+    "svgFile": "public/icons/ui/check.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 13068,
+      "green": 3489
+    },
+    "svgSha256": "a2c280dcafeee79a9ebedfad1552fa122c4ad91befc4912fd01d598a872bedc2"
+  },
+  {
+    "name": "close",
+    "sourceType": "openart-generation",
+    "historyId": "YBpqsnth84iaMtP1ZYJz",
+    "resourceId": "gp1MCFxNoYzByg4VZkEN",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975411782_23deb105.png",
+    "sourceSha256": "374cddd371d7f3c9fe336e7aecd16c951d7274a4955236844139a7c94c0b48a3",
+    "sourceFile": "sources/YBpqsnth84iaMtP1ZYJz.png",
+    "cellCrop": [
+      672,
+      0,
+      1344,
+      672
+    ],
+    "foregroundBounds": [
+      226,
+      275,
+      444,
+      486
+    ],
+    "transform": "matrix(0.09174312 0 0 0.09174312 -18.733945 -22.908257)",
+    "svgFile": "public/icons/ui/close.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 4213,
+      "green": 4761
+    },
+    "svgSha256": "ab944edba90a4a58029ed590ca92cad478d5fa3c1b1c78ebb64e3a938bf4b9c0"
+  },
+  {
+    "name": "plus",
+    "sourceType": "openart-generation",
+    "historyId": "YBpqsnth84iaMtP1ZYJz",
+    "resourceId": "gp1MCFxNoYzByg4VZkEN",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975411782_23deb105.png",
+    "sourceSha256": "374cddd371d7f3c9fe336e7aecd16c951d7274a4955236844139a7c94c0b48a3",
+    "sourceFile": "sources/YBpqsnth84iaMtP1ZYJz.png",
+    "cellCrop": [
+      1344,
+      0,
+      2016,
+      672
+    ],
+    "foregroundBounds": [
+      153,
+      262,
+      409,
+      501
+    ],
+    "transform": "matrix(0.07812500 0 0 0.07812500 -9.953125 -17.804688)",
+    "svgFile": "public/icons/ui/plus.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 3481,
+      "green": 4003
+    },
+    "svgSha256": "171bdeb5eb499dc410d7c45795ba371ac26938b6d31b3751471fd9a7dbaaa5cb"
+  },
+  {
+    "name": "minus",
+    "sourceType": "openart-generation",
+    "historyId": "YBpqsnth84iaMtP1ZYJz",
+    "resourceId": "gp1MCFxNoYzByg4VZkEN",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975411782_23deb105.png",
+    "sourceSha256": "374cddd371d7f3c9fe336e7aecd16c951d7274a4955236844139a7c94c0b48a3",
+    "sourceFile": "sources/YBpqsnth84iaMtP1ZYJz.png",
+    "cellCrop": [
+      0,
+      672,
+      672,
+      1344
+    ],
+    "foregroundBounds": [
+      231,
+      266,
+      519,
+      283
+    ],
+    "transform": "matrix(0.06944444 0 0 0.06944444 -14.041667 -7.062500)",
+    "svgFile": "public/icons/ui/minus.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 2688,
+      "green": 1988
+    },
+    "svgSha256": "38998a7fed24230027c37c3ec59d32ee59af835d351815dcaa1fd9c345861c95"
+  },
+  {
+    "name": "chevron-right",
+    "sourceType": "openart-generation",
+    "historyId": "YBpqsnth84iaMtP1ZYJz",
+    "resourceId": "gp1MCFxNoYzByg4VZkEN",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975411782_23deb105.png",
+    "sourceSha256": "374cddd371d7f3c9fe336e7aecd16c951d7274a4955236844139a7c94c0b48a3",
+    "sourceFile": "sources/YBpqsnth84iaMtP1ZYJz.png",
+    "cellCrop": [
+      672,
+      672,
+      1344,
+      1344
+    ],
+    "foregroundBounds": [
+      271,
+      142,
+      403,
+      397
+    ],
+    "transform": "matrix(0.07843137 0 0 0.07843137 -14.431373 -9.137255)",
+    "svgFile": "public/icons/ui/chevron-right.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 2619,
+      "green": 2879
+    },
+    "svgSha256": "a46398185ff972fa57a085a22837124b9d34ab1d5e73b1a21cf7f9853f523f0c"
+  },
+  {
+    "name": "chevron-left",
+    "sourceType": "openart-generation",
+    "historyId": "YBpqsnth84iaMtP1ZYJz",
+    "resourceId": "gp1MCFxNoYzByg4VZkEN",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975411782_23deb105.png",
+    "sourceSha256": "374cddd371d7f3c9fe336e7aecd16c951d7274a4955236844139a7c94c0b48a3",
+    "sourceFile": "sources/YBpqsnth84iaMtP1ZYJz.png",
+    "cellCrop": [
+      1344,
+      672,
+      2016,
+      1344
+    ],
+    "foregroundBounds": [
+      226,
+      141,
+      359,
+      397
+    ],
+    "transform": "matrix(0.07812500 0 0 0.07812500 -10.851562 -9.015625)",
+    "svgFile": "public/icons/ui/chevron-left.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 2778,
+      "green": 2739
+    },
+    "svgSha256": "b69af2833b60801e6bfaaf5220b68cb424995614b9d4329f811724c9adf57c40"
+  },
+  {
+    "name": "chevron-down",
+    "sourceType": "openart-generation",
+    "historyId": "jr7dZnIelrvoXvlUeg50",
+    "resourceId": "qbsSpnEjAUGm64W0Dbrn",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975417591_335a5f6c.png",
+    "sourceSha256": "346aa18d40a6a1dee054ce5d96e557f0d087f6c570e1c959c7713e0de733120a",
+    "sourceFile": "sources/jr7dZnIelrvoXvlUeg50.png",
+    "cellCrop": [
+      0,
+      0,
+      672,
+      672
+    ],
+    "foregroundBounds": [
+      233,
+      307,
+      506,
+      450
+    ],
+    "transform": "matrix(0.07326007 0 0 0.07326007 -15.069597 -15.728938)",
+    "svgFile": "public/icons/ui/chevron-down.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 2465,
+      "green": 2870
+    },
+    "svgSha256": "d5f8f75a0f2b5359645ced7edb6e5aa69dd2f5a3c7148c97cb4a988c861e8433"
+  },
+  {
+    "name": "arrow-right",
+    "sourceType": "openart-generation",
+    "historyId": "jr7dZnIelrvoXvlUeg50",
+    "resourceId": "qbsSpnEjAUGm64W0Dbrn",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975417591_335a5f6c.png",
+    "sourceSha256": "346aa18d40a6a1dee054ce5d96e557f0d087f6c570e1c959c7713e0de733120a",
+    "sourceFile": "sources/jr7dZnIelrvoXvlUeg50.png",
+    "cellCrop": [
+      672,
+      0,
+      1344,
+      672
+    ],
+    "foregroundBounds": [
+      179,
+      288,
+      489,
+      448
+    ],
+    "transform": "matrix(0.06451613 0 0 0.06451613 -9.548387 -11.741935)",
+    "svgFile": "public/icons/ui/arrow-right.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 5613,
+      "green": 1142
+    },
+    "svgSha256": "941696c8cf1791418643151dbb91e59c7930a4b2b41efdf71ce0a87ea2458e0c"
+  },
+  {
+    "name": "arrow-up",
+    "sourceType": "openart-generation",
+    "historyId": "jr7dZnIelrvoXvlUeg50",
+    "resourceId": "qbsSpnEjAUGm64W0Dbrn",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975417591_335a5f6c.png",
+    "sourceSha256": "346aa18d40a6a1dee054ce5d96e557f0d087f6c570e1c959c7713e0de733120a",
+    "sourceFile": "sources/jr7dZnIelrvoXvlUeg50.png",
+    "cellCrop": [
+      1344,
+      0,
+      2016,
+      672
+    ],
+    "foregroundBounds": [
+      222,
+      213,
+      372,
+      499
+    ],
+    "transform": "matrix(0.06993007 0 0 0.06993007 -8.769231 -12.895105)",
+    "svgFile": "public/icons/ui/arrow-up.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 4895,
+      "green": 1300
+    },
+    "svgSha256": "e7279ced9afcac99a0aba468ca5ade4b329ddf103fff4934643e40bec15e8895"
+  },
+  {
+    "name": "arrow-down",
+    "sourceType": "openart-generation",
+    "historyId": "jr7dZnIelrvoXvlUeg50",
+    "resourceId": "qbsSpnEjAUGm64W0Dbrn",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975417591_335a5f6c.png",
+    "sourceSha256": "346aa18d40a6a1dee054ce5d96e557f0d087f6c570e1c959c7713e0de733120a",
+    "sourceFile": "sources/jr7dZnIelrvoXvlUeg50.png",
     "cellCrop": [
       0,
       672,
@@ -1910,28 +1224,29 @@
     ],
     "foregroundBounds": [
       293,
-      114,
-      457,
-      469
+      144,
+      448,
+      420
     ],
-    "transform": "matrix(0.05633803 0 0 0.05633803 -9.126761 -4.422535)",
-    "svgFile": "public/icons/ui/map-truck.svg",
+    "transform": "matrix(0.07246377 0 0 0.07246377 -14.847826 -8.434783)",
+    "svgFile": "public/icons/ui/arrow-down.svg",
     "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 7370,
-      "green": 590
+      "graphite": 4902,
+      "green": 1357
     },
-    "svgSha256": "3b0fc202e05829eb0f09776a01a690f989a75445071d2648aeacf1b44f69aa58",
-    "approvalStatus": "exact-approved-original-not-provided"
+    "svgSha256": "8f81eb2715beaeb9dbd07b9f4d96f0ca4be451df597fa30ff6b5f79a411803eb"
   },
   {
-    "name": "map-container",
-    "historyId": "mFu4sInng2hhqcKJk3Mt",
-    "resourceId": "2h1bliWccJjiR1Y7A9nG",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926856924_be8a2359.png",
-    "sourceSha256": "e15de88d17bb7937ab459359988be149d37445458735dd02dc37498f1ccd25b0",
-    "sourceFile": "sources/mFu4sInng2hhqcKJk3Mt.png",
+    "name": "search",
+    "sourceType": "openart-generation",
+    "historyId": "jr7dZnIelrvoXvlUeg50",
+    "resourceId": "qbsSpnEjAUGm64W0Dbrn",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975417591_335a5f6c.png",
+    "sourceSha256": "346aa18d40a6a1dee054ce5d96e557f0d087f6c570e1c959c7713e0de733120a",
+    "sourceFile": "sources/jr7dZnIelrvoXvlUeg50.png",
     "cellCrop": [
       672,
       672,
@@ -1939,29 +1254,30 @@
       1344
     ],
     "foregroundBounds": [
-      254,
-      112,
-      418,
-      468
+      196,
+      153,
+      463,
+      415
     ],
-    "transform": "matrix(0.05617978 0 0 0.05617978 -6.876404 -4.292135)",
-    "svgFile": "public/icons/ui/map-container.svg",
+    "transform": "matrix(0.07490637 0 0 0.07490637 -12.681648 -9.273408)",
+    "svgFile": "public/icons/ui/search.svg",
     "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 7885,
-      "green": 507
+      "graphite": 8230,
+      "green": 1655
     },
-    "svgSha256": "ca3eee4c90608c0b13914d4122cad8c50ec0c61658c43d9b3d8a80368a8133ef",
-    "approvalStatus": "exact-approved-original-not-provided"
+    "svgSha256": "85ef6e34f8827d5779c038bd057be8f417bad427751d10b254796aaa07b0fc32"
   },
   {
-    "name": "map-van",
-    "historyId": "mFu4sInng2hhqcKJk3Mt",
-    "resourceId": "2h1bliWccJjiR1Y7A9nG",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926856924_be8a2359.png",
-    "sourceSha256": "e15de88d17bb7937ab459359988be149d37445458735dd02dc37498f1ccd25b0",
-    "sourceFile": "sources/mFu4sInng2hhqcKJk3Mt.png",
+    "name": "refresh",
+    "sourceType": "openart-generation",
+    "historyId": "jr7dZnIelrvoXvlUeg50",
+    "resourceId": "qbsSpnEjAUGm64W0Dbrn",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975417591_335a5f6c.png",
+    "sourceSha256": "346aa18d40a6a1dee054ce5d96e557f0d087f6c570e1c959c7713e0de733120a",
+    "sourceFile": "sources/jr7dZnIelrvoXvlUeg50.png",
     "cellCrop": [
       1344,
       672,
@@ -1969,29 +1285,30 @@
       1344
     ],
     "foregroundBounds": [
-      217,
-      112,
-      374,
-      470
+      165,
+      150,
+      425,
+      411
     ],
-    "transform": "matrix(0.05586592 0 0 0.05586592 -4.508380 -4.256983)",
-    "svgFile": "public/icons/ui/map-van.svg",
+    "transform": "matrix(0.07662835 0 0 0.07662835 -10.605364 -9.494253)",
+    "svgFile": "public/icons/ui/refresh.svg",
     "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 6988,
-      "green": 510
+      "graphite": 8346,
+      "green": 3567
     },
-    "svgSha256": "2021d8b0637de20008cb93c1f41403555f00b67f3b473d542e716ee3c885b6c8",
-    "approvalStatus": "exact-approved-original-not-provided"
+    "svgSha256": "ebf1822e2ce5fcb1d485507b0f79e30faf7bff46722f9c522215377d9e5b87e1"
   },
   {
-    "name": "map-car",
-    "historyId": "6ggEDK1Z4RjNtd3TtPFh",
-    "resourceId": "HUHQ5GhfqCjsmVRJU7pO",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926858234_dc421029.png",
-    "sourceSha256": "99f9ac485764e68a6a8683bf822cfbabbd485d4728b310c9d4d42c6904be3674",
-    "sourceFile": "sources/6ggEDK1Z4RjNtd3TtPFh.png",
+    "name": "microphone",
+    "sourceType": "openart-generation",
+    "historyId": "AASUuvpAlrUoQ8OK3pct",
+    "resourceId": "cKm3xPbdtqEtj7hAiShb",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963416817_30093b44.png",
+    "sourceSha256": "d307969d1f59d61f962f99f74d4147f05606cb15e7b63dbf43a3f628228a59ab",
+    "sourceFile": "sources/AASUuvpAlrUoQ8OK3pct.png",
     "cellCrop": [
       0,
       0,
@@ -1999,29 +1316,30 @@
       672
     ],
     "foregroundBounds": [
-      251,
-      248,
-      457,
-      580
+      247,
+      209,
+      462,
+      516
     ],
-    "transform": "matrix(0.06024096 0 0 0.06024096 -9.325301 -12.939759)",
-    "svgFile": "public/icons/ui/map-car.svg",
+    "transform": "matrix(0.06514658 0 0 0.06514658 -11.094463 -11.615635)",
+    "svgFile": "public/icons/ui/microphone.svg",
     "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 9762,
-      "green": 755
+      "graphite": 12780,
+      "green": 7203
     },
-    "svgSha256": "f160093626f46d43eefc44494dc531adff83ab8a407dd42e69870747870e0151",
-    "approvalStatus": "exact-approved-original-not-provided"
+    "svgSha256": "3d6613534af48d1fd7008c4baf9509f5d4ca78770a825db3e180f12a14a86641"
   },
   {
-    "name": "map-special",
-    "historyId": "6ggEDK1Z4RjNtd3TtPFh",
-    "resourceId": "HUHQ5GhfqCjsmVRJU7pO",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926858234_dc421029.png",
-    "sourceSha256": "99f9ac485764e68a6a8683bf822cfbabbd485d4728b310c9d4d42c6904be3674",
-    "sourceFile": "sources/6ggEDK1Z4RjNtd3TtPFh.png",
+    "name": "sound",
+    "sourceType": "openart-generation",
+    "historyId": "AASUuvpAlrUoQ8OK3pct",
+    "resourceId": "cKm3xPbdtqEtj7hAiShb",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963416817_30093b44.png",
+    "sourceSha256": "d307969d1f59d61f962f99f74d4147f05606cb15e7b63dbf43a3f628228a59ab",
+    "sourceFile": "sources/AASUuvpAlrUoQ8OK3pct.png",
     "cellCrop": [
       672,
       0,
@@ -2029,50 +1347,827 @@
       672
     ],
     "foregroundBounds": [
-      211,
-      274,
-      461,
-      559
+      161,
+      230,
+      497,
+      514
     ],
-    "transform": "matrix(0.07017544 0 0 0.07017544 -11.578947 -17.228070)",
-    "svgFile": "public/icons/ui/map-special.svg",
+    "transform": "matrix(0.05952381 0 0 0.05952381 -7.583333 -10.142857)",
+    "svgFile": "public/icons/ui/sound.svg",
     "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 14310,
-      "green": 531
+      "graphite": 13386,
+      "green": 8061
     },
-    "svgSha256": "1f41df5312675ab97cf1061b1e1bba8387baef1dde1ba9cb866071b1e6b93d24",
-    "approvalStatus": "exact-approved-original-not-provided"
+    "svgSha256": "40fa96fa37e5b6af2967efb1eddaae83116c74c58e36edeafc53cef426695c5b"
   },
   {
-    "name": "map-trailer",
-    "historyId": "6ggEDK1Z4RjNtd3TtPFh",
-    "resourceId": "HUHQ5GhfqCjsmVRJU7pO",
-    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926858234_dc421029.png",
-    "sourceSha256": "99f9ac485764e68a6a8683bf822cfbabbd485d4728b310c9d4d42c6904be3674",
-    "sourceFile": "sources/6ggEDK1Z4RjNtd3TtPFh.png",
+    "name": "mute",
+    "sourceType": "openart-generation",
+    "historyId": "AASUuvpAlrUoQ8OK3pct",
+    "resourceId": "cKm3xPbdtqEtj7hAiShb",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963416817_30093b44.png",
+    "sourceSha256": "d307969d1f59d61f962f99f74d4147f05606cb15e7b63dbf43a3f628228a59ab",
+    "sourceFile": "sources/AASUuvpAlrUoQ8OK3pct.png",
     "cellCrop": [
       1344,
       0,
       2016,
       672
+    ],
+    "foregroundBounds": [
+      129,
+      229,
+      486,
+      515
+    ],
+    "transform": "matrix(0.05602241 0 0 0.05602241 -5.226891 -8.840336)",
+    "svgFile": "public/icons/ui/mute.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 13652,
+      "green": 7172
+    },
+    "svgSha256": "761407fb3a45fa4860bf0fc5bb143514e928e703b67a4f434e489515ab4dfbe9"
+  },
+  {
+    "name": "camera",
+    "sourceType": "openart-generation",
+    "historyId": "AASUuvpAlrUoQ8OK3pct",
+    "resourceId": "cKm3xPbdtqEtj7hAiShb",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963416817_30093b44.png",
+    "sourceSha256": "d307969d1f59d61f962f99f74d4147f05606cb15e7b63dbf43a3f628228a59ab",
+    "sourceFile": "sources/AASUuvpAlrUoQ8OK3pct.png",
+    "cellCrop": [
+      0,
+      672,
+      672,
+      1344
+    ],
+    "foregroundBounds": [
+      188,
+      151,
+      521,
+      421
+    ],
+    "transform": "matrix(0.06006006 0 0 0.06006006 -9.291291 -5.177177)",
+    "svgFile": "public/icons/ui/camera.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 18600,
+      "green": 8252
+    },
+    "svgSha256": "d84614a938e14939d9f154be0f790ac9a1b43d9962924bdf458132f7eaefdbd0"
+  },
+  {
+    "name": "navigate",
+    "sourceType": "openart-generation",
+    "historyId": "AASUuvpAlrUoQ8OK3pct",
+    "resourceId": "cKm3xPbdtqEtj7hAiShb",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963416817_30093b44.png",
+    "sourceSha256": "d307969d1f59d61f962f99f74d4147f05606cb15e7b63dbf43a3f628228a59ab",
+    "sourceFile": "sources/AASUuvpAlrUoQ8OK3pct.png",
+    "cellCrop": [
+      672,
+      672,
+      1344,
+      1344
     ],
     "foregroundBounds": [
       190,
-      203,
-      417,
-      576
+      151,
+      482,
+      441
     ],
-    "transform": "matrix(0.05361930 0 0 0.05361930 -4.273458 -8.884718)",
-    "svgFile": "public/icons/ui/map-trailer.svg",
+    "transform": "matrix(0.06849315 0 0 0.06849315 -11.013699 -8.273973)",
+    "svgFile": "public/icons/ui/navigate.svg",
     "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
     "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
     "maskPixels": {
-      "graphite": 7965,
-      "green": 821
+      "graphite": 15334,
+      "green": 2613
     },
-    "svgSha256": "8b836f69587d246e40e58346c7ed4afb557771c6f519e2a345d6fd28adeea7a2",
-    "approvalStatus": "exact-approved-original-not-provided"
+    "svgSha256": "797fc29d9a412134e514fe88518214f84052698e530117f8f9734af274d07d16"
+  },
+  {
+    "name": "bin",
+    "sourceType": "openart-generation",
+    "historyId": "AASUuvpAlrUoQ8OK3pct",
+    "resourceId": "cKm3xPbdtqEtj7hAiShb",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963416817_30093b44.png",
+    "sourceSha256": "d307969d1f59d61f962f99f74d4147f05606cb15e7b63dbf43a3f628228a59ab",
+    "sourceFile": "sources/AASUuvpAlrUoQ8OK3pct.png",
+    "cellCrop": [
+      1344,
+      672,
+      2016,
+      1344
+    ],
+    "foregroundBounds": [
+      183,
+      110,
+      453,
+      451
+    ],
+    "transform": "matrix(0.05865103 0 0 0.05865103 -6.651026 -4.451613)",
+    "svgFile": "public/icons/ui/bin.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 24504,
+      "green": 4666
+    },
+    "svgSha256": "858f1b10e03fe0e04e0c64c2502d4ba5603337bd0e69b9c6e415772317c86830"
+  },
+  {
+    "name": "bin-missing",
+    "sourceType": "openart-generation",
+    "historyId": "Y88m5tb7xkpQtC9lJAYf",
+    "resourceId": "3Ps8UjXuO97ifSXJYIID",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975423812_bdab6a78.png",
+    "sourceSha256": "f36832f7388d2ba26a472429241ed5659bb93bf05f017a02cf066893f7639382",
+    "sourceFile": "sources/Y88m5tb7xkpQtC9lJAYf.png",
+    "cellCrop": [
+      0,
+      0,
+      672,
+      672
+    ],
+    "foregroundBounds": [
+      230,
+      220,
+      506,
+      539
+    ],
+    "transform": "matrix(0.06269592 0 0 0.06269592 -11.072100 -11.793103)",
+    "svgFile": "public/icons/ui/bin-missing.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 14977,
+      "green": 4765
+    },
+    "svgSha256": "bed305bc53276d3b82976157981e033a5064cc2e602c11f6e8602aa4cd93299e"
+  },
+  {
+    "name": "overflow",
+    "sourceType": "openart-generation",
+    "historyId": "Y88m5tb7xkpQtC9lJAYf",
+    "resourceId": "3Ps8UjXuO97ifSXJYIID",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975423812_bdab6a78.png",
+    "sourceSha256": "f36832f7388d2ba26a472429241ed5659bb93bf05f017a02cf066893f7639382",
+    "sourceFile": "sources/Y88m5tb7xkpQtC9lJAYf.png",
+    "cellCrop": [
+      672,
+      0,
+      1344,
+      672
+    ],
+    "foregroundBounds": [
+      206,
+      221,
+      461,
+      543
+    ],
+    "transform": "matrix(0.06211180 0 0 0.06211180 -8.714286 -11.726708)",
+    "svgFile": "public/icons/ui/overflow.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 14061,
+      "green": 2823
+    },
+    "svgSha256": "ce7140a223386dc8c6943c4a70147e3a8b8ac52d49ccdd24925f8eff263bcb3b"
+  },
+  {
+    "name": "obstruction",
+    "sourceType": "openart-generation",
+    "historyId": "Y88m5tb7xkpQtC9lJAYf",
+    "resourceId": "3Ps8UjXuO97ifSXJYIID",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975423812_bdab6a78.png",
+    "sourceSha256": "f36832f7388d2ba26a472429241ed5659bb93bf05f017a02cf066893f7639382",
+    "sourceFile": "sources/Y88m5tb7xkpQtC9lJAYf.png",
+    "cellCrop": [
+      1344,
+      0,
+      2016,
+      672
+    ],
+    "foregroundBounds": [
+      146,
+      246,
+      428,
+      527
+    ],
+    "transform": "matrix(0.07092199 0 0 0.07092199 -8.354610 -15.411348)",
+    "svgFile": "public/icons/ui/obstruction.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 9173,
+      "green": 4460
+    },
+    "svgSha256": "a37b93c1ae430bf9937b8d8ae52df638ccf88bb4064e66cf999abd34abdc37c4"
+  },
+  {
+    "name": "blocked",
+    "sourceType": "openart-generation",
+    "historyId": "Y88m5tb7xkpQtC9lJAYf",
+    "resourceId": "3Ps8UjXuO97ifSXJYIID",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975423812_bdab6a78.png",
+    "sourceSha256": "f36832f7388d2ba26a472429241ed5659bb93bf05f017a02cf066893f7639382",
+    "sourceFile": "sources/Y88m5tb7xkpQtC9lJAYf.png",
+    "cellCrop": [
+      0,
+      672,
+      672,
+      1344
+    ],
+    "foregroundBounds": [
+      227,
+      143,
+      508,
+      422
+    ],
+    "transform": "matrix(0.07117438 0 0 0.07117438 -14.156584 -8.106762)",
+    "svgFile": "public/icons/ui/blocked.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 10072,
+      "green": 3262
+    },
+    "svgSha256": "02a1b8dc447f3e3b782b79e5e7fc38de4c86669887e5d5cbda386d226fdac02f"
+  },
+  {
+    "name": "tablet",
+    "sourceType": "openart-generation",
+    "historyId": "Y88m5tb7xkpQtC9lJAYf",
+    "resourceId": "3Ps8UjXuO97ifSXJYIID",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975423812_bdab6a78.png",
+    "sourceSha256": "f36832f7388d2ba26a472429241ed5659bb93bf05f017a02cf066893f7639382",
+    "sourceFile": "sources/Y88m5tb7xkpQtC9lJAYf.png",
+    "cellCrop": [
+      672,
+      672,
+      1344,
+      1344
+    ],
+    "foregroundBounds": [
+      213,
+      134,
+      459,
+      430
+    ],
+    "transform": "matrix(0.06756757 0 0 0.06756757 -10.702703 -7.054054)",
+    "svgFile": "public/icons/ui/tablet.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 11665,
+      "green": 1668
+    },
+    "svgSha256": "7f6561798efeba63febaccd6f7518ccf23991fd8c9ee2fbc547798b3feaaa6ff"
+  },
+  {
+    "name": "pause",
+    "sourceType": "openart-generation",
+    "historyId": "Y88m5tb7xkpQtC9lJAYf",
+    "resourceId": "3Ps8UjXuO97ifSXJYIID",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975423812_bdab6a78.png",
+    "sourceSha256": "f36832f7388d2ba26a472429241ed5659bb93bf05f017a02cf066893f7639382",
+    "sourceFile": "sources/Y88m5tb7xkpQtC9lJAYf.png",
+    "cellCrop": [
+      1344,
+      672,
+      2016,
+      1344
+    ],
+    "foregroundBounds": [
+      228,
+      175,
+      359,
+      392
+    ],
+    "transform": "matrix(0.09216590 0 0 0.09216590 -15.050691 -14.129032)",
+    "svgFile": "public/icons/ui/pause.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Measured axes and height of each OpenArt pause bar; exported as rounded SVG rectangles with uniform 1px width. This explicit width correction is not a pixel-identical trace.",
+    "maskPixels": {
+      "graphite": 5285,
+      "green": 5286
+    },
+    "vectorAdjustment": {
+      "type": "measured-straight-bars-uniform-width",
+      "widthAt24": 1,
+      "bars": [
+        {
+          "sourceBoundsAt24": [
+            5.9375,
+            2,
+            8.25,
+            22
+          ],
+          "x": 6.59375,
+          "y": 2,
+          "width": 1,
+          "height": 20,
+          "rx": 0.5
+        },
+        {
+          "sourceBoundsAt24": [
+            15.6875,
+            2,
+            18,
+            22
+          ],
+          "x": 16.34375,
+          "y": 2,
+          "width": 1,
+          "height": 20,
+          "rx": 0.5
+        }
+      ]
+    },
+    "svgSha256": "ec1144c6389732287f22e79257b41a0e88c88a20d6d07f6a524d6270ea3dcd21"
+  },
+  {
+    "name": "measure",
+    "sourceType": "openart-generation",
+    "historyId": "Zb8faUZcNx5hfjV70UWC",
+    "resourceId": "HA7zAZXQoNgA0kFoP2q6",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975432203_418bc411.png",
+    "sourceSha256": "d48be4cc63d3308cf0f4420fac49aab0ec3bcd203b5f5449155cbbfa3ddc5b84",
+    "sourceFile": "sources/Zb8faUZcNx5hfjV70UWC.png",
+    "cellCrop": [
+      0,
+      0,
+      672,
+      672
+    ],
+    "foregroundBounds": [
+      212,
+      211,
+      514,
+      511
+    ],
+    "transform": "matrix(0.06622517 0 0 0.06622517 -12.039735 -11.907285)",
+    "svgFile": "public/icons/ui/measure.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 9076,
+      "green": 2087
+    },
+    "svgSha256": "9a00a2970724510430525be2bb9a3a323b0f23c83e62c4b7dd6754e7ef0b866a"
+  },
+  {
+    "name": "info",
+    "sourceType": "openart-generation",
+    "historyId": "Zb8faUZcNx5hfjV70UWC",
+    "resourceId": "HA7zAZXQoNgA0kFoP2q6",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975432203_418bc411.png",
+    "sourceSha256": "d48be4cc63d3308cf0f4420fac49aab0ec3bcd203b5f5449155cbbfa3ddc5b84",
+    "sourceFile": "sources/Zb8faUZcNx5hfjV70UWC.png",
+    "cellCrop": [
+      672,
+      0,
+      1344,
+      672
+    ],
+    "foregroundBounds": [
+      189,
+      222,
+      480,
+      511
+    ],
+    "transform": "matrix(0.06872852 0 0 0.06872852 -10.989691 -13.189003)",
+    "svgFile": "public/icons/ui/info.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 9678,
+      "green": 3990
+    },
+    "svgSha256": "6f1090dc50a8cc844fd99ade86d4ea272f168f3056c89e95b6117243ec4be533"
+  },
+  {
+    "name": "download",
+    "sourceType": "openart-generation",
+    "historyId": "Zb8faUZcNx5hfjV70UWC",
+    "resourceId": "HA7zAZXQoNgA0kFoP2q6",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975432203_418bc411.png",
+    "sourceSha256": "d48be4cc63d3308cf0f4420fac49aab0ec3bcd203b5f5449155cbbfa3ddc5b84",
+    "sourceFile": "sources/Zb8faUZcNx5hfjV70UWC.png",
+    "cellCrop": [
+      1344,
+      0,
+      2016,
+      672
+    ],
+    "foregroundBounds": [
+      172,
+      236,
+      448,
+      496
+    ],
+    "transform": "matrix(0.07246377 0 0 0.07246377 -10.463768 -14.521739)",
+    "svgFile": "public/icons/ui/download.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 5390,
+      "green": 4605
+    },
+    "svgSha256": "31118c4f11e3c496e6d6c3496e9f3f78d1794d26c2606ab00c96fa24cef53aeb"
+  },
+  {
+    "name": "attachment",
+    "sourceType": "openart-generation",
+    "historyId": "Zb8faUZcNx5hfjV70UWC",
+    "resourceId": "HA7zAZXQoNgA0kFoP2q6",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975432203_418bc411.png",
+    "sourceSha256": "d48be4cc63d3308cf0f4420fac49aab0ec3bcd203b5f5449155cbbfa3ddc5b84",
+    "sourceFile": "sources/Zb8faUZcNx5hfjV70UWC.png",
+    "cellCrop": [
+      0,
+      672,
+      672,
+      1344
+    ],
+    "foregroundBounds": [
+      227,
+      137,
+      491,
+      441
+    ],
+    "transform": "matrix(0.06578947 0 0 0.06578947 -11.618421 -7.013158)",
+    "svgFile": "public/icons/ui/attachment.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 11742,
+      "green": 2514
+    },
+    "svgSha256": "63479c98e5c88505a721d5780cf810ca6ee82f62ed8e539ab0ce187b500b9479"
+  },
+  {
+    "name": "car",
+    "sourceType": "openart-generation",
+    "historyId": "Zb8faUZcNx5hfjV70UWC",
+    "resourceId": "HA7zAZXQoNgA0kFoP2q6",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975432203_418bc411.png",
+    "sourceSha256": "d48be4cc63d3308cf0f4420fac49aab0ec3bcd203b5f5449155cbbfa3ddc5b84",
+    "sourceFile": "sources/Zb8faUZcNx5hfjV70UWC.png",
+    "cellCrop": [
+      672,
+      672,
+      1344,
+      1344
+    ],
+    "foregroundBounds": [
+      179,
+      187,
+      494,
+      439
+    ],
+    "transform": "matrix(0.06349206 0 0 0.06349206 -9.365079 -7.873016)",
+    "svgFile": "public/icons/ui/car.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 15189,
+      "green": 4716
+    },
+    "svgSha256": "13e6ed792c82feea0f0b906a4727c53433948a3cd146cc998368482fd99e0caf"
+  },
+  {
+    "name": "van",
+    "sourceType": "openart-generation",
+    "historyId": "Zb8faUZcNx5hfjV70UWC",
+    "resourceId": "HA7zAZXQoNgA0kFoP2q6",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975432203_418bc411.png",
+    "sourceSha256": "d48be4cc63d3308cf0f4420fac49aab0ec3bcd203b5f5449155cbbfa3ddc5b84",
+    "sourceFile": "sources/Zb8faUZcNx5hfjV70UWC.png",
+    "cellCrop": [
+      1344,
+      672,
+      2016,
+      1344
+    ],
+    "foregroundBounds": [
+      143,
+      115,
+      479,
+      442
+    ],
+    "transform": "matrix(0.05952381 0 0 0.05952381 -6.511905 -4.577381)",
+    "svgFile": "public/icons/ui/van.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 17454,
+      "green": 5910
+    },
+    "svgSha256": "29b57fa0faa6be241150b32ac915974d1bfed672ec0ce4571d6b09294a19d66a"
+  },
+  {
+    "name": "container-truck",
+    "sourceType": "openart-generation",
+    "historyId": "GHo6nwQa4gRwSWY9Aa9p",
+    "resourceId": "kzwJtmLQ1hZH6nMTSrIv",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975436070_24d539d0.png",
+    "sourceSha256": "4906d1805c12d5a9dc7bc61f1aafbe3c221f24f5b76813546141fc7d0ec3b81d",
+    "sourceFile": "sources/GHo6nwQa4gRwSWY9Aa9p.png",
+    "cellCrop": [
+      0,
+      0,
+      672,
+      672
+    ],
+    "foregroundBounds": [
+      147,
+      232,
+      591,
+      498
+    ],
+    "transform": "matrix(0.04504505 0 0 0.04504505 -4.621622 -4.441441)",
+    "svgFile": "public/icons/ui/container-truck.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 31838,
+      "green": 3436
+    },
+    "svgSha256": "1ea87b48847df3b38c5e23ad899a94f58815412f47c9d4cedc3370de852c07c1"
+  },
+  {
+    "name": "special-vehicle",
+    "sourceType": "openart-generation",
+    "historyId": "GHo6nwQa4gRwSWY9Aa9p",
+    "resourceId": "kzwJtmLQ1hZH6nMTSrIv",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975436070_24d539d0.png",
+    "sourceSha256": "4906d1805c12d5a9dc7bc61f1aafbe3c221f24f5b76813546141fc7d0ec3b81d",
+    "sourceFile": "sources/GHo6nwQa4gRwSWY9Aa9p.png",
+    "cellCrop": [
+      672,
+      0,
+      1344,
+      672
+    ],
+    "foregroundBounds": [
+      149,
+      201,
+      523,
+      502
+    ],
+    "transform": "matrix(0.05347594 0 0 0.05347594 -5.967914 -6.796791)",
+    "svgFile": "public/icons/ui/special-vehicle.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 25743,
+      "green": 4861
+    },
+    "svgSha256": "e162e9c5634e81b1f9cb69d2981d92a80de64fbac41dddccc739daa35e01b8cc"
+  },
+  {
+    "name": "trailer",
+    "sourceType": "openart-generation",
+    "historyId": "GHo6nwQa4gRwSWY9Aa9p",
+    "resourceId": "kzwJtmLQ1hZH6nMTSrIv",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975436070_24d539d0.png",
+    "sourceSha256": "4906d1805c12d5a9dc7bc61f1aafbe3c221f24f5b76813546141fc7d0ec3b81d",
+    "sourceFile": "sources/GHo6nwQa4gRwSWY9Aa9p.png",
+    "cellCrop": [
+      1344,
+      0,
+      2016,
+      672
+    ],
+    "foregroundBounds": [
+      102,
+      252,
+      543,
+      502
+    ],
+    "transform": "matrix(0.04535147 0 0 0.04535147 -2.625850 -5.097506)",
+    "svgFile": "public/icons/ui/trailer.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 22317,
+      "green": 2952
+    },
+    "svgSha256": "d0d961cdc62825eeb56a8247487c405286b80ca6ce80a1d93e1eb9ee6932e6d8"
+  },
+  {
+    "name": "map-truck",
+    "sourceType": "openart-generation",
+    "historyId": "GHo6nwQa4gRwSWY9Aa9p",
+    "resourceId": "kzwJtmLQ1hZH6nMTSrIv",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975436070_24d539d0.png",
+    "sourceSha256": "4906d1805c12d5a9dc7bc61f1aafbe3c221f24f5b76813546141fc7d0ec3b81d",
+    "sourceFile": "sources/GHo6nwQa4gRwSWY9Aa9p.png",
+    "cellCrop": [
+      0,
+      672,
+      672,
+      1344
+    ],
+    "foregroundBounds": [
+      261,
+      86,
+      455,
+      492
+    ],
+    "transform": "matrix(0.04926108 0 0 0.04926108 -5.635468 -2.236453)",
+    "svgFile": "public/icons/ui/map-truck.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 24300,
+      "green": 1529
+    },
+    "svgSha256": "bf384cfde61fc073eb6c383f378d4b156cf1053f21a528dcecfac5d073b12741"
+  },
+  {
+    "name": "map-container",
+    "sourceType": "openart-generation",
+    "historyId": "GHo6nwQa4gRwSWY9Aa9p",
+    "resourceId": "kzwJtmLQ1hZH6nMTSrIv",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975436070_24d539d0.png",
+    "sourceSha256": "4906d1805c12d5a9dc7bc61f1aafbe3c221f24f5b76813546141fc7d0ec3b81d",
+    "sourceFile": "sources/GHo6nwQa4gRwSWY9Aa9p.png",
+    "cellCrop": [
+      672,
+      672,
+      1344,
+      1344
+    ],
+    "foregroundBounds": [
+      239,
+      86,
+      433,
+      492
+    ],
+    "transform": "matrix(0.04926108 0 0 0.04926108 -4.551724 -2.236453)",
+    "svgFile": "public/icons/ui/map-container.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 23257,
+      "green": 1534
+    },
+    "svgSha256": "d9bb04db7f29d01f01390c2e7c08f2ef50086e1f4cf65e4e8e5e11aefb3c9694"
+  },
+  {
+    "name": "map-van",
+    "sourceType": "openart-generation",
+    "historyId": "GHo6nwQa4gRwSWY9Aa9p",
+    "resourceId": "kzwJtmLQ1hZH6nMTSrIv",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975436070_24d539d0.png",
+    "sourceSha256": "4906d1805c12d5a9dc7bc61f1aafbe3c221f24f5b76813546141fc7d0ec3b81d",
+    "sourceFile": "sources/GHo6nwQa4gRwSWY9Aa9p.png",
+    "cellCrop": [
+      1344,
+      672,
+      2016,
+      1344
+    ],
+    "foregroundBounds": [
+      209,
+      89,
+      415,
+      492
+    ],
+    "transform": "matrix(0.04962779 0 0 0.04962779 -3.483871 -2.416873)",
+    "svgFile": "public/icons/ui/map-van.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 21001,
+      "green": 1571
+    },
+    "svgSha256": "badb2a8766239c37b8ef2172242d08dcbb06ee8be1d7f0f144782d756875b010"
+  },
+  {
+    "name": "map-car",
+    "sourceType": "openart-generation",
+    "historyId": "iHR3Qk1nLyiecNTl4S0w",
+    "resourceId": "tsM60Z2YuW2T2eBb2LTX",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975441927_a1ccb18f.png",
+    "sourceSha256": "2128c753271f19fde0d3ff168cfeb6f8a4c733e20c524186a114075a3b79c61c",
+    "sourceFile": "sources/iHR3Qk1nLyiecNTl4S0w.png",
+    "cellCrop": [
+      0,
+      0,
+      672,
+      672
+    ],
+    "foregroundBounds": [
+      258,
+      230,
+      480,
+      592
+    ],
+    "transform": "matrix(0.05524862 0 0 0.05524862 -8.386740 -10.707182)",
+    "svgFile": "public/icons/ui/map-car.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 25813,
+      "green": 1901
+    },
+    "svgSha256": "4f96ec2c10ffa9ee6918d71bd8cd424105dc64c29da6b9b0ab7ffd9b4238a61d"
+  },
+  {
+    "name": "map-special",
+    "sourceType": "openart-generation",
+    "historyId": "iHR3Qk1nLyiecNTl4S0w",
+    "resourceId": "tsM60Z2YuW2T2eBb2LTX",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975441927_a1ccb18f.png",
+    "sourceSha256": "2128c753271f19fde0d3ff168cfeb6f8a4c733e20c524186a114075a3b79c61c",
+    "sourceFile": "sources/iHR3Qk1nLyiecNTl4S0w.png",
+    "cellCrop": [
+      672,
+      0,
+      1344,
+      672
+    ],
+    "foregroundBounds": [
+      192,
+      262,
+      480,
+      572
+    ],
+    "transform": "matrix(0.06451613 0 0 0.06451613 -9.677419 -14.903226)",
+    "svgFile": "public/icons/ui/map-special.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 36817,
+      "green": 1319
+    },
+    "svgSha256": "5644234e53f2c2dc4f9b9bf2716e3f6de6f64f6af3cb8c916961ae7a395f27bb"
+  },
+  {
+    "name": "map-trailer",
+    "sourceType": "openart-generation",
+    "historyId": "iHR3Qk1nLyiecNTl4S0w",
+    "resourceId": "tsM60Z2YuW2T2eBb2LTX",
+    "sourceUrl": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975441927_a1ccb18f.png",
+    "sourceSha256": "2128c753271f19fde0d3ff168cfeb6f8a4c733e20c524186a114075a3b79c61c",
+    "sourceFile": "sources/iHR3Qk1nLyiecNTl4S0w.png",
+    "cellCrop": [
+      1344,
+      0,
+      2016,
+      672
+    ],
+    "foregroundBounds": [
+      168,
+      186,
+      424,
+      584
+    ],
+    "transform": "matrix(0.05025126 0 0 0.05025126 -2.874372 -7.346734)",
+    "svgFile": "public/icons/ui/map-trailer.svg",
+    "userApprovedExact": false,
+    "approvalStatus": "generated-from-approved-reference",
+    "conversion": "Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry",
+    "maskPixels": {
+      "graphite": 20361,
+      "green": 2136
+    },
+    "svgSha256": "73fad55459a3c3f76e6e87d0fe4b31c8bd6ec6c8f8a669afa68276d6b44853be"
   }
 ]

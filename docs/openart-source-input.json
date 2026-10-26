@@ -58,659 +58,465 @@
       {
         "name": "fleet",
         "cell": 1,
-        "historyId": "CRikO54YGZpzFTu1poIJ"
+        "historyId": "hia6BDyVhvAmnDeTTQML",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "invoice",
         "cell": 2,
-        "historyId": "CRikO54YGZpzFTu1poIJ"
+        "historyId": "hia6BDyVhvAmnDeTTQML",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "team",
         "cell": 3,
-        "historyId": "CRikO54YGZpzFTu1poIJ"
+        "historyId": "hia6BDyVhvAmnDeTTQML",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "dashboard",
         "cell": 4,
-        "historyId": "CRikO54YGZpzFTu1poIJ"
+        "historyId": "hia6BDyVhvAmnDeTTQML",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "settings",
         "cell": 5,
-        "historyId": "CRikO54YGZpzFTu1poIJ"
+        "historyId": "hia6BDyVhvAmnDeTTQML",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "notification",
         "cell": 6,
-        "historyId": "CRikO54YGZpzFTu1poIJ"
+        "historyId": "hia6BDyVhvAmnDeTTQML",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "arrow-left",
         "cell": 1,
-        "historyId": "2DKWIOl57bclsdWmCrr2"
+        "historyId": "Uo8P2RrXphG83wRTrEr1",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "health",
         "cell": 2,
-        "historyId": "2DKWIOl57bclsdWmCrr2"
+        "historyId": "Uo8P2RrXphG83wRTrEr1",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "care",
         "cell": 3,
-        "historyId": "2DKWIOl57bclsdWmCrr2"
+        "historyId": "Uo8P2RrXphG83wRTrEr1",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "time",
         "cell": 4,
-        "historyId": "2DKWIOl57bclsdWmCrr2"
+        "historyId": "Uo8P2RrXphG83wRTrEr1",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "calendar",
         "cell": 5,
-        "historyId": "2DKWIOl57bclsdWmCrr2"
+        "historyId": "Uo8P2RrXphG83wRTrEr1",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "mail",
         "cell": 6,
-        "historyId": "2DKWIOl57bclsdWmCrr2"
+        "historyId": "Uo8P2RrXphG83wRTrEr1",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "message",
         "cell": 1,
-        "historyId": "tLWbYhKvq4VVQZjGIhAc"
+        "historyId": "pqAVwi0bHOobrYDvdNhu",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "service",
         "cell": 2,
-        "historyId": "tLWbYhKvq4VVQZjGIhAc"
+        "historyId": "pqAVwi0bHOobrYDvdNhu",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "tyres",
         "cell": 3,
-        "historyId": "tLWbYhKvq4VVQZjGIhAc"
+        "historyId": "pqAVwi0bHOobrYDvdNhu",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "routes",
         "cell": 4,
-        "historyId": "tLWbYhKvq4VVQZjGIhAc"
+        "historyId": "pqAVwi0bHOobrYDvdNhu",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "sampling",
         "cell": 5,
-        "historyId": "tLWbYhKvq4VVQZjGIhAc"
+        "historyId": "pqAVwi0bHOobrYDvdNhu",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "customers",
         "cell": 6,
-        "historyId": "tLWbYhKvq4VVQZjGIhAc"
+        "historyId": "pqAVwi0bHOobrYDvdNhu",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "costs",
         "cell": 1,
-        "historyId": "JFWhVyhtW9nPu0YySt7r"
+        "historyId": "Nebu7uzCwoA7Ostkh7Se",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "reports",
         "cell": 2,
-        "historyId": "JFWhVyhtW9nPu0YySt7r"
+        "historyId": "Nebu7uzCwoA7Ostkh7Se",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "users",
         "cell": 3,
-        "historyId": "JFWhVyhtW9nPu0YySt7r"
+        "historyId": "Nebu7uzCwoA7Ostkh7Se",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "system",
         "cell": 4,
-        "historyId": "JFWhVyhtW9nPu0YySt7r"
+        "historyId": "Nebu7uzCwoA7Ostkh7Se",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "repair",
         "cell": 5,
-        "historyId": "JFWhVyhtW9nPu0YySt7r"
+        "historyId": "Nebu7uzCwoA7Ostkh7Se",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "warning",
         "cell": 6,
-        "historyId": "JFWhVyhtW9nPu0YySt7r"
+        "historyId": "Nebu7uzCwoA7Ostkh7Se",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "check",
         "cell": 1,
-        "historyId": "Io3aKqNDDbbh3GplyHQS"
+        "historyId": "YBpqsnth84iaMtP1ZYJz",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "close",
         "cell": 2,
-        "historyId": "Io3aKqNDDbbh3GplyHQS"
+        "historyId": "YBpqsnth84iaMtP1ZYJz",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "plus",
         "cell": 3,
-        "historyId": "Io3aKqNDDbbh3GplyHQS"
+        "historyId": "YBpqsnth84iaMtP1ZYJz",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "minus",
         "cell": 4,
-        "historyId": "Io3aKqNDDbbh3GplyHQS"
+        "historyId": "YBpqsnth84iaMtP1ZYJz",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "chevron-right",
         "cell": 5,
-        "historyId": "Io3aKqNDDbbh3GplyHQS"
+        "historyId": "YBpqsnth84iaMtP1ZYJz",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "chevron-left",
         "cell": 6,
-        "historyId": "Io3aKqNDDbbh3GplyHQS"
+        "historyId": "YBpqsnth84iaMtP1ZYJz",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "chevron-down",
         "cell": 1,
-        "historyId": "pkiwp57xpT1OlfxbHv7b"
+        "historyId": "jr7dZnIelrvoXvlUeg50",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "arrow-right",
         "cell": 2,
-        "historyId": "pkiwp57xpT1OlfxbHv7b"
+        "historyId": "jr7dZnIelrvoXvlUeg50",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "arrow-up",
         "cell": 3,
-        "historyId": "pkiwp57xpT1OlfxbHv7b"
+        "historyId": "jr7dZnIelrvoXvlUeg50",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "arrow-down",
         "cell": 4,
-        "historyId": "pkiwp57xpT1OlfxbHv7b"
+        "historyId": "jr7dZnIelrvoXvlUeg50",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "search",
         "cell": 5,
-        "historyId": "pkiwp57xpT1OlfxbHv7b"
+        "historyId": "jr7dZnIelrvoXvlUeg50",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "refresh",
         "cell": 6,
-        "historyId": "pkiwp57xpT1OlfxbHv7b"
+        "historyId": "jr7dZnIelrvoXvlUeg50",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "microphone",
         "cell": 1,
-        "historyId": "jQ91kFIJNHkhNbQYKk0z"
+        "historyId": "AASUuvpAlrUoQ8OK3pct",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "sound",
         "cell": 2,
-        "historyId": "jQ91kFIJNHkhNbQYKk0z"
+        "historyId": "AASUuvpAlrUoQ8OK3pct",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "mute",
         "cell": 3,
-        "historyId": "jQ91kFIJNHkhNbQYKk0z"
+        "historyId": "AASUuvpAlrUoQ8OK3pct",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "camera",
         "cell": 4,
-        "historyId": "jQ91kFIJNHkhNbQYKk0z"
+        "historyId": "AASUuvpAlrUoQ8OK3pct",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "navigate",
         "cell": 5,
-        "historyId": "jQ91kFIJNHkhNbQYKk0z"
+        "historyId": "AASUuvpAlrUoQ8OK3pct",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "bin",
         "cell": 6,
-        "historyId": "jQ91kFIJNHkhNbQYKk0z"
+        "historyId": "AASUuvpAlrUoQ8OK3pct",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "bin-missing",
         "cell": 1,
-        "historyId": "8Rbmwg9zIvNaFDmwoNbv"
+        "historyId": "Y88m5tb7xkpQtC9lJAYf",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "overflow",
         "cell": 2,
-        "historyId": "8Rbmwg9zIvNaFDmwoNbv"
+        "historyId": "Y88m5tb7xkpQtC9lJAYf",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "obstruction",
         "cell": 3,
-        "historyId": "8Rbmwg9zIvNaFDmwoNbv"
+        "historyId": "Y88m5tb7xkpQtC9lJAYf",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "blocked",
         "cell": 4,
-        "historyId": "8Rbmwg9zIvNaFDmwoNbv"
+        "historyId": "Y88m5tb7xkpQtC9lJAYf",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "tablet",
         "cell": 5,
-        "historyId": "8Rbmwg9zIvNaFDmwoNbv"
+        "historyId": "Y88m5tb7xkpQtC9lJAYf",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "pause",
         "cell": 6,
-        "historyId": "8Rbmwg9zIvNaFDmwoNbv"
+        "historyId": "Y88m5tb7xkpQtC9lJAYf",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98",
+        "normalizeStraightStrokeWidth": 1
       },
       {
         "name": "measure",
         "cell": 1,
-        "historyId": "SRkk56a15gbxUjhlKxsB"
+        "historyId": "Zb8faUZcNx5hfjV70UWC",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "info",
         "cell": 2,
-        "historyId": "SRkk56a15gbxUjhlKxsB"
+        "historyId": "Zb8faUZcNx5hfjV70UWC",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "download",
         "cell": 3,
-        "historyId": "SRkk56a15gbxUjhlKxsB"
+        "historyId": "Zb8faUZcNx5hfjV70UWC",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "attachment",
         "cell": 4,
-        "historyId": "SRkk56a15gbxUjhlKxsB"
+        "historyId": "Zb8faUZcNx5hfjV70UWC",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "car",
         "cell": 5,
-        "historyId": "SRkk56a15gbxUjhlKxsB"
+        "historyId": "Zb8faUZcNx5hfjV70UWC",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "van",
         "cell": 6,
-        "historyId": "SRkk56a15gbxUjhlKxsB"
+        "historyId": "Zb8faUZcNx5hfjV70UWC",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "container-truck",
         "cell": 1,
-        "historyId": "mFu4sInng2hhqcKJk3Mt"
+        "historyId": "GHo6nwQa4gRwSWY9Aa9p",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "special-vehicle",
         "cell": 2,
-        "historyId": "mFu4sInng2hhqcKJk3Mt"
+        "historyId": "GHo6nwQa4gRwSWY9Aa9p",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "trailer",
         "cell": 3,
-        "historyId": "mFu4sInng2hhqcKJk3Mt"
+        "historyId": "GHo6nwQa4gRwSWY9Aa9p",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "map-truck",
         "cell": 4,
-        "historyId": "mFu4sInng2hhqcKJk3Mt"
+        "historyId": "GHo6nwQa4gRwSWY9Aa9p",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "map-container",
         "cell": 5,
-        "historyId": "mFu4sInng2hhqcKJk3Mt"
+        "historyId": "GHo6nwQa4gRwSWY9Aa9p",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "map-van",
         "cell": 6,
-        "historyId": "mFu4sInng2hhqcKJk3Mt"
+        "historyId": "GHo6nwQa4gRwSWY9Aa9p",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "map-car",
         "cell": 1,
-        "historyId": "6ggEDK1Z4RjNtd3TtPFh"
+        "historyId": "iHR3Qk1nLyiecNTl4S0w",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "map-special",
         "cell": 2,
-        "historyId": "6ggEDK1Z4RjNtd3TtPFh"
+        "historyId": "iHR3Qk1nLyiecNTl4S0w",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       },
       {
         "name": "map-trailer",
         "cell": 3,
-        "historyId": "6ggEDK1Z4RjNtd3TtPFh"
+        "historyId": "iHR3Qk1nLyiecNTl4S0w",
+        "generationAuthorized": true,
+        "styleReferenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98"
       }
-    ]
+    ],
+    "regenerationAuthorization": {
+      "userInstruction": "Ano, vytvořit 63 ikon podle originálu",
+      "totalRequested": 63,
+      "referenceSha256": "163caa0d38059e647d40ee9148a5211e56d82464ab6383a0ab1a26a2d4d58c98",
+      "doesNotApproveEachGeneratedOutput": true,
+      "productionDeploymentAuthorized": false
+    },
+    "generationStatus": "completed",
+    "implementationStatus": "prepared-for-review"
   },
   "generations": [
     {
       "status": "COMPLETED",
-      "historyId": "CRikO54YGZpzFTu1poIJ",
+      "historyId": "hia6BDyVhvAmnDeTTQML",
       "projectId": "Se5cXknUSHaom3A8Jq3B",
       "capabilityId": "gpt-image-2-5-sunburst:image2image",
       "modelDisplayName": "GPT Image 2.5 Sunburst",
       "aspectRatio": "3:2",
-      "prompt": "SMART ODPADY complete thin-line family, sheet 1. Use the attached newly corrected six-icon master as the EXACT line-weight and visual-style reference. Create a 3-column by 2-row sheet with 6 distinct icons in the specified cells. Each cell is the same size; center its icon with generous white margins, at the SAME optical size as the master icons. Crucially match the master's very slender delicate airy line weight, around 0.5–0.75 pixels at a 24px icon size. Uniform line thickness across all icons and both colours. Thin rounded strokes, open interiors, smooth curves, restrained detail. All icon outlines must be immediately visibly light, not bold or tubular. Main graphite #243128, small green #75BD25 accent in EVERY icon. Pure flat 2D outline graphics on pure white. No text, labels, captions, numbers, grid lines, tiles, shadows, gradients, textures, perspective, 3D or additional icons. The project has a historical 3D name; ignore it completely, this is strictly 2D. Preserve each specified subject and orientation. Do not copy the six master subjects except where specifically requested. Draw exactly these symbols in this exact row-major cell order:\n1. top left: Front-view refuse collection truck, green windshield outline.\n2. top center: Invoice document with green euro currency ring.\n3. top right: Two people bust outlines, one green head ring.\n4. bottom left: Three ascending bars, tallest outlined green.\n5. bottom center: Gear outline with green central ring.\n6. bottom right: Bell outline with small green notification dot.\n\nThin line weight must match the attached master, including long strokes, circles, small detail and green accents. Never add a thick border or heavier outer contour.",
-      "inputImages": [
-        {
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-          "role": "reference"
-        }
-      ],
-      "resources": [
-        {
-          "id": "u2GxTG241SH8scMekzv5",
-          "mediaType": "image",
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926832486_0c98065b.png",
-          "status": "completed",
-          "aspectRatio": "3:2",
-          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926832753_4968772c.webp",
-          "metadata": {
-            "width": 2016,
-            "height": 1344,
-            "format": "png"
-          }
-        }
-      ]
-    },
-    {
-      "status": "COMPLETED",
-      "historyId": "2DKWIOl57bclsdWmCrr2",
-      "projectId": "Se5cXknUSHaom3A8Jq3B",
-      "capabilityId": "gpt-image-2-5-sunburst:image2image",
-      "modelDisplayName": "GPT Image 2.5 Sunburst",
-      "aspectRatio": "3:2",
-      "prompt": "SMART ODPADY complete thin-line family, sheet 2. Use the attached newly corrected six-icon master as the EXACT line-weight and visual-style reference. Create a 3-column by 2-row sheet with 6 distinct icons in the specified cells. Each cell is the same size; center its icon with generous white margins, at the SAME optical size as the master icons. Crucially match the master's very slender delicate airy line weight, around 0.5–0.75 pixels at a 24px icon size. Uniform line thickness across all icons and both colours. Thin rounded strokes, open interiors, smooth curves, restrained detail. All icon outlines must be immediately visibly light, not bold or tubular. Main graphite #243128, small green #75BD25 accent in EVERY icon. Pure flat 2D outline graphics on pure white. No text, labels, captions, numbers, grid lines, tiles, shadows, gradients, textures, perspective, 3D or additional icons. The project has a historical 3D name; ignore it completely, this is strictly 2D. Preserve each specified subject and orientation. Do not copy the six master subjects except where specifically requested. Draw exactly these symbols in this exact row-major cell order:\n1. top left: Left pointing back arrow, long thin graphite shaft and arrowhead, short green accent at the right tail.\n2. top center: Medical visit and sickness: a minimal medical bag outline with a short top handle, graphite #243128; a single clearly visible green #75BD25 medical plus in its center.\n3. top right: Family care leave: one simple graphite heart outline containing a small green medical plus.\n4. bottom left: Compensatory time off: a simple graphite clock circle with two green hands showing two o'clock. No numerals.\n5. bottom center: Unpaid leave/calendar: simple graphite rounded calendar outline with two binder tabs and header separator; three sparse green date marks inside. No numbers.\n6. bottom right: Secure electronic mailbox: a simple graphite envelope outline, with green folded V-shaped flap.\n\nThin line weight must match the attached master, including long strokes, circles, small detail and green accents. Never add a thick border or heavier outer contour.",
-      "inputImages": [
-        {
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-          "role": "reference"
-        }
-      ],
-      "resources": [
-        {
-          "id": "8rY7eCr0KVsfszTeJbVl",
-          "mediaType": "image",
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926823821_3f750537.png",
-          "status": "completed",
-          "aspectRatio": "3:2",
-          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926824049_cb1a6e74.webp",
-          "metadata": {
-            "width": 2016,
-            "height": 1344,
-            "format": "png"
-          }
-        }
-      ]
-    },
-    {
-      "status": "COMPLETED",
-      "historyId": "tLWbYhKvq4VVQZjGIhAc",
-      "projectId": "Se5cXknUSHaom3A8Jq3B",
-      "capabilityId": "gpt-image-2-5-sunburst:image2image",
-      "modelDisplayName": "GPT Image 2.5 Sunburst",
-      "aspectRatio": "3:2",
-      "prompt": "SMART ODPADY complete thin-line family, sheet 3. Use the attached newly corrected six-icon master as the EXACT line-weight and visual-style reference. Create a 3-column by 2-row sheet with 6 distinct icons in the specified cells. Each cell is the same size; center its icon with generous white margins, at the SAME optical size as the master icons. Crucially match the master's very slender delicate airy line weight, around 0.5–0.75 pixels at a 24px icon size. Uniform line thickness across all icons and both colours. Thin rounded strokes, open interiors, smooth curves, restrained detail. All icon outlines must be immediately visibly light, not bold or tubular. Main graphite #243128, small green #75BD25 accent in EVERY icon. Pure flat 2D outline graphics on pure white. No text, labels, captions, numbers, grid lines, tiles, shadows, gradients, textures, perspective, 3D or additional icons. The project has a historical 3D name; ignore it completely, this is strictly 2D. Preserve each specified subject and orientation. Do not copy the six master subjects except where specifically requested. Draw exactly these symbols in this exact row-major cell order:\n1. top left: Messaging: a single graphite rectangular speech bubble with rounded corners and a small lower-left tail, one graphite short horizontal line and one green shorter line inside.\n2. top center: Vehicle maintenance: a single diagonal open-ended wrench in graphite with one short green accent on the handle.\n3. top right: Tyres: one front-view tyre, graphite circular outer outline and four sparse tread marks, green inner circular rim.\n4. bottom left: Collection routes: one winding graphite route line, a small graphite start circle at top left, ending in a small green directional arrow at lower right.\n5. bottom center: Sampling routes: one graphite laboratory flask outline with short neck and sloping sides, one green liquid-level line inside.\n6. bottom right: Business customers: one simple graphite office-building outline with a few sparse square windows and green doorway. No lettering.\n\nThin line weight must match the attached master, including long strokes, circles, small detail and green accents. Never add a thick border or heavier outer contour.",
-      "inputImages": [
-        {
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-          "role": "reference"
-        }
-      ],
-      "resources": [
-        {
-          "id": "eGugaDEY3DrleMi6MFUp",
-          "mediaType": "image",
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926838081_76ad477f.png",
-          "status": "completed",
-          "aspectRatio": "3:2",
-          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926838254_e9e750c4.webp",
-          "metadata": {
-            "width": 2016,
-            "height": 1344,
-            "format": "png"
-          }
-        }
-      ]
-    },
-    {
-      "status": "COMPLETED",
-      "historyId": "JFWhVyhtW9nPu0YySt7r",
-      "projectId": "Se5cXknUSHaom3A8Jq3B",
-      "capabilityId": "gpt-image-2-5-sunburst:image2image",
-      "modelDisplayName": "GPT Image 2.5 Sunburst",
-      "aspectRatio": "3:2",
-      "prompt": "SMART ODPADY complete thin-line family, sheet 4. Use the attached newly corrected six-icon master as the EXACT line-weight and visual-style reference. Create a 3-column by 2-row sheet with 6 distinct icons in the specified cells. Each cell is the same size; center its icon with generous white margins, at the SAME optical size as the master icons. Crucially match the master's very slender delicate airy line weight, around 0.5–0.75 pixels at a 24px icon size. Uniform line thickness across all icons and both colours. Thin rounded strokes, open interiors, smooth curves, restrained detail. All icon outlines must be immediately visibly light, not bold or tubular. Main graphite #243128, small green #75BD25 accent in EVERY icon. Pure flat 2D outline graphics on pure white. No text, labels, captions, numbers, grid lines, tiles, shadows, gradients, textures, perspective, 3D or additional icons. The project has a historical 3D name; ignore it completely, this is strictly 2D. Preserve each specified subject and orientation. Do not copy the six master subjects except where specifically requested. Draw exactly these symbols in this exact row-major cell order:\n1. top left: Costs: a compact graphite wallet outline with a clasp pocket, small green clasp accent.\n2. top center: Reports: a graphite document outline with folded upper-right corner, three short bar-chart strokes inside, last bar green.\n3. top right: User access permissions: one graphite head-and-shoulders user outline with a small graphite shield at lower right containing a green checkmark.\n4. bottom left: System health: simple graphite computer monitor outline and stand, green diagnostic pulse line on the screen.\n5. bottom center: Self-repair: two graphite circular recovery arrows around a green central checkmark.\n6. bottom right: Warning: one graphite equilateral triangle outline with rounded corners and a green exclamation stroke and dot inside.\n\nThin line weight must match the attached master, including long strokes, circles, small detail and green accents. Never add a thick border or heavier outer contour.",
-      "inputImages": [
-        {
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-          "role": "reference"
-        }
-      ],
-      "resources": [
-        {
-          "id": "ArRRIszI8Db5Ro6Tzrx8",
-          "mediaType": "image",
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926831593_6e1d70e0.png",
-          "status": "completed",
-          "aspectRatio": "3:2",
-          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926831761_0099ff65.webp",
-          "metadata": {
-            "width": 2016,
-            "height": 1344,
-            "format": "png"
-          }
-        }
-      ]
-    },
-    {
-      "status": "COMPLETED",
-      "historyId": "Io3aKqNDDbbh3GplyHQS",
-      "projectId": "Se5cXknUSHaom3A8Jq3B",
-      "capabilityId": "gpt-image-2-5-sunburst:image2image",
-      "modelDisplayName": "GPT Image 2.5 Sunburst",
-      "aspectRatio": "3:2",
-      "prompt": "SMART ODPADY complete thin-line family, sheet 5. Use the attached newly corrected six-icon master as the EXACT line-weight and visual-style reference. Create a 3-column by 2-row sheet with 6 distinct icons in the specified cells. Each cell is the same size; center its icon with generous white margins, at the SAME optical size as the master icons. Crucially match the master's very slender delicate airy line weight, around 0.5–0.75 pixels at a 24px icon size. Uniform line thickness across all icons and both colours. Thin rounded strokes, open interiors, smooth curves, restrained detail. All icon outlines must be immediately visibly light, not bold or tubular. Main graphite #243128, small green #75BD25 accent in EVERY icon. Pure flat 2D outline graphics on pure white. No text, labels, captions, numbers, grid lines, tiles, shadows, gradients, textures, perspective, 3D or additional icons. The project has a historical 3D name; ignore it completely, this is strictly 2D. Preserve each specified subject and orientation. Do not copy the six master subjects except where specifically requested. Draw exactly these symbols in this exact row-major cell order:\n1. top left: Confirmation: one graphite circular outline containing a green checkmark.\n2. top center: Close: two clean diagonal strokes forming X, one graphite and the other green. No circle or container.\n3. top right: Add: two perpendicular equal-length strokes forming a plus sign, horizontal graphite and vertical green. No circle or container.\n4. bottom left: Subtract/collapse: one horizontal stroke, mostly graphite with its right third green. No circle or container.\n5. bottom center: Next/disclosure: a simple open chevron pointing right, upper diagonal graphite and lower diagonal green. No shaft, no circle.\n6. bottom right: Previous/disclosure: a simple open chevron pointing left, upper diagonal graphite and lower diagonal green. No shaft, no circle.\n\nThin line weight must match the attached master, including long strokes, circles, small detail and green accents. Never add a thick border or heavier outer contour.",
-      "inputImages": [
-        {
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-          "role": "reference"
-        }
-      ],
-      "resources": [
-        {
-          "id": "XBxsrpQ6fX17sZZSw78c",
-          "mediaType": "image",
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926836910_b9e33f7a.png",
-          "status": "completed",
-          "aspectRatio": "3:2",
-          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926837162_c2761531.webp",
-          "metadata": {
-            "width": 2016,
-            "height": 1344,
-            "format": "png"
-          }
-        }
-      ]
-    },
-    {
-      "status": "COMPLETED",
-      "historyId": "pkiwp57xpT1OlfxbHv7b",
-      "projectId": "Se5cXknUSHaom3A8Jq3B",
-      "capabilityId": "gpt-image-2-5-sunburst:image2image",
-      "modelDisplayName": "GPT Image 2.5 Sunburst",
-      "aspectRatio": "3:2",
-      "prompt": "SMART ODPADY complete thin-line family, sheet 6. Use the attached newly corrected six-icon master as the EXACT line-weight and visual-style reference. Create a 3-column by 2-row sheet with 6 distinct icons in the specified cells. Each cell is the same size; center its icon with generous white margins, at the SAME optical size as the master icons. Crucially match the master's very slender delicate airy line weight, around 0.5–0.75 pixels at a 24px icon size. Uniform line thickness across all icons and both colours. Thin rounded strokes, open interiors, smooth curves, restrained detail. All icon outlines must be immediately visibly light, not bold or tubular. Main graphite #243128, small green #75BD25 accent in EVERY icon. Pure flat 2D outline graphics on pure white. No text, labels, captions, numbers, grid lines, tiles, shadows, gradients, textures, perspective, 3D or additional icons. The project has a historical 3D name; ignore it completely, this is strictly 2D. Preserve each specified subject and orientation. Do not copy the six master subjects except where specifically requested. Draw exactly these symbols in this exact row-major cell order:\n1. top left: Expand: a simple open chevron pointing down, left diagonal graphite and right diagonal green. No shaft, no circle.\n2. top center: Forward navigation: straight horizontal right-pointing arrow, open graphite chevron head and graphite shaft, only the terminal left-hand quarter of the shaft green. No circle.\n3. top right: Move upward: straight vertical up-pointing arrow, open graphite chevron head and graphite shaft, only the bottom quarter of the shaft green. No circle.\n4. bottom left: Move downward: straight vertical down-pointing arrow, open graphite chevron head and graphite shaft, only the top quarter of the shaft green. No circle.\n5. bottom center: Search: simple graphite magnifying-glass circular lens with green diagonal handle toward lower right.\n6. bottom right: Refresh: two simple graphite opposing curved circular arrows, their arrowhead strokes green.\n\nThin line weight must match the attached master, including long strokes, circles, small detail and green accents. Never add a thick border or heavier outer contour.",
-      "inputImages": [
-        {
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-          "role": "reference"
-        }
-      ],
-      "resources": [
-        {
-          "id": "QysXGr7lfKVrbf3sbQ26",
-          "mediaType": "image",
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926840677_35e8f13e.png",
-          "status": "completed",
-          "aspectRatio": "3:2",
-          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926840834_501057af.webp",
-          "metadata": {
-            "width": 2016,
-            "height": 1344,
-            "format": "png"
-          }
-        }
-      ]
-    },
-    {
-      "status": "COMPLETED",
-      "historyId": "jQ91kFIJNHkhNbQYKk0z",
-      "projectId": "Se5cXknUSHaom3A8Jq3B",
-      "capabilityId": "gpt-image-2-5-sunburst:image2image",
-      "modelDisplayName": "GPT Image 2.5 Sunburst",
-      "aspectRatio": "3:2",
-      "prompt": "SMART ODPADY complete thin-line family, sheet 7. Use the attached newly corrected six-icon master as the EXACT line-weight and visual-style reference. Create a 3-column by 2-row sheet with 6 distinct icons in the specified cells. Each cell is the same size; center its icon with generous white margins, at the SAME optical size as the master icons. Crucially match the master's very slender delicate airy line weight, around 0.5–0.75 pixels at a 24px icon size. Uniform line thickness across all icons and both colours. Thin rounded strokes, open interiors, smooth curves, restrained detail. All icon outlines must be immediately visibly light, not bold or tubular. Main graphite #243128, small green #75BD25 accent in EVERY icon. Pure flat 2D outline graphics on pure white. No text, labels, captions, numbers, grid lines, tiles, shadows, gradients, textures, perspective, 3D or additional icons. The project has a historical 3D name; ignore it completely, this is strictly 2D. Preserve each specified subject and orientation. Do not copy the six master subjects except where specifically requested. Draw exactly these symbols in this exact row-major cell order:\n1. top left: Voice input: graphite vertical capsule microphone, small graphite stand, green U-shaped pickup arc around its lower half.\n2. top center: Sound enabled: graphite loudspeaker outline pointing right, two simple green sound-wave arcs to its right.\n3. top right: Sound disabled: graphite loudspeaker outline pointing right, one small green X to its right.\n4. bottom left: Camera: compact graphite camera body outline with a short raised top housing, green circular lens.\n5. bottom center: Navigation heading: simple graphite angular navigation pointer outline pointing diagonally toward upper right, with a green interior dividing stroke. No map or circle.\n6. bottom right: Waste bin: graphite wheeled-bin outline with lid and small handle, two short green vertical strokes inside.\n\nThin line weight must match the attached master, including long strokes, circles, small detail and green accents. Never add a thick border or heavier outer contour.",
-      "inputImages": [
-        {
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-          "role": "reference"
-        }
-      ],
-      "resources": [
-        {
-          "id": "50fnbi1Y4YOIyYWVfjWG",
-          "mediaType": "image",
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849019_c6934ede.png",
-          "status": "completed",
-          "aspectRatio": "3:2",
-          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849205_e0c9fd28.webp",
-          "metadata": {
-            "width": 2016,
-            "height": 1344,
-            "format": "png"
-          }
-        }
-      ]
-    },
-    {
-      "status": "COMPLETED",
-      "historyId": "8Rbmwg9zIvNaFDmwoNbv",
-      "projectId": "Se5cXknUSHaom3A8Jq3B",
-      "capabilityId": "gpt-image-2-5-sunburst:image2image",
-      "modelDisplayName": "GPT Image 2.5 Sunburst",
-      "aspectRatio": "3:2",
-      "prompt": "SMART ODPADY complete thin-line family, sheet 8. Use the attached newly corrected six-icon master as the EXACT line-weight and visual-style reference. Create a 3-column by 2-row sheet with 6 distinct icons in the specified cells. Each cell is the same size; center its icon with generous white margins, at the SAME optical size as the master icons. Crucially match the master's very slender delicate airy line weight, around 0.5–0.75 pixels at a 24px icon size. Uniform line thickness across all icons and both colours. Thin rounded strokes, open interiors, smooth curves, restrained detail. All icon outlines must be immediately visibly light, not bold or tubular. Main graphite #243128, small green #75BD25 accent in EVERY icon. Pure flat 2D outline graphics on pure white. No text, labels, captions, numbers, grid lines, tiles, shadows, gradients, textures, perspective, 3D or additional icons. The project has a historical 3D name; ignore it completely, this is strictly 2D. Preserve each specified subject and orientation. Do not copy the six master subjects except where specifically requested. Draw exactly these symbols in this exact row-major cell order:\n1. top left: Missing waste bin: graphite waste-bin outline and lid crossed by one green diagonal slash.\n2. top center: Overflowing waste bin: graphite waste-bin outline with two sparse stacked material lines extending above the top, one small green upward arrow inside the bin.\n3. top right: Road obstruction: graphite traffic-cone outline with two sparse crossbars, green horizontal base.\n4. bottom left: Blocked access: graphite circle outline with a green diagonal prohibition slash.\n5. bottom center: Driver tablet: graphite portrait tablet outline with softly rounded corners, one green short horizontal home indicator at the bottom.\n6. bottom right: Pause: two parallel equal-height vertical strokes, left graphite and right green, with generous space. No circle.\n\nThin line weight must match the attached master, including long strokes, circles, small detail and green accents. Never add a thick border or heavier outer contour.",
-      "inputImages": [
-        {
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-          "role": "reference"
-        }
-      ],
-      "resources": [
-        {
-          "id": "WDpKoydsYU7tjA2yRYx5",
-          "mediaType": "image",
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926851970_2c148b85.png",
-          "status": "completed",
-          "aspectRatio": "3:2",
-          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926852165_a437594f.webp",
-          "metadata": {
-            "width": 2016,
-            "height": 1344,
-            "format": "png"
-          }
-        }
-      ]
-    },
-    {
-      "status": "COMPLETED",
-      "historyId": "SRkk56a15gbxUjhlKxsB",
-      "projectId": "Se5cXknUSHaom3A8Jq3B",
-      "capabilityId": "gpt-image-2-5-sunburst:image2image",
-      "modelDisplayName": "GPT Image 2.5 Sunburst",
-      "aspectRatio": "3:2",
-      "prompt": "SMART ODPADY complete thin-line family, sheet 9. Use the attached newly corrected six-icon master as the EXACT line-weight and visual-style reference. Create a 3-column by 2-row sheet with 6 distinct icons in the specified cells. Each cell is the same size; center its icon with generous white margins, at the SAME optical size as the master icons. Crucially match the master's very slender delicate airy line weight, around 0.5–0.75 pixels at a 24px icon size. Uniform line thickness across all icons and both colours. Thin rounded strokes, open interiors, smooth curves, restrained detail. All icon outlines must be immediately visibly light, not bold or tubular. Main graphite #243128, small green #75BD25 accent in EVERY icon. Pure flat 2D outline graphics on pure white. No text, labels, captions, numbers, grid lines, tiles, shadows, gradients, textures, perspective, 3D or additional icons. The project has a historical 3D name; ignore it completely, this is strictly 2D. Preserve each specified subject and orientation. Do not copy the six master subjects except where specifically requested. Draw exactly these symbols in this exact row-major cell order:\n1. top left: Measurement: one diagonal graphite rectangular ruler outline with three short green tick marks. No numbers.\n2. top center: Information: graphite circle outline with a green lowercase-i symbol formed by a vertical stroke and dot.\n3. top right: Download: graphite open tray outline at bottom, green downward arrow above it.\n4. bottom left: Attachment: one simple graphite paperclip outline with a short green segment on its upper inner curve.\n5. bottom center: Passenger car: minimal front-facing graphite car outline, two small lights and two tyres, a green windshield line. No perspective.\n6. bottom right: Van: minimal front-facing graphite tall van outline with two lights and two tyres, green windshield outline. No perspective.\n\nThin line weight must match the attached master, including long strokes, circles, small detail and green accents. Never add a thick border or heavier outer contour.",
-      "inputImages": [
-        {
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-          "role": "reference"
-        }
-      ],
-      "resources": [
-        {
-          "id": "QIkap6d3oqPyQ5ospOeH",
-          "mediaType": "image",
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926849775_19644623.png",
-          "status": "completed",
-          "aspectRatio": "3:2",
-          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926850099_ead31cf2.webp",
-          "metadata": {
-            "width": 2016,
-            "height": 1344,
-            "format": "png"
-          }
-        }
-      ]
-    },
-    {
-      "status": "COMPLETED",
-      "historyId": "mFu4sInng2hhqcKJk3Mt",
-      "projectId": "Se5cXknUSHaom3A8Jq3B",
-      "capabilityId": "gpt-image-2-5-sunburst:image2image",
-      "modelDisplayName": "GPT Image 2.5 Sunburst",
-      "aspectRatio": "3:2",
-      "prompt": "SMART ODPADY complete thin-line family, sheet 10. Use the attached newly corrected six-icon master as the EXACT line-weight and visual-style reference. Create a 3-column by 2-row sheet with 6 distinct icons in the specified cells. Each cell is the same size; center its icon with generous white margins, at the SAME optical size as the master icons. Crucially match the master's very slender delicate airy line weight, around 0.5–0.75 pixels at a 24px icon size. Uniform line thickness across all icons and both colours. Thin rounded strokes, open interiors, smooth curves, restrained detail. All icon outlines must be immediately visibly light, not bold or tubular. Main graphite #243128, small green #75BD25 accent in EVERY icon. Pure flat 2D outline graphics on pure white. No text, labels, captions, numbers, grid lines, tiles, shadows, gradients, textures, perspective, 3D or additional icons. The project has a historical 3D name; ignore it completely, this is strictly 2D. Preserve each specified subject and orientation. Do not copy the six master subjects except where specifically requested. Draw exactly these symbols in this exact row-major cell order:\n1. top left: Container truck: minimal flat side-profile graphite chassis, simple cab on right and rectangular cargo container on left, two sparse wheels, one green line on the container. No perspective.\n2. top center: Special equipment: minimal flat side-profile graphite forklift with cab and two wheels, vertical lifting mast on right, one green window line. No perspective.\n3. top right: Trailer: minimal flat side-profile graphite rectangular trailer outline, two wheels below and short towbar on right, one short green line inside. No perspective.\n4. bottom left: MAP MARKER: flat orthographic TOP-DOWN truck outline oriented exactly NORTH, front at top. Long graphite body with cab divider near top and two sparse cargo lines, small green windshield line near top. Strictly 2D, no isometric or side view.\n5. bottom center: MAP MARKER: flat orthographic TOP-DOWN container truck oriented exactly NORTH, front at top. Graphite rectangular outline, small cab divider near top, three sparse horizontal container ribs, small green windshield line near top. Strictly 2D, no isometric.\n6. bottom right: MAP MARKER: flat orthographic TOP-DOWN van oriented exactly NORTH, front at top. Graphite elongated body outline with rounded front, a cab divider and rear seam, short green windshield line at top. Strictly 2D, no isometric.\n\nThin line weight must match the attached master, including long strokes, circles, small detail and green accents. Never add a thick border or heavier outer contour.",
-      "inputImages": [
-        {
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-          "role": "reference"
-        }
-      ],
-      "resources": [
-        {
-          "id": "2h1bliWccJjiR1Y7A9nG",
-          "mediaType": "image",
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926856924_be8a2359.png",
-          "status": "completed",
-          "aspectRatio": "3:2",
-          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926857240_63c49b0c.webp",
-          "metadata": {
-            "width": 2016,
-            "height": 1344,
-            "format": "png"
-          }
-        }
-      ]
-    },
-    {
-      "status": "COMPLETED",
-      "historyId": "6ggEDK1Z4RjNtd3TtPFh",
-      "projectId": "Se5cXknUSHaom3A8Jq3B",
-      "capabilityId": "gpt-image-2-5-sunburst:image2image",
-      "modelDisplayName": "GPT Image 2.5 Sunburst",
-      "aspectRatio": "3:2",
-      "prompt": "SMART ODPADY complete thin-line family, sheet 11. Use the attached newly corrected six-icon master as the EXACT line-weight and visual-style reference. Create a 3-column by 2-row sheet with 3 distinct icons in the specified cells. Each cell is the same size; center its icon with generous white margins, at the SAME optical size as the master icons. Crucially match the master's very slender delicate airy line weight, around 0.5–0.75 pixels at a 24px icon size. Uniform line thickness across all icons and both colours. Thin rounded strokes, open interiors, smooth curves, restrained detail. All icon outlines must be immediately visibly light, not bold or tubular. Main graphite #243128, small green #75BD25 accent in EVERY icon. Pure flat 2D outline graphics on pure white. No text, labels, captions, numbers, grid lines, tiles, shadows, gradients, textures, perspective, 3D or additional icons. The project has a historical 3D name; ignore it completely, this is strictly 2D. Preserve each specified subject and orientation. Do not copy the six master subjects except where specifically requested. Draw exactly these symbols in this exact row-major cell order:\n1. top left: MAP MARKER: flat orthographic TOP-DOWN passenger car oriented exactly NORTH, front at top. Graphite rounded elongated body with one roof outline and rear window line, short green windshield line at top. Strictly 2D, no isometric.\n2. top center: MAP MARKER: flat orthographic TOP-DOWN special industrial vehicle oriented exactly NORTH, front at top. Graphite compact central cab and two simple side tracks or wheel rails, green windshield line near top. Strictly 2D, no isometric.\n3. top right: MAP MARKER: flat orthographic TOP-DOWN trailer oriented exactly NORTH, tow coupling at top. Graphite rectangular cargo outline, short tow coupling at top and sparse rear wheel marks, one green transverse cargo line. Strictly 2D, no isometric.\nLeave all three bottom-row cells completely blank white.\nThin line weight must match the attached master, including long strokes, circles, small detail and green accents. Never add a thick border or heavier outer contour.",
-      "inputImages": [
-        {
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
-          "role": "reference"
-        }
-      ],
-      "resources": [
-        {
-          "id": "HUHQ5GhfqCjsmVRJU7pO",
-          "mediaType": "image",
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926858234_dc421029.png",
-          "status": "completed",
-          "aspectRatio": "3:2",
-          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792926858373_ac6de2cb.webp",
-          "metadata": {
-            "width": 2016,
-            "height": 1344,
-            "format": "png"
-          }
-        }
-      ]
-    },
-    {
-      "status": "COMPLETED",
-      "historyId": "WBQuydSLHFxFXvYBRwLR",
-      "projectId": "Se5cXknUSHaom3A8Jq3B",
-      "capabilityId": "gpt-image-2-5-sunburst:image2image",
-      "modelDisplayName": "GPT Image 2.5 Sunburst",
-      "aspectRatio": "3:2",
-      "prompt": "SMART ODPADY — THIN LINE CORRECTION, not a new design. The attached six-icon image is the exact approved geometry and layout. Produce the SAME six icons in the SAME 3-column 2-row arrangement: home with green roof; four rounded module squares with only upper-left green; calendar with green check; map pin with green inner ring; clipboard with green check; three small horizontal rings with center green. Preserve all silhouettes, proportions, spacing, orientations and green-accent positions. The user's repeated correction is that previous generated icons have HEAVY THICK strokes. This revision MUST have visibly thinner, delicate, airy uniform outlines and generous open white interiors. Use a light UI monoline weight: equivalent to about 0.75 px in a 24 px icon, with the icon silhouette occupying 20 px. Not 2.2px, not bold, not thick tubing. Keep exactly that same delicate weight for the green and graphite portions of every symbol. Rounded line endings and smooth joins. Main ink exactly #243128, green exactly #75BD25. Pure flat 2D line art on pure white. No shading, texture, gradients, shadows, tiles, 3D, embellishment, text, labels, borders or alternate designs. Do not fill the house door, module squares, calendar interior, pin center, clipboard interior or three rings. Retain their open whitespace. Clean precise slender contours are the central purpose of this correction. The output must look immediately more airy and lighter than a bold outline icon pack.",
+      "prompt": "SMART ODPADY, approved-original continuation, batch 01 of 11. Create 6 NEW symbols for the EXACT SAME icon family as the attached USER-APPROVED ORIGINAL six-icon image. The attachment is the authoritative original, not a later thin redraw. Match its actual contour weight, rounded ends, rounded joins, optical scale, uncomplicated silhouettes and spacious interiors. Inspect the house wall, module-square border, calendar border and pin border in the attachment, and reproduce their line-to-icon-height ratio for every new symbol. Do not make hairlines or technical wireframes. Do not make heavy bold tubing. Do not reinterpret or redesign the visual style. Graphite #243128 outlines and a clearly visible lime #75BD25 accent in EVERY icon; both colours use the same visual line thickness. Pure flat 2D, empty open interiors, crisp solid contour edges. No shadows, gradients, texture, 3D, perspective, colored tiles, panels, labels, captions, words, grid or text. The project's historical name mentions 3D; ignore that name, this is strictly 2D.\n\nLayout: 3 equal-width columns by 2 equal-height rows on a pure white 3:2 canvas. Each cell is one invisible square; center one symbol in it, with generous equal margins and matching optical size. Use the same silhouette-to-cell scale as the supplied original. Do not include the six reference symbols as extra icons. Keep all cells separate and no overlap. Draw these exact subjects and orientations in row-major order:\n1. top left: Front-view refuse collection truck, green windshield outline.\n2. top center: Invoice document with green euro currency ring.\n3. top right: Two people bust outlines, one green head ring.\n4. bottom left: Three ascending bars, tallest outlined green.\n5. bottom center: Gear outline with green central ring.\n6. bottom right: Bell outline with small green notification dot.\n\nQuality check: all 6 requested symbols, no extra objects, every symbol has a visible green accent; stroke weight and rounded terminal shapes must visually belong beside the original six at 24px. Follow the attached ORIGINAL directly. Do not use a previously generated thin master.",
       "inputImages": [
         {
           "url": "https://cdn.openart.ai/openart-uploads/production/attachment-transfers/f83619141dc5faabc37ca522c42b9899b4f5a192017c3b3af39e033ecd19669a.png",
@@ -719,12 +525,12 @@
       ],
       "resources": [
         {
-          "id": "yQx2Hj5OhS2fPT1abvxw",
+          "id": "2uSkn94aHx31SCGovEYm",
           "mediaType": "image",
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247178_1a6d978f.png",
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963382873_83addd07.png",
           "status": "completed",
           "aspectRatio": "3:2",
-          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792922247305_d82534ad.webp",
+          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963383156_b9129a99.webp",
           "metadata": {
             "width": 2016,
             "height": 1344,
@@ -734,16 +540,317 @@
       ]
     },
     {
-      "historyId": "jBrggqXVTmQUWteApJ9n",
       "status": "COMPLETED",
+      "historyId": "Uo8P2RrXphG83wRTrEr1",
+      "projectId": "Se5cXknUSHaom3A8Jq3B",
+      "capabilityId": "gpt-image-2-5-sunburst:image2image",
+      "modelDisplayName": "GPT Image 2.5 Sunburst",
+      "aspectRatio": "3:2",
+      "prompt": "SMART ODPADY, ORIGINAL-FAMILY stroke correction, batch 02. Correct the existing 6 symbols in image 2, keeping their subjects, orientation, layout and silhouettes. Image 1 is the approved reference. Image 2 has excessively thick strokes; change its stroke weight to match image 1 accurately.\n\nStrict measurable visual requirement: the visible outer silhouette of each icon occupies 20 units in a 24-unit icon canvas; the continuous strokes of BOTH graphite and green have a uniform width of 1.0 unit, approximately 5 percent of the icon silhouette height. This is the relative weight of the house walls, calendar and module borders in the APPROVED ORIGINAL (image 1). Thin but clearly visible, NOT the 0.5-unit hairline version, NOT the 2-to-3-unit bold version. Match this same ratio on simple arrows, plus, X, pause and all accent strokes. A very simple icon must NOT get thicker strokes just because it has fewer lines. Pause is two slender rounded LINE segments, never thick pills. Medical plus, clock hands, underline and information-i are the same width as their containing outline. Only a round dot may be filled; other continuous marks stay monoline.\n\nKeep the airy open interiors and rounded caps and joins of image 1. Solid graphite #243128 and lime #75BD25 only; each icon needs a green accent. Flat 2D, pure white background extending to all four edges. Do NOT reproduce the rounded page corners from image 1. No page border, black corner pixels, shading, gradients, shadows, texture, tiles, text labels, captions or 3D. Ignore the historical project name.\n\nArrange a 3-column by 2-row invisible equal-cell grid, one centered icon per cell, generous equal margins, no overlap. Same optical scale across all six cells. Exactly these subjects in row-major order:\n1. top left: Left pointing back arrow, graphite shaft and arrowhead, short green accent at the right tail.\n2. top center: Medical visit and sickness: a minimal medical bag outline with a short top handle, graphite #243128; a single clearly visible green #75BD25 medical plus in its center.\n3. top right: Family care leave: one simple graphite heart outline containing a small green medical plus.\n4. bottom left: Compensatory time off: a simple graphite clock circle with two green hands showing two o'clock. No numerals.\n5. bottom center: Unpaid leave/calendar: simple graphite rounded calendar outline with two binder tabs and header separator; three sparse green date marks inside. No numbers.\n6. bottom right: Secure electronic mailbox: a simple graphite envelope outline, with green folded V-shaped flap.\n\nThe single controlling requirement is consistent 1.0-unit stroke width at 24 units for BOTH colours, including simple symbols. Preserve subject geometry and all green-accent positions. Do not draw the reference six subjects as extra symbols.",
+      "inputImages": [
+        {
+          "url": "https://cdn.openart.ai/openart-uploads/production/attachment-transfers/f83619141dc5faabc37ca522c42b9899b4f5a192017c3b3af39e033ecd19669a.png",
+          "role": "reference"
+        },
+        {
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963384755_fcf26f4d.png",
+          "role": "reference"
+        }
+      ],
       "resources": [
         {
-          "id": "cOMAtQOHHZKgjQSrwnSK",
+          "id": "ep5btR5fiiVYo6Mj3wvJ",
           "mediaType": "image",
-          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-1_1792916594281_0ea3c722.png",
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975406517_7cca75f1.png",
           "status": "completed",
           "aspectRatio": "3:2",
-          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-1_1792916594451_00030b8e.webp",
+          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975406751_728d8452.webp",
+          "metadata": {
+            "width": 2016,
+            "height": 1344,
+            "format": "png"
+          }
+        }
+      ]
+    },
+    {
+      "status": "COMPLETED",
+      "historyId": "pqAVwi0bHOobrYDvdNhu",
+      "projectId": "Se5cXknUSHaom3A8Jq3B",
+      "capabilityId": "gpt-image-2-5-sunburst:image2image",
+      "modelDisplayName": "GPT Image 2.5 Sunburst",
+      "aspectRatio": "3:2",
+      "prompt": "SMART ODPADY, approved-original continuation, batch 03 of 11. Create 6 NEW symbols for the EXACT SAME icon family as the attached USER-APPROVED ORIGINAL six-icon image. The attachment is the authoritative original, not a later thin redraw. Match its actual contour weight, rounded ends, rounded joins, optical scale, uncomplicated silhouettes and spacious interiors. Inspect the house wall, module-square border, calendar border and pin border in the attachment, and reproduce their line-to-icon-height ratio for every new symbol. Do not make hairlines or technical wireframes. Do not make heavy bold tubing. Do not reinterpret or redesign the visual style. Graphite #243128 outlines and a clearly visible lime #75BD25 accent in EVERY icon; both colours use the same visual line thickness. Pure flat 2D, empty open interiors, crisp solid contour edges. No shadows, gradients, texture, 3D, perspective, colored tiles, panels, labels, captions, words, grid or text. The project's historical name mentions 3D; ignore that name, this is strictly 2D.\n\nLayout: 3 equal-width columns by 2 equal-height rows on a pure white 3:2 canvas. Each cell is one invisible square; center one symbol in it, with generous equal margins and matching optical size. Use the same silhouette-to-cell scale as the supplied original. Do not include the six reference symbols as extra icons. Keep all cells separate and no overlap. Draw these exact subjects and orientations in row-major order:\n1. top left: Messaging: a single graphite rectangular speech bubble with rounded corners and a small lower-left tail, one graphite short horizontal line and one green shorter line inside.\n2. top center: Vehicle maintenance: a single diagonal open-ended wrench in graphite with one short green accent on the handle.\n3. top right: Tyres: one front-view tyre, graphite circular outer outline and four sparse tread marks, green inner circular rim.\n4. bottom left: Collection routes: one winding graphite route line, a small graphite start circle at top left, ending in a small green directional arrow at lower right.\n5. bottom center: Sampling routes: one graphite laboratory flask outline with short neck and sloping sides, one green liquid-level line inside.\n6. bottom right: Business customers: one simple graphite office-building outline with a few sparse square windows and green doorway. No lettering.\n\nQuality check: all 6 requested symbols, no extra objects, every symbol has a visible green accent; stroke weight and rounded terminal shapes must visually belong beside the original six at 24px. Follow the attached ORIGINAL directly. Do not use a previously generated thin master.",
+      "inputImages": [
+        {
+          "url": "https://cdn.openart.ai/openart-uploads/production/attachment-transfers/f83619141dc5faabc37ca522c42b9899b4f5a192017c3b3af39e033ecd19669a.png",
+          "role": "reference"
+        }
+      ],
+      "resources": [
+        {
+          "id": "RtVWFFkutD8cD7Q0E1nU",
+          "mediaType": "image",
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963393044_bd754e1e.png",
+          "status": "completed",
+          "aspectRatio": "3:2",
+          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963393219_b085029b.webp",
+          "metadata": {
+            "width": 2016,
+            "height": 1344,
+            "format": "png"
+          }
+        }
+      ]
+    },
+    {
+      "status": "COMPLETED",
+      "historyId": "Nebu7uzCwoA7Ostkh7Se",
+      "projectId": "Se5cXknUSHaom3A8Jq3B",
+      "capabilityId": "gpt-image-2-5-sunburst:image2image",
+      "modelDisplayName": "GPT Image 2.5 Sunburst",
+      "aspectRatio": "3:2",
+      "prompt": "SMART ODPADY, approved-original continuation, batch 04 of 11. Create 6 NEW symbols for the EXACT SAME icon family as the attached USER-APPROVED ORIGINAL six-icon image. The attachment is the authoritative original, not a later thin redraw. Match its actual contour weight, rounded ends, rounded joins, optical scale, uncomplicated silhouettes and spacious interiors. Inspect the house wall, module-square border, calendar border and pin border in the attachment, and reproduce their line-to-icon-height ratio for every new symbol. Do not make hairlines or technical wireframes. Do not make heavy bold tubing. Do not reinterpret or redesign the visual style. Graphite #243128 outlines and a clearly visible lime #75BD25 accent in EVERY icon; both colours use the same visual line thickness. Pure flat 2D, empty open interiors, crisp solid contour edges. No shadows, gradients, texture, 3D, perspective, colored tiles, panels, labels, captions, words, grid or text. The project's historical name mentions 3D; ignore that name, this is strictly 2D.\n\nLayout: 3 equal-width columns by 2 equal-height rows on a pure white 3:2 canvas. Each cell is one invisible square; center one symbol in it, with generous equal margins and matching optical size. Use the same silhouette-to-cell scale as the supplied original. Do not include the six reference symbols as extra icons. Keep all cells separate and no overlap. Draw these exact subjects and orientations in row-major order:\n1. top left: Costs: a compact graphite wallet outline with a clasp pocket, small green clasp accent.\n2. top center: Reports: a graphite document outline with folded upper-right corner, three short bar-chart strokes inside, last bar green.\n3. top right: User access permissions: one graphite head-and-shoulders user outline with a small graphite shield at lower right containing a green checkmark.\n4. bottom left: System health: simple graphite computer monitor outline and stand, green diagnostic pulse line on the screen.\n5. bottom center: Self-repair: two graphite circular recovery arrows around a green central checkmark.\n6. bottom right: Warning: one graphite equilateral triangle outline with rounded corners and a green exclamation stroke and dot inside.\n\nQuality check: all 6 requested symbols, no extra objects, every symbol has a visible green accent; stroke weight and rounded terminal shapes must visually belong beside the original six at 24px. Follow the attached ORIGINAL directly. Do not use a previously generated thin master.",
+      "inputImages": [
+        {
+          "url": "https://cdn.openart.ai/openart-uploads/production/attachment-transfers/f83619141dc5faabc37ca522c42b9899b4f5a192017c3b3af39e033ecd19669a.png",
+          "role": "reference"
+        }
+      ],
+      "resources": [
+        {
+          "id": "FYUoAvlFyncIdtHVPaDn",
+          "mediaType": "image",
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963397451_3f541eb5.png",
+          "status": "completed",
+          "aspectRatio": "3:2",
+          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963397610_c6c6cd55.webp",
+          "metadata": {
+            "width": 2016,
+            "height": 1344,
+            "format": "png"
+          }
+        }
+      ]
+    },
+    {
+      "status": "COMPLETED",
+      "historyId": "YBpqsnth84iaMtP1ZYJz",
+      "projectId": "Se5cXknUSHaom3A8Jq3B",
+      "capabilityId": "gpt-image-2-5-sunburst:image2image",
+      "modelDisplayName": "GPT Image 2.5 Sunburst",
+      "aspectRatio": "3:2",
+      "prompt": "SMART ODPADY, ORIGINAL-FAMILY stroke correction, batch 05. Correct the existing 6 symbols in image 2, keeping their subjects, orientation, layout and silhouettes. Image 1 is the approved reference. Image 2 has excessively thick strokes; change its stroke weight to match image 1 accurately.\n\nStrict measurable visual requirement: the visible outer silhouette of each icon occupies 20 units in a 24-unit icon canvas; the continuous strokes of BOTH graphite and green have a uniform width of 1.0 unit, approximately 5 percent of the icon silhouette height. This is the relative weight of the house walls, calendar and module borders in the APPROVED ORIGINAL (image 1). Thin but clearly visible, NOT the 0.5-unit hairline version, NOT the 2-to-3-unit bold version. Match this same ratio on simple arrows, plus, X, pause and all accent strokes. A very simple icon must NOT get thicker strokes just because it has fewer lines. Pause is two slender rounded LINE segments, never thick pills. Medical plus, clock hands, underline and information-i are the same width as their containing outline. Only a round dot may be filled; other continuous marks stay monoline.\n\nKeep the airy open interiors and rounded caps and joins of image 1. Solid graphite #243128 and lime #75BD25 only; each icon needs a green accent. Flat 2D, pure white background extending to all four edges. Do NOT reproduce the rounded page corners from image 1. No page border, black corner pixels, shading, gradients, shadows, texture, tiles, text labels, captions or 3D. Ignore the historical project name.\n\nArrange a 3-column by 2-row invisible equal-cell grid, one centered icon per cell, generous equal margins, no overlap. Same optical scale across all six cells. Exactly these subjects in row-major order:\n1. top left: Confirmation: one graphite circular outline containing a green checkmark.\n2. top center: Close: two clean diagonal strokes forming X, one graphite and the other green. No circle or container.\n3. top right: Add: two perpendicular equal-length strokes forming a plus sign, horizontal graphite and vertical green. No circle or container.\n4. bottom left: Subtract/collapse: one horizontal stroke, mostly graphite with its right third green. No circle or container.\n5. bottom center: Next/disclosure: a simple open chevron pointing right, upper diagonal graphite and lower diagonal green. No shaft, no circle.\n6. bottom right: Previous/disclosure: a simple open chevron pointing left, upper diagonal graphite and lower diagonal green. No shaft, no circle.\n\nThe single controlling requirement is consistent 1.0-unit stroke width at 24 units for BOTH colours, including simple symbols. Preserve subject geometry and all green-accent positions. Do not draw the reference six subjects as extra symbols.",
+      "inputImages": [
+        {
+          "url": "https://cdn.openart.ai/openart-uploads/production/attachment-transfers/f83619141dc5faabc37ca522c42b9899b4f5a192017c3b3af39e033ecd19669a.png",
+          "role": "reference"
+        },
+        {
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963401538_f2acd8ed.png",
+          "role": "reference"
+        }
+      ],
+      "resources": [
+        {
+          "id": "gp1MCFxNoYzByg4VZkEN",
+          "mediaType": "image",
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975411782_23deb105.png",
+          "status": "completed",
+          "aspectRatio": "3:2",
+          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975412007_92c691ef.webp",
+          "metadata": {
+            "width": 2016,
+            "height": 1344,
+            "format": "png"
+          }
+        }
+      ]
+    },
+    {
+      "status": "COMPLETED",
+      "historyId": "jr7dZnIelrvoXvlUeg50",
+      "projectId": "Se5cXknUSHaom3A8Jq3B",
+      "capabilityId": "gpt-image-2-5-sunburst:image2image",
+      "modelDisplayName": "GPT Image 2.5 Sunburst",
+      "aspectRatio": "3:2",
+      "prompt": "SMART ODPADY, ORIGINAL-FAMILY stroke correction, batch 06. Correct the existing 6 symbols in image 2, keeping their subjects, orientation, layout and silhouettes. Image 1 is the approved reference. Image 2 has excessively thick strokes; change its stroke weight to match image 1 accurately.\n\nStrict measurable visual requirement: the visible outer silhouette of each icon occupies 20 units in a 24-unit icon canvas; the continuous strokes of BOTH graphite and green have a uniform width of 1.0 unit, approximately 5 percent of the icon silhouette height. This is the relative weight of the house walls, calendar and module borders in the APPROVED ORIGINAL (image 1). Thin but clearly visible, NOT the 0.5-unit hairline version, NOT the 2-to-3-unit bold version. Match this same ratio on simple arrows, plus, X, pause and all accent strokes. A very simple icon must NOT get thicker strokes just because it has fewer lines. Pause is two slender rounded LINE segments, never thick pills. Medical plus, clock hands, underline and information-i are the same width as their containing outline. Only a round dot may be filled; other continuous marks stay monoline.\n\nKeep the airy open interiors and rounded caps and joins of image 1. Solid graphite #243128 and lime #75BD25 only; each icon needs a green accent. Flat 2D, pure white background extending to all four edges. Do NOT reproduce the rounded page corners from image 1. No page border, black corner pixels, shading, gradients, shadows, texture, tiles, text labels, captions or 3D. Ignore the historical project name.\n\nArrange a 3-column by 2-row invisible equal-cell grid, one centered icon per cell, generous equal margins, no overlap. Same optical scale across all six cells. Exactly these subjects in row-major order:\n1. top left: Expand: a simple open chevron pointing down, left diagonal graphite and right diagonal green. No shaft, no circle.\n2. top center: Forward navigation: straight horizontal right-pointing arrow, open graphite chevron head and graphite shaft, only the terminal left-hand quarter of the shaft green. No circle.\n3. top right: Move upward: straight vertical up-pointing arrow, open graphite chevron head and graphite shaft, only the bottom quarter of the shaft green. No circle.\n4. bottom left: Move downward: straight vertical down-pointing arrow, open graphite chevron head and graphite shaft, only the top quarter of the shaft green. No circle.\n5. bottom center: Search: simple graphite magnifying-glass circular lens with green diagonal handle toward lower right.\n6. bottom right: Refresh: two simple graphite opposing curved circular arrows, their arrowhead strokes green.\n\nThe single controlling requirement is consistent 1.0-unit stroke width at 24 units for BOTH colours, including simple symbols. Preserve subject geometry and all green-accent positions. Do not draw the reference six subjects as extra symbols.",
+      "inputImages": [
+        {
+          "url": "https://cdn.openart.ai/openart-uploads/production/attachment-transfers/f83619141dc5faabc37ca522c42b9899b4f5a192017c3b3af39e033ecd19669a.png",
+          "role": "reference"
+        },
+        {
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963408793_1535fae4.png",
+          "role": "reference"
+        }
+      ],
+      "resources": [
+        {
+          "id": "qbsSpnEjAUGm64W0Dbrn",
+          "mediaType": "image",
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975417591_335a5f6c.png",
+          "status": "completed",
+          "aspectRatio": "3:2",
+          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975417749_c8161735.webp",
+          "metadata": {
+            "width": 2016,
+            "height": 1344,
+            "format": "png"
+          }
+        }
+      ]
+    },
+    {
+      "status": "COMPLETED",
+      "historyId": "AASUuvpAlrUoQ8OK3pct",
+      "projectId": "Se5cXknUSHaom3A8Jq3B",
+      "capabilityId": "gpt-image-2-5-sunburst:image2image",
+      "modelDisplayName": "GPT Image 2.5 Sunburst",
+      "aspectRatio": "3:2",
+      "prompt": "SMART ODPADY, approved-original continuation, batch 07 of 11. Create 6 NEW symbols for the EXACT SAME icon family as the attached USER-APPROVED ORIGINAL six-icon image. The attachment is the authoritative original, not a later thin redraw. Match its actual contour weight, rounded ends, rounded joins, optical scale, uncomplicated silhouettes and spacious interiors. Inspect the house wall, module-square border, calendar border and pin border in the attachment, and reproduce their line-to-icon-height ratio for every new symbol. Do not make hairlines or technical wireframes. Do not make heavy bold tubing. Do not reinterpret or redesign the visual style. Graphite #243128 outlines and a clearly visible lime #75BD25 accent in EVERY icon; both colours use the same visual line thickness. Pure flat 2D, empty open interiors, crisp solid contour edges. No shadows, gradients, texture, 3D, perspective, colored tiles, panels, labels, captions, words, grid or text. The project's historical name mentions 3D; ignore that name, this is strictly 2D.\n\nLayout: 3 equal-width columns by 2 equal-height rows on a pure white 3:2 canvas. Each cell is one invisible square; center one symbol in it, with generous equal margins and matching optical size. Use the same silhouette-to-cell scale as the supplied original. Do not include the six reference symbols as extra icons. Keep all cells separate and no overlap. Draw these exact subjects and orientations in row-major order:\n1. top left: Voice input: graphite vertical capsule microphone, small graphite stand, green U-shaped pickup arc around its lower half.\n2. top center: Sound enabled: graphite loudspeaker outline pointing right, two simple green sound-wave arcs to its right.\n3. top right: Sound disabled: graphite loudspeaker outline pointing right, one small green X to its right.\n4. bottom left: Camera: compact graphite camera body outline with a short raised top housing, green circular lens.\n5. bottom center: Navigation heading: simple graphite angular navigation pointer outline pointing diagonally toward upper right, with a green interior dividing stroke. No map or circle.\n6. bottom right: Waste bin: graphite wheeled-bin outline with lid and small handle, two short green vertical strokes inside.\n\nQuality check: all 6 requested symbols, no extra objects, every symbol has a visible green accent; stroke weight and rounded terminal shapes must visually belong beside the original six at 24px. Follow the attached ORIGINAL directly. Do not use a previously generated thin master.",
+      "inputImages": [
+        {
+          "url": "https://cdn.openart.ai/openart-uploads/production/attachment-transfers/f83619141dc5faabc37ca522c42b9899b4f5a192017c3b3af39e033ecd19669a.png",
+          "role": "reference"
+        }
+      ],
+      "resources": [
+        {
+          "id": "cKm3xPbdtqEtj7hAiShb",
+          "mediaType": "image",
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963416817_30093b44.png",
+          "status": "completed",
+          "aspectRatio": "3:2",
+          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963417037_48027547.webp",
+          "metadata": {
+            "width": 2016,
+            "height": 1344,
+            "format": "png"
+          }
+        }
+      ]
+    },
+    {
+      "status": "COMPLETED",
+      "historyId": "Y88m5tb7xkpQtC9lJAYf",
+      "projectId": "Se5cXknUSHaom3A8Jq3B",
+      "capabilityId": "gpt-image-2-5-sunburst:image2image",
+      "modelDisplayName": "GPT Image 2.5 Sunburst",
+      "aspectRatio": "3:2",
+      "prompt": "SMART ODPADY, ORIGINAL-FAMILY stroke correction, batch 08. Correct the existing 6 symbols in image 2, keeping their subjects, orientation, layout and silhouettes. Image 1 is the approved reference. Image 2 has excessively thick strokes; change its stroke weight to match image 1 accurately.\n\nStrict measurable visual requirement: the visible outer silhouette of each icon occupies 20 units in a 24-unit icon canvas; the continuous strokes of BOTH graphite and green have a uniform width of 1.0 unit, approximately 5 percent of the icon silhouette height. This is the relative weight of the house walls, calendar and module borders in the APPROVED ORIGINAL (image 1). Thin but clearly visible, NOT the 0.5-unit hairline version, NOT the 2-to-3-unit bold version. Match this same ratio on simple arrows, plus, X, pause and all accent strokes. A very simple icon must NOT get thicker strokes just because it has fewer lines. Pause is two slender rounded LINE segments, never thick pills. Medical plus, clock hands, underline and information-i are the same width as their containing outline. Only a round dot may be filled; other continuous marks stay monoline.\n\nKeep the airy open interiors and rounded caps and joins of image 1. Solid graphite #243128 and lime #75BD25 only; each icon needs a green accent. Flat 2D, pure white background extending to all four edges. Do NOT reproduce the rounded page corners from image 1. No page border, black corner pixels, shading, gradients, shadows, texture, tiles, text labels, captions or 3D. Ignore the historical project name.\n\nArrange a 3-column by 2-row invisible equal-cell grid, one centered icon per cell, generous equal margins, no overlap. Same optical scale across all six cells. Exactly these subjects in row-major order:\n1. top left: Missing waste bin: graphite waste-bin outline and lid crossed by one green diagonal slash.\n2. top center: Overflowing waste bin: graphite waste-bin outline with two sparse stacked material lines extending above the top, one small green upward arrow inside the bin.\n3. top right: Road obstruction: graphite traffic-cone outline with two sparse crossbars, green horizontal base.\n4. bottom left: Blocked access: graphite circle outline with a green diagonal prohibition slash.\n5. bottom center: Driver tablet: graphite portrait tablet outline with softly rounded corners, one green short horizontal home indicator at the bottom.\n6. bottom right: Pause: two parallel equal-height vertical strokes, left graphite and right green, with generous space. No circle.\n\nThe single controlling requirement is consistent 1.0-unit stroke width at 24 units for BOTH colours, including simple symbols. Preserve subject geometry and all green-accent positions. Do not draw the reference six subjects as extra symbols.",
+      "inputImages": [
+        {
+          "url": "https://cdn.openart.ai/openart-uploads/production/attachment-transfers/f83619141dc5faabc37ca522c42b9899b4f5a192017c3b3af39e033ecd19669a.png",
+          "role": "reference"
+        },
+        {
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963424778_a2f8e198.png",
+          "role": "reference"
+        }
+      ],
+      "resources": [
+        {
+          "id": "3Ps8UjXuO97ifSXJYIID",
+          "mediaType": "image",
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975423812_bdab6a78.png",
+          "status": "completed",
+          "aspectRatio": "3:2",
+          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975423981_a7a11aef.webp",
+          "metadata": {
+            "width": 2016,
+            "height": 1344,
+            "format": "png"
+          }
+        }
+      ]
+    },
+    {
+      "status": "COMPLETED",
+      "historyId": "Zb8faUZcNx5hfjV70UWC",
+      "projectId": "Se5cXknUSHaom3A8Jq3B",
+      "capabilityId": "gpt-image-2-5-sunburst:image2image",
+      "modelDisplayName": "GPT Image 2.5 Sunburst",
+      "aspectRatio": "3:2",
+      "prompt": "SMART ODPADY, ORIGINAL-FAMILY stroke correction, batch 09. Correct the existing 6 symbols in image 2, keeping their subjects, orientation, layout and silhouettes. Image 1 is the approved reference. Image 2 has excessively thick strokes; change its stroke weight to match image 1 accurately.\n\nStrict measurable visual requirement: the visible outer silhouette of each icon occupies 20 units in a 24-unit icon canvas; the continuous strokes of BOTH graphite and green have a uniform width of 1.0 unit, approximately 5 percent of the icon silhouette height. This is the relative weight of the house walls, calendar and module borders in the APPROVED ORIGINAL (image 1). Thin but clearly visible, NOT the 0.5-unit hairline version, NOT the 2-to-3-unit bold version. Match this same ratio on simple arrows, plus, X, pause and all accent strokes. A very simple icon must NOT get thicker strokes just because it has fewer lines. Pause is two slender rounded LINE segments, never thick pills. Medical plus, clock hands, underline and information-i are the same width as their containing outline. Only a round dot may be filled; other continuous marks stay monoline.\n\nKeep the airy open interiors and rounded caps and joins of image 1. Solid graphite #243128 and lime #75BD25 only; each icon needs a green accent. Flat 2D, pure white background extending to all four edges. Do NOT reproduce the rounded page corners from image 1. No page border, black corner pixels, shading, gradients, shadows, texture, tiles, text labels, captions or 3D. Ignore the historical project name.\n\nArrange a 3-column by 2-row invisible equal-cell grid, one centered icon per cell, generous equal margins, no overlap. Same optical scale across all six cells. Exactly these subjects in row-major order:\n1. top left: Measurement: one diagonal graphite rectangular ruler outline with three short green tick marks. No numbers.\n2. top center: Information: graphite circle outline with a green lowercase-i symbol formed by a vertical stroke and dot.\n3. top right: Download: graphite open tray outline at bottom, green downward arrow above it.\n4. bottom left: Attachment: one simple graphite paperclip outline with a short green segment on its upper inner curve.\n5. bottom center: Passenger car: minimal front-facing graphite car outline, two small lights and two tyres, a green windshield line. No perspective.\n6. bottom right: Van: minimal front-facing graphite tall van outline with two lights and two tyres, green windshield outline. No perspective.\n\nThe single controlling requirement is consistent 1.0-unit stroke width at 24 units for BOTH colours, including simple symbols. Preserve subject geometry and all green-accent positions. Do not draw the reference six subjects as extra symbols.",
+      "inputImages": [
+        {
+          "url": "https://cdn.openart.ai/openart-uploads/production/attachment-transfers/f83619141dc5faabc37ca522c42b9899b4f5a192017c3b3af39e033ecd19669a.png",
+          "role": "reference"
+        },
+        {
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792963428233_d3b28bbb.png",
+          "role": "reference"
+        }
+      ],
+      "resources": [
+        {
+          "id": "HA7zAZXQoNgA0kFoP2q6",
+          "mediaType": "image",
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975432203_418bc411.png",
+          "status": "completed",
+          "aspectRatio": "3:2",
+          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975432369_b5414f52.webp",
+          "metadata": {
+            "width": 2016,
+            "height": 1344,
+            "format": "png"
+          }
+        }
+      ]
+    },
+    {
+      "status": "COMPLETED",
+      "historyId": "GHo6nwQa4gRwSWY9Aa9p",
+      "projectId": "Se5cXknUSHaom3A8Jq3B",
+      "capabilityId": "gpt-image-2-5-sunburst:image2image",
+      "modelDisplayName": "GPT Image 2.5 Sunburst",
+      "aspectRatio": "3:2",
+      "prompt": "SMART ODPADY, ORIGINAL-FAMILY completion, batch 10. Create 6 new symbols matching the supplied approved original family exactly.\n\nStrict measurable visual requirement: the visible outer silhouette of each icon occupies 20 units in a 24-unit icon canvas; the continuous strokes of BOTH graphite and green have a uniform width of 1.0 unit, approximately 5 percent of the icon silhouette height. This is the relative weight of the house walls, calendar and module borders in the APPROVED ORIGINAL (image 1). Thin but clearly visible, NOT the 0.5-unit hairline version, NOT the 2-to-3-unit bold version. Match this same ratio on simple arrows, plus, X, pause and all accent strokes. A very simple icon must NOT get thicker strokes just because it has fewer lines. Pause is two slender rounded LINE segments, never thick pills. Medical plus, clock hands, underline and information-i are the same width as their containing outline. Only a round dot may be filled; other continuous marks stay monoline.\n\nKeep the airy open interiors and rounded caps and joins of image 1. Solid graphite #243128 and lime #75BD25 only; each icon needs a green accent. Flat 2D, pure white background extending to all four edges. Do NOT reproduce the rounded page corners from image 1. No page border, black corner pixels, shading, gradients, shadows, texture, tiles, text labels, captions or 3D. Ignore the historical project name.\n\nArrange a 3-column by 2-row invisible equal-cell grid, one centered icon per cell, generous equal margins, no overlap. Same optical scale across all six cells. Exactly these subjects in row-major order:\n1. top left: Container truck: minimal flat side-profile graphite chassis, simple cab on right and rectangular cargo container on left, two sparse wheels, one green line on the container. No perspective.\n2. top center: Special equipment: minimal flat side-profile graphite forklift with cab and two wheels, vertical lifting mast on right, one green window line. No perspective.\n3. top right: Trailer: minimal flat side-profile graphite rectangular trailer outline, two wheels below and short towbar on right, one short green line inside. No perspective.\n4. bottom left: MAP MARKER: flat orthographic TOP-DOWN truck outline oriented exactly NORTH, front at top. Long graphite body with cab divider near top and two sparse cargo lines, small green windshield line near top. Strictly 2D, no isometric or side view.\n5. bottom center: MAP MARKER: flat orthographic TOP-DOWN container truck oriented exactly NORTH, front at top. Graphite rectangular outline, small cab divider near top, three sparse horizontal container ribs, small green windshield line near top. Strictly 2D, no isometric.\n6. bottom right: MAP MARKER: flat orthographic TOP-DOWN van oriented exactly NORTH, front at top. Graphite elongated body outline with rounded front, a cab divider and rear seam, short green windshield line at top. Strictly 2D, no isometric.\n\nThe single controlling requirement is consistent 1.0-unit stroke width at 24 units for BOTH colours, including simple symbols. Preserve subject geometry and all green-accent positions. Do not draw the reference six subjects as extra symbols.",
+      "inputImages": [
+        {
+          "url": "https://cdn.openart.ai/openart-uploads/production/attachment-transfers/f83619141dc5faabc37ca522c42b9899b4f5a192017c3b3af39e033ecd19669a.png",
+          "role": "reference"
+        }
+      ],
+      "resources": [
+        {
+          "id": "kzwJtmLQ1hZH6nMTSrIv",
+          "mediaType": "image",
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975436070_24d539d0.png",
+          "status": "completed",
+          "aspectRatio": "3:2",
+          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975436247_ca7d90d2.webp",
+          "metadata": {
+            "width": 2016,
+            "height": 1344,
+            "format": "png"
+          }
+        }
+      ]
+    },
+    {
+      "status": "COMPLETED",
+      "historyId": "iHR3Qk1nLyiecNTl4S0w",
+      "projectId": "Se5cXknUSHaom3A8Jq3B",
+      "capabilityId": "gpt-image-2-5-sunburst:image2image",
+      "modelDisplayName": "GPT Image 2.5 Sunburst",
+      "aspectRatio": "3:2",
+      "prompt": "SMART ODPADY, ORIGINAL-FAMILY completion, batch 11. Create 3 new symbols matching the supplied approved original family exactly.\n\nStrict measurable visual requirement: the visible outer silhouette of each icon occupies 20 units in a 24-unit icon canvas; the continuous strokes of BOTH graphite and green have a uniform width of 1.0 unit, approximately 5 percent of the icon silhouette height. This is the relative weight of the house walls, calendar and module borders in the APPROVED ORIGINAL (image 1). Thin but clearly visible, NOT the 0.5-unit hairline version, NOT the 2-to-3-unit bold version. Match this same ratio on simple arrows, plus, X, pause and all accent strokes. A very simple icon must NOT get thicker strokes just because it has fewer lines. Pause is two slender rounded LINE segments, never thick pills. Medical plus, clock hands, underline and information-i are the same width as their containing outline. Only a round dot may be filled; other continuous marks stay monoline.\n\nKeep the airy open interiors and rounded caps and joins of image 1. Solid graphite #243128 and lime #75BD25 only; each icon needs a green accent. Flat 2D, pure white background extending to all four edges. Do NOT reproduce the rounded page corners from image 1. No page border, black corner pixels, shading, gradients, shadows, texture, tiles, text labels, captions or 3D. Ignore the historical project name.\n\nArrange a 3-column by 2-row invisible equal-cell grid, one centered icon per cell, generous equal margins, no overlap. Same optical scale across all six cells. Exactly these subjects in row-major order:\n1. top left: MAP MARKER: flat orthographic TOP-DOWN passenger car oriented exactly NORTH, front at top. Graphite rounded elongated body with one roof outline and rear window line, short green windshield line at top. Strictly 2D, no isometric.\n2. top center: MAP MARKER: flat orthographic TOP-DOWN special industrial vehicle oriented exactly NORTH, front at top. Graphite compact central cab and two simple side tracks or wheel rails, green windshield line near top. Strictly 2D, no isometric.\n3. top right: MAP MARKER: flat orthographic TOP-DOWN trailer oriented exactly NORTH, tow coupling at top. Graphite rectangular cargo outline, short tow coupling at top and sparse rear wheel marks, one green transverse cargo line. Strictly 2D, no isometric.\nLeave all three bottom-row cells completely blank white.\n\nThe single controlling requirement is consistent 1.0-unit stroke width at 24 units for BOTH colours, including simple symbols. Preserve subject geometry and all green-accent positions. Do not draw the reference six subjects as extra symbols.",
+      "inputImages": [
+        {
+          "url": "https://cdn.openart.ai/openart-uploads/production/attachment-transfers/f83619141dc5faabc37ca522c42b9899b4f5a192017c3b3af39e033ecd19669a.png",
+          "role": "reference"
+        }
+      ],
+      "resources": [
+        {
+          "id": "tsM60Z2YuW2T2eBb2LTX",
+          "mediaType": "image",
+          "url": "https://cdn.openart.ai/openart-ai/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975441927_a1ccb18f.png",
+          "status": "completed",
+          "aspectRatio": "3:2",
+          "thumbnailUrl": "https://cdn.openart.ai/openart/thumbnail/production/2026-10/create-image/4Uq2ErddY1F6nBa82NGF/gpt-image-2.5-sunburst-edit-1_1792975442185_3d8e0084.webp",
           "metadata": {
             "width": 2016,
             "height": 1344,

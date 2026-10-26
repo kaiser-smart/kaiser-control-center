@@ -28,6 +28,16 @@ def clean(mask, remove_border=False):
     if remove_border:
         # The attachment has dark rounded canvas corners, separate from the icons.
         keep[np.unique(np.concatenate([labels[0,:],labels[-1,:],labels[:,0],labels[:,-1]]))]=False
+    else:
+        # Some generated sheets repeat the reference canvas's black rounded
+        # corners. These tiny corner-connected components are background,
+        # not an icon; exclude them before calculating the optical bounds.
+        h,w=mask.shape
+        for i in range(1,count):
+            x,y,cw,ch,area=stats[i]
+            corner=(x==0 or x+cw==w) and (y==0 or y+ch==h)
+            if corner and cw<w*.12 and ch<h*.12 and area<w*h*.015:
+                keep[i]=False
     return keep[labels]
 for item in manifest['reused']+manifest['submitted']:
     name=item['name']
@@ -66,7 +76,22 @@ for item in manifest['reused']+manifest['submitted']:
     normalized.save(review/(name+'-source.png'))
     reference=manifest['approvedReference']
     approved=attachment and name in reference['scope'] and sha(source)==reference.get('attachmentSha256')
-    provenance.append({'name':name,'sourceType':'user-attachment' if attachment else 'openart-generation','historyId':item.get('historyId'),'resourceId':None if attachment else generation['resources'][0]['id'],'sourceUrl':None if attachment else generation['resources'][0]['url'],'sourceSha256':sha(source),'sourceFile':item['sourceFile'] if attachment else 'sources/'+source.name,'cellCrop':crop,'foregroundBounds':bounds,'transform':transform,'svgFile':'public/icons/ui/'+name+'.svg','userApprovedExact':approved, 'approvalStatus':'approved-original' if approved else 'exact-approved-original-not-provided','conversion':'Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry','maskPixels':{'graphite':int(dark.sum()),'green':int(green.sum())}})
+    provenance.append({'name':name,'sourceType':'user-attachment' if attachment else 'openart-generation','historyId':item.get('historyId'),'resourceId':None if attachment else generation['resources'][0]['id'],'sourceUrl':None if attachment else generation['resources'][0]['url'],'sourceSha256':sha(source),'sourceFile':item['sourceFile'] if attachment else 'sources/'+source.name,'cellCrop':crop,'foregroundBounds':bounds,'transform':transform,'svgFile':'public/icons/ui/'+name+'.svg','userApprovedExact':approved, 'approvalStatus':'approved-original' if approved else ('generated-from-approved-reference' if item.get('generationAuthorized') and item.get('styleReferenceSha256')==reference.get('attachmentSha256') else 'exact-approved-original-not-provided'),'conversion':'Potrace 2.1.8 on two 384px source colour masks, alphaMax 1, optTolerance 0.2; uniform scale to 24px; no hand-authored geometry','maskPixels':{'graphite':int(dark.sum()),'green':int(green.sum())}})
+    if item.get('normalizeStraightStrokeWidth'):
+        # Vector export of the generated pause's two straight rounded bars:
+        # retain measured axes and vertical extents, unify only their width.
+        assert name=='pause' and not attachment
+        target=float(item['normalizeStraightStrokeWidth'])
+        bars=[]
+        for layer in normalized_masks:
+            count,_,stats,_=cv2.connectedComponentsWithStats(layer.astype('uint8'),8)
+            assert count==2, 'Expected one connected straight bar in each pause layer'
+            x,y,cw,ch,area=map(int,stats[1])
+            assert ch>4*cw and area/(cw*ch)>.85, 'Pause source is not a straight bar'
+            bars.append({'sourceBoundsAt24':[x/16,y/16,(x+cw)/16,(y+ch)/16],
+                         'x':(x+cw/2)/16-target/2,'y':y/16,'width':target,'height':ch/16,'rx':target/2})
+        provenance[-1]['vectorAdjustment']={'type':'measured-straight-bars-uniform-width','widthAt24':target,'bars':bars}
+        provenance[-1]['conversion']='Measured axes and height of each OpenArt pause bar; exported as rounded SVG rectangles with uniform 1px width. This explicit width correction is not a pixel-identical trace.'
     print(name,flush=True)
 (review/'provenance.json').write_text(json.dumps(provenance,ensure_ascii=False,indent=2)+'\n')
 # Inspection contact sheets: every source remains separate in review/.

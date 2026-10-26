@@ -18,6 +18,8 @@
 #app :is(.ui-pilot-nav__icon,.mobile-bottom-link) svg.smart-icon { width:22px; height:22px; }
 #app :is(.module-launcher-arrow,button:not(.mobile-bottom-link),.feedback-workflow-back) > svg.smart-icon { width:20px; height:20px; }
 #app .mobile-home-link > svg.smart-icon { width:26px; height:26px; }
+#app .mobile-vehicle-back { gap:8px; }
+#app .mobile-vehicle-back > svg.smart-icon { width:20px; height:20px; }
 #app .smart-brand-name { display:inline-flex; align-items:center; gap:8px; }
 #app .smart-brand-name svg.smart-icon { width:24px; height:24px; }
 #app .ui-pilot-brand__copy .smart-brand-name { gap:5px; }
