@@ -35,6 +35,14 @@ try{
   assert.match(await page.locator('.vm-panel-detail').innerText(),/Palivo[\s\S]*Údaj není dostupný[\s\S]*AdBlue/);
   await page.locator('[data-vm-back]').click();
  });
+ await test('Primary route action stays readable on hover',async()=>{
+  await page.locator('[data-vm-row]').first().click();
+  await page.locator('[data-vm-history-show]').hover();
+  const colors=await page.locator('[data-vm-history-show]').evaluate(e=>({text:getComputedStyle(e).color,background:getComputedStyle(e).backgroundColor}));
+  const lum=color=>color.match(/[\d.]+/g).slice(0,3).map(Number).map(c=>{c/=255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;}).reduce((s,c,i)=>s+c*[.2126,.7152,.0722][i],0);
+  const a=lum(colors.text),b=lum(colors.background);assert((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5,JSON.stringify(colors));
+  await page.mouse.move(0,0); await page.locator('[data-vm-back]').click();
+ });
  await screenshot('overview-desktop');
  await test('Selection and image decoding preserve selected marker; repeated selection retains camera',async()=>{
   await page.locator('[data-vm-row$=":synthetic-1"]').click();await page.waitForTimeout(150);

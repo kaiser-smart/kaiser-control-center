@@ -1,8 +1,8 @@
-# Poloha vozidel 2.0 — přejímka vydání 0.1.863
+# Poloha vozidel 2.0 — přejímka vydání 0.1.864
 
-Stav: **implementováno a lokálně ověřeno; produkční nasazení a následná živá přejímka se evidují samostatně**.
+Stav: **redesign 0.1.863 je v produkci; dokončuje se oprava kontrastu hlavní akce 0.1.864 a oficiální CLI upload**.
 
-Větev: `codex/vehicle-location-2`. Výchozí hlavní větev před vydáním: `1f7f3b25` (0.1.862). Zachovány souběžné změny mobilního auditu a společných ikon.
+Větev: `codex/vehicle-location-2`. Výchozí hlavní větev před vydáním: `a34841c9` (0.1.863). Zachovány souběžné změny mobilního auditu a společných ikon.
 
 ## Aktuální závazná předloha
 
@@ -38,7 +38,7 @@ Test prokázal původní 503, poté 200, načtení bodu a auditu ze správných 
 
 ## Provedené ověření
 
-- 58/58 Chromium a 58/58 WebKit po převzetí main 0.1.860: hledání názvu/SPZ/přiřazeného řidiče, filtry, 200 vozidel, shluky 6 a 20 vozidel, výběr, historie a změna období, obnova, 401/403, expirace, návrat online, odhlášení, klávesnicová dostupnost a zmenšený viewport při otevření klávesnice.
+- 59/59 Chromium a 59/59 WebKit v opravě 0.1.864 (včetně kontrastu hlavní akce) nad aktuálním main: hledání názvu/SPZ/přiřazeného řidiče, filtry, 200 vozidel, shluky 6 a 20 vozidel, výběr, historie a změna období, obnova, 401/403, expirace, návrat online, odhlášení, klávesnicová dostupnost a zmenšený viewport při otevření klávesnice.
 - 15/15 skutečné Google Maps se syntetickými vozidly: skutečný mapový podklad, obrys ČR, ovládání, 4 požadované rozměry, dva skutečné 60sekundové intervaly GPS obnovy a zotavení z výpadku. Výsledky závěrečného běhu jsou v `../outputs/v3-google/verification.json`; syntetická data nejsou produkční přejímka GPS.
 - Přihlášený integrační náhled: skutečných 57 vozidel; hledání, výběr, stav/rychlost/čas GPS/adresa, denní analytika, filtry, shluky, ruční obnova, zachování mapy a výpadek/obnova. Dříve ověřené skutečné odhlášení a následné přihlášení uživatelem. Historie staré produkční verze vracela 503; tato chyba se nevydává za úspěch.
 - Testy `test:vehicle-tracking`, modelu a dashboardu, ochrany `test:collection-routes`, mobilního auditu, ikon a databázové architektury prošly. Prošly všechny testovací příkazy oficiálního deployment guardu, syntax check a standardní build 52 rout.
@@ -52,3 +52,9 @@ Lokální důkazy mimo Git: `../outputs/v3-861-chromium`, `../outputs/v3-861-web
 Produkce výhradně z čistého aktuálního main přes `npm run deploy:pages:production`. Před sloučením musí projít závěrečné ověření omezení ČR. Po nasazení ověřit veřejnou buildMeta, chráněný status, opravené čtení historie a mapovou trasu. Pokud skutečný backend opravu nepotvrdí nebo vznikne regrese, vydání se nesmí označit za produkčně ověřené.
 
 Při lokálním sestavení přestal odpovídat generovaný adresář `dist` v původním pracovním checkoutu. Standardní build a kontroly se proto spouští nad přesným exportem zdrojů do `/private/tmp`; produkční guard poběží z čistého skutečného Git checkoutu aktuálního main. Žádný zdrojový soubor, osobní data ani databáze se kvůli tomu nemažou.
+
+## Produkční ověření 0.1.863 a dokončení 0.1.864
+
+PR #264 byl sloučen jako `a34841c93d1ef2849a4337e353606ff090a855d5`. Stávající automatické Pages nasazení `53d8229a-e3b3-43e0-b444-6fcf133bb677` hlásí success; veřejná buildMeta potvrzuje 0.1.863/main/a34841c. Přihlášená produkce načetla 57 skutečných vozidel a opravená historie vrátila 146 GPS bodů.
+
+Oficiální `npm run deploy:pages:production` prošel všemi testy, buildem a PWA kontrolou, ale CLI upload selhal na síťovém `fetch failed`. Tento pokus se neoznačuje za úspěšné dokončení guardu. Produkční kontrola navíc odhalila nedostatečný kontrast hlavní akce při hoveru: obecné hover pozadí překrylo limetkovou plochu. 0.1.864 opravuje jediný scoped CSS selector a přidává prohlížečový regresní test kontrastu alespoň 4.5:1.

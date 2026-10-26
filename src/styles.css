@@ -53477,7 +53477,7 @@ body.collection-driver-blackview-simulator-active #app {
 .vm .vm-location { padding:12px 0; font-size:12px; }
 .vm .vm-detail-actions { gap:5px; }
 .vm .vm-detail-actions button { font-size:11px; }
-.vm .vm-detail-actions .vm-primary { background:#b4e52b; color:#18220a; border-color:#b4e52b; }
+.vm .vm-detail-actions .vm-primary,.vm .vm-detail-actions .vm-primary:hover:not(:disabled) { background:#b4e52b; color:#18220a; border-color:#b4e52b; }
 .vm .vm-more { margin-top:10px; }
 .vm .vm-map-tools,.vm .vm-map-zoom { color:#c4ced3; background:#101e27; border-color:#34434b; }
 .vm .vm-map-zoom button { background:#101e27; color:#c4ced3; border-color:#34434b; }
