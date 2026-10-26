@@ -42,7 +42,7 @@ try{
   assert.equal(await row(1).getAttribute('aria-label'),'Online');assert.equal(await row(3).getAttribute('aria-label'),'Online');
   assert.equal(await row(2).getAttribute('aria-label'),'Offline');assert.equal(await row(12).getAttribute('aria-label'),'Offline');
   assert.equal(await row(1).evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(117, 189, 37)');
-  assert.equal(await row(2).evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(245, 166, 35)');
+  assert.equal(await row(2).evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(239, 68, 68)');
 
  });
  await test('Primary route action stays readable on hover',async()=>{
@@ -101,7 +101,7 @@ try{
   const before=await camera();await control('revision=1');await page.locator('[data-vm-refresh]').click();await page.waitForTimeout(180);assert.deepEqual(await camera(),before);
   assert.equal(await page.evaluate(()=>savedMarker===document.querySelector('.vm-marker.is-selected')&&savedImage===savedMarker.querySelector('img')),true);
  });
- await test('Stale point: orange Offline dot, no age text or direction',async()=>{
+ await test('Stale point: red Offline dot, no age text or direction',async()=>{
   await page.locator('[data-vm-back]').click();await page.locator('[data-vm-row$=":synthetic-2"]').click();await page.waitForTimeout(100);
   assert.doesNotMatch(await page.locator('.vm-panel-detail').innerText(),/před \d+|Stará poloha|Poslední GPS/);assert.equal(await page.locator('.vm-panel-detail .vm-offline').count(),1);
   assert.equal(await page.locator('.vm-marker.is-selected .vm-heading').count(),0);assert.equal(await page.locator('.vm-marker.is-selected .vm-badge').innerText(),'');assert.equal(await page.locator('.vm-marker.is-selected .vm-badge').getAttribute('aria-label'),'Offline');
