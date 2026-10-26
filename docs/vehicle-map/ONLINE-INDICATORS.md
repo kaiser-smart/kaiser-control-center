@@ -14,3 +14,8 @@ Testy: jednotkové testy online/offline pro pohyb, stání, starou/chybějící/
 Bez změny API, DB, oprávnění, ukládání GPS nebo ostatních modulů. Fyzická instalace PWA není browser testem doložena.
 
 Od verze 0.1.880 na požadavek uživatele červený bod nahrazuje oranžový ve všech společných indikátorech GPS (seznam, mapa, shluk, detail a přehled). Jde pouze o změnu barvy; podmínky Online/Offline zůstávají stejné.
+
+
+## Umístění v detailu — 0.1.882
+
+Indikátor dostupnosti je v záhlaví detailu vedle SPZ. Zachovává barvu, dostupnostní logiku i přístupný název Online/Offline. Původní buňku GPS napravo od rychlosti nahrazuje Poloha; samostatný řádek polohy pod metrikami se odstranil. Dlouhá adresa se zalamuje, při chybějící adrese zůstává původní fallback na souřadnice či Bez ověřené polohy. Výběr, GPS data ani grafika vozidel se nemění.
