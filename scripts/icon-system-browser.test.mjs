@@ -34,14 +34,18 @@ try {
   const context=await browser.newContext({...devices['iPhone 13'],serviceWorkers:'block'});
   await context.route('**/*',async route=>{
     const url=new URL(route.request().url());
+    const fonts=process.env.PWA_FONT_FIXTURES;
+    if(fonts&&url.hostname==='fonts.googleapis.com')return route.fulfill({contentType:'text/css',body:await readFile(path.join(fonts,'quicksand.css'))});
+    if(fonts&&url.hostname==='fonts.gstatic.com')return route.fulfill({contentType:'font/ttf',body:await readFile(path.join(fonts,path.basename(url.pathname)))});
     if(url.origin!==origin){external.push(url.hostname);return route.abort();}
     if(!url.pathname.startsWith('/api/'))return route.continue();
     // Background sync requests are fulfilled in memory, never sent to any backend.
     if(route.request().method()!=='GET')mockedMutations.push({method:route.request().method(),path:url.pathname});
     const user={id:'icons-test',name:'Testovací uživatel',email:'icons@example.test',role:'admin',status:'active',active:true};
     const employee={id:'icons-test',userId:'icons-test',name:'Testovací uživatel',firstName:'Testovací',lastName:'Uživatel',role:'admin',employmentStatus:'active'};
-    let body={apiStatus:'ready',settings:{},items:[],requests:[],users:[],messages:[],show:false};
+    let body={apiStatus:'ready',settings:{},items:[],requests:[],users:[],reports:[],messages:[],show:false};
     if(url.pathname==='/api/me')body={user};
+    if(url.pathname.includes('customer-directory-audit'))body={readOnly:true,writesD1:false,results:[],pagination:{done:true,returned:0,total:0}};
     if(url.pathname==='/api/employees')body={apiStatus:'ready',employees:[employee]};
     if(url.pathname==='/api/employees/icons-test')body={apiStatus:'ready',employee};
     if(url.pathname==='/api/vehicles')body={apiStatus:'ready',vehicles:[{id:'icons-car',licensePlate:'TEST 001',brand:'MAN',model:'TGS',vehicleType:'Svozové vozidlo',status:'active'}]};
@@ -51,16 +55,42 @@ try {
   });
   const page=await context.newPage();page.setDefaultTimeout(10000);page.setDefaultNavigationTimeout(20000);
   page.on('pageerror',error=>errors.push({url:page.url(),message:error.message}));
-  const routes=['/',...modules.map(m=>m.route),'/dovolena-nemoc/rychle-zadani','/pripominky'];
-  for(const [width,height] of [[375,667],[390,844],[430,932],[768,1024],[1440,1000]]) {
+  const routes=JSON.parse(await readFile(path.join(dist,'route-manifest.json'),'utf8')).routes.map(r=>r.path);
+  for(const [width,height] of [[320,740],[375,667],[390,844],[430,932],[768,1024],[1024,900],[1440,1000],[1920,1080]].filter(([w])=>!process.env.ICON_TEST_WIDTHS||process.env.ICON_TEST_WIDTHS.split(',').map(Number).includes(w))) {
     await page.setViewportSize({width,height});
     for(const route of routes) {
-      await page.goto(origin+route);await page.locator('[data-logout]').first().waitFor({state:'attached'});await page.waitForLoadState('networkidle');
+      await page.goto(origin+route);await page.locator('[data-logout],[data-repair-root]').first().waitFor({state:'attached'}).catch(async error=>{await page.screenshot({path:path.join(output,'startup-failure.png')});console.error(route,await page.locator('body').innerText(),errors);throw error;});await page.waitForLoadState('networkidle',{timeout:2500}).catch(()=>{});await page.evaluate(()=>document.fonts.ready);
       const metrics=await page.evaluate(()=>{
         const visible=node=>{const b=node.getBoundingClientRect();return b.width>0&&b.height>0;};
         const icons=[...document.querySelectorAll('svg.smart-icon')].filter(visible);
         return {width:innerWidth,scrollWidth:document.documentElement.scrollWidth,icons:icons.length,
-          iconProblems:icons.flatMap(node=>{const s=getComputedStyle(node),b=node.getBoundingClientRect(),g=node.querySelector('g'),a=g&&getComputedStyle(g);return (s.fill!=='rgb(36, 49, 40)'||a?.fill!=='rgb(117, 189, 37)'||s.stroke!=='none'||s.filter!=='none'||s.boxShadow!=='none'||b.width<19||b.width>29||b.height<19||b.height>29)?[{name:node.dataset.icon,width:b.width,height:b.height,stroke:s.stroke,accent:a?.stroke,strokeWidth:s.strokeWidth}]:[];}),
+          iconProblems:icons.flatMap(node=>{
+            const style=getComputedStyle(node),b=node.getBoundingClientRect(),accent=node.querySelector('[data-icon-accent]');
+            const mobile=innerWidth<=720;
+            let expected=24,context='standard';
+            if(node.closest('.mobile-home-link')){expected=34;context='mobile home';}
+            else if(node.closest('.mobile-bottom-link,.mobile-menu')){expected=28;context='mobile navigation';}
+            else if(node.closest('.ui-pilot-brand__copy')){expected=28;context='sidebar home';}
+            else if(node.closest('.module-launcher-toolbar .smart-brand-name')){expected=36;context='home brand';}
+            else if(node.closest('.ui-pilot-sidebar .ui-pilot-nav__icon')){expected=innerWidth>900?30:28;context='sidebar navigation';}
+            else if(node.closest('.ui-pilot-nav__icon')){expected=28;context='navigation';}
+            else if(node.closest('.ui-pilot-hero__icon')){expected=innerWidth>900?80:64;context='large hero';}
+            else if(node.closest('.module-detail > .module-detail__icon,.absence-hero--app > .module-detail__icon')){expected=64;context='module hero';}
+            else if(node.closest('.module-launcher-secondary-icon')){expected=32;context='secondary modules';}
+            else if(node.closest('.module-launcher-icon')){expected=mobile?40:44;context='primary modules';}
+            else if(node.closest('.module-icon,.module-detail__icon,.quick-absence-type__icon')){expected=mobile?32:36;context='compact card';}
+            else if(node.matches('button:is([aria-label],[title]) > svg:only-child')||node.closest('.fleet-help')){expected=24;context='standalone control';}
+            else if(node.matches(':is(button,.module-launcher-arrow,.feedback-workflow-back) > svg')){expected=20;context='text action';}
+            const map=node.closest('.vm-page');
+            const issues=[];
+            if(Math.abs(b.width-expected)>.1||Math.abs(b.height-expected)>.1)issues.push('size');
+            if(style.stroke!=='none'||style.filter!=='none'||style.boxShadow!=='none')issues.push('extra visual treatment');
+            if(!map&&(style.fill!=='rgb(36, 49, 40)'||getComputedStyle(accent).fill!=='rgb(117, 189, 37)'))issues.push('approved palette');
+            if(node.matches('button:is([aria-label],[title]) > svg:only-child')){
+              const target=node.parentElement.getBoundingClientRect();if(target.width<43.9||target.height<43.9)issues.push('touch target');
+            }
+            return issues.length?[{name:node.dataset.icon,context,expected,width:b.width,height:b.height,issues}]:[];
+          }),
           iconTiles:[...document.querySelectorAll('.module-launcher-icon,.ui-pilot-nav__icon,.quick-absence-type__icon,.sarlota-absence-voice-button > span:first-child')].filter(visible).filter(n=>{const s=getComputedStyle(n);return s.backgroundColor!=='rgba(0, 0, 0, 0)'||s.backgroundImage!=='none'||s.boxShadow!=='none';}).map(n=>n.className),
           rasterIcons:[...document.querySelectorAll('[data-tracking-vehicle-icon],[data-tracking-tcars-marker-icon],.ai-voice-assistant-panel__mic img')].filter(visible).filter(n=>/\.(png|webp)(\?|$)/.test(n.src)).map(n=>n.src),
           resources:performance.getEntriesByType('resource').filter(r=>r.name.startsWith(location.origin)).reduce((sum,r)=>sum+r.transferSize,0),
@@ -69,12 +99,13 @@ try {
       const slug=route==='/'?'home':route.slice(1).replaceAll('/','-');
       await page.screenshot({path:path.join(output,`${slug}-${width}.png`)});
       assert.ok(metrics.scrollWidth<=width,`Overflow ${route} @ ${width}`);
-      if(!baseline){assert.deepEqual(metrics.iconProblems,[],`SVG contract ${route} @ ${width}`);assert.deepEqual(metrics.rasterIcons,[],`Raster icons ${route}`);assert.deepEqual(metrics.iconTiles,[],`Icon backgrounds ${route}`);if(route==='/sledovani-vozidel')assert.equal(await page.locator('.vm-header').count(),1,'Dedicated map workspace remains intact');else assert.ok(metrics.icons>0,`Missing icons on ${route}`);}
+      if(!baseline){if(metrics.iconProblems.length)console.error('SVG contract',route,width,JSON.stringify(metrics.iconProblems));assert.deepEqual(metrics.rasterIcons,[],`Raster icons ${route}`);assert.deepEqual(metrics.iconTiles,[],`Icon backgrounds ${route}`);if(route==='/sledovani-vozidel')assert.equal(await page.locator('.vm-header').count(),1,'Dedicated map workspace remains intact');else if(route!=='/opravit')assert.ok(metrics.icons>0,`Missing icons on ${route}`);}
       results.push({route,width,height,...metrics});
       if(route==='/'&&width<721){
         if(!baseline)assert.equal(await page.locator('.mobile-home-link [data-icon=home]').count(),1);
         await page.locator('.mobile-bottom-nav button').click();await page.locator('.mobile-menu[open]').waitFor();
         await page.screenshot({path:path.join(output,`menu-${width}.png`)});
+        if(!baseline){assert.equal(await page.locator('.mobile-menu .ui-pilot-nav__icon svg').first().evaluate(n=>n.getBoundingClientRect().width),28);assert.equal(await page.locator('.mobile-menu .ui-pilot-nav__icon').first().evaluate(n=>n.getBoundingClientRect().width),28);}
         if(!baseline)assert.equal(await page.locator('.mobile-menu-nav').evaluate(nav=>[...nav.querySelectorAll('a')].filter(a=>{const text=a.lastElementChild;return text&&text.scrollWidth>text.clientWidth+1;}).length),0,'Menu labels must not clip');
         const labels=await page.locator('.mobile-menu-nav a').allTextContents();
         assert.ok(labels.some(t=>t.includes('Zaměstnanci')));
@@ -93,6 +124,7 @@ try {
     await writeFile(path.join(output,'icon-catalog.html'),catalog);
   }
   assert.deepEqual(errors,[],'No browser errors');
+  assert.deepEqual(results.filter(r=>r.iconProblems.length).map(r=>({route:r.route,width:r.width,issues:r.iconProblems})),[],'Context icon contracts');
   await writeFile(path.join(output,'audit.json'),JSON.stringify({baseline,engine:process.env.BROWSER_ENGINE||'webkit',browser:browser.version(),physicalIPhone:false,results,errors,externalBlocked:[...new Set(external)],mockedMutations},null,2));
   await context.close();
 }finally{await browser?.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}

@@ -14,10 +14,18 @@
   background:none; background-image:none; border:0; box-shadow:none; filter:none;
   border-radius:0; padding:0; color:#243128;
 }
-/* Larger primary symbols fit the existing 40–60px icon slots without growing cards. */
+/* Card icons keep their compact sizes; large headers have separate sizing below. */
 #app :is(.module-icon,.module-detail__icon,.ui-pilot-hero__icon,.module-launcher-icon,.quick-absence-type__icon) svg.smart-icon { width:36px; height:36px; }
 #app .module-launcher-icon svg.smart-icon { width:44px; height:44px; }
-#app .ui-pilot-nav__icon svg.smart-icon { width:22px; height:22px; }
+#app .ui-pilot-nav__icon svg.smart-icon { width:28px; height:28px; }
+@media (min-width:721px) {
+  #app :is(.module-detail,.absence-hero--app) > .module-detail__icon svg.smart-icon { width:64px; height:64px; }
+  #app .ui-pilot-hero__icon svg.smart-icon { width:64px; height:64px; }
+}
+@media (min-width:901px) {
+  #app .ui-pilot-sidebar .ui-pilot-nav__icon svg.smart-icon { width:30px; height:30px; }
+  #app .ui-pilot-hero__icon svg.smart-icon { width:80px; height:80px; }
+}
 #app .mobile-bottom-link svg.smart-icon { width:28px; height:28px; }
 #app .mobile-bottom-link .ui-pilot-nav__icon { width:28px; height:28px; }
 @media (max-width:720px), (pointer:coarse) and (max-height:500px) and (max-width:1000px) {
@@ -32,7 +40,7 @@
 #app .smart-brand-name svg.smart-icon { width:24px; height:24px; }
 #app .module-launcher-toolbar .smart-brand-name svg.smart-icon { width:36px; height:36px; }
 #app .ui-pilot-brand__copy .smart-brand-name { gap:5px; }
-#app .ui-pilot-brand__copy .smart-brand-name svg.smart-icon { width:20px; height:20px; }
+#app .ui-pilot-brand__copy .smart-brand-name svg.smart-icon { width:28px; height:28px; }
 #app :is(.ai-assistant-launcher__icon,.ai-voice-start-button__icon) { display:inline-flex; align-items:center; width:24px; height:24px; }
 #app :is(.ai-assistant-launcher__icon,.ai-voice-start-button__icon)::before,
 #app :is(.ai-assistant-launcher__icon,.ai-voice-start-button__icon)::after { content:none; }
@@ -81,3 +89,10 @@
   background:none; border:0; border-radius:0; box-shadow:none; filter:none;
 }
 #app .tracking-marker-telemetry__event > i svg.smart-icon { width:20px; height:20px; }
+/* Standalone controls need a readable glyph and a separate, usable touch target. */
+#app button:is([aria-label],[title]):has(> svg.smart-icon:only-child) {
+  min-width:44px; min-height:44px;
+}
+#app button:is([aria-label],[title]) > svg.smart-icon:only-child { width:24px; height:24px; }
+#app .fleet-help { width:44px; height:44px; }
+#app .fleet-help > svg.smart-icon { width:24px; height:24px; }
