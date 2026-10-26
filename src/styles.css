@@ -53684,7 +53684,7 @@ body.collection-driver-blackview-simulator-active #app {
 .repair-module form,
 .repair-module form label {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 .repair-module form {
   max-width: 760px;
