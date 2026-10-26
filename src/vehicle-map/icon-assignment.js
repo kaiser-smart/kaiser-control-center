@@ -6,9 +6,10 @@ import { SmartIcon } from '../components/icons/SmartIcon.js';
 // Only explicit choices are exported. GPS, drivers and authentication are omitted.
 export const ICON_CHOICES = Object.freeze([
   ['collection_truck', 'Popelářský vůz'], ['tanker', 'Cisterna'],
+  ['tanker_compact', 'Cisterna – 2 nápravy'],
   ['skip_loader', 'RAM / ramenový nakladač'], ['container_truck', 'Hákový nosič'],
-  ['box_body', 'Vůz s kontejnerem'], ['truck', 'Nákladní vůz'],
-  ['van', 'Dodávka'], ['car', 'Osobní vůz'], ['excavator', 'Bagr'],
+  ['box_body', 'Vůz s kontejnerem'], ['box_body_compact', 'Vůz s kontejnerem – 2 nápravy'], ['truck', 'Nákladní vůz'],
+  ['van', 'Dodávka'], ['van_passenger', 'Dodávka / minibus'], ['car', 'Osobní vůz'], ['excavator', 'Bagr'],
   ['forklift', 'Vysokozdvižný vozík'], ['trailer', 'Přívěs – bez dodané ikony'],
   ['special', 'Speciální – bez dodané ikony'], ['unknown', 'Nevím / doplnit podklad']
 ].map(([key, label]) => Object.freeze({ key, label, monogram: TYPES[key]?.monogram })));
@@ -67,7 +68,7 @@ export function createIconAssignment({ root, getVehicles }) {
     select.disabled = !rows.length;
     $('[data-ia-matches]').textContent = `${rows.length} z ${all.length} vozidel`;
     const v = all.find(v => v.id === selected), chosen = ICON_CHOICES.find(i => i.key === choices.get(selected));
-    $('[data-ia-vehicle]').innerHTML = v ? `<div class="vm-assignment-current">${artwork(chosen || v.type)}<div><h3>${escape(v.name || v.label)}</h3><p>${escape(v.plate || v.label)}</p><small>${chosen ? `Váš výběr: ${escape(chosen.label)}` : `Nyní na mapě: ${escape(v.type.label)}`}</small></div></div>` : '<p>Vyhledávání neodpovídá žádné vozidlo se stabilní identitou.</p>';
+    $('[data-ia-vehicle]').innerHTML = v ? `<div class="vm-assignment-current">${artwork(chosen || ICON_CHOICES.find(icon => icon.key === v.artworkKey) || v.type)}<div><h3>${escape(v.name || v.label)}</h3><p>${escape(v.plate || v.label)}</p><small>${chosen ? `Váš výběr: ${escape(chosen.label)}` : `Nyní na mapě: ${escape(ICON_CHOICES.find(icon => icon.key === v.artworkKey)?.label || v.type.label)}`}</small></div></div>` : '<p>Vyhledávání neodpovídá žádné vozidlo se stabilní identitou.</p>';
     dialog.querySelectorAll('[data-ia-icon]').forEach(button => { button.disabled = !v; button.setAttribute('aria-pressed', String(button.dataset.iaIcon === chosen?.key)); });
     $('[data-ia-clear]').disabled = !chosen;
     $('[data-ia-next]').disabled = !all.some(v => v.id !== selected && !choices.has(v.id));

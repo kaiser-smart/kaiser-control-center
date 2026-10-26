@@ -21,6 +21,7 @@ export const versionInfo = {
 
 export const versionNews = [
   { title: "Zřetelný kruh při jízdě", text: "Kruh vybraného jedoucího vozidla se oddělí od pevného obrysu a pomalu se rozšíří. Původní ikony i čitelné SPZ zůstávají beze změny; stará nebo neověřená GPS neanimuje." },
+  { title: "Ikony podle vašeho přiřazení", text: "Mapa používá 42 ručně vybraných ikon podle předaného návrhu. Nabídka navíc obsahuje tři dodané varianty kontejnerového vozu, dodávky a cisterny." },
   { title: "Poloha vozidel: online a offline", text: "Stáří GPS nahrazují zelené a oranžové puntíky. Jízda, rychlost i bezpečnostní pravidla GPS zůstávají zachované." },
   { title: "Čitelnější vozidla a SPZ na mapě", text: "Původní siluety mají jemný tmavý kruhový podklad a SPZ světlé štítky. Pouze vybrané jedoucí auto s aktuální GPS jemně pulzuje; při omezení animací zůstává statické." },
   { title: "Poloha vozidel: přiřazení ikon", text: "Vyberte správnou dodanou siluetu pro každé auto. Návrh lze stáhnout a znovu načíst; slouží k předání přiřazení, provozní mapu ani evidenci vozidel automaticky nemění." },

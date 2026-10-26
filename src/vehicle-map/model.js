@@ -1,3 +1,4 @@
+import { approvedArtworkKey } from "./approved-icons.js";
 // Pure presentation model. No storage, network, GPS inference or fleet enum mutation.
 export const TYPES = Object.freeze({
   collection_truck: { label: "Svozové vozidlo", image: true },
@@ -129,7 +130,7 @@ export function normalize(records, { now = Date.now(), staleAfterSeconds = 1800 
     const name = first(v.name, v.model, s.name, s.model);
     const heading = number(sample.heading);
     return {
-      id: record.key, stable: record.stable, type, plate, internal, name,
+      id: record.key, stable: record.stable, type, artworkKey: approvedArtworkKey(record), plate, internal, name,
       label: plate || internal || name || "Vozidlo bez označení",
       category, movement, speed, ignition: typeof sample.ignition === "boolean" ? sample.ignition : null,
       emergency: sample.emergency === true, previousPoint, age, clockSkew: pointCheck.clockSkew,

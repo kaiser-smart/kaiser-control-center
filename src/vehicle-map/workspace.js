@@ -1,7 +1,7 @@
 import { createIconAssignment } from "./icon-assignment.js";
 import { fleetStatsHTML, driverHTML, telemetryHTML, vehiclePictureHTML, activityHTML, overviewHTML, mapLegendHTML } from "./dashboard.js";
 import { reconcile, normalize, filterVehicles, CATEGORIES, validateSample } from "./model.js";
-import { escape, artwork, artworkFilterHTML, legendHTML, connectionHTML, connectionName, isOnline, stateHTML, markerName } from "./presentation.js";
+import { escape, artwork, vehicleArtworkType, artworkFilterHTML, legendHTML, connectionHTML, connectionName, isOnline, stateHTML, markerName } from "./presentation.js";
 import { SmartIcon } from "../components/icons/SmartIcon.js";
 import { isMobileViewport, mobileViewportQuery } from "../mobileViewport.js";
 import { createGoogleMap } from "./google-map.js";
@@ -65,7 +65,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
     $("[data-vm-refresh]").disabled = loading;
   }
   function rowHTML(v) {
-    return `${artwork(v.type)}<span class="vm-row-main"><strong>${escape(v.name || v.label)}</strong><span class="vm-row-identity">${escape(v.name ? v.label : v.type.label)}</span>${stateHTML(v, true)}</span>`;
+    return `${artwork(vehicleArtworkType(v))}<span class="vm-row-main"><strong>${escape(v.name || v.label)}</strong><span class="vm-row-identity">${escape(v.name ? v.label : v.type.label)}</span>${stateHTML(v, true)}</span>`;
   }
 
   function updateRows() {

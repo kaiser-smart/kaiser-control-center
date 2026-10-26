@@ -40,6 +40,48 @@
       ],
       "sha256": "95bd74b192c2cde146fad83e425ff71679447e5430f96bcd6100ae244d20699a",
       "imageModified": false
+    },
+    {
+      "file": "container-compact.png",
+      "source": "Snímek obrazovky 2026-10-26 v 7.33.00.png",
+      "width": 698,
+      "height": 642,
+      "crop": [
+        60,
+        190,
+        620,
+        380
+      ],
+      "sha256": "f8c7a98185d1a02ce2928207c2f4a065c56b9ea786a4b52a46148253a6530635",
+      "imageModified": false
+    },
+    {
+      "file": "van-passenger.png",
+      "source": "Snímek obrazovky 2026-10-26 v 7.32.33.png",
+      "width": 308,
+      "height": 280,
+      "crop": [
+        43,
+        80,
+        260,
+        150
+      ],
+      "sha256": "80e6d742630b86f7dee1839e4fcd6fc2a0fd9f228dd824d5c70657bb39f7a261",
+      "imageModified": false
+    },
+    {
+      "file": "tanker-compact.png",
+      "source": "Snímek obrazovky 2026-10-26 v 7.32.23.png",
+      "width": 1074,
+      "height": 636,
+      "crop": [
+        155,
+        76,
+        840,
+        420
+      ],
+      "sha256": "0482162f1d927e35272ab94cf948261eb21da6cce2360c91a311848d20c58336",
+      "imageModified": false
     }
   ]
 }
