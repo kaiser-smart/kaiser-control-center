@@ -27,13 +27,14 @@ await page.route('**/api/vehicle-tracking/status', async r => { const answer = a
 const test = async (name, run) => { await run(); results.push({ name, status: 'passed' }); console.log('PASS', name); };
 const ready = async () => { await page.goto(`${url}/sledovani-vozidel`); await page.waitForSelector('[data-vm-row]', { state: 'attached' }); await page.waitForSelector('[data-dr-open]', { state: 'attached' }); };
 const shot = name => page.screenshot({ path: `${output}/${name}.png`, fullPage: true });
+const waitText = (selector, text) => page.waitForFunction(({ selector, text }) => document.querySelector(selector)?.textContent.includes(text), { selector, text });
 try {
   await ready();
   await test('No evidence shows no score or invented winner', async () => { assert.match(await page.locator('[data-vm-driver]').innerText(), /Čeká na data/); assert.equal(await page.locator('[data-vm-driver] progress').count(), 0); });
   await shot('desktop-waiting');
   await test('Desktop drawer, keyboard close and unchanged map instance', async () => {
     await page.evaluate(() => window.savedRatingMap = google.maps._instances.at(-1));
-    await page.locator('[data-dr-open]').click(); await page.waitForSelector('.dr-content');
+    await page.locator('[data-dr-open]').click(); await waitText('.dr-content', 'nejsou k dispozici');
     assert.equal(Math.round((await page.locator('.dr-drawer').boundingBox()).width), 440);
     assert.match(await page.locator('.dr-content').innerText(), /nejsou k dispozici/);
     await shot('desktop-waiting-detail'); await page.keyboard.press('Escape');
@@ -71,11 +72,11 @@ try {
     await page.locator('[data-dr-close]').click(); assert.equal(await page.locator('.dr-drawer').isVisible(), false);
   });
   mode = 'shadow'; await ready(); await page.locator('[data-vm-view="dashboard"]').click();
-  await test('Shadow mode never leaks test scores', async () => { assert.equal(await page.locator('[data-vm-driver] progress').count(), 0); await page.locator('[data-dr-open]').click(); await page.waitForSelector('.dr-content'); assert.match(await page.locator('.dr-content').innerText(), /nejsou zveřejněné/); await shot('mobile-shadow'); await page.keyboard.press('Escape'); });
+  await test('Shadow mode never leaks test scores', async () => { assert.equal(await page.locator('[data-vm-driver] progress').count(), 0); await page.locator('[data-dr-open]').click(); await waitText('.dr-content', 'nejsou zveřejněné'); assert.match(await page.locator('.dr-content').innerText(), /nejsou zveřejněné/); await shot('mobile-shadow'); await page.keyboard.press('Escape'); });
   mode = 'error'; await ready(); await page.locator('[data-vm-view="dashboard"]').click();
   await test('Source failure shows unavailable without disrupting the map', async () => { await page.waitForFunction(() => document.querySelector('[data-vm-driver]').textContent.includes('Nedostupné')); await page.locator('[data-dr-open]').click(); await page.waitForSelector('.dr-content [role=alert]'); await shot('mobile-unavailable'); await page.locator('[data-dr-close]').click(); assert(await page.locator('[data-vm-row]').count()); });
   mode = 'scored'; own = true; await ready(); await page.locator('[data-vm-view="dashboard"]').click();
-  await test('Driver UI says own evaluation and exposes no ranking', async () => { assert.match(await page.locator('[data-vm-driver]').innerText(), /Moje hodnocení/i); await page.locator('[data-dr-open]').click(); await page.waitForSelector('[data-dr-driver]'); assert.doesNotMatch(await page.locator('.dr-content').innerText(), /TOP 5/); });
+  await test('Driver UI says own evaluation and exposes no ranking', async () => { await waitText('[data-vm-driver]', 'Moje hodnocení'); assert.match(await page.locator('[data-vm-driver]').innerText(), /Moje hodnocení/i); await page.locator('[data-dr-open]').click(); await page.waitForSelector('[data-dr-driver]'); assert.doesNotMatch(await page.locator('.dr-content').innerText(), /TOP 5/); });
   assert.deepEqual(errors, []);
   await writeFile(`${output}/results.json`, JSON.stringify({ engine, synthetic: true, results, errors }, null, 2));
 } finally { await browser.close(); server.close(); }
