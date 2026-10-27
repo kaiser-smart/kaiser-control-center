@@ -98,7 +98,9 @@ test('different custom work days and notification days remain separate',()=>{
   assert.equal(parsed.changes.workingHours.start,'09:00');
 });
 
-test('personal live pilot refuses broad consent and keeps onboarding plus priority in one bounded 30-day sample',async()=>{
+test('personal live pilot refuses broad consent and keeps onboarding plus priority in one bounded 30-day sample',async(t)=>{
+  // The workflow fixture and the MCP expiry guard must share the same test clock.
+  t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-09-26T12:00:00Z')});
   const incoming=Array.from({length:65},(_,index)=>message(index+1,{date:'2026-09-20T08:00:00Z'}));
   const sent=Array.from({length:25},(_,index)=>message(100+index,{folder:'Sent',from:'alice@example.com',
     to:'client@example.net',date:'2026-09-21T08:00:00Z',text:'Děkuji.\n\nS pozdravem\nAlice'}));
