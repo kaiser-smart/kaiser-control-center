@@ -74,6 +74,10 @@ test('endpoint denies anonymous, unknown role, revoked rights, foreign companies
   env.AUTH_USERS_JSON = JSON.stringify([{ ...scope.user, role: 'readonly' }]); assert.equal((await onRequestGet({ env, request })).status, 403);
   env.AUTH_USERS_JSON = JSON.stringify([{ ...scope.user, role: 'ridic', deniedModules: ['vehicle-tracking'] }]); assert.equal((await onRequestGet({ env, request })).status, 403);
   env.AUTH_USERS_JSON = JSON.stringify([scope.user]);
+  const future = fixture(); future.asOf = '2099-01-01T00:00:00Z';
+  const attemptedClockOverride = new Request(url, { method: 'POST', headers: { Cookie: cookie, Origin: 'https://example.test', 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'save_evidence', document: future, expectedRevision: 0, reason: 'future', now: Date.parse(future.asOf) }) });
+  assert.equal((await onRequestPost({ env, request: attemptedClockOverride })).status, 422);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM driver_rating_inputs').get().n, 0);
   assert.equal((await onRequestPost({ env, request: new Request(url, { method: 'POST', headers: { Cookie: cookie, Origin: 'https://evil.test', 'Content-Type': 'application/json' }, body: '{}' }) })).status, 403);
   env.DB_ARCHIVE = null; assert.equal((await onRequestGet({ env, request })).status, 503);
 });

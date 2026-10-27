@@ -36,6 +36,7 @@ neprokazuje skutečnou pracovní dobu, dokončení etapy či výsledek kontroly.
 - Čistý serverový výpočet `functions/_lib/driver-rating-engine.js`.
 - Verzované vstupy, výsledky a schválení historického porovnání v DB_ARCHIVE.
 - Chráněné čtení `/api/vehicle-tracking/driver-ratings?period=today|yesterday&category=all|tanker|container|cleaning|other`.
+- Při oprávnění k více firmám je nutný explicitní `companyId`; bez něj se výsledky různých firem neslučují. Automatická volba je možná jen při jedné oprávněné firmě.
 - Správce/vedení mohou přidat `audit=1` pro interní kontrolu výsledků před zveřejněním.
 - Příjem doložených podkladů a oprav: POST `/api/vehicle-tracking/driver-rating-evidence`.
 - Samostatný cloudový worker `kaiser-driver-rating-runner`, připravený pro 15minutový interval.

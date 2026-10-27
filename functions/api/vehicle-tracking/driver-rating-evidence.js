@@ -12,7 +12,7 @@ export async function onRequestPost({ request, env }) {
     const input = JSON.parse(raw), db = ratingDb(env);
     if (input.action === 'validate_history') return json(await validateHistoricalResults(db, scope, input));
     if (input.action !== 'save_evidence') return json({ error: 'Neznámá operace.' }, 400);
-    const result = await saveInput(db, scope, input.document, input);
+    const result = await saveInput(db, scope, input.document, { expectedRevision: input.expectedRevision, reason: input.reason });
     try { await calculateInput(db, await latestInput(db, scope.installation, input.document.companyId, input.document.day)); }
     catch { return json({ ...result, calculation: 'pending', message: 'Podklady jsou uloženy; výpočet čeká na opakování.' }, 202); }
     return json(result, 201);
