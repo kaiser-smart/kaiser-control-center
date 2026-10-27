@@ -1,7 +1,7 @@
 import { createIconAssignment } from "./icon-assignment.js";
 import { fleetStatsHTML, driverHTML, telemetryHTML, vehiclePictureHTML, activityHTML, overviewHTML } from "./dashboard.js";
 import { reconcile, normalize, filterVehicles, CATEGORIES, validateSample } from "./model.js";
-import { escape, artwork, vehicleArtworkType, artworkFilterHTML, legendHTML, connectionHTML, connectionName, isOnline, stateHTML, markerName, movementText } from "./presentation.js";
+import { escape, artwork, vehicleArtworkType, artworkFilterHTML, legendHTML, ignitionHTML, ignitionName, ignitionState, isOnline, stateHTML, markerName, movementText } from "./presentation.js";
 import { SmartIcon } from "../components/icons/SmartIcon.js";
 import { isMobileViewport, mobileViewportQuery } from "../mobileViewport.js";
 import { createGoogleMap } from "./google-map.js";
@@ -70,7 +70,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
     const time = lastSuccess ? new Intl.DateTimeFormat("cs-CZ", { timeStyle: "medium", timeZone: "Europe/Prague" }).format(lastSuccess) : "dosud žádná";
     $("[data-vm-refresh-status]").textContent = error ? `Obnova se nezdařila · poslední úspěšná aktualizace ${time}` : loading ? "Načítám polohy…" : `Živá data · ${time}`;
     root.classList.toggle("has-error", !!error);
-    $("[data-vm-refresh-status]").title = "Čas načtení dat z API. Dostupnost GPS označuje zelený nebo červený bod. Obnova po 60 s.";
+    $("[data-vm-refresh-status]").title = "Čas načtení dat z API. Zelený bod: zapalování zapnuto. Červený bod: zapalování vypnuto. Obnova po 60 s.";
     $("[data-vm-refresh]").disabled = loading;
   }
   function rowHTML(v) {
@@ -113,7 +113,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   function detailHTML(v) {
     const field = (label, value) => `<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`;
     const historical = !v.point || v.previousPoint || v.age > 120;
-    return `<header class="vm-detail-head"><div class="vm-detail-identity">${vehiclePictureHTML(v)}<div><h2>${escape(v.name || v.label)}</h2><p class="vm-detail-meta">${connectionHTML(v)}<span>${escape(v.name ? `${v.label} · ${v.type.label}` : v.type.label)}</span></p><span class="vm-state">${escape(movementText(v))}</span></div></div><button type="button" data-vm-back aria-label="Zavřít detail vozidla" title="Zavřít detail">${SmartIcon("close")}</button></header>
+    return `<header class="vm-detail-head"><div class="vm-detail-identity">${vehiclePictureHTML(v)}<div><h2>${escape(v.name || v.label)}</h2><p class="vm-detail-meta">${ignitionHTML(v)}<span>${escape(v.name ? `${v.label} · ${v.type.label}` : v.type.label)}</span></p><span class="vm-state">${escape(movementText(v))}</span></div></div><button type="button" data-vm-back aria-label="Zavřít detail vozidla" title="Zavřít detail">${SmartIcon("close")}</button></header>
       <div class="vm-detail-scroll">
       ${v.emergency ? '<p class="vm-emergency">Hlášená mimořádná událost</p>' : ""}
       ${!v.point ? `<p>${escape(v.reason)}</p>` : ""}
@@ -123,7 +123,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
 
       <details class="vm-telemetry-box" ><summary>Obrázek a telemetrie</summary>${telemetryHTML(v)}</details>
       <details class="vm-history" ${historyState.open ? "open" : ""}><summary>Období a GPS body trasy</summary><label>Období <select data-vm-history-range><option value="24h" ${historyState.range === "24h" ? "selected" : ""}>24 hodin</option><option value="7d" ${historyState.range === "7d" ? "selected" : ""}>7 dní</option><option value="today" ${historyState.range === "today" ? "selected" : ""}>Dnes</option></select></label><button type="button" data-vm-history-load ${!v.historyKey ? "disabled" : ""}>Načíst historii</button><p data-vm-history-status role="status">${escape(historyState.text || "Trasa z uložených GPS bodů za zvolené období.")}</p></details>
-      <details class="vm-more"><summary>Další údaje a ovládání</summary><div class="vm-detail-secondary"><button type="button" data-vm-center ${!v.point || !map ? "disabled" : ""}>${SmartIcon("navigate")}Vystředit vozidlo</button>${selectedGroup.length ? `<button type="button" data-vm-selected-group>Vozidla ve skupině (${selectedGroup.length})</button>` : ""}</div><dl>${field("Typ", v.type.label)}${field("SPZ", v.plate || "Neověřeno")}${field("Řidič právě ve vozidle", "Neověřeno")}${field("Zapalování", v.ignition === null ? "Neověřeno" : v.ignition ? "Zapnuto" : "Vypnuto")}${v.internal ? field("Interní číslo", v.internal) : ""}${v.odometer !== null ? field("Tachometr", `${v.odometer} km`) : ""}${v.voltage !== null ? field("Napětí", `${v.voltage} V`) : ""}${historical ? field("Historický provozní stav", CATEGORIES[v.movement]) : ""}${field("Jednoznačná identita", v.id)}</dl></details></div>`;
+      <details class="vm-more"><summary>Další údaje a ovládání</summary><div class="vm-detail-secondary"><button type="button" data-vm-center ${!v.point || !map ? "disabled" : ""}>${SmartIcon("navigate")}Vystředit vozidlo</button>${selectedGroup.length ? `<button type="button" data-vm-selected-group>Vozidla ve skupině (${selectedGroup.length})</button>` : ""}</div><dl>${field("Typ", v.type.label)}${field("SPZ", v.plate || "Neověřeno")}${field("Řidič právě ve vozidle", "Neověřeno")}${field("Zapalování", ignitionState(v) === null ? "Údaj není dostupný nebo je zastaralý" : ignitionState(v) ? "Zapnuto" : "Vypnuto")}${v.internal ? field("Interní číslo", v.internal) : ""}${v.odometer !== null ? field("Tachometr", `${v.odometer} km`) : ""}${v.voltage !== null ? field("Napětí", `${v.voltage} V`) : ""}${historical ? field("Historický provozní stav", CATEGORIES[v.movement]) : ""}${field("Jednoznačná identita", v.id)}</dl></details></div>`;
   }
 
   function updatePanel() {
@@ -157,7 +157,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   function update({ tick = false } = {}) {
     vehicles = normalize(records, { now: now(), staleAfterSeconds });
     const result = filterVehicles(vehicles, state.query, state.category === "stale" ? "all" : state.category);
-    // Keep the internal filter key, but Offline includes every red dot.
+    // GPS availability filters stay independent of ignition indicators.
     result.counts.stale = filterVehicles(vehicles, state.query).vehicles.filter(v => !isOnline(v)).length;
     filtered = state.category === "stale" ? result.vehicles.filter(v => !isOnline(v)) : result.vehicles;
     if (state.selectedId && !filtered.some((v) => v.id === state.selectedId)) {
@@ -173,12 +173,14 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
     const signature = JSON.stringify(filtered.map(({ age, ...v }) => ({ ...v, softAge: age > 120 })));
     if (!tick || signature !== dataSignature) { dataSignature = signature; updatePanel(); updateMap(); }
     else map?.age(filtered);
-    // Availability dots update without repainting vehicle images or map geometry.
+    // Ignition indicators age without repainting vehicle images or map geometry.
     const byId = new Map(vehicles.map(v => [v.id, v]));
-    root.querySelectorAll("[data-vm-connection]").forEach(el => {
-      const v = byId.get(el.dataset.vmConnection); if (!v) return;
-      el.classList.toggle("vm-online", isOnline(v)); el.classList.toggle("vm-offline", !isOnline(v));
-      el.setAttribute("aria-label", connectionName(v)); el.title = connectionName(v);
+    root.querySelectorAll("[data-vm-ignition]").forEach(el => {
+      const v = byId.get(el.dataset.vmIgnition); if (!v) return;
+      const ignition = ignitionState(v);
+      el.classList.toggle("vm-ignition-on", ignition === true); el.classList.toggle("vm-ignition-off", ignition === false);
+      el.classList.toggle("vm-ignition-unknown", ignition === null); el.textContent = ignition === null ? "—" : "";
+      el.setAttribute("aria-label", ignitionName(v)); el.title = ignitionName(v);
     });
     updateStatus();
     if (!tick) { iconAssignment.update(); if (openAssignmentsOnLoad && vehicles.length) { openAssignmentsOnLoad = false; iconAssignment.open(); } }

@@ -27,17 +27,32 @@ export function artwork(type, size = "list") {
 export function isOnline(v) {
   return Boolean(v.point && !v.previousPoint && v.category !== "stale" && v.category !== "missing" && Number.isFinite(v.age) && v.age >= 0);
 }
-export function connectionName(v) { return isOnline(v) ? "Online" : "Offline"; }
-export function connectionHTML(v, extraClass = "") {
-  return `<span class="vm-connection ${isOnline(v) ? "vm-online" : "vm-offline"} ${extraClass}" data-vm-connection="${escape(v.id)}" role="img" aria-label="${connectionName(v)}" title="${connectionName(v)}"></span>`;
+// Use only the provider's explicit boolean from a usable sample. Never infer
+// ignition from speed, GPS connectivity, or a missing value.
+export function ignitionState(v) {
+  return isOnline(v) && typeof v.ignition === "boolean" ? v.ignition : null;
+}
+export function ignitionName(v) {
+  const state = ignitionState(v);
+  return state === null ? "Zapalování: údaj není dostupný nebo je zastaralý" : `Zapalování ${state ? "zapnuto" : "vypnuto"}`;
+}
+export function ignitionHTML(v, extraClass = "") {
+  const state = ignitionState(v);
+  return `<span class="vm-ignition vm-ignition-${state === null ? "unknown" : state ? "on" : "off"} ${extraClass}" data-vm-ignition="${escape(v.id)}" role="img" aria-label="${ignitionName(v)}" title="${ignitionName(v)}">${state === null ? "—" : ""}</span>`;
+}
+export function clusterIgnition(members) {
+  const states = members.map(ignitionState), on = states.filter(s => s === true).length, off = states.filter(s => s === false).length;
+  const uniform = on === states.length ? true : off === states.length ? false : null;
+  return { html: states.length && uniform !== null ? `<span class="vm-cluster-clock vm-ignition vm-ignition-${uniform ? "on" : "off"}" aria-hidden="true"></span>` : "",
+    label: `Zapalování: ${on} zapnuto, ${off} vypnuto, ${states.length - on - off} neověřeno.` };
 }
 export function movementText(v) { return ["stale", "missing"].includes(v.category) ? "" : statusText(v); }
 export function stateHTML(v, speed = false) {
-  return `<span class="vm-state">${connectionHTML(v)}${escape(movementText(v))}${speed && v.speed !== null && v.category === "moving" ? ` · ${v.speed} km/h` : ""}</span>`;
+  return `<span class="vm-state">${ignitionHTML(v)}${escape(movementText(v))}${speed && v.speed !== null && v.category === "moving" ? ` · ${v.speed} km/h` : ""}</span>`;
 }
 export function vehicleArtworkType(v) { return v.artworkKey ? { key: v.artworkKey } : v.type; }
 export function markerHTML(v) {
-  return `${artwork(vehicleArtworkType(v), "map")}${connectionHTML(v, "vm-badge")}${v.emergency ? '<span class="vm-emergency-badge" aria-label="Mimořádná událost">!</span>' : ""}${v.heading !== null ? `<span class="vm-heading" style="transform:rotate(${v.heading}deg)" aria-hidden="true"><i></i></span>` : ""}`;
+  return `${artwork(vehicleArtworkType(v), "map")}${ignitionHTML(v, "vm-badge")}${v.emergency ? '<span class="vm-emergency-badge" aria-label="Mimořádná událost">!</span>' : ""}${v.heading !== null ? `<span class="vm-heading" style="transform:rotate(${v.heading}deg)" aria-hidden="true"><i></i></span>` : ""}`;
 }
 // A speed label is current only within the existing 120 s GPS window.
 // Never present the last known historical speed as a current reading.
@@ -50,10 +65,10 @@ export function markerLabelHTML(v) {
   const speed = currentSpeed(v);
   return `<span class="vm-label-plate">${escape(v.label)}</span><span class="vm-label-speed" title="${speed === null ? "Aktuální rychlost není dostupná" : "Aktuální rychlost"}">${speed === null ? "—" : escape(speed)}<span class="vm-label-unit"> km/h</span></span>`;
 }
-export function markerName(v) { return [v.label, v.type.label, movementText(v), currentSpeed(v) === null ? "" : `${currentSpeed(v)} km/h`, connectionName(v)].filter(Boolean).join(", "); }
+export function markerName(v) { return [v.label, v.type.label, movementText(v), currentSpeed(v) === null ? "" : `${currentSpeed(v)} km/h`, ignitionName(v)].filter(Boolean).join(", "); }
 export function legendHTML() {
   return `<h2>Ikony a stavy</h2><p>Dodaná sada OpenArt. Popelářský vůz, ramenový nakladač RAM a hákový nosič mají vlastní dodané siluety; typ určuje doložená evidence. Přívěs, neurčená a obecná speciální technika používají neutrální zkratku, protože v sadě nemají vlastní ikonu.</p><div class="vm-legend-art">${Object.entries(TYPES).map(([key, t]) => `<div>${artwork({ key, ...t })}<span>${escape(t.label)}</span></div>`).join("")}</div>
-    <p>Typ vychází z doložené evidence. Neurčená nástavba zůstává označená otazníkem.</p><p><span class="vm-connection vm-online" aria-hidden="true"></span> Online · <span class="vm-connection vm-offline" aria-hidden="true"></span> Offline</p>`;
+    <p>Typ vychází z doložené evidence. Neurčená nástavba zůstává označená otazníkem.</p><p><span class="vm-ignition vm-ignition-on" aria-hidden="true"></span> Zapalování zapnuto · <span class="vm-ignition vm-ignition-off" aria-hidden="true"></span> Zapalování vypnuto</p><p>Pomlčka znamená chybějící nebo zastaralý údaj o zapalování.</p>`;
 }
 
 // Presentation eligibility only: reuse the existing 120 s current-GPS window
