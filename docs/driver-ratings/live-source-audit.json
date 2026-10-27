@@ -1,0 +1,19 @@
+{
+  "checkedDate": "2026-10-27",
+  "approximateCompletedAt": "2026-10-27T10:54:00Z",
+  "method": "read-only SELECT through authenticated Cloudflare D1 web console",
+  "accountId": "3b25838c1e15dbfe5f3ac0c273826576",
+  "database": "SMART_ODPADY_ARCHIVE",
+  "databaseId": "b10566be-ebb1-414c-beab-eac03f1a909b",
+  "sourceRecords": [
+    {"entity":"ServiceList","records":806,"distinctNonNullDriverReferences":20,"lastReceivedAt":"2026-10-27T10:45:10.717Z"},
+    {"entity":"ServiceListItem","records":2550,"distinctNonNullDriverReferences":0,"lastReceivedAt":"2026-10-27T10:52:21.502Z"}
+  ],
+  "job_execution_evidence": 0,
+  "vistos_execution_checks": 0,
+  "tablesMatchingShiftExecutionDriverAssignmentNorm": ["job_execution_evidence", "vistos_execution_checks"],
+  "completeImportVerified": false,
+  "historicalScoringVerified": false,
+  "productionWrites": false,
+  "cliBlocker": "macOS Keychain exit 51; audit was recovered via the web console"
+}

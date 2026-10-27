@@ -1,0 +1,12 @@
+name = "kaiser-driver-rating-runner"
+main = "workers/driver-rating-runner.js"
+compatibility_date = "2026-06-26"
+workers_dev = false
+
+[[d1_databases]]
+binding = "DB_ARCHIVE"
+database_name = "SMART_ODPADY_ARCHIVE"
+database_id = "b10566be-ebb1-414c-beab-eac03f1a909b"
+
+[triggers]
+crons = ["*/15 * * * *"]

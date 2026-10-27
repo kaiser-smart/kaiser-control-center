@@ -1,12 +1,13 @@
 import { createIconAssignment } from "./icon-assignment.js";
-import { fleetStatsHTML, driverHTML, telemetryHTML, vehiclePictureHTML, activityHTML, overviewHTML } from "./dashboard.js";
+import { fleetStatsHTML, telemetryHTML, vehiclePictureHTML, activityHTML, overviewHTML } from "./dashboard.js";
+import { createDriverRatings } from './driver-ratings.js';
 import { reconcile, normalize, filterVehicles, CATEGORIES, validateSample } from "./model.js";
 import { escape, artwork, vehicleArtworkType, artworkFilterHTML, legendHTML, ignitionHTML, ignitionName, ignitionState, isOnline, stateHTML, markerName, movementText } from "./presentation.js";
 import { SmartIcon } from "../components/icons/SmartIcon.js";
 import { isMobileViewport, mobileViewportQuery } from "../mobileViewport.js";
 import { createGoogleMap } from "./google-map.js";
 
-export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, readAnalytics, now = () => Date.now(), mapFactory = createGoogleMap }) {
+export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, readAnalytics, readRatings, now = () => Date.now(), mapFactory = createGoogleMap }) {
   const root = document.createElement("section");
   root.className = "vm"; root.dataset.trackingOperationalView = "";
   const filter = (key, label = CATEGORIES[key]) => `<button type="button" data-vm-filter="${key}" aria-pressed="${key === "all"}">${label}<b>0</b></button>`;
@@ -40,6 +41,12 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   const rows = new Map();
   const listScroller = () => $(isMobileViewport() ? ".vm-panel" : ".vm-list");
   const iconAssignment = createIconAssignment({ root, getVehicles: () => vehicles });
+  const driverRatings = createDriverRatings({ root, readRatings, selectVehicle(id) {
+    const v = vehicles.find(v => v.id === `${scope}:vehicle:${id}`);
+    if (!v) return false;
+    state.query = ''; state.category = 'all'; state.groupIds = []; $('#vm-search').value = '';
+    update(); select(v.id); return true;
+  } });
   let openAssignmentsOnLoad = new URLSearchParams(location.search).get("ikony") === "1";
   const announce = (message) => { $("[data-vm-announcement]").textContent = message; };
   function fit() {
@@ -136,7 +143,6 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
       : pointCount ? `Přizpůsobit ${pointCount} polohám podle filtru` : "Filtru neodpovídá žádná ověřená poloha";
     $(".vm-panel-detail").hidden = !v;
     $(".vm-selection-empty").hidden = !!v;
-    $("[data-vm-driver]").innerHTML = driverHTML(v);
     root.dataset.view = state.view;
     root.querySelectorAll("[data-vm-view]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.vmView === state.view)));
     updateRows();
@@ -253,7 +259,7 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
   }
   root.addEventListener("click", (event) => {
     const button = event.target.closest("button"); if (!button) return;
-    if (button.hasAttribute("data-vm-refresh")) { void refresh(); void loadAnalytics(); }
+    if (button.hasAttribute("data-vm-refresh")) { void refresh(); void loadAnalytics(); void driverRatings.refresh(); }
     if (button.hasAttribute("data-vm-select")) select(button.dataset.vmSelect);
     if (button.hasAttribute("data-vm-filter")) {
       const category = button.dataset.vmFilter; state.category = category === state.category ? "all" : category;
@@ -314,6 +320,6 @@ export function createVehicleWorkspace({ scope, loadMaps, refresh, readHistory, 
       }
       update(); resize(); if (options.mapsReady) void ensureMap();
     },
-    destroy() { iconAssignment.destroy(); destroyed = true; historyRequest++; clearInterval(tickTimer); observer.disconnect(); mobileQuery.removeEventListener("change", onViewportChange); window.removeEventListener("resize", resize); window.visualViewport?.removeEventListener("resize", resize); cancelAnimationFrame(resizeFrame); map?.destroy(); records.clear(); vehicles = []; filtered = []; payloadRef = null; root.remove(); }
+    destroy() { driverRatings.destroy(); iconAssignment.destroy(); destroyed = true; historyRequest++; clearInterval(tickTimer); observer.disconnect(); mobileQuery.removeEventListener("change", onViewportChange); window.removeEventListener("resize", resize); window.visualViewport?.removeEventListener("resize", resize); cancelAnimationFrame(resizeFrame); map?.destroy(); records.clear(); vehicles = []; filtered = []; payloadRef = null; root.remove(); }
   };
 }
