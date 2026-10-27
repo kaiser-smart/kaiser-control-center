@@ -19,7 +19,7 @@ await page.route('https://**/*', r => r.abort());
 let mode = 'waiting', own = false;
 const evaluated = evaluateDay(fixture(), { now: NOW });
 function response(period) {
-  return { day: period === 'yesterday' ? '2026-10-26' : '2026-10-27', category: 'all', categories: CATEGORIES, mode: mode === 'shadow' ? 'shadow' : 'live', scope: own ? 'own' : 'audit', status: mode === 'scored' ? 'provisional' : 'waiting', lastCalculatedAt: mode === 'scored' ? fixture().asOf : null, lastSynchronizedAt: mode === 'scored' ? fixture().asOf : null, reasons: mode === 'shadow' ? ['shadow'] : mode === 'waiting' ? ['assignment'] : [], ranking: mode === 'scored' && !own ? evaluated.ranking : [], drivers: mode === 'scored' ? evaluated.results.map(d => ({ ...d, revision: 1 })) : [] };
+  return { day: /^\d{4}-\d{2}-\d{2}$/.test(period || '') ? period : period === 'yesterday' ? '2026-10-26' : '2026-10-27', category: 'all', categories: CATEGORIES, mode: mode === 'shadow' ? 'shadow' : 'live', scope: own ? 'own' : 'audit', status: mode === 'scored' ? 'provisional' : 'waiting', lastCalculatedAt: mode === 'scored' ? fixture().asOf : null, lastSynchronizedAt: mode === 'scored' ? fixture().asOf : null, reasons: mode === 'shadow' ? ['shadow'] : mode === 'waiting' ? ['assignment'] : [], ranking: mode === 'scored' && !own ? evaluated.ranking : [], drivers: mode === 'scored' ? evaluated.results.map(d => ({ ...d, revision: 1 })) : [] };
 }
 await page.route('**/api/vehicle-tracking/driver-ratings?*', r => mode === 'error' ? r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Testovací výpadek' }) }) : r.fulfill({ contentType: 'application/json', body: JSON.stringify(response(new URL(r.request().url()).searchParams.get('period'))) }));
 // Canonical vehicle identity is supplied explicitly, never matched using a name or a plate.
@@ -53,6 +53,7 @@ try {
   await test('Top 5, calculation detail, day and category controls', async () => {
     await page.locator('[data-dr-open]').click(); await page.waitForSelector('[data-dr-driver]');
     await page.locator('[data-dr-period="yesterday"]').click(); await page.waitForSelector('[data-dr-driver]');
+    await page.locator('[data-dr-day]').fill('2026-10-20'); await waitText('.dr-sync', '20. 10. 2026');
     await page.locator('[data-dr-category]').selectOption('tanker'); await page.waitForSelector('[data-dr-driver]');
     await page.locator('[data-dr-driver]').first().click(); assert.match(await page.locator('.dr-content').innerText(), /Normovaná práce/);
     assert.match(await page.locator('.dr-content').innerText(), /Rozpis bodů/); await shot('desktop-driver-detail');
@@ -66,7 +67,7 @@ try {
     await page.locator('[data-dr-open]').click(); await page.waitForSelector('[data-dr-driver]');
     const box = await page.locator('.dr-drawer').boundingBox(); assert.equal(Math.round(box.width), 390); assert.equal(Math.round(box.height), 844);
     assert.equal(await page.locator('.dr-drawer').evaluate(e => e.scrollWidth <= e.clientWidth), true);
-    const targets = await page.locator('.dr-drawer button,.dr-drawer select').evaluateAll(es => es.map(e => ({ tag: e.tagName, text: e.textContent, width: e.getBoundingClientRect().width, height: e.getBoundingClientRect().height })));
+    const targets = await page.locator('.dr-drawer button,.dr-drawer select,.dr-drawer input').evaluateAll(es => es.map(e => ({ tag: e.tagName, text: e.textContent, width: e.getBoundingClientRect().width, height: e.getBoundingClientRect().height })));
     await shot('mobile-ranking'); assert(targets.every(b => b.height >= 44 && b.width >= 44), JSON.stringify(targets));
     await page.locator('[data-dr-driver]').first().click(); await shot('mobile-driver-detail');
     await page.locator('[data-dr-close]').click(); assert.equal(await page.locator('.dr-drawer').isVisible(), false);

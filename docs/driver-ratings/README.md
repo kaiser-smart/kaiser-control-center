@@ -4,6 +4,29 @@ Stav: implementováno lokálně, **nenasazeno**, produkční bodování nezapnut
 Kód nevytváří vítěze z GPS ani z pouhého přiřazení ve Vozovém parku.
 Nejde o dokončenou integraci skutečných směn. Bez ní není naplněno celé zadání.
 
+## Upřesnění skutečného provozu od uživatele (27. 10. 2026)
+
+Samostatná evidence skutečných směn, přestávek a potvrzených kontrol neexistuje.
+Možnými zdroji jsou Zakázky a T-Cars; Zakázky se průběžně doplňují se zpožděním
+oproti dni provedení. Nejde tedy pouze o dočasný výpadek importu.
+
+- Dnešní T-Cars může sloužit jako provozní přehled vozidel. Existující parser jízd
+  čte začátek/konec, kilometry, soukromou jízdu a případného řidiče ze zdroje.
+  Dostupnost těchto polí u konkrétních jízd ani historická identita řidiče tím není ověřena.
+- Čas jízdy není délka směny; stání nerozlišuje práci, přestávku či čekání.
+  Zakázka ani GPS nepotvrzuje kvalitu, zavinění ztráty nebo úplnost dne.
+- Datum provedení, datum příjmu dat a datum výpočtu zůstávají rozdílné.
+  Pozdní úplný a ověřený podklad se vyhodnotí zpětně za skutečný den; datum se
+  nepřepisuje na den importu. Detail nyní umožňuje vybrat libovolný minulý den.
+- Není stanoven umělý pevný odklad D+1/D+7 ani automatické uzavření neúplného dne.
+  Čerstvý import nepotvrzuje úplnost; uzávěrka v 07:00 je pouze nejdřívější možnost.
+- Původní skóre 50/30/20 se z těchto dvou zdrojů samo nedopočítá. Dokud nejsou
+  potřebné skutečnosti doložené, výsledek zůstává nehodnocený, bez vítěze.
+  Nové zjednodušené bodování pouze z telemetrie nebylo zavedeno.
+
+Tato úprava přidává podporu opožděných historických výsledků, nikoli hotový automatický
+adaptér ani náhradu chybějící evidence. Dnešní provozní údaje zůstávají ve stávající mapě.
+
 ## Skutečně ověřené zdroje (27. 10. 2026, přibližně 11:54 Europe/Prague)
 
 Read-only kontrola přes přihlášený Cloudflare Dashboard; účet
@@ -35,7 +58,7 @@ neprokazuje skutečnou pracovní dobu, dokončení etapy či výsledek kontroly.
 
 - Čistý serverový výpočet `functions/_lib/driver-rating-engine.js`.
 - Verzované vstupy, výsledky a schválení historického porovnání v DB_ARCHIVE.
-- Chráněné čtení `/api/vehicle-tracking/driver-ratings?period=today|yesterday&category=all|tanker|container|cleaning|other`.
+- Chráněné čtení `/api/vehicle-tracking/driver-ratings?period=today|yesterday|YYYY-MM-DD&category=all|tanker|container|cleaning|other`.
 - Při oprávnění k více firmám je nutný explicitní `companyId`; bez něj se výsledky různých firem neslučují. Automatická volba je možná jen při jedné oprávněné firmě.
 - Správce/vedení mohou přidat `audit=1` pro interní kontrolu výsledků před zveřejněním.
 - Příjem doložených podkladů a oprav: POST `/api/vehicle-tracking/driver-rating-evidence`.

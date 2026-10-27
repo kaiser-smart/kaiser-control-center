@@ -81,3 +81,28 @@ test('endpoint denies anonymous, unknown role, revoked rights, foreign companies
   assert.equal((await onRequestPost({ env, request: new Request(url, { method: 'POST', headers: { Cookie: cookie, Origin: 'https://evil.test', 'Content-Type': 'application/json' }, body: '{}' }) })).status, 403);
   env.DB_ARCHIVE = null; assert.equal((await onRequestGet({ env, request })).status, 503);
 });
+
+// Import time must not move completed work to another scoring day.
+test('late verified jobs remain on execution day and historical results survive later synchronizations', async () => {
+  const { db, scope } = setup();
+  const late = NOW + 7 * 86400000, f = fixture();
+  f.closeEvidence = proof('late-review', new Date(late).toISOString());
+  f.sources.forEach(source => { source.successAt = new Date(late).toISOString(); });
+  await store(db, scope, f, 0, late);
+  await validateHistoricalResults(db, scope, { companyId: f.companyId, evidence: proof('approval', new Date(late).toISOString()), cases: [{ day: f.day, revision: 1, driverId: 'test-driver', evidence: proof(), expected: { performance: 50, efficiency: 30, quality: 20, total: 100 } }] }, late);
+  const historical = await readRatings(db, scope, f.day, 'all', { now: late + 86400000 });
+  assert.equal(historical.day, '2026-10-27'); assert.equal(historical.status, 'final'); assert.equal(historical.ranking[0].total, 100);
+  assert.deepEqual((await readRatings(db, scope, '2026-11-03', 'all', { now: late })).ranking, []);
+  const unverified = fixture(); unverified.companyId = 'other';
+  await store(db, { ...scope, companies: ['other'] }, unverified, 0, late);
+  assert.deepEqual((await readRatings(db, { ...scope, companies: ['other'] }, unverified.day, 'all', { now: late, audit: true })).ranking, []);
+});
+test('historical date endpoint validates actual calendar dates and never falls back to today', async () => {
+  const { db, scope } = setup();
+  const env = { APP_ENV: 'test', AUTH_MODE: 'mock', AUTH_USERS_JSON: JSON.stringify([scope.user]), DB_CORE: db, DB_ARCHIVE: db, DB_AUDIT: db };
+  db.sqlite.prepare('INSERT INTO vistos_company_access VALUES(?,?,?)').run(scope.user.id, scope.installation, scope.companies[0]);
+  const cookie = await createSessionCookie(env, scope.user);
+  const get = period => onRequestGet({ env, request: new Request('https://example.test/api/vehicle-tracking/driver-ratings?period=' + period, { headers: { Cookie: cookie } }) });
+  const answer = await get('2026-10-20'); assert.equal(answer.status, 200); assert.equal((await answer.json()).day, '2026-10-20');
+  for (const invalid of ['2026-02-30', '2099-01-01', '2026-1-2', 'undefined']) assert.equal((await get(invalid)).status, 400);
+});
