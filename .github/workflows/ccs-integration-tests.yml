@@ -1,0 +1,35 @@
+name: CCS integration tests
+on:
+  pull_request:
+    paths:
+      - 'functions/_lib/ccs-*.js'
+      - 'functions/api/ccs/**'
+      - 'scripts/ccs-*'
+      - 'src/components/CcsFuel.js'
+      - 'src/ccs-fuel.css'
+      - 'workers/ccs-sync-runner.js'
+      - 'wrangler.ccs-sync-runner.toml'
+      - 'migrations/modular/archive/0004_ccs_integration.sql'
+      - '.github/workflows/ccs-integration-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: node --test scripts/ccs-import.test.mjs scripts/ccs-server.test.mjs
+      - run: python3 scripts/ccs-read-export.test.py
+      - run: node scripts/fleet-fuel-identity-review.test.mjs
+      - run: node scripts/fleet-job-fuel-economics.test.mjs
+      - run: node scripts/global-search.test.mjs
+      - run: node scripts/check-syntax.mjs
+      - run: node scripts/build.mjs

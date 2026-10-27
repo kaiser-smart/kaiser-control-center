@@ -1,5 +1,6 @@
 export const ACTIONS = ["view", "create", "edit", "delete", "approve", "export", "manage", "parts-search", "view_finance", "view_personal", "vistos_write"];
 export const PERMISSION_MODULES = [
+  "ccs-fuel",
   "dashboard",
   "jobs",
   "integrations",
@@ -57,6 +58,7 @@ const ROLE_ALIASES = {
 };
 
 const MODULE_ALIASES = {
+  "tankovani-ccs": "ccs-fuel",
   zakazky: "jobs",
   "vozovy-park": "fleet",
   "sledovani-vozidel": "vehicle-tracking",

@@ -1,3 +1,4 @@
+import { ccsFuelMarkup, mountCcsFuel } from "./components/CcsFuel.js";
 import { RepairModule } from "./components/RepairModule.js";
 import { isMobileViewport } from "./mobileViewport.js";
 import { fleetCalendarDate } from "./data/fleetDate.js";
@@ -41975,6 +41976,7 @@ async function runVistosAuditV4() {
 }
 
 function modulePage(moduleItem, user, isDashboard = false) {
+  if (moduleItem.id === "ccs-fuel") return `<main class="app-shell module-page module-theme-scope" ${moduleThemeStyleAttribute()}>${userBar(user)}<nav class="topbar"><a class="back-button" href="/" data-link>Zpět na moduly</a></nav>${ccsFuelMarkup()}</main>`;
   if (moduleItem.id === "absence") {
     return absenceModulePage(moduleItem, user, isDashboard);
   }
@@ -55444,6 +55446,7 @@ function renderAuthenticatedApp(user) {
   if (userPrimaryRoutes.has(path)) {
     const moduleItem = userPrimaryRoutes.get(path);
     app.innerHTML = modulePage(moduleItem, user);
+    if (moduleItem.id === "ccs-fuel") void mountCcsFuel(app.querySelector("[data-ccs-root]"), { canManage: hasPermission(user, "*", "*"), canExport: hasPermission(user, "ccs-fuel", "export") });
     document.title = `${moduleItem.title} | ${APP_NAME}`;
 
     if (moduleItem.id === "users" && hasPermission(user, "users", "view")) {
