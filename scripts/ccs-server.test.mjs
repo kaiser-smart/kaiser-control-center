@@ -1,0 +1,77 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
+import { deflateRawSync } from 'node:zlib';
+import { CCS_HEADERS } from '../functions/_lib/ccs-import.js';
+import { readCcsXlsx } from '../functions/_lib/ccs-xlsx.js';
+import { CCS_SCHEMA, CCS_CRON, CCS_BLOCKER, ccsWindow, nextCcsRun, enqueueCcs, runCcsQueue, ccsStatus, ccsScheduled, ingestCcsExport } from '../functions/_lib/ccs-store.js';
+import { ccsReport, ccsDetail, resolveCcsObservation, saveCcsCardAssignment, ccsCsvCell } from '../functions/_lib/ccs-report.js';
+import { onRequestGet, onRequestPost } from '../functions/api/ccs/index.js';
+const CCS_ACCOUNT = 'D000001';
+class D1 {
+  constructor() { this.db = new DatabaseSync(':memory:'); }
+  prepare(sql) { const self = this; const stmt = args => ({ bind: (...next) => stmt(next), all: async () => ({ results:self.db.prepare(sql).all(...args) }), first: async () => self.db.prepare(sql).get(...args) || null, run: async () => ({ meta:self.db.prepare(sql).run(...args) }) }); return stmt([]); }
+  async batch(statements) { this.db.exec('BEGIN'); try { const out = []; for (const s of statements) out.push(await s.run()); this.db.exec('COMMIT'); return out; } catch (e) { this.db.exec('ROLLBACK'); throw e; } }
+}
+function env() {
+  const archive = new D1(), core = new D1(); archive.db.exec(CCS_SCHEMA.join(';'));
+  core.db.exec(`CREATE TABLE fleet_vehicle_external_aliases(id TEXT PRIMARY KEY,vehicle_id TEXT,external_system TEXT,external_key TEXT UNIQUE,normalized_license_plate TEXT,status TEXT,match_method TEXT,confidence TEXT,valid_from TEXT,valid_to TEXT,metadata_json TEXT,created_at TEXT,updated_at TEXT); CREATE TABLE users(id TEXT PRIMARY KEY,name TEXT,role TEXT); INSERT INTO users VALUES('driver-1','Test řidič','ridic'); INSERT INTO fleet_vehicle_external_aliases(id,vehicle_id,external_system,external_key,status,metadata_json) VALUES('master','vehicle-1','vistos','vehicle-1','active','{}');`);
+  const objects = new Map(); return { CCS_ACCOUNT_ID:CCS_ACCOUNT, DB_ARCHIVE:archive, DB_CORE:core, R2_ARCHIVE:{ put:async (k,v) => objects.set(k,v), get:async k => objects.has(k) ? { arrayBuffer:async () => objects.get(k).slice().buffer } : null }, objects };
+}
+const xesc = v => String(v).replaceAll('&','&amp;').replaceAll('<','&lt;');
+function zip(files) {
+  const parts = [], directory = []; let offset = 0;
+  for (const [name, text] of Object.entries(files)) {
+    const content = Buffer.from(text), compressed = deflateRawSync(content), n = Buffer.from(name); let crc = 0xffffffff;
+    for (const b of content) { crc ^= b; for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0); } crc = ~crc >>> 0;
+    const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50); local.writeUInt16LE(20,4); local.writeUInt16LE(8,8); local.writeUInt32LE(crc,14); local.writeUInt32LE(compressed.length,18); local.writeUInt32LE(content.length,22); local.writeUInt16LE(n.length,26);
+    const central = Buffer.alloc(46); central.writeUInt32LE(0x02014b50); central.writeUInt16LE(20,6); central.writeUInt16LE(8,10); central.writeUInt32LE(crc,16); central.writeUInt32LE(compressed.length,20); central.writeUInt32LE(content.length,24); central.writeUInt16LE(n.length,28); central.writeUInt32LE(offset,42);
+    parts.push(local,n,compressed); directory.push(central,n); offset += local.length+n.length+compressed.length;
+  }
+  const cd = Buffer.concat(directory), end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50); end.writeUInt16LE(Object.keys(files).length,8); end.writeUInt16LE(Object.keys(files).length,10); end.writeUInt32LE(cd.length,12); end.writeUInt32LE(offset,16); return new Uint8Array(Buffer.concat([...parts,cd,end]));
+}
+const fixture = () => [CCS_ACCOUNT,'Test firma','Nevyfakturované pouze','','25.10.2026','10:42:00','7000000000000000001','Test řidič','1AB2345','','0','Nafta','Test stanice','Adresa','Město','10','36.30','0.21','300','63','363','Koruna česká','Prodej-nákup'];
+function xlsx(input = [fixture()], change = {}) {
+  const sheet = '<worksheet><sheetData>'+[CCS_HEADERS,...input].map((r,i) => `<row r="${i+1}">${r.map((v,j) => `<c r="${String.fromCharCode(65+j)}${i+1}" t="inlineStr"><is><t>${xesc(v)}</t></is></c>`).join('')}</row>`).join('')+'</sheetData></worksheet>';
+  return zip({ 'xl/workbook.xml':'<workbook><sheets><sheet name="Transactions" r:id="r1"/></sheets></workbook>', 'xl/_rels/workbook.xml.rels':'<Relationships><Relationship Id="r1" Target="worksheets/sheet1.xml"/></Relationships>', 'xl/worksheets/sheet1.xml':sheet, ...change });
+}
+const acquisition = bytes => async ({ from,to }) => ({ bytes,format:'xlsx',from,to,complete:true });
+const clock = () => Date.now()+10000;
+async function importOne(e, bytes = xlsx(), now = clock()) { await enqueueCcs(e,{ now }); return runCcsQueue(e,{ now },acquisition(bytes)); }
+test('real SQLite schema matches deployable migration', () => assert.equal(readFileSync(new URL('../migrations/modular/archive/0004_ccs_integration.sql',import.meta.url),'utf8').split('\n').slice(1).join('\n'),CCS_SCHEMA.join(';\n')+';\n'));
+test('server XLSX reader preserves all fields and leading card precision',async () => { const matrix = await readCcsXlsx(xlsx()); assert.deepEqual(matrix,[CCS_HEADERS,fixture()]); });
+test('malicious or changed XLSX fails closed',async () => { await assert.rejects(readCcsXlsx(xlsx([],{'xl/vbaProject.bin':'macro'}))); await assert.rejects(readCcsXlsx(xlsx([],{'xl/worksheets/sheet1.xml':'<worksheet><f>1+1</f></worksheet>'}))); await assert.rejects(readCcsXlsx(new Uint8Array([1,2,3]))); await assert.rejects(readCcsXlsx(xlsx([],{'xl/workbook.xml':'<workbook><workbookPr date1904="true"/></workbook>'}))); });
+test('4-hour UTC schedule and backfill survive missing periods',() => { assert.equal(nextCcsRun(Date.parse('2026-10-27T00:07:00Z')),'2026-10-27T04:07:00.000Z'); assert.equal(ccsWindow(null,clock()).from,'2026-04-01'); assert.equal(ccsWindow({ covered_to:'2026-10-26',last_backfill:new Date(clock()).toISOString() },clock()).from,'2026-09-11'); });
+test('missing source produces blocked audit, never success or invented data',async () => { const e=env(),n=clock(); await enqueueCcs(e,{now:n}); assert.equal((await runCcsQueue(e,{now:n})).status,'blocked'); const s=await ccsStatus(e,n); assert.equal(s.lastSuccess,null); assert.equal(s.sourceConnected,false); assert.equal(s.jobs[0].error_code,CCS_BLOCKER); assert.equal(e.objects.size,0); });
+test('unconfigured deployment exposes inactive status without accessing storage or secrets',async () => {
+  const e = { CCS_ACCOUNT_ID: 'invalid-private-setting', get DB_ARCHIVE() { throw new Error('must not read storage'); } };
+  const status = await ccsStatus(e);
+  assert.equal(status.storageReady,false); assert.equal(status.sourceConnected,false);
+  assert.equal(status.setupReason,'ccs_account_not_configured'); assert.equal(status.lastSuccess,null);
+  assert.equal(status.scheduler.nextRun,null); assert.deepEqual(status.jobs,[]);
+  assert.ok(!JSON.stringify(status).includes(e.CCS_ACCOUNT_ID));
+  await assert.rejects(enqueueCcs(e), {code:'ccs_account_not_configured'});
+});
+test('future or stale scheduler timestamp never proves a current server run',async () => {
+  const e=env(),n=clock(); await enqueueCcs(e,{now:n});
+  for (const at of [n+60000,n-6*3600000]) {
+    e.DB_ARCHIVE.db.prepare('UPDATE ccs_state SET scheduler_seen=?').run(new Date(at).toISOString());
+    assert.equal((await ccsStatus(e,n)).scheduler.verifiedRecent,false);
+  }
+});
+test('persistent admin alert after eight hours of failure',async () => { const e=env(),n=clock(); await enqueueCcs(e,{now:n}); await runCcsQueue(e,{now:n}); await enqueueCcs(e,{now:n+9*3600000}); await runCcsQueue(e,{now:n+9*3600000}); assert.equal((await ccsStatus(e,n+9*3600000)).alert.code,CCS_BLOCKER); });
+test('atomic commit archives XLSX and leaves unverified units/time/identity null',async () => { const e=env(),result=await importOne(e); assert.equal(result.status,'succeeded'); assert.equal(result.inserted,1); assert.equal(e.objects.size,1); const report=await ccsReport(e,new URLSearchParams()); assert.equal(report.totals[0].grossMinor,36300); assert.equal(report.rows[0].vehicle_id,null); assert.equal(report.rows[0].unit,null); assert.equal(report.rows[0].timezoneVerified,false); const p=JSON.parse(e.DB_ARCHIVE.db.prepare('SELECT payload_json FROM ccs_observations').get().payload_json); assert.equal(p.time.utc,null); });
+test('repeat file is idempotent, ambiguous separate rows are retained for review',async () => { const e=env(),bytes=xlsx(),n=clock(); await importOne(e,bytes,n); const again=await importOne(e,bytes,n+60001); assert.equal(again.inserted,0); assert.equal(e.DB_ARCHIVE.db.prepare('SELECT COUNT(*) n FROM ccs_observations').get().n,1); const duplicate=fixture(); duplicate[9]='different export note'; await importOne(e,xlsx([duplicate]),n+120002); const r=await ccsReport(e,new URLSearchParams()); assert.equal(r.total,2); assert.equal(r.pendingReview,1); assert.equal(r.totals[0].grossMinor,36300); });
+test('two real identical purchases are not silently discarded',async () => { const e=env(); await importOne(e,xlsx([fixture(),fixture()])); const r=await ccsReport(e,new URLSearchParams()); assert.equal(r.total,2); assert.equal(r.pendingReview,2); assert.deepEqual(r.totals,[]); });
+test('source outage is retryable and backfill window remains durable',async () => { const e=env(),n=clock(); await enqueueCcs(e,{now:n}); const result=await runCcsQueue(e,{now:n},async()=>{throw new Error('do not log password=secret');}); assert.equal(result.status,'retry'); assert.equal((await ccsStatus(e,n)).jobs[0].error_code,'ccs_sync_failed'); const done=await runCcsQueue(e,{now:n+16*60000},acquisition(xlsx())); assert.equal(done.inserted,1); assert.ok(!(JSON.stringify(e.DB_ARCHIVE.db.prepare('SELECT * FROM ccs_events').all())).includes('secret')); });
+test('lost process lease is reclaimed and previous owner cannot commit',async () => { const e=env(),n=clock(); await enqueueCcs(e,{now:n}); e.DB_ARCHIVE.db.prepare(`UPDATE ccs_jobs SET status='running',owner='dead',lease_until=?`).run(new Date(n-1).toISOString()); e.DB_ARCHIVE.db.prepare('INSERT INTO ccs_leases VALUES(?,?,?)').run(CCS_ACCOUNT,'dead',new Date(n-1).toISOString()); const job=e.DB_ARCHIVE.db.prepare('SELECT * FROM ccs_jobs').get(); const result=await runCcsQueue(e,{now:n},acquisition(xlsx())); assert.equal(result.status,'succeeded'); await assert.rejects(ingestCcsExport(e,job,'dead',{bytes:xlsx(),format:'xlsx',from:job.from_date,to:job.to_date,complete:true},n)); assert.equal(e.DB_ARCHIVE.db.prepare('SELECT COUNT(*) n FROM ccs_observations').get().n,1); });
+test('concurrent runner returns busy, queued request is not duplicated',async () => { const e=env(),n=clock(); await enqueueCcs(e,{now:n}); await enqueueCcs(e,{now:n+60000}); assert.equal(e.DB_ARCHIVE.db.prepare('SELECT COUNT(*) n FROM ccs_jobs').get().n,1); e.DB_ARCHIVE.db.prepare('INSERT INTO ccs_leases VALUES(?,?,?)').run(CCS_ACCOUNT,'other',new Date(n+600000).toISOString()); assert.equal((await runCcsQueue(e,{now:n})).status,'busy'); });
+test('archive readback failure leaves no partially imported rows',async () => { const e=env();e.R2_ARCHIVE.get=async()=>null;const r=await importOne(e);assert.equal(r.status,'retry');assert.equal(e.DB_ARCHIVE.db.prepare('SELECT COUNT(*) n FROM ccs_exports').get().n,0);assert.equal(e.DB_ARCHIVE.db.prepare('SELECT COUNT(*) n FROM ccs_observations').get().n,0); });
+test('manual identity uses existing records, proof and optimistic version',async () => { const e=env();await importOne(e);const r=(await ccsReport(e,new URLSearchParams())).rows[0]; const input={action:'assign',id:r.id,expectedUpdatedAt:r.updated_at,vehicleId:'vehicle-1',driverId:'driver-1',evidence:'signed dated assignment document'}; const saved=await resolveCcsObservation(e,input,'admin',Date.parse(r.updated_at)+10);assert.equal(saved.vehicle_id,'vehicle-1');assert.equal(saved.driver_id,'driver-1');await assert.rejects(resolveCcsObservation(e,input,'admin'));await assert.rejects(resolveCcsObservation(e,{...input,expectedUpdatedAt:saved.updated_at,vehicleId:'invented'},'admin')); });
+test('card history prevents overlapping reassignment and preserves existing aliases',async () => { const e=env(),input={cardId:fixture()[6],vehicleId:'vehicle-1',validFrom:'2026-01-01T00:00:00Z',validTo:'2026-10-01T00:00:00Z',evidence:'historical assignment signed'};await saveCcsCardAssignment(e,input,'admin');await assert.rejects(saveCcsCardAssignment(e,{...input,validFrom:'2026-09-30T00:00:00Z'},'admin'));await saveCcsCardAssignment(e,{...input,validFrom:'2026-10-01T00:00:00Z',validTo:null},'admin');assert.equal(e.DB_CORE.db.prepare('SELECT COUNT(*) n FROM fleet_vehicle_external_aliases').get().n,3); });
+test('manual review preserves both observations, only accepted costs count',async()=>{const e=env();await importOne(e,xlsx([fixture(),fixture()]));const r=(await ccsReport(e,new URLSearchParams())).rows; const base={evidence:'Reviewed separate receipts'};const first=await resolveCcsObservation(e,{...base,id:r[0].id,expectedUpdatedAt:r[0].updated_at,action:'accept_new'},'admin');await resolveCcsObservation(e,{...base,id:r[1].id,expectedUpdatedAt:r[1].updated_at,action:'duplicate',targetId:first.id},'admin');const report=await ccsReport(e,new URLSearchParams());assert.equal(report.total,2);assert.equal(report.totals[0].grossMinor,36300);assert.equal(report.pendingReview,0); });
+test('filter SQL is parameterized and spreadsheet export escapes formulas',async()=>{const e=env();await importOne(e);assert.equal((await ccsReport(e,new URLSearchParams({plate:"' OR 1=1 --"}))).total,0);assert.equal(ccsCsvCell('=HYPERLINK("bad")'),'"\'=HYPERLINK(""bad"")"');});
+test('scheduled handler persists heartbeat but does not claim source connection',async()=>{const e=env(),n=clock();await ccsScheduled({cron:CCS_CRON,scheduledTime:n},e);const s=await ccsStatus(e,n);assert.equal(s.scheduler.verifiedRecent,true);assert.equal(s.sourceConnected,false);assert.equal(s.lastSuccess,null);});
+test('API denies anonymous reads and writes before touching storage',async()=>{for(const fn of [onRequestGet,onRequestPost]){const r=await fn({request:new Request('https://smart-odpady.ai/api/ccs'),env:{APP_ENV:'production'}});assert.equal(r.status,401);assert.equal(r.headers.get('Cache-Control'),'no-store');}});
+if (process.env.CCS_TEST_XLSX && process.env.CCS_TEST_EXPECTED_JSON) test('private historical export matches supplied control totals; repeat is idempotent',async()=>{const e=env(),bytes=new Uint8Array(readFileSync(process.env.CCS_TEST_XLSX)),expected=JSON.parse(readFileSync(process.env.CCS_TEST_EXPECTED_JSON)),n=clock();const matrix=await readCcsXlsx(bytes);e.CCS_ACCOUNT_ID=expected.account;assert.equal(matrix.length,expected.rows+1);assert.equal(new Set(matrix.slice(1).map(r=>r[6])).size,expected.cards);const result=await importOne(e,bytes,n);assert.equal(result.inserted,expected.rows);const r=await ccsReport(e,new URLSearchParams());assert.equal(r.totals[0].grossMinor,expected.grossMinor);assert.equal(r.totals[0].netMinor,expected.netMinor);assert.equal(r.totals[0].vatMinor,expected.vatMinor);e.DB_ARCHIVE.db.exec('UPDATE ccs_state SET last_backfill=NULL');assert.equal((await importOne(e,bytes,n+60001)).inserted,0);});

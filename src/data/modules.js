@@ -1,6 +1,7 @@
 import { ModuleIcon } from "../components/icons/SmartIcon.js";
 
 export const modules = [
+  { id: "ccs-fuel", title: "Tankování CCS", description: "Nákupy CCS, přiřazení a stav synchronizace.", route: "/tankovani-ccs", icon: () => ModuleIcon("fleet"), status: "Zdroj nepřipojen", ctaLabel: "Otevřít tankování", active: true, disabled: false, order: 2.4 },
   { id: "jobs", title: "Zakázky", description: "Zakázkové listy, jejich provedení a doklady.", route: "/zakazky", icon: () => ModuleIcon("jobs"),
     status: "Ověřování zdrojů", ctaLabel: "Otevřít zakázky", active: true, disabled: false, order: 4.5 },
   {
