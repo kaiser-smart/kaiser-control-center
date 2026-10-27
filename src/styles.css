@@ -53884,3 +53884,9 @@ body.collection-driver-blackview-simulator-active #app {
 #app .vm .dr-drawer select { appearance:none; -webkit-appearance:none; height:44px; min-height:44px; box-sizing:border-box; background-image:linear-gradient(45deg,transparent 50%,#c4ced3 50%),linear-gradient(135deg,#c4ced3 50%,transparent 50%); background-position:calc(100% - 18px) 19px,calc(100% - 13px) 19px; background-size:5px 5px; background-repeat:no-repeat; padding-right:32px; }
 
 .dr-toolbar input[type=date] { box-sizing:border-box; width:100%; min-width:0; min-height:44px; padding:8px; color:#e8eef0; background:#182d37; border:1px solid #546770; border-radius:6px; color-scheme:dark; font:inherit; }
+
+.op-vehicle,.op-jobs { border-top:1px solid #34434b; padding:12px 0; }
+.op-vehicle h3,.op-jobs h3 { margin:0 0 4px; font-size:15px; }
+.vm .op-drawer [data-op-close] { min-width:44px; font-size:24px; }
+.op-jobs a { display:inline-flex; align-items:center; min-height:44px; color:#b6e47b; }
+.vm-driver-card [data-op-open] { margin-top:8px; }

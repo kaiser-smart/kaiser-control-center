@@ -6,14 +6,54 @@
   "database": "SMART_ODPADY_ARCHIVE",
   "databaseId": "b10566be-ebb1-414c-beab-eac03f1a909b",
   "sourceRecords": [
-    {"entity":"ServiceList","records":806,"distinctNonNullDriverReferences":20,"lastReceivedAt":"2026-10-27T10:45:10.717Z"},
-    {"entity":"ServiceListItem","records":2550,"distinctNonNullDriverReferences":0,"lastReceivedAt":"2026-10-27T10:52:21.502Z"}
+    {
+      "entity": "ServiceList",
+      "records": 806,
+      "distinctNonNullDriverReferences": 20,
+      "lastReceivedAt": "2026-10-27T10:45:10.717Z"
+    },
+    {
+      "entity": "ServiceListItem",
+      "records": 2550,
+      "distinctNonNullDriverReferences": 0,
+      "lastReceivedAt": "2026-10-27T10:52:21.502Z"
+    }
   ],
   "job_execution_evidence": 0,
   "vistos_execution_checks": 0,
-  "tablesMatchingShiftExecutionDriverAssignmentNorm": ["job_execution_evidence", "vistos_execution_checks"],
+  "tablesMatchingShiftExecutionDriverAssignmentNorm": [
+    "job_execution_evidence",
+    "vistos_execution_checks"
+  ],
   "completeImportVerified": false,
   "historicalScoringVerified": false,
   "productionWrites": false,
-  "cliBlocker": "macOS Keychain exit 51; audit was recovered via the web console"
+  "cliBlocker": "macOS Keychain exit 51; audit was recovered via the web console",
+  "vehicleOperations": {
+    "method": "read-only GROUP BY local_date in authenticated D1 console",
+    "rows": [
+      {
+        "day": "2026-10-27",
+        "vehicles": 55,
+        "points": 10651,
+        "usableIntervals": 10507,
+        "lastCalculatedAt": "2026-10-27T11:57:05.687Z"
+      },
+      {
+        "day": "2026-10-26",
+        "vehicles": 55,
+        "points": 14175,
+        "usableIntervals": 13930,
+        "lastCalculatedAt": "2026-10-27T11:57:05.687Z"
+      },
+      {
+        "day": "2026-10-25",
+        "vehicles": 54,
+        "points": 4722,
+        "usableIntervals": 4453,
+        "lastCalculatedAt": "2026-10-26T22:55:22.358Z"
+      }
+    ],
+    "shiftCompletenessVerified": false
+  }
 }

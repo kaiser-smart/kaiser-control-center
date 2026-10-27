@@ -54,6 +54,43 @@ a vazbu `ServiceListItem.ServiceList_FK`. Dostupnost nebo název pole sám o sob
 neprokazuje skutečnou pracovní dobu, dokončení etapy či výsledek kontroly.
 `vistos-job-execution.js` výslovně označuje řidiče za neověřeného a GPS za pozorování.
 
+## Provozní přehled bez bodování
+
+Karta při nedostupném skóre nabízí „Provoz podle T-Cars“. Jde o funkční čtení
+existujícího `/api/vehicle-tracking/analytics?day=YYYY-MM-DD`, nikoli o nový žebříček.
+Databáze `vehicle_tracking_daily_metrics` poskytuje pouze zvolený pražský den:
+`vehicle_key`, `license_plate`, `total_km`, `moving_minutes`, `point_count`,
+`valid_segment_count`, `rejected_segment_count`, `first_recorded_at`, `last_recorded_at`,
+`calculated_at`. Vzdálenost je odvozená z geometrie GPS, nikoli z tachometru;
+čas pohybu není délka směny. Podíl přijatých intervalů nedokládá pokrytí celého dne.
+
+Vozidla jsou řazená podle označení, bez bodů, jmen řidičů a domnělého historického
+přiřazení ke dnešnímu vozovému parku. Bez použitelného GPS intervalu se ukazuje
+pomlčka, nikoli nulový výkon. Čerstvost se odvozuje z výpočtu vybraných podkladů,
+nikoli z nesouvisejícího pozdějšího běhu. Změna dne ruší předchozí odpověď v UI;
+výpadek odstraní staré výsledky. Dialog se obnoví i po změně mobilního rozložení.
+
+Denní rozhraní vyžaduje aktuálně aktivní účet, `vehicle-tracking:view` a roli
+admin/management/dispecer. Řidičské účty nemají přístup k tomuto přehledu flotily.
+Jde o stejný rozsah vozidel jako existující GPS analytika, nikoli o firemně oddělené
+bodování. Zakázky se čtou samostatně přes stávající oprávnění a firemní rozsah
+`/api/jobs?period=all&pageSize=1`; v přehledu se zobrazuje pouze poslední příjem
+`importProgress.lastReceivedAt` a odkaz do Zakázek. Tento údaj nepotvrzuje úplnost
+vybraného dne. Plánované datum ani příjem zakázky se automaticky nepovažuje za
+provedení. Automatické párování zakázky s jízdou není součástí této etapy.
+
+Provozní přehled používá již existující tabulky a synchronizaci. Nevyžaduje aktivaci
+bodovací migrace ani workeru; ty zůstávají připravené pro případ doložené evidence.
+
+Read-only kontrola skutečného archivu 27. 10. 2026:
+- 27. 10.: 55 denních souhrnů vozidel, 10 651 GPS bodů, 10 507 použitelných intervalů;
+  poslední výpočet 2026-10-27T11:57:05.687Z.
+- 26. 10.: 55 souhrnů, 14 175 bodů, 13 930 intervalů, stejný poslední výpočet.
+- 25. 10.: 54 souhrnů, 4 722 bodů, 4 453 intervalů;
+  poslední výpočet 2026-10-26T22:55:22.358Z.
+Toto ověřuje dostupnost zdroje. Neprokazuje správnost bodování řidičů ani úplnost
+pracovních směn. Dotaz byl pouze čtecí; produkční data nebyla změněna.
+
 ## Implementované součásti
 
 - Čistý serverový výpočet `functions/_lib/driver-rating-engine.js`.

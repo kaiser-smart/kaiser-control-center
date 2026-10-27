@@ -14,10 +14,10 @@ function reasons(list = []) { return list.map(reason => `<li>${escape(labels[rea
 function evidence(value) { return value ? `${escape(value.source)} · ${escape(value.recordId)} · ověřil ${escape(value.verifiedBy)} · ${escape(time(value.verifiedAt))}` : 'Neověřeno'; }
 function vehicles(driver) { return (driver.vehicles || []).map(v => escape([v.name, v.plate].filter(Boolean).join(' · ') || 'Vozidlo bez popisku')).join(', '); }
 
-export function createDriverRatings({ root, readRatings, selectVehicle }) {
+export function createDriverRatings({ root, readRatings, selectVehicle, openOperations }) {
   const card = root.querySelector('[data-vm-driver]');
   const dialog = document.createElement('dialog');
-  dialog.className = 'dr-drawer'; dialog.setAttribute('aria-labelledby', 'dr-title');
+  dialog.className = 'dr-drawer rating-drawer'; dialog.setAttribute('aria-labelledby', 'dr-title');
   root.append(dialog);
   let today = null, data = null, error = '', period = 'today', category = 'all', selected = null, destroyed = false, requestId = 0, loading = false;
   let cardRequest = 0, returnFocus = null;
@@ -26,8 +26,8 @@ export function createDriverRatings({ root, readRatings, selectVehicle }) {
     const own = today?.scope === 'own';
     const winner = own ? today.drivers?.find(d => d.total !== null) : today?.ranking?.[0];
     const multiple = today?.tiedFirst && !own;
-    const title = own ? 'Moje hodnocení' : 'Řidič dne';
-    card.innerHTML = `<header><h2>${title}</h2><small>${winner ? 'Dnes · průběžně' : 'Dnes · bez úplných podkladů'}</small></header>${winner ? `<div class="dr-winner"><strong>${multiple ? 'Sdílené první místo' : escape(winner.name)}</strong><small>${multiple ? 'Shodné celkové i rozhodující dílčí skóre' : vehicles(winner)}</small></div><strong class="dr-score">${fmt(winner.total)} / 100 bodů</strong>${bars(winner)}` : `<strong class="dr-empty">${states[today?.status] || 'Čeká na data'}</strong><p>${escape(today?.error || (today?.reasons?.length ? labels[today.reasons[0]] : 'Přiřazení neověřeno. Čekáme na doložené směny a kontroly práce.'))}</p>`}<button type="button" data-dr-open>Zobrazit hodnocení${own ? '' : ' a žebříček'} <span aria-hidden="true">›</span></button>`;
+    const title = own ? 'Moje hodnocení' : !winner && openOperations ? 'Provoz a hodnocení' : 'Řidič dne';
+    card.innerHTML = `<header><h2>${title}</h2><small>${winner ? 'Dnes · průběžně' : 'Dnes · bez úplných podkladů'}</small></header>${winner ? `<div class="dr-winner"><strong>${multiple ? 'Sdílené první místo' : escape(winner.name)}</strong><small>${multiple ? 'Shodné celkové i rozhodující dílčí skóre' : vehicles(winner)}</small></div><strong class="dr-score">${fmt(winner.total)} / 100 bodů</strong>${bars(winner)}` : `<strong class="dr-empty">${states[today?.status] || 'Čeká na data'}</strong><p>${escape(today?.error || (today?.reasons?.length ? labels[today.reasons[0]] : 'Přiřazení neověřeno. Čekáme na doložené směny a kontroly práce.'))}</p>`}${!own && openOperations && !winner ? '<button type="button" data-op-open>Provoz podle T-Cars</button>' : ''}<button type="button" data-dr-open>Zobrazit hodnocení${own ? '' : ' a žebříček'} <span aria-hidden="true">›</span></button>`;
   }
   function driverDetail(driver) {
     return `<button type="button" data-dr-back>‹ Zpět na přehled</button><h3>${escape(driver.name)}</h3><p>${vehicles(driver)}</p><strong class="dr-score">${driver.total === null ? 'Nehodnoceno' : `${fmt(driver.total)} / 100 bodů`}</strong>${bars(driver)}<ul>${reasons(driver.reasons)}</ul>
@@ -55,7 +55,8 @@ export function createDriverRatings({ root, readRatings, selectVehicle }) {
     if (!destroyed && id === requestId) { loading = false; renderDialog(); dialog.querySelector('[data-dr-close]')?.focus(); }
   }
   function open() { if (dialog.open) return; returnFocus = card.querySelector('[data-dr-open]'); period = 'today'; category = 'all'; selected = null; dialog.showModal(); void load(); }
-  card.addEventListener('click', open);
+  const onCardClick = e => { if (e.target.closest('[data-op-open]')) openOperations?.(); else if (e.target.closest('[data-dr-open]')) open(); };
+  card.addEventListener('click', onCardClick);
   dialog.addEventListener('click', e => {
     const button = e.target.closest('button'); if (!button) return;
     if (button.hasAttribute('data-dr-close')) dialog.close();
@@ -73,5 +74,5 @@ export function createDriverRatings({ root, readRatings, selectVehicle }) {
   dialog.addEventListener('close', () => { requestId++; returnFocus?.isConnected && returnFocus.focus(); });
   const timer = setInterval(() => { if (!document.hidden) { void refreshCard(); if (dialog.open && !selected) void load(); } }, 60000);
   renderCard(); void refreshCard();
-  return { refresh: refreshCard, destroy() { destroyed = true; requestId++; cardRequest++; clearInterval(timer); card.removeEventListener('click', open); dialog.close(); dialog.remove(); } };
+  return { refresh: refreshCard, restore() { if (dialog.open && dialog.isConnected && !dialog.matches(':modal')) { dialog.removeAttribute('open'); dialog.showModal(); } }, destroy() { destroyed = true; requestId++; cardRequest++; clearInterval(timer); card.removeEventListener('click', onCardClick); dialog.close(); dialog.remove(); } };
 }

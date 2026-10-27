@@ -22,6 +22,14 @@ function response(period) {
   return { day: /^\d{4}-\d{2}-\d{2}$/.test(period || '') ? period : period === 'yesterday' ? '2026-10-26' : '2026-10-27', category: 'all', categories: CATEGORIES, mode: mode === 'shadow' ? 'shadow' : 'live', scope: own ? 'own' : 'audit', status: mode === 'scored' ? 'provisional' : 'waiting', lastCalculatedAt: mode === 'scored' ? fixture().asOf : null, lastSynchronizedAt: mode === 'scored' ? fixture().asOf : null, reasons: mode === 'shadow' ? ['shadow'] : mode === 'waiting' ? ['assignment'] : [], ranking: mode === 'scored' && !own ? evaluated.ranking : [], drivers: mode === 'scored' ? evaluated.results.map(d => ({ ...d, revision: 1 })) : [] };
 }
 await page.route('**/api/vehicle-tracking/driver-ratings?*', r => mode === 'error' ? r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Testovací výpadek' }) }) : r.fulfill({ contentType: 'application/json', body: JSON.stringify(response(new URL(r.request().url()).searchParams.get('period'))) }));
+let operationsError = false;
+await page.route('**/api/vehicle-tracking/analytics?day=*', async r => {
+  const day = new URL(r.request().url()).searchParams.get('day');
+  if (day === '2026-10-18') await new Promise(resolve => setTimeout(resolve, 300));
+  if (operationsError) return r.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"Test outage"}' });
+  return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ day, apiStatus: 'stale', summary: { lastCalculatedAt: `${day}T16:00:00Z` }, vehicles: day === '2026-10-19' ? [] : [{ vehicleKey: 'test-vehicle', licensePlate: 'TEST 001', totalKm: 12.5, movingMinutes: 25, validSegmentCount: 5, rejectedSegmentCount: 2, firstRecordedAt: `${day}T08:00:00Z`, lastRecordedAt: `${day}T10:00:00Z`, calculatedAt: `${day}T16:00:00Z` }, { vehicleKey: 'insufficient', licensePlate: 'TEST 002', totalKm: 0, movingMinutes: 0, validSegmentCount: 0, rejectedSegmentCount: 0 }] }) });
+});
+await page.route('**/api/jobs?period=all&pageSize=1', r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ importProgress: { lastReceivedAt: '2026-10-27T09:00:00Z' } }) }));
 // Canonical vehicle identity is supplied explicitly, never matched using a name or a plate.
 await page.route('**/api/vehicle-tracking/status', async r => { const answer = await r.fetch(); const body = await answer.json(); if (body.vehicles?.[0]) { body.vehicles[0].vehicleId = 'test-vehicle'; for (const l of body.locations || []) if (l.externalVehicleId === body.vehicles[0].externalVehicleId) { l.vehicleId = 'test-vehicle'; l.vehicle.vehicleId = 'test-vehicle'; } } await r.fulfill({ response: answer, json: body }); });
 const test = async (name, run) => { await run(); results.push({ name, status: 'passed' }); console.log('PASS', name); };
@@ -34,11 +42,11 @@ try {
   await shot('desktop-waiting');
   await test('Desktop drawer, keyboard close and unchanged map instance', async () => {
     await page.evaluate(() => window.savedRatingMap = google.maps._instances.at(-1));
-    await page.locator('[data-dr-open]').click(); await waitText('.dr-content', 'nejsou k dispozici');
-    assert.equal(Math.round((await page.locator('.dr-drawer').boundingBox()).width), 440);
-    assert.match(await page.locator('.dr-content').innerText(), /nejsou k dispozici/);
+    await page.locator('[data-dr-open]').click(); await waitText('.rating-drawer .dr-content', 'nejsou k dispozici');
+    assert.equal(Math.round((await page.locator('.rating-drawer').boundingBox()).width), 440);
+    assert.match(await page.locator('.rating-drawer .dr-content').innerText(), /nejsou k dispozici/);
     await shot('desktop-waiting-detail'); await page.keyboard.press('Escape');
-    assert.equal(await page.locator('.dr-drawer').isVisible(), false);
+    assert.equal(await page.locator('.rating-drawer').isVisible(), false);
     assert.equal(await page.evaluate(() => savedRatingMap === google.maps._instances.at(-1)), true);
   });
   mode = 'scored'; await ready();
@@ -53,11 +61,11 @@ try {
   await test('Top 5, calculation detail, day and category controls', async () => {
     await page.locator('[data-dr-open]').click(); await page.waitForSelector('[data-dr-driver]');
     await page.locator('[data-dr-period="yesterday"]').click(); await page.waitForSelector('[data-dr-driver]');
-    await page.locator('[data-dr-day]').fill('2026-10-20'); await waitText('.dr-sync', '20. 10. 2026');
+    await page.locator('[data-dr-day]').fill('2026-10-20'); await waitText('.rating-drawer .dr-sync', '20. 10. 2026');
     await page.locator('[data-dr-category]').selectOption('tanker'); await page.waitForSelector('[data-dr-driver]');
-    await page.locator('[data-dr-driver]').first().click(); assert.match(await page.locator('.dr-content').innerText(), /Normovaná práce/);
-    assert.match(await page.locator('.dr-content').innerText(), /Rozpis bodů/); await shot('desktop-driver-detail');
-    await page.locator('[data-dr-vehicle]').click(); assert.equal(await page.locator('.dr-drawer').isVisible(), false);
+    await page.locator('[data-dr-driver]').first().click(); assert.match(await page.locator('.rating-drawer .dr-content').innerText(), /Normovaná práce/);
+    assert.match(await page.locator('.rating-drawer .dr-content').innerText(), /Rozpis bodů/); await shot('desktop-driver-detail');
+    await page.locator('[data-dr-vehicle]').click(); assert.equal(await page.locator('.rating-drawer').isVisible(), false);
     assert.equal(await page.locator('[data-vm-row$=":vehicle:test-vehicle"]').getAttribute('aria-pressed'), 'true');
   });
   await page.setViewportSize({ width: 390, height: 844 }); await ready();
@@ -65,19 +73,53 @@ try {
   await shot('mobile-scored');
   await test('Mobile fullscreen drawer, long names, >=44px targets and no horizontal scroll', async () => {
     await page.locator('[data-dr-open]').click(); await page.waitForSelector('[data-dr-driver]');
-    const box = await page.locator('.dr-drawer').boundingBox(); assert.equal(Math.round(box.width), 390); assert.equal(Math.round(box.height), 844);
-    assert.equal(await page.locator('.dr-drawer').evaluate(e => e.scrollWidth <= e.clientWidth), true);
-    const targets = await page.locator('.dr-drawer button,.dr-drawer select,.dr-drawer input').evaluateAll(es => es.map(e => ({ tag: e.tagName, text: e.textContent, width: e.getBoundingClientRect().width, height: e.getBoundingClientRect().height })));
+    const box = await page.locator('.rating-drawer').boundingBox(); assert.equal(Math.round(box.width), 390); assert.equal(Math.round(box.height), 844);
+    assert.equal(await page.locator('.rating-drawer').evaluate(e => e.scrollWidth <= e.clientWidth), true);
+    const targets = await page.locator('.rating-drawer button,.rating-drawer select,.rating-drawer input').evaluateAll(es => es.map(e => ({ tag: e.tagName, text: e.textContent, width: e.getBoundingClientRect().width, height: e.getBoundingClientRect().height })));
     await shot('mobile-ranking'); assert(targets.every(b => b.height >= 44 && b.width >= 44), JSON.stringify(targets));
     await page.locator('[data-dr-driver]').first().click(); await shot('mobile-driver-detail');
-    await page.locator('[data-dr-close]').click(); assert.equal(await page.locator('.dr-drawer').isVisible(), false);
+    await page.locator('[data-dr-close]').click(); assert.equal(await page.locator('.rating-drawer').isVisible(), false);
   });
   mode = 'shadow'; await ready(); await page.locator('[data-vm-view="dashboard"]').click();
-  await test('Shadow mode never leaks test scores', async () => { assert.equal(await page.locator('[data-vm-driver] progress').count(), 0); await page.locator('[data-dr-open]').click(); await waitText('.dr-content', 'nejsou zveřejněné'); assert.match(await page.locator('.dr-content').innerText(), /nejsou zveřejněné/); await shot('mobile-shadow'); await page.keyboard.press('Escape'); });
+  await test('Shadow mode never leaks test scores', async () => { assert.equal(await page.locator('[data-vm-driver] progress').count(), 0); await page.locator('[data-dr-open]').click(); await waitText('.rating-drawer .dr-content', 'nejsou zveřejněné'); assert.match(await page.locator('.rating-drawer .dr-content').innerText(), /nejsou zveřejněné/); await shot('mobile-shadow'); await page.keyboard.press('Escape'); });
   mode = 'error'; await ready(); await page.locator('[data-vm-view="dashboard"]').click();
-  await test('Source failure shows unavailable without disrupting the map', async () => { await page.waitForFunction(() => document.querySelector('[data-vm-driver]').textContent.includes('Nedostupné')); await page.locator('[data-dr-open]').click(); await page.waitForSelector('.dr-content [role=alert]'); await shot('mobile-unavailable'); await page.locator('[data-dr-close]').click(); assert(await page.locator('[data-vm-row]').count()); });
+  await test('Source failure shows unavailable without disrupting the map', async () => { await page.waitForFunction(() => document.querySelector('[data-vm-driver]').textContent.includes('Nedostupné')); await page.locator('[data-dr-open]').click(); await page.waitForSelector('.rating-drawer .dr-content [role=alert]'); await shot('mobile-unavailable'); await page.locator('[data-dr-close]').click(); assert(await page.locator('[data-vm-row]').count()); });
+  mode = 'waiting'; await ready(); await page.locator('[data-vm-view="dashboard"]').click();
+  await test('Vehicle operations show observed GPS, unknown intervals and delayed job source without driver scores', async () => {
+    await page.locator('[data-op-open]').click(); await page.waitForSelector('.op-vehicle');
+    assert.match(await page.locator('.op-vehicle').first().innerText(), /12,5 km/);
+    assert.match(await page.locator('.op-vehicle').last().innerText(), /— km/);
+    assert.match(await page.locator('.op-jobs').innerText(), /nepotvrzuje úplnost/);
+    assert.equal(await page.locator('.op-drawer progress').count(), 0);
+    await shot('mobile-operations');
+    await page.locator('[data-op-day]').fill('2026-10-20');
+    await waitText('.op-drawer .dr-content', '20. 10. 2026');
+    assert.match(await page.locator('.op-drawer .dr-content').innerText(), /20\. 10\. 2026/);
+    await page.locator('[data-op-day]').fill('2026-10-19');
+    await waitText('.op-drawer .dr-content', 'nejsou dostupné uložené GPS souhrny');
+    assert.equal(await page.locator('.op-vehicle').count(), 0);
+  });
+  await test('A late response cannot replace the newly selected operations day', async () => {
+    const oldResponse = page.waitForResponse(r => r.url().includes('analytics?day=2026-10-18'));
+    await page.locator('[data-op-day]').fill('2026-10-18');
+    await page.locator('[data-op-day]').fill('2026-10-17');
+    await waitText('.op-drawer .dr-content', '17. 10. 2026');
+    await (await oldResponse).finished();
+    assert.match(await page.locator('.op-drawer .dr-content').innerText(), /17\. 10\. 2026/);
+    assert.doesNotMatch(await page.locator('.op-drawer .dr-content').innerText(), /18\. 10\. 2026/);
+    await page.setViewportSize({ width: 1440, height: 1000 }); await shot('desktop-operations');
+    await page.setViewportSize({ width: 390, height: 844 });
+  });
+  await test('Operations outage clears previous results and keeps Jobs independent', async () => {
+    operationsError = true; await page.locator('[data-op-refresh]').click();
+    await page.waitForSelector('.op-drawer [role=alert]');
+    assert.equal(await page.locator('.op-vehicle').count(), 0);
+    assert.match(await page.locator('.op-jobs').innerText(), /Poslední příjem/);
+    await page.locator('[data-op-close]').click();
+    operationsError = false;
+  });
   mode = 'scored'; own = true; await ready(); await page.locator('[data-vm-view="dashboard"]').click();
-  await test('Driver UI says own evaluation and exposes no ranking', async () => { await waitText('[data-vm-driver]', 'Moje hodnocení'); assert.match(await page.locator('[data-vm-driver]').innerText(), /Moje hodnocení/i); await page.locator('[data-dr-open]').click(); await page.waitForSelector('[data-dr-driver]'); assert.doesNotMatch(await page.locator('.dr-content').innerText(), /TOP 5/); });
+  await test('Driver UI says own evaluation and exposes no ranking', async () => { await waitText('[data-vm-driver]', 'Moje hodnocení'); assert.equal(await page.locator('[data-op-open]').count(), 0); assert.match(await page.locator('[data-vm-driver]').innerText(), /Moje hodnocení/i); await page.locator('[data-dr-open]').click(); await page.waitForSelector('[data-dr-driver]'); assert.doesNotMatch(await page.locator('.rating-drawer .dr-content').innerText(), /TOP 5/); });
   assert.deepEqual(errors, []);
   await writeFile(`${output}/results.json`, JSON.stringify({ engine, synthetic: true, results, errors }, null, 2));
 } finally { await browser.close(); server.close(); }
