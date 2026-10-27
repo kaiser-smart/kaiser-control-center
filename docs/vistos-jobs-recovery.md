@@ -20,6 +20,13 @@ limit ani oprávnění. Aktuální pevné stropy: CORE 0.5 GB, ARCHIVE 7 GB, AUD
 Chybějící měření, neschválený plán nebo dosažení stropu dál zastaví zápis.
 Plán není příslibem, že celá historická databáze se do limitu vejde.
 
+Po obnovení se zdrojový počet změnil z 183131 na 183219 a původní mechanismus
+vrátil počáteční průchod z offsetu 300 na 0. Nově se při růstu neomezené historie
+hlaviček ověří jediným dodatečným čtením ID bezprostředně před checkpointem.
+Jen pokud je stále na stejné pozici a souhlasí aktuální počet obou odpovědí,
+pokračuje dávka dál. Pokles počtu, posunuté ID, souběžná změna počtu a omezené
+průchody si zachovávají restart. Ani stabilní offset sám nepotvrzuje úplnost historie.
+
 Stávající minutový plánovač pokračuje z checkpointů, používá časově omezené
 zámky a společný limit poskytovatele. Zápisy do Vistosu a účetní operace zůstávají
 vypnuté. Kapacitní chyby se nově zapisují do běhů a checkpointů; interní endpoint

@@ -112,7 +112,17 @@ export async function syncVistosBatch(env,{installation,entity,mode='initial_bac
     const filter=boundedFilter||(mode==='delta'?{Modified_From:cp.window_from,Modified_To:cp.window_to}:null);
     const page=source?await source({offset:cp.offset,length:pageSize,filter}):await getVistosPage(readEnv,session,entity,rules.columns,filter,cp.offset,pageSize,{order:rules.idOrder});
     if(!page.countEvidence?.filteredReported || !Number.isSafeInteger(page.filtered)||page.filtered<0) throw integrationError('vistos_count_unverified');
-    if(cp.expected_count!==null&&page.filtered!==cp.expected_count) throw integrationError('vistos_page_count_changed');
+    if(cp.expected_count!==null&&page.filtered!==cp.expected_count) {
+      // New jobs can arrive while a long history scan is running. Before keeping
+      // the offset, verify that its immediately preceding ID is still there.
+      // Count decreases, moved anchors and bounded streams still restart safely.
+      const growingJobs=entity==='ServiceList'&&mode==='initial_backfill'&&page.filtered>cp.expected_count;
+      if(!growingJobs)throw integrationError('vistos_page_count_changed');
+      if(cp.offset>0){
+        const anchor=source?await source({offset:cp.offset-1,length:1,filter}):await getVistosPage(readEnv,session,entity,auditReadColumns(contract,entity,rules.columns),filter,cp.offset-1,1,{order:rules.idOrder});
+        if(!anchor.countEvidence?.filteredReported||anchor.filtered!==page.filtered||anchor.rows.length!==1||numericId(anchor.rows[0]?.Id)!==cp.last_source_id)throw integrationError('vistos_page_count_changed');
+      }
+    }
     if(page.rows.length>pageSize||(!page.rows.length&&cp.offset<page.filtered)||cp.offset+page.rows.length>page.filtered) throw integrationError('vistos_page_range_mismatch');
     let last=cp.last_source_id?BigInt(cp.last_source_id):0n;
     const statements=[];let pendingBytes=0;

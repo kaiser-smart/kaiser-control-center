@@ -104,6 +104,30 @@ test('S01: explicit permissions, finance denial and company isolation',async()=>
  const scope=await authorizedIntegrationScope(env,{id:'u',role:'dispecer',permissions:[]});assert.equal(scope.rights.finance,false);
  const data=await listJobs(scope,new URL('https://test/api/jobs?period=all'));assert.equal(data.stats.total,0);assert.deepEqual(data.rows,[]);db.sqlite.close();
 });
+
+test('growing job history keeps its cursor only after a stable anchor read; deletions and races restart',async()=>{
+ for(const scenario of ['append','moved-anchor','count-race','shrink']){
+  const db=fixtureDb(),env=environment(db);let ids=[1,2,3],changed=false;const offsets=[];
+  const source=async({offset,length})=>{
+   offsets.push(offset);
+   return {rows:ids.slice(offset,offset+length).map(Id=>({Id,Number:'J'+Id})),filtered:ids.length+(changed&&scenario==='count-race'&&length===1?1:0),countEvidence:{filteredReported:true}};
+  };
+  const args={installation:'test',entity:'ServiceList',source,pageSize:2};
+  await syncVistosBatch(env,args);changed=true;
+  ids=scenario==='shrink'?[1,2]:scenario==='moved-anchor'?[2,3,4,5]:[1,2,3,4];
+  if(scenario==='append'){
+   const result=await syncVistosBatch(env,args);assert.equal(result.offset,4);assert.equal(result.completeImport,false);
+   assert.deepEqual(offsets,[0,2,1]);
+   assert.equal(db.sqlite.prepare('SELECT generation FROM vistos_sync_checkpoints').get().generation,1);
+   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM vistos_source_records').get().n,4);
+  }else{
+   await assert.rejects(syncVistosBatch(env,args),e=>e.code==='vistos_page_count_changed');
+   assert.equal(db.sqlite.prepare('SELECT offset FROM vistos_sync_checkpoints').get().offset,2);
+   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM vistos_source_records').get().n,2);
+  }
+  db.sqlite.close();
+ }
+});
 const baseTime=Date.parse('2026-10-24T10:00:00Z');
 const alias={id:'a',external_system:'tcars',external_key:'7',vehicle_id:'v',source_system:'tcars',verified:true,status:'active',valid_from:'2020-01-01T00:00:00Z',valid_to:null};
 const points=[0,1,2,3,4].map((m,i)=>({id:String(i),providerId:'7',recordedAt:new Date(baseTime+m*60000).toISOString(),latitude:i===0||i===4?51:50,longitude:14,gpsValid:true,speedKmh:i===0||i===4?20:0}));
