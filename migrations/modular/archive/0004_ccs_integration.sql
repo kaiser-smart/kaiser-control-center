@@ -1,0 +1,11 @@
+-- Additive CCS storage. No writes to existing ORWII, vehicles or drivers.
+CREATE TABLE IF NOT EXISTS ccs_state (account TEXT PRIMARY KEY, last_success TEXT, covered_to TEXT, last_backfill TEXT, scheduler_seen TEXT, last_error TEXT, failure_since TEXT);
+CREATE TABLE IF NOT EXISTS ccs_jobs (id TEXT PRIMARY KEY, account TEXT NOT NULL, trigger TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('queued','running','retry','blocked','succeeded')), created_at TEXT NOT NULL, due_at TEXT NOT NULL, attempt INTEGER NOT NULL DEFAULT 0, owner TEXT, lease_until TEXT, from_date TEXT NOT NULL, to_date TEXT NOT NULL, finished_at TEXT, error_code TEXT, loaded INTEGER NOT NULL DEFAULT 0, inserted INTEGER NOT NULL DEFAULT 0, review INTEGER NOT NULL DEFAULT 0, file_hash TEXT);
+CREATE INDEX IF NOT EXISTS ccs_jobs_due ON ccs_jobs(account,status,due_at);
+CREATE TABLE IF NOT EXISTS ccs_leases (account TEXT PRIMARY KEY, owner TEXT NOT NULL, expires_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS ccs_fence_checks (id TEXT PRIMARY KEY, valid INTEGER NOT NULL CHECK(valid=1));
+CREATE TABLE IF NOT EXISTS ccs_exports (hash TEXT PRIMARY KEY, account TEXT NOT NULL, object_key TEXT NOT NULL, received_at TEXT NOT NULL, row_count INTEGER NOT NULL, totals_json TEXT NOT NULL, from_date TEXT NOT NULL, to_date TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS ccs_observations (id TEXT PRIMARY KEY, account TEXT NOT NULL, export_hash TEXT NOT NULL, source_row INTEGER NOT NULL, day TEXT NOT NULL, card TEXT NOT NULL, plate TEXT NOT NULL, product TEXT NOT NULL, driver_label TEXT, currency TEXT, gross_minor INTEGER NOT NULL, payload_json TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('accepted','review','duplicate')), reason TEXT NOT NULL, linked_to TEXT, vehicle_id TEXT, driver_id TEXT, resolution_evidence TEXT, updated_at TEXT NOT NULL, UNIQUE(export_hash,source_row), FOREIGN KEY(export_hash) REFERENCES ccs_exports(hash));
+CREATE INDEX IF NOT EXISTS ccs_observations_period ON ccs_observations(account,day,state);
+CREATE TABLE IF NOT EXISTS ccs_events (id TEXT PRIMARY KEY, account TEXT NOT NULL, created_at TEXT NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL, subject TEXT NOT NULL, detail_json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS ccs_alerts (account TEXT PRIMARY KEY, since_at TEXT NOT NULL, last_seen TEXT NOT NULL, code TEXT NOT NULL, resolved_at TEXT);
