@@ -120,6 +120,8 @@ export function normalize(records, { now = Date.now(), staleAfterSeconds = 1800 
     const hasPoint = pointCheck.valid;
     const previousPoint = hasPoint && !check.valid;
     const sample = previousPoint ? pointSample : latest || {};
+    // Ignition and its timestamp belong to the telemetry sample, not a fallback GPS point.
+    const ignitionSample = latest || pointSample || {};
     const speedRaw = number(sample.speedKmh), speed = speedRaw !== null && speedRaw >= 0 ? speedRaw : null;
     const movement = speed === null ? "unknown" : speed > 2 ? "moving" : "stopped";
     const age = hasPoint ? Math.max(0, (now - pointCheck.time) / 1000) : null;
@@ -132,7 +134,8 @@ export function normalize(records, { now = Date.now(), staleAfterSeconds = 1800 
     return {
       id: record.key, stable: record.stable, type, artworkKey: approvedArtworkKey(record), plate, internal, name,
       label: plate || internal || name || "Vozidlo bez označení",
-      category, movement, speed, ignition: typeof sample.ignition === "boolean" ? sample.ignition : null,
+      category, movement, speed, ignition: typeof ignitionSample.ignition === "boolean" ? ignitionSample.ignition : null,
+      ignitionAt: first(ignitionSample.lastGpsAt),
       emergency: sample.emergency === true, previousPoint, age, clockSkew: pointCheck.clockSkew,
       point: hasPoint ? { lat: pointCheck.latitude, lng: pointCheck.longitude } : null,
       lastGpsAt: hasPoint ? pointSample.lastGpsAt : first(latest?.lastGpsAt),

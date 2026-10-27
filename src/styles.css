@@ -53817,3 +53817,7 @@ body.collection-driver-blackview-simulator-active #app {
 .vm .vm-emergency-badge { position:absolute; top:-2px; right:0; z-index:2; width:12px; height:12px; border-radius:50%; background:#b42318; color:#fff; font:bold 10px/12px sans-serif; text-align:center; }
 
 .vm .vm-ignition.vm-ignition-unknown { background:transparent; border:0; border-radius:0; box-shadow:none; color:var(--muted, #9baab2); font:12px/8px sans-serif; text-align:center; }
+
+/* A touch target for the existing ignition dot; no new vehicle artwork. */
+.vm .vm-detail-meta .vm-ignition-info { display:inline-flex; align-items:center; justify-content:center; flex:none; min-width:44px; min-height:44px; padding:0; border:0; background:transparent; }
+.vm [data-vm-ignition-message] { overflow-wrap:anywhere; font-size:13px; line-height:1.5; }
