@@ -18978,7 +18978,7 @@ function vehicleTrackingPage(moduleItem, user, context = {}) {
     <main class="app-shell module-page module-theme-scope tracking-page vm-page" ${moduleThemeStyleAttribute()}>
       ${userBar(user)}
       <nav class="topbar" aria-label="Navigace">
-        <a class="kaiser-logo kaiser-logo--small" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}">kaiser.</a>
+        <a class="kaiser-logo kaiser-logo--small vm-kaiser-logo" href="${routeHref("/")}" data-link aria-label="Zpět na ${APP_NAME}"><img src="/kaiser-logo-original.svg" alt="Kaiser" width="359" height="127" /></a>
         <a class="back-button" href="${routeHref("/")}" data-link aria-label="Domů" title="Domů">${SmartIcon("home")}</a>
         <div class="vm-shell-links">
           ${canViewModule(user, "fleet") ? `<a href="${routeHref(FLEET_ROUTE)}" data-link aria-label="Vozový park" title="Vozový park">${SmartIcon("fleet")}</a>` : ""}
