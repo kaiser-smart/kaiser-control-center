@@ -1,0 +1,10 @@
+{
+ "observedAt":"2026-10-27T10:18:41.149Z",
+ "source":"Authenticated /api/integrations/vistos/readiness and Cloudflare CORE console",
+ "installation":"kaiserservis.myvistos.com",
+ "records":{"ServiceList":806,"ServiceListItem":2137},
+ "itemsPending":85,
+ "sizeBytes":{"core":268607488,"archive":2407587840,"audit":1273753600},
+ "revision":"jobs-pilot-2026-10-26-v1",
+ "capacityEvidence":{"approvedAt":"2026-10-26T00:36:51.766456+00:00","estimateEvidenceId":"jobs-bounded-capacity-pilot-20261026","scope":"bounded measurement pilot; not full-history capacity approval","domains":{"core":{"maxSizeBytes":300000000},"archive":{"maxSizeBytes":2400000000},"audit":{"maxSizeBytes":1270000000}}}
+}

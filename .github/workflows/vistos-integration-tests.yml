@@ -46,6 +46,8 @@ jobs:
         run: npm run test:receivables
       - name: Jobs, payments and tracking evidence
         run: npm run test:vistos-jobs-payments
+      - name: Jobs capacity recovery and scheduler diagnostics
+        run: node --test scripts/vistos-field-storage.test.mjs scripts/vistos-jobs-server-bridge.test.mjs
       - name: Bounded monitor route batches
         run: node scripts/self-repair-monitor.test.mjs
       - name: Build

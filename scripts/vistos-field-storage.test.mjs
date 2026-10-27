@@ -43,3 +43,26 @@ test('job bulk opt-in requires measured capacity in every domain and does not en
  await assert.rejects(checkJobsImportCapacity({...approved,DB_ARCHIVE:binding(7999500000)},contract,{entity:'ServiceList'}),e=>e.code==='vistos_target_capacity_exceeded');
  await assert.rejects(checkJobsImportCapacity(approved,{capacityEvidence:{approvedAt:'x'}},{entity:'ServiceList'}),e=>e.code==='vistos_capacity_plan_unverified');
 });
+
+test('capacity recovery resumes the 806-job incident within explicit hard ceilings',async()=>{
+ const {checkJobsImportCapacity}=await import('../functions/_lib/vistos-import-capacity.js');
+ const binding=size=>({prepare:()=>({all:async()=>({meta:{size_after:size}})})});
+ const env={D1_CAPACITY_BLOCK_BULK_WRITES:'true',VISTOS_JOBS_BULK_IMPORT_APPROVED:'true',DB_CORE:binding(268607488),DB_ARCHIVE:binding(2407587840),DB_AUDIT:binding(1273753600)};
+ const evidence={approvedAt:'2026-10-26',estimateEvidenceId:'pilot',domains:{core:{maxSizeBytes:300000000},archive:{maxSizeBytes:2400000000},audit:{maxSizeBytes:1270000000}}};
+ const contract={capacityEvidence:evidence};
+ await assert.rejects(checkJobsImportCapacity(env,contract,{entity:'ServiceList'}),e=>e.code==='vistos_target_capacity_exceeded');
+ evidence.autoRecovery={approvedAt:'2026-10-27',evidenceId:'incident-806',maxSizeBytes:{core:500000000,archive:7000000000,audit:3000000000}};
+ const recovered=await checkJobsImportCapacity(env,contract,{entity:'ServiceList'});
+ assert.equal(recovered.archive.maxSizeBytes,2500000000);
+ assert.equal(recovered.audit.maxSizeBytes,1300000000);
+ assert.equal(evidence.domains.archive.maxSizeBytes,2400000000); // no implicit contract rewrite
+ for(const [domain,key,limit] of [['core','DB_CORE',500000000],['archive','DB_ARCHIVE',7000000000],['audit','DB_AUDIT',3000000000]]){
+  await assert.rejects(checkJobsImportCapacity({...env,[key]:binding(limit-500000)},contract,{entity:'ServiceListItem'}),e=>e.code==='vistos_target_capacity_exceeded',domain);
+ }
+ await assert.rejects(checkJobsImportCapacity(env,contract,{entity:'ServiceList',reserveBytes:NaN}),e=>e.code==='vistos_capacity_plan_unverified');
+ await assert.rejects(checkJobsImportCapacity({...env,DB_ARCHIVE:binding(null)},contract,{entity:'ServiceList'}),e=>e.code==='vistos_capacity_measurement_unavailable');
+ await assert.rejects(checkJobsImportCapacity({...env,VISTOS_JOBS_BULK_IMPORT_APPROVED:'false'},contract,{entity:'ServiceList'}),e=>e.code==='d1_bulk_capacity_blocked');
+ await assert.rejects(checkJobsImportCapacity(env,contract,{entity:'Payment'}),e=>e.code==='d1_bulk_capacity_blocked');
+ evidence.autoRecovery.maxSizeBytes.archive=8000000000;
+ await assert.rejects(checkJobsImportCapacity(env,contract,{entity:'ServiceList'}),e=>e.code==='vistos_capacity_plan_unverified');
+});

@@ -71,7 +71,6 @@ export async function syncVistosBatch(env,{installation,entity,mode='initial_bac
     boundedFilter=jobAuditFilter({entity,parentId});
     parentFingerprint=parent.fingerprint;
   }
-  await checkJobsImportCapacity(env,contract,{entity});
   if(mode==='delta'&&!rules.modifiedFilterVerified) throw integrationError('vistos_delta_filter_unverified',503);
   if(rules.detailOnImport&&!rules.detailVerified)throw integrationError('vistos_detail_contract_unverified',503);
   pageSize=Math.max(1,Math.min(rules.detailOnImport?20:100,Math.trunc(pageSize)||100));
@@ -104,6 +103,9 @@ export async function syncVistosBatch(env,{installation,entity,mode='initial_bac
       await db.prepare('UPDATE vistos_sync_checkpoints SET window_from=?,window_to=? WHERE id=?').bind(from,now,cp.id).run();cp.window_from=from;cp.window_to=now;
     }
     await db.prepare('INSERT INTO vistos_sync_runs(id,installation,entity,mode,status,started_at,scope_json) VALUES(?,?,?,?,?,?,?)').bind(runId,installation,entity,mode,'running',now,JSON.stringify(contract.companyIds)).run();
+    // Record capacity failures like any other attempt, before contacting Vistos.
+    // Previously the preflight threw before any checkpoint/run could report it.
+    await checkJobsImportCapacity(env,contract,{entity});
     const readEnv={...env,VISTOS_EXACT_DECIMALS:true,VISTOS_REQUIRE_SHARED_BUDGET:true,syncRequestDeadline:Math.min(env.syncRequestDeadline||Infinity,Date.now()+90000)};
     if(!source)assertVistosInstallation(env,contract);
     const session=source?null:await loginVistosExecute(readEnv);
