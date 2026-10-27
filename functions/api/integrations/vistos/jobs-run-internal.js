@@ -11,7 +11,9 @@ export async function handleJobsServerRun({request,env},run=runVistosJobsPayment
   try {
     const result=await run({...env,VISTOS_PAYMENT_WRITE_ENABLED:'false',VISTOS_JOB_EXECUTION_ENABLED:'false'},{onlyJobs:true,maxBatches:12});
     const reads=result.reads||[];
-    return json({status:result.status,reads:reads.length,blocked:reads.filter(r=>r.status==='blocked').length});
+    const failures=reads.filter(r=>r.status==='blocked');
+    const code=failures.find(r=>/^[a-z0-9_]+$/.test(r.code||''))?.code;
+    return json({status:failures.length===reads.length&&failures.length?'blocked':result.status,reads:reads.length,blocked:failures.length,...(code?{code}:{})});
   }catch{return json({code:'vistos_jobs_server_unavailable'},503);}
 }
 export const onRequestPost=context=>handleJobsServerRun(context);

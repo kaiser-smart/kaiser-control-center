@@ -5,6 +5,12 @@ import {handleJobsServerRun,onRequestGet} from '../functions/api/integrations/vi
 import {runVistosJobsPayments} from '../functions/_lib/vistos-jobs-runner.js';
 const token='fixture-job-runner-token-at-least-32-characters';
 const flags={VISTOS_JOBS_RUNNER_TOKEN:token,VISTOS_JOBS_RUNNER_ENABLED:'true',VISTOS_READ_SYNC_ENABLED:'true'};
+test('scheduler receives the real capacity failure instead of a successful partial run',async()=>{
+ const request=new Request('https://smart-odpady.ai/api/integrations/vistos/jobs-run-internal',{method:'POST',headers:{Authorization:'Bearer '+token}});
+ const result=await handleJobsServerRun({request,env:flags},async()=>({status:'partial',reads:[{status:'blocked',code:'vistos_target_capacity_exceeded'}]}));
+ const body=await result.json();assert.deepEqual(body,{status:'blocked',reads:1,blocked:1,code:'vistos_target_capacity_exceeded'});
+ assert.deepEqual(await runVistosJobsServerBridge(flags,{fetcher:async()=>Response.json(body)}),body);
+});
 test('internal jobs route requires its dedicated token and never accepts a user-selected operation',async()=>{
  let calls=0;
  const run=async(env,options)=>{calls++;assert.equal(env.VISTOS_PAYMENT_WRITE_ENABLED,'false');assert.equal(env.VISTOS_JOB_EXECUTION_ENABLED,'false');assert.equal(options.onlyJobs,true);return {status:'partial',reads:[{status:'partial'},{status:'blocked',secret:'not returned'}]};};

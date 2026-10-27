@@ -1,4 +1,5 @@
 import { json, requireUserPermission } from './auth.js';
+import {jobsSyncHealth} from './vistos-jobs-health.js';
 import { hasPermission } from '../../src/permissions.js';
 import { authorizedIntegrationScope, integrationError, loadIntegrationContract, publicSourceRecord, readScopedRecord, syncVistosBatch, flushIntegrationAudit } from './vistos-integration-store.js';
 import { confirmJobExecution } from './vistos-job-execution.js';
@@ -49,7 +50,8 @@ export async function listJobs(scope,url) {
     COALESCE(SUM(CASE WHEN c.status='compared' AND json_extract(c.comparison_json,'$.parentFingerprint')=r.fingerprint THEN 0 ELSE 1 END),0) AS itemsPending
     FROM vistos_source_records r LEFT JOIN vistos_sync_checkpoints c ON c.installation=r.installation AND c.entity='ServiceListItem' AND c.mode='parent:'||r.source_id
     WHERE r.installation=? AND r.entity='ServiceList' AND r.company_id IN (${scope.companies.map(()=>'?')})`).bind(scope.installation,...scope.companies).first();
-  return {rows:results.map(r=>publicSourceRecord(r,scope.rights)),stats,pagination:{page,pageSize:size,total:stats.total},period,dateVerified:verifiedDate,
+  const syncHealth=await jobsSyncHealth(scope,{pending:importProgress.itemsPending>0||!streams.some(s=>s.mode==='initial_backfill'&&s.status==='compared')});
+  return {rows:results.map(r=>publicSourceRecord(r,scope.rights)),stats,pagination:{page,pageSize:size,total:stats.total},period,dateVerified:verifiedDate,syncHealth,
     streams,importProgress,rights:scope.rights,companies:scope.companies,sourceCountConfirmed:false};
 }
 async function integrationStatus(scope) {

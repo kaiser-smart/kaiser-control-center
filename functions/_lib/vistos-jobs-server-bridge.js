@@ -22,6 +22,7 @@ export async function runVistosJobsServerBridge(env,{fetcher=fetch}={}) {
     const result=await response.json().catch(()=>({}));
     if(!response.ok)return {status:'blocked',code:/^[a-z0-9_]+$/.test(result.code||'')?result.code:'vistos_jobs_server_unavailable'};
     return {status:['partial','disabled','blocked'].includes(result.status)?result.status:'partial',
-      reads:Number.isSafeInteger(result.reads)?result.reads:0,blocked:Number.isSafeInteger(result.blocked)?result.blocked:0};
+      reads:Number.isSafeInteger(result.reads)?result.reads:0,blocked:Number.isSafeInteger(result.blocked)?result.blocked:0,
+      ...(/^[a-z0-9_]+$/.test(result.code||'')?{code:result.code}:{})};
   }catch{return {status:'blocked',code:'vistos_jobs_server_unavailable'};}
 }
