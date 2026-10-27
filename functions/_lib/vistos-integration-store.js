@@ -119,7 +119,7 @@ export async function syncVistosBatch(env,{installation,entity,mode='initial_bac
       const growingJobs=entity==='ServiceList'&&mode==='initial_backfill'&&page.filtered>cp.expected_count;
       if(!growingJobs)throw integrationError('vistos_page_count_changed');
       if(cp.offset>0){
-        const anchor=source?await source({offset:cp.offset-1,length:1,filter}):await getVistosPage(readEnv,session,entity,auditReadColumns(contract,entity,rules.columns),filter,cp.offset-1,1,{order:rules.idOrder});
+        const anchor=source?await source({offset:cp.offset-1,length:1,filter}):await getVistosPage(readEnv,session,entity,rules.columns,filter,cp.offset-1,1,{order:rules.idOrder});
         if(!anchor.countEvidence?.filteredReported||anchor.filtered!==page.filtered||anchor.rows.length!==1||numericId(anchor.rows[0]?.Id)!==cp.last_source_id)throw integrationError('vistos_page_count_changed');
       }
     }
