@@ -35,13 +35,13 @@ try{
   assert.match(await page.locator('.vm-panel-detail').innerText(),/Palivo[\s\S]*Údaj není dostupný[\s\S]*AdBlue/);
   await page.locator('[data-vm-back]').click();
  });
- await test('Ignition dots use explicit provider booleans; missing and stale show no colored dot',async()=>{
+ await test('Ignition dots use explicit provider booleans; missing remains unknown; stale and missing GPS retain explicit ignition',async()=>{
   assert.equal(await page.locator('[data-vm-age],.vm-row-gps').count(),0);
   assert.doesNotMatch(await page.locator('.vm').innerText(),/Stará poloha|GPS před|před \d+ (min|h|d)|Poslední GPS/);
   const row=n=>page.locator(`[data-vm-row$=":synthetic-${n}"] .vm-ignition`);
-  assert.match(await row(1).getAttribute('aria-label'),/údaj není dostupný/);assert.equal(await row(3).getAttribute('aria-label'),'Zapalování vypnuto');
-  assert.equal(await row(8).getAttribute('aria-label'),'Zapalování zapnuto');
-  assert.match(await row(2).getAttribute('aria-label'),/údaj není dostupný/);assert.match(await row(12).getAttribute('aria-label'),/údaj není dostupný/);
+  assert.match(await row(1).getAttribute('aria-label'),/Zapalování nezjištěno/);assert.match(await row(3).getAttribute('aria-label'),/^Zapalování vypnuto · poslední stav /);
+  assert.match(await row(8).getAttribute('aria-label'),/^Zapalování zapnuto · poslední stav /);
+  assert.match(await row(2).getAttribute('aria-label'),/^Zapalování zapnuto · poslední stav /);assert.match(await row(12).getAttribute('aria-label'),/^Zapalování vypnuto · poslední stav /);
   assert.equal(await row(8).evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(117, 189, 37)');
   assert.equal(await row(3).evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(239, 68, 68)');
 
@@ -104,8 +104,9 @@ try{
  });
  await test('Stale point: no invented ignition state or direction',async()=>{
   await page.locator('[data-vm-back]').click();await page.locator('[data-vm-row$=":synthetic-2"]').click();await page.waitForTimeout(100);
-  assert.doesNotMatch(await page.locator('.vm-panel-detail').innerText(),/před \d+|Stará poloha|Poslední GPS/);assert.equal(await page.locator('.vm-panel-detail .vm-ignition-unknown').count(),1);
-  assert.equal(await page.locator('.vm-marker.is-selected .vm-heading').count(),0);assert.equal(await page.locator('.vm-marker.is-selected .vm-badge').innerText(),'—');assert.match(await page.locator('.vm-marker.is-selected .vm-badge').getAttribute('aria-label'),/údaj není dostupný/);
+  assert.doesNotMatch(await page.locator('.vm-panel-detail').innerText(),/před \d+|Stará poloha|Poslední GPS/);assert.equal(await page.locator('.vm-panel-detail .vm-ignition-on').count(),1);
+  assert.equal(await page.locator('.vm-marker.is-selected .vm-heading').count(),0);assert.equal(await page.locator('.vm-marker.is-selected .vm-badge').innerText(),'');assert.match(await page.locator('.vm-marker.is-selected .vm-badge').getAttribute('aria-label'),/^Zapalování zapnuto · poslední stav /);
+  await page.locator('[data-vm-ignition-toggle]').click();assert.equal(await page.locator('[data-vm-ignition-message]').isVisible(),true);assert.match(await page.locator('[data-vm-ignition-message]').innerText(),/^Zapalování zapnuto · poslední stav /);
  });
  await screenshot('stale-desktop');
  await test('API provider error: retained map and selection, explicit last success',async()=>{
@@ -129,7 +130,7 @@ try{
  });
  await test('Search/filters shared by map and list; missing GPS remains selectable; empty reason',async()=>{
   await page.locator('#vm-search').fill('t e s t 012');await page.waitForTimeout(120);assert.equal(await page.locator('[data-vm-row]').count(),1);assert.equal(await page.locator('.vm-marker').count(),0);assert.equal(await page.locator('[data-vm-fit]').isDisabled(),true);
-  await page.locator('[data-vm-row]').click();assert.match(await page.locator('.vm-panel-detail').innerText(),/Bez ověřené polohy/);assert.equal(await page.locator('.vm-panel-detail .vm-ignition-unknown').count(),1);await page.locator('[data-vm-back]').click();
+  await page.locator('[data-vm-row]').click();assert.match(await page.locator('.vm-panel-detail').innerText(),/Bez ověřené polohy/);assert.equal(await page.locator('.vm-panel-detail .vm-ignition-off').count(),1);await page.locator('[data-vm-back]').click();
   await page.locator('#vm-search').fill('NOT FOUND');assert.match(await page.locator('.vm-list').innerText(),/Žádná vozidla/);await page.locator('#vm-search').fill('');await page.locator('.vm-extra-filters summary').click();await page.locator('[data-vm-filter="stale"]').click();await page.waitForTimeout(100);assert.equal(await page.locator('[data-vm-row]').count(),3);assert.equal(await page.locator('.vm-marker').evaluateAll(nodes=>nodes.reduce((n,e)=>n+(e.classList.contains('vm-cluster')?Number(e.querySelector('b').textContent):1),0)),2);await page.locator('[data-vm-filter="stale"]').click();
  });
  await test('Hover and keyboard focus highlight without camera changes',async()=>{
@@ -232,12 +233,12 @@ try{
   await page.goto(`${url}/pripominky`);await page.waitForSelector('[data-logout]');await context.setOffline(true);await page.waitForTimeout(100);assert.equal(await page.locator('#app').isVisible(),false);await context.setOffline(false);await page.waitForTimeout(150);
  });
  await test('No business writes or GPS browser persistence during acceptance run',async()=>{assert.deepEqual(network.filter(r=>r.method!=='GET'),[]);const stored=await page.evaluate(()=>({local:{...localStorage},session:{...sessionStorage}}));assert.deepEqual(stored,{local:{},session:{}});});
- await test('Ignition expires without a new sample, including table indicators',async()=>{
+ await test('Last ignition survives GPS expiry, including table indicators',async()=>{
   await scene();const row=n=>page.locator(`[data-vm-row$=":synthetic-${n}"] .vm-ignition`);
   await page.clock.setFixedTime(new Date(Date.now()+1900000));await page.waitForTimeout(1300);
-  assert.match(await row(8).getAttribute('aria-label'),/údaj není dostupný/);
-  assert.equal(await page.locator('.vm-table-scroll .vm-ignition-on').count(),0);
-  await page.clock.setFixedTime(new Date());await page.waitForTimeout(1300);assert.equal(await row(8).getAttribute('aria-label'),'Zapalování zapnuto');
+  assert.match(await row(8).getAttribute('aria-label'),/^Zapalování zapnuto · poslední stav /);
+  assert((await page.locator('.vm-table-scroll .vm-ignition-on').count())>0);
+  await page.clock.setFixedTime(new Date());await page.waitForTimeout(1300);assert.match(await row(8).getAttribute('aria-label'),/^Zapalování zapnuto · poslední stav /);
  });
  await test('Logout clears selected GPS and returns to login; reload stays signed out',async()=>{
   await scene();await page.locator('[data-vm-row$=":synthetic-1"]').click();

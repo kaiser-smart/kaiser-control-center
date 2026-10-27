@@ -27,14 +27,21 @@ export function artwork(type, size = "list") {
 export function isOnline(v) {
   return Boolean(v.point && !v.previousPoint && v.category !== "stale" && v.category !== "missing" && Number.isFinite(v.age) && v.age >= 0);
 }
-// Use only the provider's explicit boolean from a usable sample. Never infer
-// ignition from speed, GPS connectivity, or a missing value.
+// An explicit last known ignition state does not expire with the GPS position.
+// Never infer ignition from speed, connectivity, or a missing provider value.
 export function ignitionState(v) {
-  return isOnline(v) && typeof v.ignition === "boolean" ? v.ignition : null;
+  return typeof v.ignition === "boolean" ? v.ignition : null;
 }
-export function ignitionName(v) {
+const ignitionDayFormat = new Intl.DateTimeFormat("cs-CZ", { day: "numeric", month: "numeric", year: "numeric", timeZone: "Europe/Prague" });
+const ignitionTimeFormat = new Intl.DateTimeFormat("cs-CZ", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Europe/Prague" });
+export function ignitionName(v, now = Date.now()) {
   const state = ignitionState(v);
-  return state === null ? "Zapalování: údaj není dostupný nebo je zastaralý" : `Zapalování ${state ? "zapnuto" : "vypnuto"}`;
+  if (state === null) return "Zapalování nezjištěno";
+  const label = `Zapalování ${state ? "zapnuto" : "vypnuto"}`;
+  const time = Date.parse(v.ignitionAt);
+  if (!Number.isFinite(time) || time <= Date.UTC(1900, 0, 1) || time > now + 120000) return `${label} · čas posledního stavu nezjištěn`;
+  const day = ignitionDayFormat.format(time), today = ignitionDayFormat.format(now);
+  return `${label} · poslední stav ${day === today ? "dnes" : day} ${ignitionTimeFormat.format(time)}`;
 }
 export function ignitionHTML(v, extraClass = "") {
   const state = ignitionState(v);
@@ -68,7 +75,7 @@ export function markerLabelHTML(v) {
 export function markerName(v) { return [v.label, v.type.label, movementText(v), currentSpeed(v) === null ? "" : `${currentSpeed(v)} km/h`, ignitionName(v)].filter(Boolean).join(", "); }
 export function legendHTML() {
   return `<h2>Ikony a stavy</h2><p>Dodaná sada OpenArt. Popelářský vůz, ramenový nakladač RAM a hákový nosič mají vlastní dodané siluety; typ určuje doložená evidence. Přívěs, neurčená a obecná speciální technika používají neutrální zkratku, protože v sadě nemají vlastní ikonu.</p><div class="vm-legend-art">${Object.entries(TYPES).map(([key, t]) => `<div>${artwork({ key, ...t })}<span>${escape(t.label)}</span></div>`).join("")}</div>
-    <p>Typ vychází z doložené evidence. Neurčená nástavba zůstává označená otazníkem.</p><p><span class="vm-ignition vm-ignition-on" aria-hidden="true"></span> Zapalování zapnuto · <span class="vm-ignition vm-ignition-off" aria-hidden="true"></span> Zapalování vypnuto</p><p>Pomlčka znamená chybějící nebo zastaralý údaj o zapalování.</p>`;
+    <p>Typ vychází z doložené evidence. Neurčená nástavba zůstává označená otazníkem.</p><p><span class="vm-ignition vm-ignition-on" aria-hidden="true"></span> Zapalování zapnuto · <span class="vm-ignition vm-ignition-off" aria-hidden="true"></span> Zapalování vypnuto</p><p>Tečka ukazuje poslední známé zapalování. Čas stavu zjistíte najetím na tečku nebo klepnutím na tečku v detailu. Pomlčka znamená, že zapalování nebylo zjištěno.</p>`;
 }
 
 // Presentation eligibility only: reuse the existing 120 s current-GPS window

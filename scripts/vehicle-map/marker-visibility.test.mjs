@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { hasCurrentMotion, isOnline, ignitionState, clusterIgnition, markerName, ignitionHTML } from '../../src/vehicle-map/presentation.js';
+import { hasCurrentMotion, isOnline, ignitionState, ignitionName, clusterIgnition, markerName, ignitionHTML } from '../../src/vehicle-map/presentation.js';
 import { labelMarkerRect,placeLabels,focusTarget,fittedCamera,overlaps,rect } from '../../src/vehicle-map/spatial.js';
 const moving={point:{lat:49,lng:16},previousPoint:false,category:'moving',movement:'moving',age:30};
 assert.equal(hasCurrentMotion(moving),true);
@@ -31,8 +31,8 @@ console.log('PASS current-motion eligibility, 120-second boundary, stable plate 
 assert.equal(isOnline(moving),true);
 assert.equal(isOnline({...moving,category:'stopped',movement:'stopped'}),true);
 for(const patch of [{category:'stale'},{category:'missing'},{point:null},{previousPoint:true},{age:null},{age:NaN}])assert.equal(isOnline({...moving,...patch}),false);
-assert.equal(markerName({...moving,label:'TEST 001',type:{label:'Vůz'}}),'TEST 001, Vůz, Jede, Zapalování: údaj není dostupný nebo je zastaralý');
-assert.equal(markerName({...moving,category:'stale',label:'TEST 002',type:{label:'Vůz'}}),'TEST 002, Vůz, Zapalování: údaj není dostupný nebo je zastaralý');
+assert.equal(markerName({...moving,label:'TEST 001',type:{label:'Vůz'}}),'TEST 001, Vůz, Jede, Zapalování nezjištěno');
+assert.equal(markerName({...moving,category:'stale',label:'TEST 002',type:{label:'Vůz'}}),'TEST 002, Vůz, Zapalování nezjištěno');
 assert.match(ignitionHTML({...moving,category:'stale'}),/vm-ignition-unknown/);
 for (const ignition of [true,false]) {
   for (const movement of ['moving','stopped','unknown']) {
@@ -41,8 +41,8 @@ for (const ignition of [true,false]) {
     assert.match(ignitionHTML(v),ignition ? /vm-ignition-on/ : /vm-ignition-off/);
   }
   for (const patch of [{category:'stale'},{category:'missing'},{previousPoint:true},{point:null},{age:null}]) {
-    assert.equal(ignitionState({...moving,ignition,...patch}),null);
-    assert.doesNotMatch(ignitionHTML({...moving,ignition,...patch}),/vm-ignition-(on|off)\b/);
+    assert.equal(ignitionState({...moving,ignition,...patch}),ignition);
+    assert.match(ignitionHTML({...moving,ignition,...patch}),ignition ? /vm-ignition-on/ : /vm-ignition-off/);
   }
 }
 for (const ignition of [null,undefined,0,1,'false','true']) assert.equal(ignitionState({...moving,ignition}),null);
@@ -50,7 +50,7 @@ assert.match(clusterIgnition([{...moving,ignition:true},{...moving,ignition:true
 assert.match(clusterIgnition([{...moving,ignition:false},{...moving,ignition:false}]).html,/vm-ignition-off/);
 assert.equal(clusterIgnition([{...moving,ignition:true},{...moving,ignition:false}]).html,'');
 assert.equal(clusterIgnition([{...moving,ignition:false},{...moving,ignition:null}]).html,'');
-console.log('PASS explicit ignition on/off independent of motion, no inference for missing/stale data, homogeneous clusters only');
+console.log('PASS explicit ignition on/off independent of motion, retained stale state, no inference for missing data, homogeneous clusters only');
 
 const tabletBounds={left:6,top:6,right:302,bottom:404},tabletSafe={left:50,top:76,right:258,bottom:374},legend={left:12,top:245,right:138,bottom:400};
 const target=focusTarget({heading:0},tabletSafe,tabletBounds,[legend],{width:100,height:26});
@@ -67,3 +67,12 @@ const single=fittedCamera([{lat:49,lng:16}],400,600,7);
 assert.ok(Math.abs(single.center.lat-49)<1e-10);assert.equal(single.center.lng,16);assert.equal(single.zoom,16);
 assert.equal(fittedCamera([],400,600,7),null);
 console.log('PASS group camera fits real bounds atomically, including coincident points');
+
+const captionNow = Date.parse('2026-10-27T12:00:00+01:00');
+assert.equal(ignitionName({ignition:false, ignitionAt:'2026-10-27T08:42:00+01:00'}, captionNow), 'Zapalování vypnuto · poslední stav dnes 08:42');
+assert.equal(ignitionName({ignition:true, ignitionAt:'2026-10-26T08:42:00+01:00'}, captionNow), 'Zapalování zapnuto · poslední stav 26. 10. 2026 08:42');
+assert.equal(ignitionName({ignition:false, ignitionAt:'2026-10-26T23:30:00Z'}, captionNow), 'Zapalování vypnuto · poslední stav dnes 00:30');
+assert.equal(ignitionName({ignition:false, ignitionAt:'2026-07-01T06:42:00Z'}, Date.parse('2026-07-01T10:00:00Z')), 'Zapalování vypnuto · poslední stav dnes 08:42');
+for (const ignitionAt of [undefined,'','bad','2026-10-28T08:00:00Z']) assert.equal(ignitionName({ignition:false,ignitionAt},captionNow),'Zapalování vypnuto · čas posledního stavu nezjištěn');
+assert.equal(ignitionName({ignition:null,ignitionAt:'2026-10-27T08:42:00+01:00'},captionNow),'Zapalování nezjištěno');
+console.log('PASS exact approved wording, Prague date/day boundary and summer time, missing/future timestamp');

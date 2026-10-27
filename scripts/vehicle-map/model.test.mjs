@@ -92,6 +92,18 @@ test('new supplied equipment artwork uses explicit declared type, never nickname
  assert.equal(presentationType({name:'VZV Bagr'}).key,'unknown');
  assert.equal(presentationType({name:'VZV',vehicleType:'car'}).key,'car');
 });
+test('ignition timestamp follows latest telemetry independently of fallback GPS', () => {
+  const oldSample = sample('a', {ignition: true});
+  const old = reconcile({locations:[oldSample]}, undefined, {now});
+  const current = sample('a', {gpsValid:false, ignition:false, lastGpsAt:new Date(now).toISOString()});
+  const [v] = model([current], old);
+  assert.equal(v.previousPoint,true); assert.equal(v.lastGpsAt,oldSample.lastGpsAt);
+  assert.equal(v.ignition,false); assert.equal(v.ignitionAt,current.lastGpsAt);
+  const [unknown] = model([{...current,ignition:null}],old);
+  assert.equal(unknown.ignition,null);
+  const [stale] = model([sample('a',{ignition:false,lastGpsAt:new Date(now-86400000).toISOString()})]);
+  assert.equal(stale.ignition,false); assert.equal(stale.category,'stale');
+});
 const timings = [];
 for (let i = 0; i < 100; i++) { const start = performance.now(); clusterPoints(points(200, false)); timings.push(performance.now() - start); }
 timings.sort((a, b) => a - b);
