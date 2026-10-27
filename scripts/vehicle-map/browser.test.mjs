@@ -15,7 +15,7 @@ const page=await context.newPage();page.setDefaultTimeout(6000);const errors=[],
 page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>network.push({method:r.method(),url:r.url()}));
 await page.route('https://**/*',r=>r.abort());
 const test=async(name,fn)=>{try{await fn();results.push({name,status:'PASS'});console.log(`PASS ${name}`);}catch(e){results.push({name,status:'FAIL',error:e.message});console.log(`FAIL ${name}: ${e.message}`);}};
-const ready=async()=>{await page.waitForSelector('.vm-marker',{timeout:15000});await page.waitForTimeout(120);};
+const ready=async()=>{await page.waitForSelector('.vm-marker',{timeout:15000});await page.evaluate(()=>document.fonts.ready);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await page.waitForTimeout(120);};
 const control=async(q)=>{await fetch(`${url}/__preview/control?${q}`);};
 const scene=async(name='overview',theme='light',width=1440,height=1000)=>{await control(`scene=${name}&theme=${theme}&error=0&denied=0&unauthorized=0&ttl=3600000&failMe=0`);await page.setViewportSize({width,height});await page.goto(`${url}/sledovani-vozidel`);await ready();};
 const camera=()=>page.evaluate(()=>{const m=google.maps._instances.at(-1);return {center:m.getCenter().toJSON(),zoom:m.getZoom(),heading:m.getHeading(),tilt:m.getTilt(),calls:m.calls.length};});
@@ -35,14 +35,15 @@ try{
   assert.match(await page.locator('.vm-panel-detail').innerText(),/Palivo[\s\S]*Údaj není dostupný[\s\S]*AdBlue/);
   await page.locator('[data-vm-back]').click();
  });
- await test('Only availability dots replace age text across list, table, map and detail',async()=>{
+ await test('Ignition dots use explicit provider booleans; missing and stale show no colored dot',async()=>{
   assert.equal(await page.locator('[data-vm-age],.vm-row-gps').count(),0);
   assert.doesNotMatch(await page.locator('.vm').innerText(),/Stará poloha|GPS před|před \d+ (min|h|d)|Poslední GPS/);
-  const row=n=>page.locator(`[data-vm-row$=":synthetic-${n}"] .vm-connection`);
-  assert.equal(await row(1).getAttribute('aria-label'),'Online');assert.equal(await row(3).getAttribute('aria-label'),'Online');
-  assert.equal(await row(2).getAttribute('aria-label'),'Offline');assert.equal(await row(12).getAttribute('aria-label'),'Offline');
-  assert.equal(await row(1).evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(117, 189, 37)');
-  assert.equal(await row(2).evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(239, 68, 68)');
+  const row=n=>page.locator(`[data-vm-row$=":synthetic-${n}"] .vm-ignition`);
+  assert.match(await row(1).getAttribute('aria-label'),/údaj není dostupný/);assert.equal(await row(3).getAttribute('aria-label'),'Zapalování vypnuto');
+  assert.equal(await row(8).getAttribute('aria-label'),'Zapalování zapnuto');
+  assert.match(await row(2).getAttribute('aria-label'),/údaj není dostupný/);assert.match(await row(12).getAttribute('aria-label'),/údaj není dostupný/);
+  assert.equal(await row(8).evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(117, 189, 37)');
+  assert.equal(await row(3).evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(239, 68, 68)');
 
  });
  await test('Primary route action stays readable on hover',async()=>{
@@ -101,10 +102,10 @@ try{
   const before=await camera();await control('revision=1');await page.locator('[data-vm-refresh]').click();await page.waitForTimeout(180);assert.deepEqual(await camera(),before);
   assert.equal(await page.evaluate(()=>savedMarker===document.querySelector('.vm-marker.is-selected')&&savedImage===savedMarker.querySelector('img')),true);
  });
- await test('Stale point: red Offline dot, no age text or direction',async()=>{
+ await test('Stale point: no invented ignition state or direction',async()=>{
   await page.locator('[data-vm-back]').click();await page.locator('[data-vm-row$=":synthetic-2"]').click();await page.waitForTimeout(100);
-  assert.doesNotMatch(await page.locator('.vm-panel-detail').innerText(),/před \d+|Stará poloha|Poslední GPS/);assert.equal(await page.locator('.vm-panel-detail .vm-offline').count(),1);
-  assert.equal(await page.locator('.vm-marker.is-selected .vm-heading').count(),0);assert.equal(await page.locator('.vm-marker.is-selected .vm-badge').innerText(),'');assert.equal(await page.locator('.vm-marker.is-selected .vm-badge').getAttribute('aria-label'),'Offline');
+  assert.doesNotMatch(await page.locator('.vm-panel-detail').innerText(),/před \d+|Stará poloha|Poslední GPS/);assert.equal(await page.locator('.vm-panel-detail .vm-ignition-unknown').count(),1);
+  assert.equal(await page.locator('.vm-marker.is-selected .vm-heading').count(),0);assert.equal(await page.locator('.vm-marker.is-selected .vm-badge').innerText(),'—');assert.match(await page.locator('.vm-marker.is-selected .vm-badge').getAttribute('aria-label'),/údaj není dostupný/);
  });
  await screenshot('stale-desktop');
  await test('API provider error: retained map and selection, explicit last success',async()=>{
@@ -128,7 +129,7 @@ try{
  });
  await test('Search/filters shared by map and list; missing GPS remains selectable; empty reason',async()=>{
   await page.locator('#vm-search').fill('t e s t 012');await page.waitForTimeout(120);assert.equal(await page.locator('[data-vm-row]').count(),1);assert.equal(await page.locator('.vm-marker').count(),0);assert.equal(await page.locator('[data-vm-fit]').isDisabled(),true);
-  await page.locator('[data-vm-row]').click();assert.match(await page.locator('.vm-panel-detail').innerText(),/Bez ověřené polohy/);assert.equal(await page.locator('.vm-panel-detail .vm-offline').count(),1);await page.locator('[data-vm-back]').click();
+  await page.locator('[data-vm-row]').click();assert.match(await page.locator('.vm-panel-detail').innerText(),/Bez ověřené polohy/);assert.equal(await page.locator('.vm-panel-detail .vm-ignition-unknown').count(),1);await page.locator('[data-vm-back]').click();
   await page.locator('#vm-search').fill('NOT FOUND');assert.match(await page.locator('.vm-list').innerText(),/Žádná vozidla/);await page.locator('#vm-search').fill('');await page.locator('.vm-extra-filters summary').click();await page.locator('[data-vm-filter="stale"]').click();await page.waitForTimeout(100);assert.equal(await page.locator('[data-vm-row]').count(),3);assert.equal(await page.locator('.vm-marker').evaluateAll(nodes=>nodes.reduce((n,e)=>n+(e.classList.contains('vm-cluster')?Number(e.querySelector('b').textContent):1),0)),2);await page.locator('[data-vm-filter="stale"]').click();
  });
  await test('Hover and keyboard focus highlight without camera changes',async()=>{
@@ -166,7 +167,7 @@ try{
   await test(`Viewport ${width}x${height}: map fills work area, no document overflow, existing navigation`,async()=>{
    const d=await page.evaluate(()=>{const r=e=>e.getBoundingClientRect().toJSON();return{scroll:document.documentElement.scrollWidth,work:r(document.querySelector('.vm-work')),map:r(document.querySelector('.vm-map-shell')),panel:r(document.querySelector('.vm-panel')),nav:document.querySelector('.mobile-bottom-nav')?r(document.querySelector('.mobile-bottom-nav')):null};});
    assert(d.scroll<=width);assert(d.map.height>=220);assert(d.map.bottom<=height+1);
-   if(width<=720){assert(d.map.bottom<=d.nav.top+1);assert.equal(await page.locator('.vm-panel').isVisible(),false);assert.equal(await page.locator('.mobile-header').count(),1);}
+   if(width<=720){assert(d.map.bottom<=d.nav.top+1,JSON.stringify(d));assert.equal(await page.locator('.vm-panel').isVisible(),false);assert.equal(await page.locator('.mobile-header').count(),1);}
    else {assert.equal(d.panel.width,width<=1100?210:240);assert(d.map.left>d.panel.right && d.map.left-d.panel.right<=10);if(width>=1024)assert(d.map.width/d.work.width>=.7);}
    metrics.push({scenario:`viewport-${width}`,mapWidth:d.map.width,mapHeight:d.map.height,panelWidth:d.panel.width});
   });
@@ -231,12 +232,12 @@ try{
   await page.goto(`${url}/pripominky`);await page.waitForSelector('[data-logout]');await context.setOffline(true);await page.waitForTimeout(100);assert.equal(await page.locator('#app').isVisible(),false);await context.setOffline(false);await page.waitForTimeout(150);
  });
  await test('No business writes or GPS browser persistence during acceptance run',async()=>{assert.deepEqual(network.filter(r=>r.method!=='GET'),[]);const stored=await page.evaluate(()=>({local:{...localStorage},session:{...sessionStorage}}));assert.deepEqual(stored,{local:{},session:{}});});
- await test('Availability changes to offline as GPS ages without a new sample',async()=>{
-  await scene();const row=n=>page.locator(`[data-vm-row$=":synthetic-${n}"] .vm-connection`);
+ await test('Ignition expires without a new sample, including table indicators',async()=>{
+  await scene();const row=n=>page.locator(`[data-vm-row$=":synthetic-${n}"] .vm-ignition`);
   await page.clock.setFixedTime(new Date(Date.now()+1900000));await page.waitForTimeout(1300);
-  assert.equal(await row(1).getAttribute('aria-label'),'Offline');
-  assert.equal(await page.locator('.vm-table-scroll .vm-online').count(),0);
-  await page.clock.setFixedTime(new Date());await page.waitForTimeout(1300);assert.equal(await row(1).getAttribute('aria-label'),'Online');
+  assert.match(await row(8).getAttribute('aria-label'),/údaj není dostupný/);
+  assert.equal(await page.locator('.vm-table-scroll .vm-ignition-on').count(),0);
+  await page.clock.setFixedTime(new Date());await page.waitForTimeout(1300);assert.equal(await row(8).getAttribute('aria-label'),'Zapalování zapnuto');
  });
  await test('Logout clears selected GPS and returns to login; reload stays signed out',async()=>{
   await scene();await page.locator('[data-vm-row$=":synthetic-1"]').click();

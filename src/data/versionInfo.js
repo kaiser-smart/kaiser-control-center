@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.887"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.888"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,7 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Tečky podle zapalování", text: "Zelená tečka znamená zapnuté zapalování, červená vypnuté. Údaj pochází přímo z T-Cars; chybějící nebo zastaralé zapalování se neodhaduje." },
   { title: "Rychlost vedle SPZ", text: "Mapa zobrazuje SPZ a aktuální rychlost v jednom čitelném štítku pod vozidlem. Stará nebo nedostupná rychlost je označená pomlčkou. Širší štítky respektují kolize a výběr vozidla." },
   { title: "Originální k. z loga Kaiser", text: "Ikona záložky i aplikace na ploše používá původní malé k a tečku přímo z dodaného loga Kaiser." },
   { title: "K. také na ploše telefonu", text: "Ikona při přidání aplikace na plochu používá stejné K. písmem Quicksand jako záložka. Doplněny ikony pro iPhone i Android." },
