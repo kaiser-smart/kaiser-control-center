@@ -19,6 +19,7 @@ export async function onRequestGet({ request, env }) {
     const today = localDay(Date.now());
     if ((!['today', 'yesterday'].includes(period) && (!isDay(period) || period > today)) || !['all', ...Object.keys(CATEGORIES)].includes(category)) return json({ error: 'Neplatné období nebo kategorie.' }, 400);
     const day = period === 'today' ? today : period === 'yesterday' ? previousDay(today) : period;
+    if (env.DRIVER_RATINGS_ENABLED !== 'true') return json({ day, category, status: 'waiting', mode: 'inactive', reasons: ['inactive'], scope: scope.user.role === 'ridic' ? 'own' : 'audit', categories: CATEGORIES, ranking: [], drivers: [] });
     return json(await readRatings(ratingDb(env), scope, day, category, { audit: url.searchParams.get('audit') === '1' }));
   } catch (error) {
     const status = [401, 403].includes(error.status) ? error.status : 503;
