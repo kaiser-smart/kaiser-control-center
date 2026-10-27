@@ -19008,7 +19008,7 @@ function syncVehicleMapWorkspace() {
       readHistory: (key, range) => apiJson(`/api/vehicle-tracking/history?vehicleKey=${encodeURIComponent(key)}&range=${encodeURIComponent(range)}`),
       readAnalytics: () => apiJson("/api/vehicle-tracking/analytics?period=today"),
       readOperations: ["admin", "management", "dispecer"].includes(normalizeRole(user.role)) ? day => apiJson(`/api/vehicle-tracking/analytics?day=${encodeURIComponent(day)}`) : null,
-      readJobsSummary: hasPermission(user, "jobs", "view") ? () => apiJson("/api/jobs?period=all&pageSize=1") : null,
+      readJobsSummary: hasPermission(user, "jobs", "view") ? () => apiJson("/api/jobs?period=all&pageSize=25") : null,
       readRatings: (period, category) => apiJson(`/api/vehicle-tracking/driver-ratings?period=${encodeURIComponent(period)}&category=${encodeURIComponent(category)}`)
     });
   }

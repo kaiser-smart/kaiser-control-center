@@ -1,6 +1,8 @@
 # Řidič dne — implementace a podklady
 
-Stav: implementováno lokálně, **nenasazeno**, produkční bodování nezapnuto.
+Provozní přehled byl publikován ve verzi 0.1.894 (PR #293, merge `1a391650`).
+Verze 0.1.895 opravuje parametr příjmu Zakázek a výslovný neaktivní stav bodování. Produkční bodování,
+jeho migrace a plánovač zůstávají nezapnuté.
 Kód nevytváří vítěze z GPS ani z pouhého přiřazení ve Vozovém parku.
 Nejde o dokončenou integraci skutečných směn. Bez ní není naplněno celé zadání.
 
@@ -74,10 +76,14 @@ Denní rozhraní vyžaduje aktuálně aktivní účet, `vehicle-tracking:view` a
 admin/management/dispecer. Řidičské účty nemají přístup k tomuto přehledu flotily.
 Jde o stejný rozsah vozidel jako existující GPS analytika, nikoli o firemně oddělené
 bodování. Zakázky se čtou samostatně přes stávající oprávnění a firemní rozsah
-`/api/jobs?period=all&pageSize=1`; v přehledu se zobrazuje pouze poslední příjem
+`/api/jobs?period=all&pageSize=25`; v přehledu se zobrazuje pouze poslední příjem
 `importProgress.lastReceivedAt` a odkaz do Zakázek. Tento údaj nepotvrzuje úplnost
 vybraného dne. Plánované datum ani příjem zakázky se automaticky nepovažuje za
 provedení. Automatické párování zakázky s jízdou není součástí této etapy.
+
+Bez výslovného serverového `DRIVER_RATINGS_ENABLED=true` čtení hodnocení vrací
+„Bodování není aktivní“ bez dotazu na bodovací tabulky. Ani zapnutí tohoto příznaku
+neobchází požadavek na ověřené historické výsledky.
 
 Provozní přehled používá již existující tabulky a synchronizaci. Nevyžaduje aktivaci
 bodovací migrace ani workeru; ty zůstávají připravené pro případ doložené evidence.

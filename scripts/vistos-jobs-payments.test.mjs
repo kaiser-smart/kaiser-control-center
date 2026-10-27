@@ -269,6 +269,11 @@ test('J10/S01: authenticated backend paging/history and forbidden finance/compan
  assert.equal((await call('jobs-list','/api/jobs?company=2')).status,403);
  await syncVistosBatch(env,{installation:'test',entity:'ServiceList',source:async()=>({rows:Array.from({length:61},(_,i)=>({Id:i+1,Number:'fixture-'+i,Modified:'2026-10-25T01:00:00Z'})),filtered:61,countEvidence:{filteredReported:true}})});
  const response=await call('jobs-list','/api/jobs?period=all&pageSize=25&page=3');assert.equal(response.status,200);assert.equal((await response.json()).rows.length,11);
+ const appSource=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
+ const overviewPath=appSource.match(/readJobsSummary:[^\n]*apiJson\("([^"]+)"\)/)?.[1];
+ assert.ok(overviewPath,'operations overview has a real jobs-source URL');
+ const overview=await call('jobs-list',overviewPath);assert.equal(overview.status,200,'UI request must conform to actual Jobs pagination');
+ const overviewBody=await overview.json();assert.equal(overviewBody.importProgress.total,61);assert.ok(overviewBody.importProgress.lastReceivedAt);
  const id=db.sqlite.prepare('SELECT id FROM vistos_source_records LIMIT 1').get().id;
  const history=await call('job-history','/api/jobs/'+id+'/history',{id});assert.equal(history.status,200);const historyBody=await history.json();assert.equal(historyBody.events.length,1);assert.equal(historyBody.events[0].actor,null);
  db.sqlite.prepare('UPDATE vistos_integration_events SET fields_json=? WHERE entity_id=?').run(JSON.stringify(['Number','Phone','PriceWithTax','UnknownSecret']),id);

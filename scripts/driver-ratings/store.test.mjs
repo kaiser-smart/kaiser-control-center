@@ -62,7 +62,7 @@ test('stale computations and newer pending evidence never display old winners', 
 });
 test('endpoint denies anonymous, unknown role, revoked rights, foreign companies and cross-origin writes', async () => {
   const { db, scope } = setup();
-  const env = { APP_ENV: 'test', AUTH_MODE: 'mock', AUTH_USERS_JSON: JSON.stringify([scope.user]), DB_CORE: db, DB_ARCHIVE: db, DB_AUDIT: db };
+  const env = { DRIVER_RATINGS_ENABLED: 'true', APP_ENV: 'test', AUTH_MODE: 'mock', AUTH_USERS_JSON: JSON.stringify([scope.user]), DB_CORE: db, DB_ARCHIVE: db, DB_AUDIT: db };
   const url = 'https://example.test/api/vehicle-tracking/driver-ratings';
   assert.equal((await onRequestGet({ env, request: new Request(url) })).status, 401);
   const cookie = await createSessionCookie(env, scope.user);
@@ -79,6 +79,10 @@ test('endpoint denies anonymous, unknown role, revoked rights, foreign companies
   assert.equal((await onRequestPost({ env, request: attemptedClockOverride })).status, 422);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM driver_rating_inputs').get().n, 0);
   assert.equal((await onRequestPost({ env, request: new Request(url, { method: 'POST', headers: { Cookie: cookie, Origin: 'https://evil.test', 'Content-Type': 'application/json' }, body: '{}' }) })).status, 403);
+  env.DRIVER_RATINGS_ENABLED = '';
+  const inactive = await onRequestGet({ env, request }); assert.equal(inactive.status, 200);
+  const inactiveBody = await inactive.json(); assert.equal(inactiveBody.mode, 'inactive'); assert.deepEqual(inactiveBody.ranking, []);
+  env.DRIVER_RATINGS_ENABLED = 'true';
   env.DB_ARCHIVE = null; assert.equal((await onRequestGet({ env, request })).status, 503);
 });
 
@@ -99,7 +103,7 @@ test('late verified jobs remain on execution day and historical results survive 
 });
 test('historical date endpoint validates actual calendar dates and never falls back to today', async () => {
   const { db, scope } = setup();
-  const env = { APP_ENV: 'test', AUTH_MODE: 'mock', AUTH_USERS_JSON: JSON.stringify([scope.user]), DB_CORE: db, DB_ARCHIVE: db, DB_AUDIT: db };
+  const env = { DRIVER_RATINGS_ENABLED: 'true', APP_ENV: 'test', AUTH_MODE: 'mock', AUTH_USERS_JSON: JSON.stringify([scope.user]), DB_CORE: db, DB_ARCHIVE: db, DB_AUDIT: db };
   db.sqlite.prepare('INSERT INTO vistos_company_access VALUES(?,?,?)').run(scope.user.id, scope.installation, scope.companies[0]);
   const cookie = await createSessionCookie(env, scope.user);
   const get = period => onRequestGet({ env, request: new Request('https://example.test/api/vehicle-tracking/driver-ratings?period=' + period, { headers: { Cookie: cookie } }) });
