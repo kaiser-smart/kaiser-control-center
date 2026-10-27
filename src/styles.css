@@ -53821,3 +53821,7 @@ body.collection-driver-blackview-simulator-active #app {
 /* A touch target for the existing ignition dot; no new vehicle artwork. */
 .vm .vm-detail-meta .vm-ignition-info { display:inline-flex; align-items:center; justify-content:center; flex:none; min-width:44px; min-height:44px; padding:0; border:0; background:transparent; }
 .vm [data-vm-ignition-message] { overflow-wrap:anywhere; font-size:13px; line-height:1.5; }
+
+/* User-supplied original logo, preserving its artwork and aspect ratio. */
+.vm-page > .topbar .vm-kaiser-logo { width:96px; min-width:96px; height:34px; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.vm-page > .topbar .vm-kaiser-logo img { display:block; width:100%; height:100%; object-fit:contain; }
