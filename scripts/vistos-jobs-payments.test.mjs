@@ -13,6 +13,7 @@ import {loadJobTrackingInterval,vehicleTrackingHistoryPoint} from '../functions/
 import {writeGate,processPaymentCommand,acquireFinanceLocks,submitTransfers,confirmAllocation} from '../functions/_lib/vistos-payment-outbox.js';
 import {hasPermission} from '../src/permissions.js';
 import {runJobsReadQueue} from '../functions/_lib/vistos-jobs-read-queue.js';
+import {jobsSyncHealth} from '../functions/_lib/vistos-jobs-health.js';
 
 export function fixtureDb(){
  const sqlite=new DatabaseSync(':memory:');
@@ -25,6 +26,33 @@ export function fixtureDb(){
 }
 const mapping={apiOrigin:'https://fixture.invalid',installation:'test',revision:'fixture-v1',companyIds:['1'],capacityEvidence:{approvedAt:'2026-10-01',estimateEvidenceId:'fixture-estimate',domains:Object.fromEntries(['core','archive','audit'].map(d=>[d,{maxSizeBytes:10000000}]))},entities:{ServiceList:{readVerified:true,orderVerified:true,modifiedFilterVerified:true,fixedCompanyId:'1',verifiedFields:['Number','Planned','Customer'],plannedField:'Planned',numberField:'Number',customerField:'Customer',idOrder:'Id asc'}}};
 function environment(db,contract=mapping){db.sqlite.prepare('INSERT OR REPLACE INTO vistos_integration_contracts VALUES(?,?,?,?,?)').run('test',contract.revision,JSON.stringify(contract),'fixture','2026-10-25');return {DB_CORE:db,DB_ARCHIVE:db,DB_AUDIT:db,VISTOS_READ_SYNC_ENABLED:'true',VISTOS_INSTALLATION_ID:'test',VISTOS_API_BASE_URL:'https://fixture.invalid'};}
+
+test('preflight failures are recorded and recover from the same checkpoint without source calls or duplicates',async()=>{
+ const db=fixtureDb(),env=environment(db);let calls=0;
+ const source=async()=>{calls++;return {rows:[{Id:1,Number:'one'}],filtered:1,countEvidence:{filteredReported:true}};};
+ const args={installation:'test',entity:'ServiceList',source};
+ await assert.rejects(syncVistosBatch({...env,D1_CAPACITY_BLOCK_BULK_WRITES:'true'},args),e=>e.code==='d1_bulk_capacity_blocked');
+ assert.equal(calls,0);
+ assert.equal(db.sqlite.prepare('SELECT error_code FROM vistos_sync_runs').get().error_code,'d1_bulk_capacity_blocked');
+ assert.equal(db.sqlite.prepare('SELECT offset FROM vistos_sync_checkpoints').get().offset,0);
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM vistos_sync_entity_locks').get().n,0);
+ await syncVistosBatch(env,args);await syncVistosBatch(env,args);
+ assert.equal(calls,1);assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM vistos_source_records').get().n,1);db.sqlite.close();
+});
+
+test('jobs health distinguishes blocked, stale and recovered runs and isolates companies',async()=>{
+ const db=fixtureDb(),scope={db,installation:'test',companies:['1']},now=Date.parse('2026-10-27T10:00:00Z');
+ const add=(id,status,at,code=null,companies='["1"]')=>db.sqlite.prepare('INSERT INTO vistos_sync_runs(id,installation,entity,mode,status,started_at,finished_at,error_code,scope_json) VALUES(?,\'test\',\'ServiceList\',\'initial_backfill\',?,?,?,?,?)').run(id,status,at,at,code,companies);
+ assert.equal((await jobsSyncHealth(scope,{now})).status,'stalled');
+ add('old','partial','2026-10-26T06:11:00Z');
+ add('foreign','compared','2026-10-27T09:59:00Z',null,'["other"]');
+ assert.equal((await jobsSyncHealth(scope,{now})).status,'stalled');
+ add('failed','error','2026-10-27T09:58:00Z','vistos_target_capacity_exceeded');
+ assert.equal((await jobsSyncHealth(scope,{now})).code,'vistos_target_capacity_exceeded');
+ add('recovered','partial','2026-10-27T09:59:00Z');
+ assert.equal((await jobsSyncHealth(scope,{now})).status,'ok');
+ assert.equal((await jobsSyncHealth(scope,{now:now+20*60000})).status,'stalled');db.sqlite.close();
+});
 
 test('J06-J08/J11/S02: precise decimals, availability, source identities, scoped disclosure',async()=>{
  assert.equal(exactJsonParse('{"a":123456789012345.678901,"s":"1.25"}').a,'123456789012345.678901');
@@ -75,6 +103,30 @@ test('S01: explicit permissions, finance denial and company isolation',async()=>
  await assert.rejects(authorizedIntegrationScope(env,{id:'u'},{companyId:'2'}),e=>e.status===403);
  const scope=await authorizedIntegrationScope(env,{id:'u',role:'dispecer',permissions:[]});assert.equal(scope.rights.finance,false);
  const data=await listJobs(scope,new URL('https://test/api/jobs?period=all'));assert.equal(data.stats.total,0);assert.deepEqual(data.rows,[]);db.sqlite.close();
+});
+
+test('growing job history keeps its cursor only after a stable anchor read; deletions and races restart',async()=>{
+ for(const scenario of ['append','moved-anchor','count-race','shrink']){
+  const db=fixtureDb(),env=environment(db);let ids=[1,2,3],changed=false;const offsets=[];
+  const source=async({offset,length})=>{
+   offsets.push(offset);
+   return {rows:ids.slice(offset,offset+length).map(Id=>({Id,Number:'J'+Id})),filtered:ids.length+(changed&&scenario==='count-race'&&length===1?1:0),countEvidence:{filteredReported:true}};
+  };
+  const args={installation:'test',entity:'ServiceList',source,pageSize:2};
+  await syncVistosBatch(env,args);changed=true;
+  ids=scenario==='shrink'?[1,2]:scenario==='moved-anchor'?[2,3,4,5]:[1,2,3,4];
+  if(scenario==='append'){
+   const result=await syncVistosBatch(env,args);assert.equal(result.offset,4);assert.equal(result.completeImport,false);
+   assert.deepEqual(offsets,[0,2,1]);
+   assert.equal(db.sqlite.prepare('SELECT generation FROM vistos_sync_checkpoints').get().generation,1);
+   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM vistos_source_records').get().n,4);
+  }else{
+   await assert.rejects(syncVistosBatch(env,args),e=>e.code==='vistos_page_count_changed');
+   assert.equal(db.sqlite.prepare('SELECT offset FROM vistos_sync_checkpoints').get().offset,2);
+   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM vistos_source_records').get().n,2);
+  }
+  db.sqlite.close();
+ }
 });
 const baseTime=Date.parse('2026-10-24T10:00:00Z');
 const alias={id:'a',external_system:'tcars',external_key:'7',vehicle_id:'v',source_system:'tcars',verified:true,status:'active',valid_from:'2020-01-01T00:00:00Z',valid_to:null};
