@@ -26,6 +26,10 @@ The import is deliberately bounded to 750 rows per atomic D1 batch; a larger res
 
 The alert is persistent inside the CCS module, not an email/SMS dispatch or a newly wired global notification. A scheduler heartbeat proves only handler execution, not successful data acquisition. `lastSuccess` is not populated on a blocked/error run.
 
+## Staged Pages release
+
+The module can be released before account/storage activation. With no valid `CCS_ACCOUNT_ID`, authenticated status returns `storageReady: false` without reading or creating any tables. The UI displays the blocked source, no successful run, no next run and disabled transaction controls; it makes no report/options requests and offers no synchronization action. This stage changes neither database data nor Worker configuration and is not a working sync. A failed report request must not overwrite independently verified source status. Account configuration remains a separate prerequisite for storage activation.
+
 ## Required source evidence before activation
 
 1. Official account-specific API/data-delivery contract, credentials scope and complete sample, or supported SFTP/dedicated-mail delivery with confirmed format and frequency.

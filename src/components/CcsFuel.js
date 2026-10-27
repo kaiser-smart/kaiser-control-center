@@ -17,7 +17,12 @@ export async function mountCcsFuel(root, { canManage = false, canExport = false 
   async function loadStatus() {
     const s = await api('view=status'); if (!root.isConnected) return;
     $('[data-ccs-status]').innerHTML = `<section class="ccs-connection"><div><strong>${s.sourceConnected ? 'Zdroj připojen' : 'Automatické získávání dat je blokované'}</strong><p>${s.sourceConnected ? esc(s.channel) : 'Pro tento účet není doložené a připojené automatické rozhraní CCS. Naplánovaný běh sám o sobě data nestahuje.'}</p></div>${canManage ? '<button type="button" data-ccs-sync>Synchronizovat nyní</button>' : ''}<dl><div><dt>Poslední úspěšná synchronizace</dt><dd>${esc(date(s.lastSuccess))}</dd></div><div><dt>Serverový plánovač</dt><dd>${s.scheduler.verifiedRecent ? 'Běh serveru doložen' : 'Běh serveru není doložen'}</dd></div><div><dt>Další plánované spuštění</dt><dd>${s.scheduler.nextRun ? esc(date(s.scheduler.nextRun)) : 'Není doloženo'}</dd></div><div><dt>Poslední serverový signál</dt><dd>${esc(date(s.scheduler.lastSeen))}</dd></div></dl>${s.alert ? '<p role="alert">Synchronizace selhává déle než 8 hodin. Je potřeba zásah správce.</p>' : ''}<details><summary>Historie běhů a chyby</summary>${s.jobs.length ? s.jobs.map(j => `<p>${esc(date(j.created_at))} · ${esc(states[j.status] || j.status)} · načteno ${j.loaded}, nových ${j.inserted}, k prověření ${j.review}${j.error_code ? ' · ' + esc(j.error_code) : ''}</p>`).join('') : '<p>Zatím není uložený žádný běh.</p>'}</details></section>`;
-    const button = $('[data-ccs-sync]'); if (button) button.onclick = run(async () => { button.disabled = true; try { await api('', { action:'sync' }); await loadStatus(); } finally { if (button.isConnected) button.disabled = false; } });
+    const button = $('[data-ccs-sync]');
+    if (s.storageReady === false) {
+      if (button) button.remove();
+      $('[data-ccs-status]').insertAdjacentHTML('beforeend', '<p class="ccs-empty">Modul čeká na aktivaci účtu a úložiště. Importované transakce ani běh plánovače zatím nejsou doložené.</p>');
+    } else if (button) button.onclick = run(async () => { button.disabled = true; try { await api('', { action:'sync' }); await loadStatus(); } finally { if (button.isConnected) button.disabled = false; } });
+    return s;
   }
   async function loadReport() {
     const call = ++revision; const data = await api(filter().toString()); if (!root.isConnected || call !== revision) return; report = data; next = data.nextOffset;
@@ -41,7 +46,18 @@ export async function mountCcsFuel(root, { canManage = false, canExport = false 
   $('[data-ccs-next]').onclick = run(async () => { if (next !== null) { offset = next; await loadReport(); } });
   const exportButton = $('[data-ccs-export]'); exportButton.hidden = !canExport;
   exportButton.onclick = run(async () => { const q = filter(); q.set('view','csv'); const response = await fetch('/api/ccs?' + q, { credentials:'same-origin',cache:'no-store' }); if (!response.ok) throw new Error('Export není dostupný.'); const url = URL.createObjectURL(await response.blob()), a = document.createElement('a'); a.href = url; a.download = 'tankovani-ccs.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(url),10000); });
+  try {
+    const status = await loadStatus();
+    if (status?.storageReady === false) {
+      root.querySelectorAll('[data-ccs-filter] input, [data-ccs-filter] select, [data-ccs-filter] button').forEach(el => { el.disabled = true; });
+      exportButton.hidden = true;
+      $('[data-ccs-table]').innerHTML = '<p class="ccs-empty">Evidence bude dostupná po aktivaci úložiště. Automatické stahování vyžaduje ověřené připojení CCS.</p>';
+      return;
+    }
+  } catch (e) {
+    error.textContent = e.message;
+    $('[data-ccs-status]').textContent = 'Stav spojení nelze ověřit. Žádná úspěšná synchronizace není potvrzena.';
+  }
   try { options = await api('view=options'); for (const d of options.drivers) { const option = new Option(d.name,d.id); $('[name=driver]').add(option); } } catch { /* Records and source status remain readable when master data are unavailable. */ }
-  const results = await Promise.allSettled([loadStatus(),loadReport()]);
-  for (const result of results) if (result.status === 'rejected') { error.textContent = result.reason.message; $('[data-ccs-status]').textContent = 'Stav spojení nelze ověřit. Žádná úspěšná synchronizace není potvrzena.'; }
+  try { await loadReport(); } catch (e) { error.textContent = e.message; }
 }

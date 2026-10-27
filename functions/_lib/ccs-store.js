@@ -133,12 +133,18 @@ export async function runCcsQueue(env, { now = Date.now() } = {}, acquire = acqu
   } finally { await db.prepare('DELETE FROM ccs_leases WHERE account=? AND owner=?').bind(CCS_ACCOUNT, owner).run(); }
 }
 export async function ccsStatus(env, now = Date.now()) {
+  // A published module can precede storage activation. Do not fabricate an empty
+  // ledger, attempt schema writes, or expose a sync button in that state.
+  if (!/^D[0-9]{6}$/.test(env.CCS_ACCOUNT_ID || '')) return ccsInactiveStatus('ccs_account_not_configured');
   const CCS_ACCOUNT = ccsAccount(env), db = getArchiveDatabase(env);
   const state = await db.prepare('SELECT * FROM ccs_state WHERE account=?').bind(CCS_ACCOUNT).first();
   const jobs = await rows(db.prepare('SELECT id,trigger,status,created_at,due_at,attempt,finished_at,error_code,loaded,inserted,review FROM ccs_jobs WHERE account=? ORDER BY created_at DESC LIMIT 20').bind(CCS_ACCOUNT));
   const alert = await db.prepare('SELECT code,since_at FROM ccs_alerts WHERE account=? AND resolved_at IS NULL').bind(CCS_ACCOUNT).first();
   const seen = state?.scheduler_seen;
-  return { sourceConnected: false, channel: null, blocker: CCS_BLOCKER, scheduler: { cron: CCS_CRON, platform: 'Cloudflare Workers', lastSeen: seen || null, verifiedRecent: Boolean(seen && now - Date.parse(seen) < 5 * 3600000), nextRun: seen ? nextCcsRun(now) : null }, lastSuccess: state?.last_success || null, lastError: state?.last_error || CCS_BLOCKER, jobs, alert, timezoneVerified: false, unitsVerified: false };
+  return { storageReady: true, sourceConnected: false, channel: null, blocker: CCS_BLOCKER, scheduler: { cron: CCS_CRON, platform: 'Cloudflare Workers', lastSeen: seen || null, verifiedRecent: Boolean(seen && now - Date.parse(seen) >= 0 && now - Date.parse(seen) < 5 * 3600000), nextRun: seen ? nextCcsRun(now) : null }, lastSuccess: state?.last_success || null, lastError: state?.last_error || CCS_BLOCKER, jobs, alert, timezoneVerified: false, unitsVerified: false };
+}
+export function ccsInactiveStatus(reason) {
+  return { storageReady: false, setupReason: reason, sourceConnected: false, channel: null, blocker: CCS_BLOCKER, scheduler: { cron: CCS_CRON, platform: 'Cloudflare Workers', lastSeen: null, verifiedRecent: false, nextRun: null }, lastSuccess: null, lastError: reason, jobs: [], alert: null, timezoneVerified: false, unitsVerified: false };
 }
 export async function ccsScheduled(controller, env) {
   if (![CCS_CRON, CCS_RECOVERY_CRON].includes(controller.cron)) return { status: 'ignored' };

@@ -44,6 +44,22 @@ test('server XLSX reader preserves all fields and leading card precision',async 
 test('malicious or changed XLSX fails closed',async () => { await assert.rejects(readCcsXlsx(xlsx([],{'xl/vbaProject.bin':'macro'}))); await assert.rejects(readCcsXlsx(xlsx([],{'xl/worksheets/sheet1.xml':'<worksheet><f>1+1</f></worksheet>'}))); await assert.rejects(readCcsXlsx(new Uint8Array([1,2,3]))); await assert.rejects(readCcsXlsx(xlsx([],{'xl/workbook.xml':'<workbook><workbookPr date1904="true"/></workbook>'}))); });
 test('4-hour UTC schedule and backfill survive missing periods',() => { assert.equal(nextCcsRun(Date.parse('2026-10-27T00:07:00Z')),'2026-10-27T04:07:00.000Z'); assert.equal(ccsWindow(null,clock()).from,'2026-04-01'); assert.equal(ccsWindow({ covered_to:'2026-10-26',last_backfill:new Date(clock()).toISOString() },clock()).from,'2026-09-11'); });
 test('missing source produces blocked audit, never success or invented data',async () => { const e=env(),n=clock(); await enqueueCcs(e,{now:n}); assert.equal((await runCcsQueue(e,{now:n})).status,'blocked'); const s=await ccsStatus(e,n); assert.equal(s.lastSuccess,null); assert.equal(s.sourceConnected,false); assert.equal(s.jobs[0].error_code,CCS_BLOCKER); assert.equal(e.objects.size,0); });
+test('unconfigured deployment exposes inactive status without accessing storage or secrets',async () => {
+  const e = { CCS_ACCOUNT_ID: 'invalid-private-setting', get DB_ARCHIVE() { throw new Error('must not read storage'); } };
+  const status = await ccsStatus(e);
+  assert.equal(status.storageReady,false); assert.equal(status.sourceConnected,false);
+  assert.equal(status.setupReason,'ccs_account_not_configured'); assert.equal(status.lastSuccess,null);
+  assert.equal(status.scheduler.nextRun,null); assert.deepEqual(status.jobs,[]);
+  assert.ok(!JSON.stringify(status).includes(e.CCS_ACCOUNT_ID));
+  await assert.rejects(enqueueCcs(e), {code:'ccs_account_not_configured'});
+});
+test('future or stale scheduler timestamp never proves a current server run',async () => {
+  const e=env(),n=clock(); await enqueueCcs(e,{now:n});
+  for (const at of [n+60000,n-6*3600000]) {
+    e.DB_ARCHIVE.db.prepare('UPDATE ccs_state SET scheduler_seen=?').run(new Date(at).toISOString());
+    assert.equal((await ccsStatus(e,n)).scheduler.verifiedRecent,false);
+  }
+});
 test('persistent admin alert after eight hours of failure',async () => { const e=env(),n=clock(); await enqueueCcs(e,{now:n}); await runCcsQueue(e,{now:n}); await enqueueCcs(e,{now:n+9*3600000}); await runCcsQueue(e,{now:n+9*3600000}); assert.equal((await ccsStatus(e,n+9*3600000)).alert.code,CCS_BLOCKER); });
 test('atomic commit archives XLSX and leaves unverified units/time/identity null',async () => { const e=env(),result=await importOne(e); assert.equal(result.status,'succeeded'); assert.equal(result.inserted,1); assert.equal(e.objects.size,1); const report=await ccsReport(e,new URLSearchParams()); assert.equal(report.totals[0].grossMinor,36300); assert.equal(report.rows[0].vehicle_id,null); assert.equal(report.rows[0].unit,null); assert.equal(report.rows[0].timezoneVerified,false); const p=JSON.parse(e.DB_ARCHIVE.db.prepare('SELECT payload_json FROM ccs_observations').get().payload_json); assert.equal(p.time.utc,null); });
 test('repeat file is idempotent, ambiguous separate rows are retained for review',async () => { const e=env(),bytes=xlsx(),n=clock(); await importOne(e,bytes,n); const again=await importOne(e,bytes,n+60001); assert.equal(again.inserted,0); assert.equal(e.DB_ARCHIVE.db.prepare('SELECT COUNT(*) n FROM ccs_observations').get().n,1); const duplicate=fixture(); duplicate[9]='different export note'; await importOne(e,xlsx([duplicate]),n+120002); const r=await ccsReport(e,new URLSearchParams()); assert.equal(r.total,2); assert.equal(r.pendingReview,1); assert.equal(r.totals[0].grossMinor,36300); });
