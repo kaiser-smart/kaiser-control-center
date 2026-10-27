@@ -1,0 +1,29 @@
+name: Driver ratings evidence and access
+on:
+  pull_request:
+    paths:
+      - 'functions/_lib/driver-rating-*.js'
+      - 'functions/_lib/vehicle-tracking-analytics.js'
+      - 'functions/api/vehicle-tracking/analytics.js'
+      - 'scripts/vehicle-tracking-analytics.test.mjs'
+      - 'functions/api/vehicle-tracking/driver-rating*.js'
+      - 'src/vehicle-map/**'
+      - 'scripts/driver-ratings/**'
+      - 'migrations/modular/archive/0004_driver_ratings.sql'
+      - 'workers/driver-rating-runner.js'
+      - 'wrangler.driver-rating-runner.toml'
+      - '.github/workflows/driver-ratings.yml'
+permissions:
+  contents: read
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm run test:driver-ratings
+      - run: node scripts/vehicle-tracking-analytics.test.mjs
+      - run: npm run test:vehicle-map
+      - run: npm run build

@@ -370,25 +370,35 @@ function analyticsVehicle(row = {}) {
     coveragePercent: round(coveragePercent, 1),
     qualityStatus: qualityStatus(coveragePercent, valid),
     firstRecordedAt: cleanString(row.first_recorded_at),
-    lastRecordedAt: cleanString(row.last_recorded_at)
+    lastRecordedAt: cleanString(row.last_recorded_at),
+    calculatedAt: cleanString(row.calculated_at)
   };
+}
+
+export function validAnalyticsDay(value, now = new Date()) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value
+    && value <= vehicleTrackingPragueDate(now);
 }
 
 export async function loadVehicleTrackingAnalytics(db, options = {}) {
   const now = options.now instanceof Date ? options.now : new Date(options.now || Date.now());
   const period = vehicleTrackingAnalyticsPeriod(options.period);
-  const fromDate = vehicleTrackingAnalyticsFromDate(period, now);
+  const day = options.day;
+  if (day !== undefined && !validAnalyticsDay(day, now)) throw new Error("invalid_analytics_day");
+  const fromDate = day || vehicleTrackingAnalyticsFromDate(period, now);
+  const dateBindings = day ? [day, day] : [fromDate];
   const result = await db.prepare(`
     SELECT vehicle_key, MAX(license_plate) AS license_plate, SUM(total_km) AS total_km,
       SUM(trip_count) AS trip_count, SUM(moving_minutes) AS moving_minutes,
       SUM(point_count) AS point_count, SUM(valid_segment_count) AS valid_segment_count,
       SUM(rejected_segment_count) AS rejected_segment_count,
-      MIN(first_recorded_at) AS first_recorded_at, MAX(last_recorded_at) AS last_recorded_at
+      MIN(first_recorded_at) AS first_recorded_at, MAX(last_recorded_at) AS last_recorded_at, MAX(calculated_at) AS calculated_at
     FROM vehicle_tracking_daily_metrics
-    WHERE local_date >= ?
+    WHERE local_date >= ? ${day ? "AND local_date <= ?" : ""}
     GROUP BY vehicle_key
     ORDER BY total_km DESC
-  `).bind(fromDate).all();
+  `).bind(...dateBindings).all();
   const vehicles = (result.results || []).map(analyticsVehicle);
   const totals = vehicles.reduce((summary, vehicle) => ({
     totalKm: summary.totalKm + vehicle.totalKm,
@@ -404,7 +414,7 @@ export async function loadVehicleTrackingAnalytics(db, options = {}) {
     vehicles_processed, points_processed, trips_written, daily_rows_written, message
     FROM vehicle_tracking_analytics_runs ORDER BY started_at DESC LIMIT 1`).first();
   const lastGps = await db.prepare("SELECT MAX(recorded_at) AS last_recorded_at FROM vehicle_tracking_gps_points").first();
-  const finishedAt = cleanString(lastRun?.finished_at);
+  const finishedAt = day ? vehicles.map(v => v.calculatedAt).filter(Boolean).sort().at(-1) || "" : cleanString(lastRun?.finished_at);
   const freshnessMinutes = finishedAt ? (now.getTime() - new Date(finishedAt).getTime()) / 60000 : null;
   const fresh = lastRun?.status === "ok" && freshnessMinutes !== null && freshnessMinutes <= 20;
 
@@ -415,13 +425,14 @@ export async function loadVehicleTrackingAnalytics(db, options = {}) {
       finished_at, distance_km, duration_minutes, moving_minutes, point_count, segment_count,
       quality_score, quality_status, distance_source
       FROM vehicle_tracking_trip_summaries
-      WHERE vehicle_key = ? AND local_date >= ? ORDER BY started_at DESC LIMIT 500`)
-      .bind(vehicleKey, fromDate).all();
+      WHERE vehicle_key = ? AND local_date >= ? ${day ? "AND local_date <= ?" : ""} ORDER BY started_at DESC LIMIT 500`)
+      .bind(vehicleKey, ...dateBindings).all();
     trips = tripResult.results || [];
   }
 
   return {
     period,
+    day: day || null,
     fromDate,
     apiStatus: vehicles.length ? (fresh ? "ready" : "stale") : "waiting",
     source: "GPS vzdálenost z uložených bodů T-Cars",

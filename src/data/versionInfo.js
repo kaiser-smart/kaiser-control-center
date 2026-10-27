@@ -9,7 +9,7 @@ function valueOrUnknown(value, fallback = UNKNOWN) {
 
 export const versionInfo = {
   appName: "Smart odpady",
-  version: valueOrUnknown(buildMeta.version, "v0.1.893"),
+  version: valueOrUnknown(buildMeta.version, "v0.1.894"),
   status: "development",
   backupName: "Pneumatiky v KCC – chráněná evidence",
   backupNote: "Evidence Pneumatik je součástí KCC; data, změny i audit jsou vedené přes chráněné API a D1.",
@@ -20,6 +20,8 @@ export const versionInfo = {
 };
 
 export const versionNews = [
+  { title: "Provoz vozidel podle dne", text: "Denní přehled ukazuje pozorovanou vzdálenost a čas pohybu z uložených GPS bodů T-Cars. Zakázky mohou přicházet později; chybějící podklady se nepřevádějí na body ani na pořadí řidičů." },
+  { title: "Hodnocení řidičů s doloženými podklady", text: "Panel Řidič dne rozlišuje nehodnocené směny, kontrolní režim a ověřené výsledky. Zveřejnění skóre vyžaduje úplné podklady a historické porovnání; GPS stání se nepovažuje za nečinnost." },
   { title: "Tankování CCS: stav připojení", text: "Nový modul připravuje evidenci a kontrolu nákladů CCS. Automatické získávání dat zatím není připojené; modul ukazuje stav aktivace a nepotvrzuje neprovedené synchronizace." },
   { title: "Obnova načítání zakázek", text: "Načítání automaticky rozšiřuje schválenou kapacitní rezervu až do bezpečného stropu. Přehled upozorní na zastavený import a chyby se zaznamenávají i při kapacitním omezení." },
   { title: "Originální logo Kaiser na mapě", text: "Záhlaví Polohy vozidel používá dodané originální SVG logo Kaiser, v původních barvách a proporcích." },

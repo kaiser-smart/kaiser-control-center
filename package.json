@@ -1,9 +1,11 @@
 {
   "name": "smart-odpady",
-  "version": "0.1.893",
+  "version": "0.1.894",
   "private": true,
   "type": "module",
   "scripts": {
+    "test:driver-ratings": "node --test scripts/driver-ratings/engine.test.mjs scripts/driver-ratings/store.test.mjs",
+    "test:driver-ratings:browser": "node scripts/driver-ratings/browser.test.mjs",
     "test:mobile-audit": "node scripts/mobile-audit-regression.test.mjs",
     "test:theme-settings": "node --test scripts/theme-settings.test.mjs",
     "test:auth-session": "node scripts/auth-session.test.mjs",

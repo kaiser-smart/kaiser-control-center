@@ -234,3 +234,24 @@ const missingAuditResponse = await getVehicleTrackingAnalytics({
 assert.equal(missingAuditResponse.status, 503, "read endpoint must fail closed without DB_AUDIT");
 
 console.log("vehicle tracking analytics tests: ok");
+
+// A selected civil day must not include subsequent imports or other days' movement.
+const selectedDay = await loadVehicleTrackingAnalytics(db, { day: "2026-07-15", now: new Date("2026-07-20T12:00:00Z") });
+assert.equal(selectedDay.day, "2026-07-15"); assert.equal(selectedDay.vehicles.length, 1);
+const beforeDay = await loadVehicleTrackingAnalytics(db, { day: "2026-07-14", now: new Date("2026-07-20T12:00:00Z") });
+assert.equal(beforeDay.vehicles.length, 0, "later GPS must not leak into an earlier day");
+assert.equal(beforeDay.summary.lastCalculatedAt, "", "global recent job is not proof of selected-day calculation");
+assert.ok(selectedDay.vehicles[0].calculatedAt);
+await assert.rejects(loadVehicleTrackingAnalytics(db, { day: "2026-02-30" }), /invalid_analytics_day/);
+await assert.rejects(loadVehicleTrackingAnalytics(db, { day: "2099-01-01" }), /invalid_analytics_day/);
+const dayRequest = day => new Request(`https://smart-odpady.test/api/vehicle-tracking/analytics?day=${day}`, { headers: { Cookie: endpointCookie.split(";")[0] } });
+assert.equal((await getVehicleTrackingAnalytics({ env: endpointEnv, request: dayRequest(modularDate) })).status, 200);
+assert.equal((await getVehicleTrackingAnalytics({ env: endpointEnv, request: dayRequest('2026-02-30') })).status, 400);
+assert.equal((await getVehicleTrackingAnalytics({ env: endpointEnv, request: new Request('https://smart-odpady.test/api/vehicle-tracking/analytics?day=2026-07-15') })).status, 401);
+for (const role of ['ridic', 'readonly']) {
+  const restrictedEnv = { ...endpointEnv, AUTH_USERS_JSON: JSON.stringify([{ ...endpointUser, role }]) };
+  assert.equal((await getVehicleTrackingAnalytics({ env: restrictedEnv, request: dayRequest(modularDate) })).status, 403, 'fleet operations cannot bypass own-driver access');
+}
+const revokedEnv = { ...endpointEnv, AUTH_USERS_JSON: JSON.stringify([{ ...endpointUser, role: 'dispecer', deniedModules: ['vehicle-tracking'] }]) };
+assert.equal((await getVehicleTrackingAnalytics({ env: revokedEnv, request: dayRequest(modularDate) })).status, 403);
+console.log('Daily operations: exact day, metadata, invalid dates, anonymous, driver and revoked access passed.');
